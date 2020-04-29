@@ -1,0 +1,2 @@
+versioneer~=0.18
+setuptools~=46.1.3
