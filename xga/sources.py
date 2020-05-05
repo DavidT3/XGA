@@ -2,7 +2,6 @@
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/04/2020, 21:44. Copyright (c) David J Turner
 
 import numpy as np
-from xga.sourcetools import nhlookup
 
 
 class BaseSource:
@@ -24,7 +23,6 @@ class PointSource(BaseSource):
 class GalaxyCluster(ExtendedSource):
     def __init__(self):
         pass
-
 
 
 

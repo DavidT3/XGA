@@ -4,6 +4,10 @@
 # TODO This will contain functions that act as a simple interface Pythonic interface between the user and SAS
 # TODO They'll take 'source' instances (or a list of) and return those instances with associated file paths
 
+# TODO Might do a decorator here to try except all sas functions, like Tim suggested
+
+
+
 
 
 

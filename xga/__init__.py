@@ -3,6 +3,7 @@
 
 from ._version import get_versions
 
+from xga.utils import xga_conf, CENSUS
 
 __version__ = get_versions()['version']
 del get_versions

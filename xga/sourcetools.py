@@ -4,7 +4,9 @@
 from subprocess import Popen, PIPE
 from numpy import array, ndarray
 
-from xga.utils import HeasoftError
+from xga.exceptions import HeasoftError
+from xga import CENSUS
+from pandas import DataFrame
 
 
 def nhlookup(ra: float, dec: float) -> ndarray:
@@ -44,12 +46,33 @@ def nhlookup(ra: float, dec: float) -> ndarray:
     except ValueError:
         raise HeasoftError("HEASOFT nH command scraped output cannot be converted to float")
 
+    # Returns both the average and weighted average nH values, as output by HEASOFT nH tool.
     nh_vals = array([average_nh, weighed_av_nh])
     return nh_vals
 
 
-# TODO Here shall live the odds and ends, stuff that doesn't fit anywhere else.
-#  Some unit objects for XMM coordinate systems perhaps, angular radius calculation,
+# TODO Maybe switch this over to taking a source object as an argument instead of coords
+def simple_xmm_match(src_ra: float, src_dec: float, half_width: float = 15.0) -> DataFrame:
+    """
+    Returns ObsIDs within a square of +-half width from the input ra and dec. The default half_width is
+    15 arcminutes, which approximately corresponds to the size of the XMM FOV.
+    :param float src_ra: RA coordinate of the source, in degrees.
+    :param float src_dec: DEC coordinate of the source, in degrees.
+    :param float half_width: Half width of square to search in, in arc minutes.
+    :return: The ObsID, RA_PNT, and DEC_PNT of matching XMM observations.
+    :rtype: DataFrame
+    """
+    half_width = half_width / 60
+    matches = CENSUS[(CENSUS["RA_PNT"] <= src_ra+half_width) & (CENSUS["RA_PNT"] >= src_ra-half_width) &
+                     (CENSUS["DEC_PNT"] <= src_dec+half_width) & (CENSUS["DEC_PNT"] >= src_dec-half_width)]
+    return matches
+
+
+# TODO Want this to do a check as to where it falls wrt chip gaps ideally
+def full_xmm_match():
+    raise NotImplemented("More complex XMM matching is not implemented yet.")
+
+# TODO Some unit objects for XMM coordinate systems perhaps, angular radius calculation,
 #  other things that haven't yet occured to me.
 
 
