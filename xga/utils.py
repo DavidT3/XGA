@@ -39,6 +39,7 @@ XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/"}
 # Will have to make it clear in the documentation what is allowed here, and which can be left out
 # TODO Figure out how on earth to deal with separate exp1 and exp2 etc events lists/images.
 #  For now just ignore them I guess?
+# TODO I am assuming here that there is just one event list per observation, may only be safe for XCS?
 XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required/{obs_id}/pn_exp1_clean_evts.fits",
              "clean_mos1_evts": "/this/is/required/{obs_id}/mos1_exp1_clean_evts.fits",
@@ -51,7 +52,13 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "mos2_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_img.fits",
              "pn_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-pn_merged_img.fits",
              "mos1_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos1_merged_expmap.fits",
-             "mos2_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_expmap.fits"}
+             "mos2_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_expmap.fits",
+             "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
+# List of XMM products supported by XGA that are allowed to be energy bound
+ENERGY_BOUND_PRODUCTS = ["image", "expmap", "reg_image", "reg_expmap", "psfmap"]
+# List of all XMM products supported by XGA
+# TODO This will also need to change when I figure out how to implement multiple sets of multiple spec products
+ALLOWED_PRODUCTS = ["spec", "arf", "rmf", "grp_spec"] + ENERGY_BOUND_PRODUCTS
 
 
 def xmm_obs_id_test(test_string: str) -> bool:
@@ -130,6 +137,18 @@ def observation_census(config: ConfigParser) -> DataFrame:
     return obs_lookup
 
 
+def to_list(str_rep_list: str) -> list:
+    """
+    Convenience function to change a string representation of a Python list into an actual list object.
+    :param str str_rep_list: String that represents a Python list. e.g. "['0.5', '2.0']"
+    :return: The parsed representative string.
+    :rtype: list
+    """
+    in_parts = str_rep_list.strip("[").strip("]").split(',')
+    real_list = [part.strip(' ').strip("'").strip('"') for part in in_parts if part != '' and part != ' ']
+    return real_list
+
+
 if not os.path.exists(CONFIG_PATH):
     os.makedirs(CONFIG_PATH)
 
@@ -183,10 +202,21 @@ else:
             xga_conf["XMM_FILES"][key] = os.path.join(os.path.abspath(xga_conf["XMM_FILES"]["root_xmm_dir"]),
                                                       xga_conf["XMM_FILES"][key])
 
+    # As it turns out, the ConfigParser class is a pain to work with, so we're converting to a dict here
+    # Addressing works just the same
+    xga_conf = {str(sect): dict(xga_conf[str(sect)]) for sect in xga_conf}
+    try:
+        xga_conf["XMM_FILES"]["lo_en"] = to_list(xga_conf["XMM_FILES"]["lo_en"])
+        xga_conf["XMM_FILES"]["hi_en"] = to_list(xga_conf["XMM_FILES"]["hi_en"])
+    except KeyError:
+        raise KeyError("Entries have been removed from config file, "
+                       "please leave all in place, even if they are empty")
+
+    # Do a little pre-checking for the energy entries
+    if len(xga_conf["XMM_FILES"]["lo_en"]) != len(xga_conf["XMM_FILES"]["hi_en"]):
+        raise ValueError("lo_en and hi_en entries in the config file do not parse to lists of the same length.")
+
     # Make sure that this is the absolute path
     xga_conf["XMM_FILES"]["root_xmm_dir"] = os.path.abspath(xga_conf["XMM_FILES"]["root_xmm_dir"]) + "/"
     # Read dataframe of ObsIDs and pointing coordinates into constant
     CENSUS = observation_census(xga_conf)
-
-
-

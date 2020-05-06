@@ -21,6 +21,25 @@ class HeasoftError(Exception):
             return 'HeasoftError has been raised'
 
 
+class SASNotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the XMM Scientific Analysis System can not be found on the system.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'SASNotFoundError has been raised'
+
+
 class XGAConfigError(Exception):
     def __init__(self, *args):
         """
@@ -40,10 +59,10 @@ class XGAConfigError(Exception):
             return 'XGAConfig has been raised'
 
 
-class SASNotFoundError(Exception):
+class NoMatchFoundError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if the XMM Scientific Analysis System can not be found on the system.
+        Exception raised when source ra and dec coordinates can't be made to match to any XMM observation.
         :param expression:
         :param message:
         """
@@ -56,4 +75,42 @@ class SASNotFoundError(Exception):
         if self.message:
             return '{0} '.format(self.message)
         else:
-            return 'XGAConfig has been raised'
+            return 'NoMatchFoundError has been raised'
+
+
+class NotAssociatedError(Exception):
+    def __init__(self, *args):
+        """
+        Error raised when a given ObsID is not associated with a source object.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'NotAssociatedError has been raised'
+
+
+class UnknownProductTypeError(Exception):
+    def __init__(self, *args):
+        """
+        Error raised when there is an attempt to write an unknown XMM product type to an XGA source.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'UnknownProductTypeError has been raised'

@@ -2,27 +2,30 @@
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2020, 12:18. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
-from numpy import array, ndarray
+from numpy import array, ndarray, pi, rad2deg
+from astropy import units as u
+from astropy.units.quantity import Quantity
+from astropy.cosmology import Planck15
 
-from xga.exceptions import HeasoftError
+from xga.exceptions import HeasoftError, NoMatchFoundError
 from xga import CENSUS
 from pandas import DataFrame
 
 
-def nhlookup(ra: float, dec: float) -> ndarray:
+def nhlookup(src_ra: float, src_dec: float) -> ndarray:
     """
     Uses HEASOFT to lookup hydrogen column density for given coordinates.
-    :param float ra: Right Ascension of object
-    :param float dec: Declination of object
+    :param float src_ra: Right Ascension of object
+    :param float src_dec: Declination of object
     :return : Average and weighted average nH values (in units of cm^-2)
     :rtype: ndarray
     """
     # Apparently minimal type-checking is the Python way, but for some reason this heasoft command fails if
     # integers are passed, so I'll convert them, let them ValueError if people pass weird types.
-    ra = float(ra)
-    dec = float(dec)
+    src_ra = float(src_ra)
+    src_dec = float(src_dec)
 
-    heasoft_cmd = 'nh 2000 {ra} {dec}'.format(ra=ra, dec=dec)
+    heasoft_cmd = 'nh 2000 {ra} {dec}'.format(ra=src_ra, dec=src_dec)
 
     out, err = Popen(heasoft_cmd, stdout=PIPE, stderr=PIPE, shell=True).communicate()
     # Catch errors from stderr
@@ -51,7 +54,6 @@ def nhlookup(ra: float, dec: float) -> ndarray:
     return nh_vals
 
 
-# TODO Maybe switch this over to taking a source object as an argument instead of coords
 def simple_xmm_match(src_ra: float, src_dec: float, half_width: float = 15.0) -> DataFrame:
     """
     Returns ObsIDs within a square of +-half width from the input ra and dec. The default half_width is
@@ -65,6 +67,8 @@ def simple_xmm_match(src_ra: float, src_dec: float, half_width: float = 15.0) ->
     half_width = half_width / 60
     matches = CENSUS[(CENSUS["RA_PNT"] <= src_ra+half_width) & (CENSUS["RA_PNT"] >= src_ra-half_width) &
                      (CENSUS["DEC_PNT"] <= src_dec+half_width) & (CENSUS["DEC_PNT"] >= src_dec-half_width)]
+    if len(matches) == 0:
+        raise NoMatchFoundError("No XMM observation found for ra={r} dec={d}".format(r=src_ra, d=src_dec))
     return matches
 
 
@@ -74,5 +78,20 @@ def full_xmm_match():
 
 # TODO Some unit objects for XMM coordinate systems perhaps, angular radius calculation,
 #  other things that haven't yet occured to me.
+
+
+def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
+    """
+    Converts radius in length units to radius on sky in degrees.
+    :param Quantity rad: Radius for conversion.
+    :param Cosmology cosmo: An instance of an astropy cosmology, the default is Planck15.
+    :param float z: The redshift of the source.
+    :return: The radius in degrees.
+    :rtype: Quantity
+    """
+    d_a = Planck15.angular_diameter_distance(z)
+    ang_rad = (rad.to("Mpc") / d_a).to('').value * (180 / pi)
+    return Quantity(ang_rad, 'deg')
+
 
 
