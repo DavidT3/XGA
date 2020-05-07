@@ -4,12 +4,11 @@
 import os
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
-from astropy.io import fits
-from tqdm import tqdm
-import sys
-from pandas import DataFrame
-from numpy import nan
 
+from astropy.io import fits
+from numpy import nan
+from pandas import DataFrame
+from tqdm import tqdm
 from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
 
 # Got to make sure we're able to import the PyXspec module.
@@ -58,7 +57,7 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
 ENERGY_BOUND_PRODUCTS = ["image", "expmap", "reg_image", "reg_expmap", "psfmap"]
 # List of all XMM products supported by XGA
 # TODO This will also need to change when I figure out how to implement multiple sets of multiple spec products
-ALLOWED_PRODUCTS = ["spec", "arf", "rmf", "grp_spec"] + ENERGY_BOUND_PRODUCTS
+ALLOWED_PRODUCTS = ["spec", "arf", "rmf", "grp_spec", "regions"] + ENERGY_BOUND_PRODUCTS
 
 
 def xmm_obs_id_test(test_string: str) -> bool:

@@ -13,8 +13,8 @@ setup(name='xga',
       author='David Turner',
       author_email='david.turner@sussex.ac.uk',
       url='http://github.com/DavidT3/XGA',
-      setup_requires=["versioneer"],
-      install_requires=["astropy", "numpy", "tqdm", "regions>=0.3", "pandas>=1.0.3"],
+      setup_requires=[],
+      install_requires=["astropy", "numpy", "tqdm", "regions~=0.4", "pandas>=1.0.3"],
       include_package_data=False,
       python_requires='>=3')
 

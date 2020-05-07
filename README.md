@@ -17,4 +17,6 @@ Dynamic and optional (fill out the lo_en and hi_en headers to define the energy 
 * Energy ranged images (in file names replace the lower energy number with {lo_en} and the higher with {hi_en})
 * Energy ranged expmaps (same as above)
 
-# XGA assumes that all your XMM obsid folders live in the same directory
+## XGA assumes that all your XMM obsid folders live in the same directory
+
+## XGA assumes that region files are in a DS9 format

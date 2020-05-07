@@ -2,14 +2,13 @@
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2020, 12:18. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
-from numpy import array, ndarray, pi, rad2deg
-from astropy import units as u
-from astropy.units.quantity import Quantity
-from astropy.cosmology import Planck15
 
-from xga.exceptions import HeasoftError, NoMatchFoundError
-from xga import CENSUS
+from astropy.cosmology import Planck15
+from astropy.units.quantity import Quantity
+from numpy import array, ndarray, pi
 from pandas import DataFrame
+from xga import CENSUS
+from xga.exceptions import HeasoftError, NoMatchFoundError
 
 
 def nhlookup(src_ra: float, src_dec: float) -> ndarray:
@@ -76,9 +75,6 @@ def simple_xmm_match(src_ra: float, src_dec: float, half_width: float = 15.0) ->
 def full_xmm_match():
     raise NotImplemented("More complex XMM matching is not implemented yet.")
 
-# TODO Some unit objects for XMM coordinate systems perhaps, angular radius calculation,
-#  other things that haven't yet occured to me.
-
 
 def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
     """
@@ -92,6 +88,10 @@ def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
     d_a = Planck15.angular_diameter_distance(z)
     ang_rad = (rad.to("Mpc") / d_a).to('').value * (180 / pi)
     return Quantity(ang_rad, 'deg')
+
+
+
+
 
 
 
