@@ -6,7 +6,8 @@ from configparser import ConfigParser
 from subprocess import Popen, PIPE
 
 from astropy.io import fits
-from numpy import nan
+from astropy.units import Quantity
+from numpy import nan, floor
 from pandas import DataFrame
 from tqdm import tqdm
 from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
@@ -34,7 +35,8 @@ CENSUS_FILE = os.path.join(CONFIG_PATH, 'census.csv')
 # XGA config file path
 CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 # Section of the config file for setting up the XGA module
-XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/"}
+XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/",
+              "compute_mode": "local"}
 # Will have to make it clear in the documentation what is allowed here, and which can be left out
 # TODO Figure out how on earth to deal with separate exp1 and exp2 etc events lists/images.
 #  For now just ignore them I guess?
@@ -57,7 +59,8 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
 ENERGY_BOUND_PRODUCTS = ["image", "expmap", "reg_image", "reg_expmap", "psfmap"]
 # List of all XMM products supported by XGA
 # TODO This will also need to change when I figure out how to implement multiple sets of multiple spec products
-ALLOWED_PRODUCTS = ["spec", "arf", "rmf", "grp_spec", "regions"] + ENERGY_BOUND_PRODUCTS
+ALLOWED_PRODUCTS = ["spec", "arf", "rmf", "grp_spec", "regions", "events"] + ENERGY_BOUND_PRODUCTS
+XMM_INST = ["pn", "mos1", "mos2"]
 
 
 def xmm_obs_id_test(test_string: str) -> bool:
@@ -148,6 +151,16 @@ def to_list(str_rep_list: str) -> list:
     return real_list
 
 
+def energy_to_channel(energy: Quantity) -> int:
+    """
+    Converts an astropy energy quantity into an XMM channel.
+    :param energy:
+    """
+    energy = energy.to("eV").value
+    chan = int(energy)
+    return chan
+
+
 if not os.path.exists(CONFIG_PATH):
     os.makedirs(CONFIG_PATH)
 
@@ -219,3 +232,23 @@ else:
     xga_conf["XMM_FILES"]["root_xmm_dir"] = os.path.abspath(xga_conf["XMM_FILES"]["root_xmm_dir"]) + "/"
     # Read dataframe of ObsIDs and pointing coordinates into constant
     CENSUS = observation_census(xga_conf)
+    OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
+
+    # These are the different ways the SAS runs can be partitioned out
+    allowed_compute = ["local", "sge", "slurm"]
+    COMPUTE_MODE = xga_conf["XGA_SETUP"]["compute_mode"].lower()
+    if COMPUTE_MODE not in allowed_compute:
+        raise ValueError("{0} is not a valid compute mode - "
+                         "please choose from:\n {1}".format(xga_conf["XGA_SETUP"]["compute_mode"],
+                                                            ", ".join(allowed_compute)))
+    elif COMPUTE_MODE == "local":
+        # Going to allow multi-core processing to use 90% of available cores by default, but
+        # this can be over-ridden in individual SAS calls.
+        NUM_CORES = int(floor(os.cpu_count() * 0.9))
+
+    # TODO Remove this once I have figured out how to support HPCs
+    elif COMPUTE_MODE in ["sge", "slurm"]:
+        raise NotImplementedError("I don't support HPCs yet!")
+
+
+

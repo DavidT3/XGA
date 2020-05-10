@@ -3,7 +3,7 @@
 import os
 import warnings
 from itertools import product
-from typing import Tuple
+from typing import Tuple, List
 
 import numpy as np
 from astropy import wcs
@@ -12,13 +12,16 @@ from astropy.cosmology import Planck15
 from astropy.io import fits
 from regions import read_ds9, PixelRegion
 from xga import xga_conf
-from xga.exceptions import NotAssociatedError, UnknownProductTypeError
+from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError
 from xga.sourcetools import simple_xmm_match, nhlookup
-from xga.utils import ENERGY_BOUND_PRODUCTS, ALLOWED_PRODUCTS
+from xga.utils import ENERGY_BOUND_PRODUCTS, ALLOWED_PRODUCTS, XMM_INST
+
+import sys
 
 warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
+# TODO Consider a generator solution to read in images on demand, if individual ones are required
 class BaseSource:
     def __init__(self, ra, dec, redshift=None, name='', cosmology=Planck15):
         self.source_name = name
@@ -39,7 +42,7 @@ class BaseSource:
         # Don't know if I'll keep this in, but this sums the live times of all instruments of all observations
         # TODO Perhaps get rid of this, perhaps put in function
         self.livetime = 0
-        for oi in product(self._products, ["pn", "mos1", "mos2"]):
+        for oi in product(self._products, XMM_INST):
             obs_id = oi[0]
             inst = oi[1]
             try:
@@ -48,8 +51,14 @@ class BaseSource:
             except KeyError:
                 pass
 
+        # This is a queue for products to be generated for this source, will be a numpy array in practise.
+        # Items in the same row will all be generated in parallel, whereas items in the same column will
+        # be combined into a command stack and run in order.
+        self.queue = None
+
         # TODO Read in images maybe, or at least generate the 'master' image and expmap
 
+    # TODO Rethink of the storage structure might be in order?
     def _initial_products(self) -> dict:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
@@ -73,7 +82,7 @@ class BaseSource:
 
             existing_files = {key: file for key, file in files.items() if os.path.exists(file)}
 
-            bound_key = "{l}-{u}".format(l=float(en_lims[0]), u=float(en_lims[1]))
+            bound_key = "bound_{l}-{u}".format(l=float(en_lims[0]), u=float(en_lims[1]))
             return bound_key, existing_files
 
         # This dictionary structure will contain paths to all available data products associated with this
@@ -82,7 +91,7 @@ class BaseSource:
 
         # Use itertools to create iterable and avoid messy nested for loop
         # product makes iterable of tuples, with all combinations of the events files and ObsIDs
-        for oi in product(obs_dict, ["pn", "mos1", "mos2"]):
+        for oi in product(obs_dict, XMM_INST):
             # Produces a list of the combinations of upper and lower energy bounds from the config file.
             en_comb = zip(xga_conf["XMM_FILES"]["lo_en"], xga_conf["XMM_FILES"]["hi_en"])
 
@@ -103,14 +112,17 @@ class BaseSource:
                 if os.path.exists(reg_file):
                     # Dictionary updated with path to region file, if it exists
                     # Want regions top level, as not associated with any one instrument
+                    # TODO Make this stop saving regions here, they have their own attribute
                     obs_dict[obs_id]["regions"] = reg_file
 
         # Cleans any observations that don't have at least one instrument associated with them
         obs_dict = {o: v for o, v in obs_dict.items() if len(v) != 0}
+        if len(obs_dict) == 0:
+            raise NoValidObservationsError("No matching observations have the necessary files.")
         return obs_dict
 
-    def _update_products(self, obs_id: str, inst: str, p_type: str, p_path: str,
-                         lo: float = None, hi: float = None):
+    def update_products(self, obs_id: str, inst: str, p_type: str, p_path: str,
+                        lo: float = None, hi: float = None):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
         but will overwrite existing products with a warning. Raises errors if the ObsID is not associated
@@ -127,9 +139,9 @@ class BaseSource:
         # Allowed products are defined in the utils code, lay down the law about what types of products
         # are supported by XGA
         if p_type not in ALLOWED_PRODUCTS:
-            raise UnknownProductTypeError()
+            raise UnknownProductError()
         elif lo is not None and hi is not None:
-            en_key = "{l}-{u}".format(l=float(lo), u=float(hi))
+            en_key = "bound_{l}-{u}".format(l=float(lo), u=float(hi))
         elif lo is None or hi is None and p_type in ENERGY_BOUND_PRODUCTS:
             raise TypeError("Energy limits cannot be None when writing an energy bound product.")
         else:
@@ -157,6 +169,46 @@ class BaseSource:
             # TODO This implementation will have to change when I figure out how to implement
             #  writing groups of spectra.
             self._products[obs_id][inst][p_type] = p_path
+
+    def get_products(self, p_type: str) -> List[list]:
+        """
+        This is the getter for the products data structure of Source objects. Passing a 'product type'
+        such as 'events' or 'images' will return every matching entry in the products data structure.
+        :param str p_type: Product type identifier. e.g. image or expmap.
+        :return: Generator of matching products.
+        """
+        def dict_search(key: str, var: dict) -> str:
+            """
+            This simple function was very lightly modified from a stackoverflow answer, and is an
+            efficient method of searching through a nested dictionary structure for specfic keys
+            (and yielding the values associated with them). In this case will extract all of a
+            specific product type for a given source.
+            :param key: The key in the dictionary to search for and extract values.
+            :param var: The variable to search, likely to be either a dictionary or a string.
+            :return list[list]: Returns information on keys and values
+            """
+
+            # Check that the input is actually a dictionary
+            if hasattr(var, 'items'):
+                for k, v in var.items():
+                    if k == key:
+                        yield v
+                    # Here is where we dive deeper, recursively searching lower dictionary levels.
+                    if isinstance(v, dict):
+                        for result in dict_search(key, v):
+                            # This way all the key steps get concatenated together, so I can break them
+                            # apart again later. Need to return info about ObsID and instrument
+                            yield str(k) + "\n" + str(result)
+
+        # Only certain product identifier are allowed
+        if p_type not in ALLOWED_PRODUCTS:
+            raise UnknownProductError("Requested product type not recognised.")
+
+        # Here's where the concatenated strings are split apart again.
+        # So we end up with a list of N keys, then the value on the end. Where N is the number of levels
+        # down we had to go.
+        matches = [res.split("\n") for res in dict_search(p_type, self._products)]
+        return matches
 
     def _load_regions(self) -> Tuple[dict, dict]:
         """
@@ -205,17 +257,37 @@ class BaseSource:
                 match_dict[obs_id] = within
         return reg_dict, match_dict
 
-    def merged_im(self):
-        # TODO Remove this experimental crap
-        things = []
-        hdus = []
-        for obs in self._products:
-            for ins in self._products[obs]:
-                if "0.5-2.0" in self._products[obs][ins] and "image" in self._products[obs][ins]["0.5-2.0"]:
-                    things.append(self._products[obs][ins]["0.5-2.0"]["image"])
-                    hdus.append(fits.open(things[-1])[0])
+    def update_queue(self, cmd_arr: np.ndarray, stack: bool = False):
+        """
+        Small function to update the numpy array that makes up the queue of products to be generated.
+        :param np.ndarray cmd_arr: Array containing SAS commands.
+        :param stack: Should these commands be executed after a preceding line of commands,
+        or at the same time.
+        :return:
+        """
+        if self.queue is None:
+            self.queue = cmd_arr
+        elif stack:
+            self.queue = np.vstack((self.queue, cmd_arr))
+        else:
+            self.queue = np.append(self.queue, cmd_arr, axis=0)
 
-        print('emosaic imagesets="'+' '.join(things) + '" mosaicedset="testsmoosh.fits"')
+    def get_queue(self) -> List[str]:
+        """
+        Calling this indicates that the queue is about to be processed, so this function combines SAS
+        commands along columns (command stacks), and returns N SAS commands to be run concurrently,
+        where N is the number of columns.
+        :return: List of strings, where the strings are bash commands to run SAS procedures.
+        :rtype: list[str]
+        """
+        if len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
+            processed_cmds = list(self.queue)
+        else:
+            processed_cmds = [";".join(col) for col in self.queue.T]
+
+        # This is only likely to be called when processing is beginning, so this will wipe the queue.
+        self.queue = None
+        return processed_cmds
 
     def info(self):
         """

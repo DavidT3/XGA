@@ -97,7 +97,7 @@ class NotAssociatedError(Exception):
             return 'NotAssociatedError has been raised'
 
 
-class UnknownProductTypeError(Exception):
+class UnknownProductError(Exception):
     def __init__(self, *args):
         """
         Error raised when there is an attempt to write an unknown XMM product type to an XGA source.
@@ -114,3 +114,23 @@ class UnknownProductTypeError(Exception):
             return '{}'.format(self.message)
         else:
             return 'UnknownProductTypeError has been raised'
+
+
+class NoValidObservationsError(Exception):
+    def __init__(self, *args):
+        """
+        Error raised when there is an initial match to an XMM observation, but the
+        necessary files cannot be found.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'NoValidObservationsError has been raised'
