@@ -55,10 +55,13 @@ class BaseSource:
         # Items in the same row will all be generated in parallel, whereas items in the same column will
         # be combined into a command stack and run in order.
         self.queue = None
+        # Another attribute destined to be an array, will contain the output type of each command submitted to
+        # the queue array.
+        self.queue_type = None
+        # This contains the path of the final output of each command in the queue
+        self.queue_path = None
 
-        # TODO Read in images maybe, or at least generate the 'master' image and expmap
-
-    # TODO Rethink of the storage structure might be in order?
+    # TODO Use the new product classes in the initial load in of supplied files in the source objects
     def _initial_products(self) -> dict:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
@@ -154,7 +157,7 @@ class BaseSource:
         if not os.path.exists(p_path):
             raise FileNotFoundError("The path to the XMM product does not exist.")
 
-        # Double check that something is trying to add spectra from another source to the current one.
+        # Double check that something is trying to add products from another source to the current one.
         if obs_id not in self._products:
             raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
         elif inst not in self._products[obs_id]:
@@ -257,43 +260,65 @@ class BaseSource:
                 match_dict[obs_id] = within
         return reg_dict, match_dict
 
-    def update_queue(self, cmd_arr: np.ndarray, stack: bool = False):
+    def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
+                     stack: bool = False):
         """
         Small function to update the numpy array that makes up the queue of products to be generated.
         :param np.ndarray cmd_arr: Array containing SAS commands.
+        :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
+        by the cmd array. e.g. image or expmap.
+        :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
         :param stack: Should these commands be executed after a preceding line of commands,
         or at the same time.
         :return:
         """
         if self.queue is None:
+            # I could have done all of these in one array with 3 dimensions, but felt this was easier to read
+            # and with no real performance penalty
             self.queue = cmd_arr
+            self.queue_type = p_type_arr
+            self.queue_path = p_path_arr
         elif stack:
             self.queue = np.vstack((self.queue, cmd_arr))
+            self.queue_type = np.vstack((self.queue_type, p_type_arr))
+            self.queue_path = np.vstack((self.queue_path, p_path_arr))
         else:
             self.queue = np.append(self.queue, cmd_arr, axis=0)
+            self.queue_type = np.append(self.queue_type, p_type_arr, axis=0)
+            self.queue_path = np.append(self.queue_path, p_path_arr, axis=0)
 
-    def get_queue(self) -> List[str]:
+    def get_queue(self) -> Tuple[List[str], List[str], List[List[str]]]:
         """
         Calling this indicates that the queue is about to be processed, so this function combines SAS
         commands along columns (command stacks), and returns N SAS commands to be run concurrently,
         where N is the number of columns.
-        :return: List of strings, where the strings are bash commands to run SAS procedures.
-        :rtype: list[str]
+        :return: List of strings, where the strings are bash commands to run SAS procedures, another
+        list of strings, where the strings are expected output types for the commands, a list of
+        lists of strings, where the strings are expected output paths for products of the SAS commands.
+        :rtype: Tuple[List[str], List[str], List[List[str]]]
         """
         if len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
             processed_cmds = list(self.queue)
+            types = list(self.queue_type)
+            paths = [[str(path)] for path in self.queue_path]
         else:
             processed_cmds = [";".join(col) for col in self.queue.T]
+            types = list(self.queue_type[-1, :])
+            paths = [list(col.astype(str)) for col in self.queue_path.T]
 
         # This is only likely to be called when processing is beginning, so this will wipe the queue.
         self.queue = None
-        return processed_cmds
+        self.queue_type = None
+        self.queue_path = None
+        # The returned paths are lists of strings because we want to include every file in a stack to be able
+        # to check that exists
+        return processed_cmds, types, paths
 
     def info(self):
         """
         Very simple function that just prints a summary of the BaseSource object.
         """
-        print("\n-----------------------------------------------------")
+        print("-----------------------------------------------------")
         print("Source Name - {}".format(self.source_name))
         print("User Coordinates - ({0}, {1}) degrees".format(*self.ra_dec))
         print("X-ray Peak Coordinates - ({0}, {1}) degrees".format("N/A", "N/A"))

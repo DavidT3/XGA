@@ -15,6 +15,6 @@ setup(name='xga',
       url='http://github.com/DavidT3/XGA',
       setup_requires=[],
       install_requires=["astropy", "numpy", "tqdm", "regions~=0.4", "pandas>=1.0.3"],
-      include_package_data=False,
+      include_package_data=True,
       python_requires='>=3')
 

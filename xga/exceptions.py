@@ -40,6 +40,69 @@ class SASNotFoundError(Exception):
             return 'SASNotFoundError has been raised'
 
 
+# I do not know if I will keep this as is or expand out into different errors
+# The trouble is there are many hundreds of possible SAS errors, and I don't know if I
+# want a class for all of them
+class SASGenerationError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if an error is found to have occured during a run of a part
+        of the SAS software
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'A generic SASNotFoundError has been raised'
+
+
+class UnknownCommandlineError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if an error is found to have occured during a run of a part
+        of the SAS software, but it cannot be linked to a SAS function.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'A generic UnknownCommandlineError has been raised'
+
+
+class FailedProductError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised when trying to access certain data/attributes from an object wrapping a
+         product that failed to generate properly.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'FailedProductError has been raised.'
+
+
 class XGAConfigError(Exception):
     def __init__(self, *args):
         """
