@@ -255,7 +255,7 @@ else:
     elif COMPUTE_MODE == "local":
         # Going to allow multi-core processing to use 90% of available cores by default, but
         # this can be over-ridden in individual SAS calls.
-        NUM_CORES = int(floor(os.cpu_count() * 0.9))
+        NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
 
     # TODO Remove this once I have figured out how to support HPCs
     elif COMPUTE_MODE in ["sge", "slurm"]:
