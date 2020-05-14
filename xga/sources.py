@@ -9,19 +9,20 @@ import numpy as np
 from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
-from astropy.io import fits
+from astropy.units import Quantity
 from regions import read_ds9, PixelRegion
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError
 from xga.sourcetools import simple_xmm_match, nhlookup
 from xga.utils import ENERGY_BOUND_PRODUCTS, ALLOWED_PRODUCTS, XMM_INST
+from xga.products import PROD_MAP, EventList, BaseProduct
 
 import sys
-
+# This disables an annoying astropy warning that pops up all the time with XMM images
+# Don't know if I should do this really
 warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
-# TODO Consider a generator solution to read in images on demand, if individual ones are required
 class BaseSource:
     def __init__(self, ra, dec, redshift=None, name='', cosmology=Planck15):
         self.source_name = name
@@ -35,21 +36,22 @@ class BaseSource:
         # nhlookup returns average and weighted average values, so just take the first
         self.nH = nhlookup(ra, dec)[0]
         self.redshift = redshift
-        self._products = self._initial_products()
+        self._products, region_dict = self._initial_products()
         if redshift is not None:
             self.lum_dist = cosmology.luminosity_distance(self.redshift)
-        self.regions, self.matches = self._load_regions()
+        self.regions, self.matches = self._load_regions(region_dict)
+
         # Don't know if I'll keep this in, but this sums the live times of all instruments of all observations
         # TODO Perhaps get rid of this, perhaps put in function
-        self.livetime = 0
-        for oi in product(self._products, XMM_INST):
-            obs_id = oi[0]
-            inst = oi[1]
-            try:
-                with fits.open(self._products[obs_id][inst]["events"]) as evt:
-                    self.livetime += evt[1].header["LIVETIME"]
-            except KeyError:
-                pass
+        # self.livetime = 0
+        # for oi in product(self._products, XMM_INST):
+        #     obs_id = oi[0]
+        #     inst = oi[1]
+        #     try:
+        #         with fits.open(self._products[obs_id][inst]["events"]) as evt:
+        #             self.livetime += evt[1].header["LIVETIME"]
+        #     except KeyError:
+        #         pass
 
         # This is a queue for products to be generated for this source, will be a numpy array in practise.
         # Items in the same row will all be generated in parallel, whereas items in the same column will
@@ -58,15 +60,18 @@ class BaseSource:
         # Another attribute destined to be an array, will contain the output type of each command submitted to
         # the queue array.
         self.queue_type = None
-        # This contains the path of the final output of each command in the queue
+        # This contains an array of the paths of the final output of each command in the queue
         self.queue_path = None
+        # This contains an array of the extra information needed to instantiate class
+        # after the SAS command has run
+        self.queue_extra_info = None
 
-    # TODO Use the new product classes in the initial load in of supplied files in the source objects
-    def _initial_products(self) -> dict:
+    def _initial_products(self) -> Tuple[dict, dict]:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
-        :return: A dictionary structure detailing the data products available at initialisation
-        :rtype: dict
+        :return: A dictionary structure detailing the data products available at initialisation, and
+        another dictionary containing paths to region files.
+        :rtype: Tuple[dict, dict]
         """
         def gen_file_names(en_lims: tuple) -> Tuple[str, dict]:
             """
@@ -79,18 +84,34 @@ class BaseSource:
             dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = ["root_xmm_dir", "lo_en", "hi_en", "region_file", evt_key]
+            not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key]
+            # Formats the generic paths given in the config file for this particular obs and energy range
             files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
                      for k, v in xga_conf["XMM_FILES"].items() if k not in not_these and inst in k}
 
-            existing_files = {key: file for key, file in files.items() if os.path.exists(file)}
+            # It is not necessary to check that the files exist, as this happens when the product classes
+            # are instantiated. So whether the file exists or not, an object WILL exist, and you can check if
+            # you should use it for analysis using the .usable attribute
+
+            # This looks up the class which corresponds to the key (which is the product
+            # ID in this case e.g. image), then instantiates an object of that class
+            lo = Quantity(float(en_lims[0]), 'keV')
+            hi = Quantity(float(en_lims[1]), 'keV')
+            prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
+                                            gen_cmd="", lo_en=lo, hi_en=hi)
+                         for key, file in files.items() if os.path.exists(file)}
+            # As these files existed already, I don't have any stdout/err strings to pass, also no
+            # command string.
 
             bound_key = "bound_{l}-{u}".format(l=float(en_lims[0]), u=float(en_lims[1]))
-            return bound_key, existing_files
+            return bound_key, prod_objs
 
         # This dictionary structure will contain paths to all available data products associated with this
         # source instance, both pre-generated and made with XGA.
         obs_dict = {obs: {} for obs in self.obs}
+        # Regions will get their own dictionary, I don't care about keeping the reg_file paths as
+        # an attribute because they get read into memory in the init of this class
+        reg_dict = {}
 
         # Use itertools to create iterable and avoid messy nested for loop
         # product makes iterable of tuples, with all combinations of the events files and ObsIDs
@@ -108,79 +129,68 @@ class BaseSource:
             if os.path.exists(evt_file):
                 # An instrument subsection of an observation will ONLY be populated if the events file exists
                 # Otherwise nothing can be done with it.
-                obs_dict[obs_id][inst] = {"events": evt_file}
+                obs_dict[obs_id][inst] = {"events": EventList(evt_file, obs_id=obs_id, instrument=inst,
+                                                              stdout_str="", stderr_str="", gen_cmd="")}
                 # Dictionary updated with derived product names
                 map_ret = map(gen_file_names, en_comb)
                 obs_dict[obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
                 if os.path.exists(reg_file):
-                    # Dictionary updated with path to region file, if it exists
-                    # Want regions top level, as not associated with any one instrument
-                    # TODO Make this stop saving regions here, they have their own attribute
-                    obs_dict[obs_id]["regions"] = reg_file
+                    # Regions dictionary updated with path to region file, if it exists
+                    reg_dict[obs_id] = reg_file
 
         # Cleans any observations that don't have at least one instrument associated with them
         obs_dict = {o: v for o, v in obs_dict.items() if len(v) != 0}
         if len(obs_dict) == 0:
             raise NoValidObservationsError("No matching observations have the necessary files.")
-        return obs_dict
+        return obs_dict, reg_dict
 
-    def update_products(self, obs_id: str, inst: str, p_type: str, p_path: str,
-                        lo: float = None, hi: float = None):
+    def update_products(self, prod_obj: BaseProduct):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
         but will overwrite existing products with a warning. Raises errors if the ObsID is not associated
         with this source or the instrument is not associated with the ObsID.
-        :param str obs_id: A valid XMM ObsID.
-        :param str inst: XMM Instrument identifier. Allowed values are pn, mos1, or mos2.
-        :param str p_type: Product type identifier. e.g. image or expmap.
-        :param str p_path: Product file path.
-        :param float lo: The lower energy bound used to create this product. This only needs to
-        be supplied for image based products such as images or exposure maps.
-        :param float hi: The upper energy bound used to create this product. This only needs to
-        be supplied for image based products images or exposure maps.
+        :param BaseProduct prod_obj: The new product object to be added to the source object.
         """
-        # Allowed products are defined in the utils code, lay down the law about what types of products
-        # are supported by XGA
-        if p_type not in ALLOWED_PRODUCTS:
-            raise UnknownProductError()
-        elif lo is not None and hi is not None:
-            en_key = "bound_{l}-{u}".format(l=float(lo), u=float(hi))
-        elif lo is None or hi is None and p_type in ENERGY_BOUND_PRODUCTS:
-            raise TypeError("Energy limits cannot be None when writing an energy bound product.")
+        if not isinstance(prod_obj, BaseProduct):
+            raise TypeError("Only product objects can be assigned to sources.")
+
+        en_bnds = prod_obj.energy_bounds
+        if en_bnds[0] is not None and en_bnds[1] is not None:
+            en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
         else:
             en_key = None
 
-        # Just to be sure
-        inst = inst.lower()
-
-        # Don't want to point a source object at a file that doesn't actually exist.
-        if not os.path.exists(p_path):
-            raise FileNotFoundError("The path to the XMM product does not exist.")
+        # All information about where to place it in our storage hierarchy can be pulled from the product
+        # object itself
+        obs_id = prod_obj.obs_id
+        inst = prod_obj.instrument
+        p_type = prod_obj.type
 
         # Double check that something is trying to add products from another source to the current one.
         if obs_id not in self._products:
             raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
         elif inst not in self._products[obs_id]:
             raise NotAssociatedError("{i} is not associated with XMM observation {o}".format(i=inst, o=obs_id))
-        elif en_key is not None and en_key in self._products[obs_id][inst] \
-                and p_type in self._products[obs_id][inst][en_key]:
-            warnings.warn("You are replacing an existing product associated with this X-ray source.")
 
-        if p_type in ENERGY_BOUND_PRODUCTS:
-            self._products[obs_id][inst][en_key][p_type] = p_path
+        if en_key is not None:
+            # If there is no entry for this energy band already, we must make one
+            if en_key not in self._products[obs_id][inst]:
+                self._products[obs_id][inst][en_key] = {}
+            self._products[obs_id][inst][en_key][p_type] = prod_obj
         else:
-            # TODO This implementation will have to change when I figure out how to implement
-            #  writing groups of spectra.
-            self._products[obs_id][inst][p_type] = p_path
+            self._products[obs_id][inst][p_type] = prod_obj
 
-    def get_products(self, p_type: str) -> List[list]:
+    def get_products(self, p_type: str, obs_id: str = None, inst: str = None) -> List[list]:
         """
         This is the getter for the products data structure of Source objects. Passing a 'product type'
         such as 'events' or 'images' will return every matching entry in the products data structure.
         :param str p_type: Product type identifier. e.g. image or expmap.
-        :return: Generator of matching products.
+        :param str obs_id: Optionally, a specific obs_id to search can be supplied.
+        :param str inst: Optionally, a specific instrument to search can be supplied.
+        :return: List of matching products.
+        :rtype: List[list]
         """
-        def dict_search(key: str, var: dict) -> str:
+        def dict_search(key: str, var: dict) -> list:
             """
             This simple function was very lightly modified from a stackoverflow answer, and is an
             efficient method of searching through a nested dictionary structure for specfic keys
@@ -199,21 +209,51 @@ class BaseSource:
                     # Here is where we dive deeper, recursively searching lower dictionary levels.
                     if isinstance(v, dict):
                         for result in dict_search(key, v):
-                            # This way all the key steps get concatenated together, so I can break them
-                            # apart again later. Need to return info about ObsID and instrument
-                            yield str(k) + "\n" + str(result)
+                            # We yield a string of the result and the key, as we'll need to return the
+                            # ObsID and Instrument information from these product searches as well.
+                            # This will mean the output is an unpleasantly nested list, but we can solve that.
+                            yield [str(k), result]
+
+        def unpack_list(to_unpack: list):
+            """
+            A recursive function to go through every layer of a nested list and flatten it all out. It
+            doesn't return anything because to make life easier the 'results' are appended to a variable
+            in the namespace above this one.
+            :param list to_unpack: The list that needs unpacking.
+            """
+            # Must iterate through the given list
+            for entry in to_unpack:
+                # If the current element is not a list then all is chill, this element is ready for appending
+                # to the final list
+                if not isinstance(entry, list):
+                    out.append(entry)
+                else:
+                    # If the current element IS a list, then obviously we still have more unpacking to do,
+                    # so we call this function recursively.
+                    unpack_list(entry)
 
         # Only certain product identifier are allowed
         if p_type not in ALLOWED_PRODUCTS:
             raise UnknownProductError("Requested product type not recognised.")
+        elif obs_id not in self._products and obs_id is not None:
+            raise NotAssociatedError("{} is not associated with this source.".format(obs_id))
+        elif inst not in XMM_INST and inst is not None:
+            raise ValueError("{} is not an allowed instrument".format(inst))
 
-        # Here's where the concatenated strings are split apart again.
-        # So we end up with a list of N keys, then the value on the end. Where N is the number of levels
-        # down we had to go.
-        matches = [res.split("\n") for res in dict_search(p_type, self._products)]
+        matches = []
+        # Iterates through the dict search return, but each match is likely to be a very nested list,
+        # with the degree of nesting dependant on product type (as event lists live a level up from
+        # images for instance
+        for match in dict_search(p_type, self._products):
+            out = []
+            unpack_list(match)
+            # Only appends if this particular match is for the obs_id and instrument passed to this method
+            # Though all matches will be returned if no obs_id/inst is passed
+            if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None):
+                matches.append(out)
         return matches
 
-    def _load_regions(self) -> Tuple[dict, dict]:
+    def _load_regions(self, reg_paths) -> Tuple[dict, dict]:
         """
         An internal method that reads and parses region files found for observations
         associated with this source. Also computes simple matches to find regions likely
@@ -236,38 +276,41 @@ class BaseSource:
         # As we only allow one set of regions per observation, we shall assume that we can use the
         # WCS transform from ANY of the images to convert pixels to degrees
 
-        for obs_id in self._products:
-            if "regions" in self._products[obs_id]:
-                ds9_regs = read_ds9(self._products[obs_id]["regions"])
-                inst = [k for k in self._products[obs_id] if k in ["pn", "mos1", "mos2"]][0]
-                en = [k for k in self._products[obs_id][inst] if "-" in k][0]
-                # Making an assumption here, that if there are regions there will be images
-                w = wcs.WCS(self._products[obs_id][inst][en]["image"])
-                if isinstance(ds9_regs[0], PixelRegion):
-                    sky_regs = [reg.to_sky(w) for reg in ds9_regs]
-                    reg_dict[obs_id] = np.array(sky_regs)
-                else:
-                    reg_dict[obs_id] = np.array(ds9_regs)
+        for obs_id in reg_paths:
+            ds9_regs = read_ds9(reg_paths[obs_id])
+            inst = [k for k in self._products[obs_id] if k in ["pn", "mos1", "mos2"]][0]
+            en = [k for k in self._products[obs_id][inst] if "-" in k][0]
+            # Making an assumption here, that if there are regions there will be images
+            # Getting the radec_wcs property from the Image object
+            w = self._products[obs_id][inst][en]["image"].radec_wcs
+            if isinstance(ds9_regs[0], PixelRegion):
+                sky_regs = [reg.to_sky(w) for reg in ds9_regs]
+                reg_dict[obs_id] = np.array(sky_regs)
+            else:
+                reg_dict[obs_id] = np.array(ds9_regs)
 
-                # Quickly calculating distance between source and center of regions, then sorting
-                # and getting indices. Thus I only match to the closest 5 regions.
-                diff_sort = np.array([dist_from_source(r) for r in reg_dict[obs_id]]).argsort()
-                within = np.array([reg.contains(SkyCoord(*self.ra_dec, unit='deg'), w)
-                                   for reg in reg_dict[obs_id][diff_sort[0:5]]])
+            # Quickly calculating distance between source and center of regions, then sorting
+            # and getting indices. Thus I only match to the closest 5 regions.
+            diff_sort = np.array([dist_from_source(r) for r in reg_dict[obs_id]]).argsort()
+            within = np.array([reg.contains(SkyCoord(*self.ra_dec, unit='deg'), w)
+                               for reg in reg_dict[obs_id][diff_sort[0:5]]])
 
-                # Expands it so it can be used as a mask on the whole set of regions for this observation
-                within = np.pad(within, [0, len(diff_sort)-len(within)])
-                match_dict[obs_id] = within
+            # Expands it so it can be used as a mask on the whole set of regions for this observation
+            within = np.pad(within, [0, len(diff_sort)-len(within)])
+            match_dict[obs_id] = within
+            # Use the deleter for the hdulist to unload the astropy hdulist for this image
+            del self._products[obs_id][inst][en]["image"].hdulist
         return reg_dict, match_dict
 
     def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
-                     stack: bool = False):
+                     extra_info: np.ndarray, stack: bool = False):
         """
         Small function to update the numpy array that makes up the queue of products to be generated.
         :param np.ndarray cmd_arr: Array containing SAS commands.
         :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
         by the cmd array. e.g. image or expmap.
         :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
+        :param np.ndarray extra_info: Array of extra information dictionaries
         :param stack: Should these commands be executed after a preceding line of commands,
         or at the same time.
         :return:
@@ -278,16 +321,19 @@ class BaseSource:
             self.queue = cmd_arr
             self.queue_type = p_type_arr
             self.queue_path = p_path_arr
+            self.queue_extra_info = extra_info
         elif stack:
             self.queue = np.vstack((self.queue, cmd_arr))
             self.queue_type = np.vstack((self.queue_type, p_type_arr))
             self.queue_path = np.vstack((self.queue_path, p_path_arr))
+            self.queue_extra_info = np.vstack((self.queue_extra_info, extra_info))
         else:
             self.queue = np.append(self.queue, cmd_arr, axis=0)
             self.queue_type = np.append(self.queue_type, p_type_arr, axis=0)
             self.queue_path = np.append(self.queue_path, p_path_arr, axis=0)
+            self.queue_extra_info = np.append(self.queue_extra_info, extra_info, axis=0)
 
-    def get_queue(self) -> Tuple[List[str], List[str], List[List[str]]]:
+    def get_queue(self) -> Tuple[List[str], List[str], List[List[str]], List[dict]]:
         """
         Calling this indicates that the queue is about to be processed, so this function combines SAS
         commands along columns (command stacks), and returns N SAS commands to be run concurrently,
@@ -297,22 +343,45 @@ class BaseSource:
         lists of strings, where the strings are expected output paths for products of the SAS commands.
         :rtype: Tuple[List[str], List[str], List[List[str]]]
         """
-        if len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
+        if self.queue is None:
+            # This returns empty lists if the queue is undefined
+            processed_cmds = []
+            types = []
+            paths = []
+            extras = []
+        elif len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
             processed_cmds = list(self.queue)
             types = list(self.queue_type)
             paths = [[str(path)] for path in self.queue_path]
+            extras = list(self.queue_extra_info)
         else:
             processed_cmds = [";".join(col) for col in self.queue.T]
             types = list(self.queue_type[-1, :])
             paths = [list(col.astype(str)) for col in self.queue_path.T]
+            extras = []
+            for col in self.queue_path.T:
+                # This nested dictionary comprehension combines a column of extra information
+                # dictionaries into one, for ease of access.
+                comb_extra = {k: v for ext_dict in col for k, v in ext_dict.items()}
+                extras.append(comb_extra)
 
         # This is only likely to be called when processing is beginning, so this will wipe the queue.
         self.queue = None
         self.queue_type = None
         self.queue_path = None
+        self.queue_extra_info = None
         # The returned paths are lists of strings because we want to include every file in a stack to be able
         # to check that exists
-        return processed_cmds, types, paths
+        return processed_cmds, types, paths, extras
+
+    # @property
+    # def queue_shape(self) -> Tuple[int, int]:
+    #     """
+    #     A simple getter to fetch the current shape of the queue associated with this source.
+    #     :return: A tuple containing the shape of the numpy array that is the queue.
+    #     :rtype: Tuple[int, int]
+    #     """
+    #     return self.queue.shape
 
     def info(self):
         """
@@ -328,7 +397,7 @@ class BaseSource:
         print("Total regions - {}".format(sum([len(self.regions[o]) for o in self.regions])))
         print("Obs with one match - {}".format(sum([1 for o in self.matches if self.matches[o].sum() == 1])))
         print("Obs with >1 matches - {}".format(sum([1 for o in self.matches if self.matches[o].sum() > 1])))
-        print("Total livetime - {} [seconds]".format(round(self.livetime, 2)))
+        # print("Total livetime - {} [seconds]".format(round(self.livetime, 2)))
         print("-----------------------------------------------------\n")
 
     def __len__(self) -> int:

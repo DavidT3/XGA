@@ -7,13 +7,16 @@ from typing import Tuple, List, Dict
 import numpy as np
 from astropy.io import fits
 from astropy import wcs
+from astropy.units import Quantity
 
 from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError
 from xga.utils import SASERROR_LIST, SASWARNING_LIST
+# TODO Maybe do a regions object but not fully decided on that yet
 
 
 class BaseProduct:
-    def __init__(self, path: str, stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+                 gen_cmd: str, raise_properly: bool = True):
         """
         The initialisation method for the BaseProduct class.
         :param str path: The path to where the product file SHOULD be located.
@@ -30,7 +33,11 @@ class BaseProduct:
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
         self._sas_error, self._other_error = self.parse_stderr()
+        self._obs_id = obs_id
+        self._inst = instrument
         self.og_cmd = gen_cmd
+        self._energy_bounds = (None, None)
+        self._prod_type = None
 
         self.raise_errors(raise_properly)
 
@@ -130,31 +137,78 @@ class BaseProduct:
             for error in self._other_error:
                 raise UnknownCommandlineError("{}".format(error))
 
+    @property
+    def obs_id(self) -> str:
+        """
+        Property getter for the ObsID of this image. Admittedly this information is implicit in the location
+        this object is stored in a source object, but I think it worth storing directly as a property as well.
+        :return: The XMM ObsID of this image.
+        :rtype: str
+        """
+        return self._obs_id
+
+    @property
+    def instrument(self) -> str:
+        """
+        Property getter for the instrument used to take this image. Admittedly this information is implicit
+        in the location this object is stored in a source object, but I think it worth storing
+        directly as a property as well.
+        :return: The XMM instrument used to take this image.
+        :rtype: str
+        """
+        return self._inst
+
+    # This is a fundamental property of the generated product, so I won't allow it be changed.
+    @property
+    def energy_bounds(self) -> Tuple[Quantity, Quantity]:
+        """
+        Getter method for the energy_bounds property, which returns the rest frame energy band that this
+        product was generated in.
+        :return: Tuple containing the lower and upper energy limits as Astropy quantities.
+        :rtype: Tuple[Quantity, Quantity]
+        """
+        return self._energy_bounds
+
+    @property
+    def type(self) -> str:
+        """
+        Property getter for the string identifier for the type of product this object is, mostly useful for
+        internal methods of source objects.
+        :return: The string identifier for this type of object.
+        :rtype: str
+        """
+        return self._prod_type
+
 
 # TODO Probably add methods for coordinate transforms using the wcses (including radius)
 class Image(BaseProduct):
-    def __init__(self, path: str, stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
         """
         The initialisation method for the Image class.
         :param str path: The path to where the product file SHOULD be located.
         :param str stdout_str: The stdout from calling the terminal command.
         :param str stderr_str: The stderr from calling the terminal command.
         :param str gen_cmd: The command used to generate the product.
+        :param Quantity lo_en: The lower energy bound used to generate this product.
+        :param Quantity hi_en: The upper energy bound used to generate this product.
         :param bool raise_properly: Shall we actually raise the errors as Python errors?
         """
-        super().__init__(path, stdout_str, stderr_str, gen_cmd, raise_properly)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
         self._im_obj = None
         self._shape = None
         self._wcs_radec = None
         self._wcs_xmmXY = None
         self._wcs_xmmdetXdetY = None
+        self._energy_bounds = (lo_en, hi_en)
+        self._prod_type = "image"
 
     def _read_on_demand(self):
         """
         Internal method to read the image associated with this Image object into memory when it is requested by
         another method. Doing it on-demand saves on wasting memory.
         """
-        if self._im_obj is None and self.usable:
+        if self.usable:
             # Not all images produced by SAS are going to be needed all the time, so they will only be read in if
             # asked for.
             # Using read only mode because it still allows the user to make changes to the object in memory,
@@ -182,7 +236,7 @@ class Image(BaseProduct):
                 raise FailedProductError("SAS has generated this image without a WCS capable of "
                                          "going from pixels to RA-DEC.")
 
-        elif not self.usable:
+        else:
             raise FailedProductError("SAS failed to generate this product successfully, so you cannot "
                                      "access data from it. Check the usable attribute next time")
 
@@ -194,7 +248,10 @@ class Image(BaseProduct):
         :rtype: Tuple[int, int]
         """
         # This has to be run first, to check the image is loaded, otherwise how can we know the shape?
-        self._read_on_demand()
+        # This if is here rather than in the method as some other properties of this class don't need the
+        # image object, just some products derived from it.
+        if self._im_obj is None:
+            self._read_on_demand()
         # There will not be a setter for this property, no-one is allowed to change the shape of the image.
         return self._shape
 
@@ -207,7 +264,8 @@ class Image(BaseProduct):
         :rtype: np.ndarray
         """
         # Calling this ensures the image object is read into memory
-        self._read_on_demand()
+        if self._im_obj is None:
+            self._read_on_demand()
         return self._im_obj["PRIMARY"].data
 
     @data.setter
@@ -219,7 +277,8 @@ class Image(BaseProduct):
         :param np.ndarray new_im_arr: The new image data.
         """
         # Calling this ensures the image object is read into memory
-        self._read_on_demand()
+        if self._im_obj is None:
+            self._read_on_demand()
 
         # Have to make sure the input is of the right type, and the right shape
         if not isinstance(new_im_arr, np.ndarray):
@@ -239,6 +298,9 @@ class Image(BaseProduct):
         :return: The WCS object for RA and DEC.
         :rtype: wcs.WCS
         """
+        # If this WCS is None then _read_on_demand definitely hasn't run, this one MUST be set
+        if self._wcs_radec is None:
+            self._read_on_demand()
         return self._wcs_radec
 
     # These two however, can be none, so the user should be allowed to set add WCS-es to those
@@ -251,6 +313,10 @@ class Image(BaseProduct):
         :return: The WCS object for XMM X and Y sky coordinates.
         :rtype: wcs.WCS
         """
+        # Deliberately checking the radec WCS, as the skyXY WCS is allowed to be None after the
+        # read_on_demand call
+        if self._wcs_radec is None:
+            self._read_on_demand()
         return self._wcs_xmmXY
 
     @skyxy_wcs.setter
@@ -281,6 +347,10 @@ class Image(BaseProduct):
         :return: The WCS object for XMM DETX and DETY detector coordinates.
         :rtype: wcs.WCS
         """
+        # Deliberately checking the radec WCS, as the DETXY WCS is allowed to be None after the
+        # read_on_demand call
+        if self._wcs_radec is None:
+            self._read_on_demand()
         return self._wcs_xmmdetXdetY
 
     @detxy_wcs.setter
@@ -303,7 +373,8 @@ class Image(BaseProduct):
             else:
                 self._wcs_xmmdetXdetY = input_wcs
     
-    # This absolutely doesn't get a setter considering its the main object with all the information in.
+    # This absolutely doesn't get a setter considering its the main object with all the information in, it does
+    # get a deleter though because I'm nice like that
     @property
     def hdulist(self) -> fits.hdu.hdulist.HDUList:
         """
@@ -313,21 +384,44 @@ class Image(BaseProduct):
         """
         return self._im_obj
 
+    @hdulist.deleter
+    def hdulist(self):
+        """
+        Property deleter to unload the fits HDUlist object.
+        """
+        self._im_obj.close()
+        self._im_obj = None
+
 
 class ExpMap(Image):
-    def __init__(self, path: str, stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
-        super().__init__(path, stdout_str, stderr_str, gen_cmd, raise_properly)
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, raise_properly)
+        self._prod_type = "expmap"
 
 
+class EventList(BaseProduct):
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+                 gen_cmd: str, raise_properly: bool = True):
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+
+
+# TODO So these are 'stack' products, with each next step relying on the one before, so while they are a single
+#  object they will get the paths of every file that should have been created.
 class Spec(BaseProduct):
-    def __init__(self, path: str, stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
-        super().__init__(path, stdout_str, stderr_str, gen_cmd, raise_properly)
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+                 gen_cmd: str, raise_properly: bool = True):
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
 
 
 class AnnSpec(BaseProduct):
-    def __init__(self, path: str, stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
-        super().__init__(path, stdout_str, stderr_str, gen_cmd, raise_properly)
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+                 gen_cmd: str, raise_properly: bool = True):
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
 
+
+# Defining a dictionary to map from string product names to their associated classes
+PROD_MAP = {"image": Image, "expmap": ExpMap, "events": EventList}
 
 
 

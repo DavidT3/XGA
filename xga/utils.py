@@ -61,8 +61,6 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
 # List of XMM products supported by XGA that are allowed to be energy bound
 ENERGY_BOUND_PRODUCTS = ["image", "expmap", "reg_image", "reg_expmap", "psfmap"]
 # List of all XMM products supported by XGA
-# TODO This will also need to change when I figure out how to implement
-#  multiple sets of multiple spec products
 ALLOWED_PRODUCTS = ["spec", "arf", "rmf", "grp_spec", "regions", "events"] + ENERGY_BOUND_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]
 
