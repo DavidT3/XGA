@@ -5,10 +5,13 @@ import os
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
 
+import pandas as pd
+import pkg_resources
 from astropy.io import fits
-from numpy import nan
-from pandas import DataFrame
+from astropy.units import Quantity
+from numpy import nan, floor
 from tqdm import tqdm
+
 from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
 
 # Got to make sure we're able to import the PyXspec module.
@@ -21,7 +24,8 @@ except ModuleNotFoundError:
 
 # This one I'm less likely to relax to a warnings
 if "SAS_DIR" not in os.environ:
-    raise SASNotFoundError("SAS_DIR environment variable is not set, unable to verify SAS is present on system")
+    raise SASNotFoundError("SAS_DIR environment variable is not set, "
+                           "unable to verify SAS is present on system")
 else:
     # This way, the user can just import the SAS_VERSION from this utils code
     out, err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
@@ -34,7 +38,8 @@ CENSUS_FILE = os.path.join(CONFIG_PATH, 'census.csv')
 # XGA config file path
 CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 # Section of the config file for setting up the XGA module
-XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/"}
+XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/",
+              "compute_mode": "local"}
 # Will have to make it clear in the documentation what is allowed here, and which can be left out
 # TODO Figure out how on earth to deal with separate exp1 and exp2 etc events lists/images.
 #  For now just ignore them I guess?
@@ -56,8 +61,15 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
 # List of XMM products supported by XGA that are allowed to be energy bound
 ENERGY_BOUND_PRODUCTS = ["image", "expmap", "reg_image", "reg_expmap", "psfmap"]
 # List of all XMM products supported by XGA
-# TODO This will also need to change when I figure out how to implement multiple sets of multiple spec products
-ALLOWED_PRODUCTS = ["spec", "arf", "rmf", "grp_spec", "regions"] + ENERGY_BOUND_PRODUCTS
+ALLOWED_PRODUCTS = ["spec", "arf", "rmf", "grp_spec", "regions", "events"] + ENERGY_BOUND_PRODUCTS
+XMM_INST = ["pn", "mos1", "mos2"]
+
+# Here we read in files that list the errors and warnings in SAS
+errors = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_errors.csv"), header="infer")
+warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warnings.csv"), header="infer")
+# Just the names of the errors in two handy constants
+SASERROR_LIST = errors["ErrName"].values
+SASWARNING_LIST = warnings["WarnName"].values
 
 
 def xmm_obs_id_test(test_string: str) -> bool:
@@ -80,14 +92,14 @@ def xmm_obs_id_test(test_string: str) -> bool:
     return probably_xmm
 
 
-def observation_census(config: ConfigParser) -> DataFrame:
+def observation_census(config: ConfigParser) -> pd.DataFrame:
     """
     A function to initialise or update the file that stores which observations are available in the user
     specified XMM data directory, and what their pointing coordinates are.
     CURRENTLY THIS WILL NOT UPDATE TO DEAL WITH OBSID FOLDERS THAT HAVE BEEN DELETED.
     :param config: The XGA configuration object.
     :return: ObsIDs and pointing coordinates of available XMM observations.
-    :rtype: DataFrame
+    :rtype: pd.DataFrame
     """
     # The census lives in the XGA config folder, and CENSUS_FILE stores the path to it.
     # If it exists, it is read in, otherwise empty lists are initialised to be appended to.
@@ -109,7 +121,8 @@ def observation_census(config: ConfigParser) -> DataFrame:
         for obs in obs_census:
             ra_pnt = ''
             dec_pnt = ''
-            # Prepared to check all three events files, but if one succeeds the rest are skipped for efficiency
+            # Prepared to check all three events files, but if one succeeds the rest are
+            # skipped for efficiency
             for key in ["clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts"]:
                 evt_path = config["XMM_FILES"][key].format(obs_id=obs)
                 if os.path.exists(evt_path) and ra_pnt == '' and dec_pnt == '':
@@ -129,8 +142,8 @@ def observation_census(config: ConfigParser) -> DataFrame:
             census.writelines(obs_lookup)
 
     # I do the stripping and splitting to make it a 3 column array, needed to be lines to write to file
-    obs_lookup = DataFrame(data=[entry.strip('\n').split(',') for entry in obs_lookup[1:]],
-                           columns=obs_lookup[0].strip("\n").split(','), dtype=str)
+    obs_lookup = pd.DataFrame(data=[entry.strip('\n').split(',') for entry in obs_lookup[1:]],
+                              columns=obs_lookup[0].strip("\n").split(','), dtype=str)
     obs_lookup["RA_PNT"] = obs_lookup["RA_PNT"].replace('', nan).astype(float)
     obs_lookup["DEC_PNT"] = obs_lookup["DEC_PNT"].replace('', nan).astype(float)
     return obs_lookup
@@ -146,6 +159,16 @@ def to_list(str_rep_list: str) -> list:
     in_parts = str_rep_list.strip("[").strip("]").split(',')
     real_list = [part.strip(' ').strip("'").strip('"') for part in in_parts if part != '' and part != ' ']
     return real_list
+
+
+def energy_to_channel(energy: Quantity) -> int:
+    """
+    Converts an astropy energy quantity into an XMM channel.
+    :param energy:
+    """
+    energy = energy.to("eV").value
+    chan = int(energy)
+    return chan
 
 
 if not os.path.exists(CONFIG_PATH):
@@ -213,9 +236,30 @@ else:
 
     # Do a little pre-checking for the energy entries
     if len(xga_conf["XMM_FILES"]["lo_en"]) != len(xga_conf["XMM_FILES"]["hi_en"]):
-        raise ValueError("lo_en and hi_en entries in the config file do not parse to lists of the same length.")
+        raise ValueError("lo_en and hi_en entries in the config "
+                         "file do not parse to lists of the same length.")
 
     # Make sure that this is the absolute path
     xga_conf["XMM_FILES"]["root_xmm_dir"] = os.path.abspath(xga_conf["XMM_FILES"]["root_xmm_dir"]) + "/"
     # Read dataframe of ObsIDs and pointing coordinates into constant
     CENSUS = observation_census(xga_conf)
+    OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
+
+    # These are the different ways the SAS runs can be partitioned out
+    allowed_compute = ["local", "sge", "slurm"]
+    COMPUTE_MODE = xga_conf["XGA_SETUP"]["compute_mode"].lower()
+    if COMPUTE_MODE not in allowed_compute:
+        raise ValueError("{0} is not a valid compute mode - "
+                         "please choose from:\n {1}".format(xga_conf["XGA_SETUP"]["compute_mode"],
+                                                            ", ".join(allowed_compute)))
+    elif COMPUTE_MODE == "local":
+        # Going to allow multi-core processing to use 90% of available cores by default, but
+        # this can be over-ridden in individual SAS calls.
+        NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
+
+    # TODO Remove this once I have figured out how to support HPCs
+    elif COMPUTE_MODE in ["sge", "slurm"]:
+        raise NotImplementedError("I don't support HPCs yet!")
+
+
+
