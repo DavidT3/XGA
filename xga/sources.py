@@ -29,29 +29,20 @@ class BaseSource:
         self.ra_dec = np.array([ra, dec])
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
-        self.obs = simple_xmm_match(ra, dec)["ObsID"].values
+        self._obs = simple_xmm_match(ra, dec)["ObsID"].values
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         on_axis_match = simple_xmm_match(ra, dec, 5)["ObsID"].values
-        self.onaxis = np.isin(self.obs, on_axis_match)
+        self.onaxis = np.isin(self._obs, on_axis_match)
         # nhlookup returns average and weighted average values, so just take the first
         self.nH = nhlookup(ra, dec)[0]
         self.redshift = redshift
-        self._products, region_dict = self._initial_products()
+        self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
+        # Want to update the ObsIDs associated with this source after seeing if all files are present
+        self._obs = list(self._products.keys())
+
         if redshift is not None:
             self.lum_dist = cosmology.luminosity_distance(self.redshift)
         self.regions, self.matches = self._load_regions(region_dict)
-
-        # Don't know if I'll keep this in, but this sums the live times of all instruments of all observations
-        # TODO Perhaps get rid of this, perhaps put in function
-        # self.livetime = 0
-        # for oi in product(self._products, XMM_INST):
-        #     obs_id = oi[0]
-        #     inst = oi[1]
-        #     try:
-        #         with fits.open(self._products[obs_id][inst]["events"]) as evt:
-        #             self.livetime += evt[1].header["LIVETIME"]
-        #     except KeyError:
-        #         pass
 
         # This is a queue for products to be generated for this source, will be a numpy array in practise.
         # Items in the same row will all be generated in parallel, whereas items in the same column will
@@ -66,12 +57,13 @@ class BaseSource:
         # after the SAS command has run
         self.queue_extra_info = None
 
-    def _initial_products(self) -> Tuple[dict, dict]:
+    # TODO Check for XGA generated products and load them in perhaps.
+    def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
-        :return: A dictionary structure detailing the data products available at initialisation, and
-        another dictionary containing paths to region files.
-        :rtype: Tuple[dict, dict]
+        :return: A dictionary structure detailing the data products available at initialisation, another
+        dictionary containing paths to region files, and another dictionary containing paths to attitude files.
+        :rtype: Tuple[dict, dict, dict]
         """
         def gen_file_names(en_lims: tuple) -> Tuple[str, dict]:
             """
@@ -84,7 +76,7 @@ class BaseSource:
             dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key]
+            not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key, "attitude_file", "odf_path"]
             # Formats the generic paths given in the config file for this particular obs and energy range
             files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
                      for k, v in xga_conf["XMM_FILES"].items() if k not in not_these and inst in k}
@@ -108,10 +100,14 @@ class BaseSource:
 
         # This dictionary structure will contain paths to all available data products associated with this
         # source instance, both pre-generated and made with XGA.
-        obs_dict = {obs: {} for obs in self.obs}
+        obs_dict = {obs: {} for obs in self._obs}
         # Regions will get their own dictionary, I don't care about keeping the reg_file paths as
         # an attribute because they get read into memory in the init of this class
         reg_dict = {}
+        # Attitude files also get their own dictionary, they won't be read into memory by XGA
+        att_dict = {}
+        # ODF paths also also get their own dict, they will just be used to point cifbuild to the right place
+        odf_dict = {}
 
         # Use itertools to create iterable and avoid messy nested for loop
         # product makes iterable of tuples, with all combinations of the events files and ObsIDs
@@ -126,11 +122,19 @@ class BaseSource:
             evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=obs_id)
             reg_file = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
 
-            if os.path.exists(evt_file):
+            # Attitude file is a special case of data product, only SAS should ever need it, so it doesn't
+            # have a product object
+            att_file = xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=obs_id)
+            # ODF path isn't a data product, but is necessary for cifbuild
+            odf_path = xga_conf["XMM_FILES"]["odf_path"].format(obs_id=obs_id)
+
+            if os.path.exists(evt_file) and os.path.exists(att_file) and os.path.exists(odf_path):
                 # An instrument subsection of an observation will ONLY be populated if the events file exists
                 # Otherwise nothing can be done with it.
                 obs_dict[obs_id][inst] = {"events": EventList(evt_file, obs_id=obs_id, instrument=inst,
                                                               stdout_str="", stderr_str="", gen_cmd="")}
+                att_dict[obs_id] = att_file
+                odf_dict[obs_id] = odf_path
                 # Dictionary updated with derived product names
                 map_ret = map(gen_file_names, en_comb)
                 obs_dict[obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
@@ -142,7 +146,7 @@ class BaseSource:
         obs_dict = {o: v for o, v in obs_dict.items() if len(v) != 0}
         if len(obs_dict) == 0:
             raise NoValidObservationsError("No matching observations have the necessary files.")
-        return obs_dict, reg_dict
+        return obs_dict, reg_dict, att_dict, odf_dict
 
     def update_products(self, prod_obj: BaseProduct):
         """
@@ -374,14 +378,38 @@ class BaseSource:
         # to check that exists
         return processed_cmds, types, paths, extras
 
-    # @property
-    # def queue_shape(self) -> Tuple[int, int]:
-    #     """
-    #     A simple getter to fetch the current shape of the queue associated with this source.
-    #     :return: A tuple containing the shape of the numpy array that is the queue.
-    #     :rtype: Tuple[int, int]
-    #     """
-    #     return self.queue.shape
+    def get_att_file(self, obs_id: str) -> str:
+        """
+        Fetches the path to the attitude file for an XMM observation.
+        :param obs_id: The ObsID to fetch the attitude file for.
+        :return: The path to the attitude file.
+        :rtype: str
+        """
+        if obs_id not in self._products:
+            raise NotAssociatedError("{} is not associated with this source".format(obs_id))
+        else:
+            return self._att_files[obs_id]
+
+    def get_odf_path(self, obs_id: str) -> str:
+        """
+        Fetches the path to the odf directory for an XMM observation.
+        :param obs_id: The ObsID to fetch the ODF path for.
+        :return: The path to the ODF path.
+        :rtype: str
+        """
+        if obs_id not in self._products:
+            raise NotAssociatedError("{} is not associated with this source".format(obs_id))
+        else:
+            return self._odf_paths[obs_id]
+
+    @property
+    def obs_ids(self) -> List[str]:
+        """
+        Property getter for ObsIDs associated with this source that are confirmed to have events files.
+        :return: A list of the associated XMM ObsIDs.
+        :rtype: List[str]
+        """
+        return self._obs
 
     def info(self):
         """
