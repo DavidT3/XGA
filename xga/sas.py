@@ -159,7 +159,8 @@ def sas_call(sas_func):
 
         elif to_execute and len(all_run) == 0:
             # It is possible to call a wrapped SAS function and find that the products already exist.
-            print("All requested products already exist")
+            # print("All requested products already exist")
+            pass
 
         # Now we assign products to source objects
         for entry in results:
@@ -401,8 +402,78 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
 
 
-def merge_images():
-    raise NotImplementedError("Haven't quite got around to doing this bit yet")
+@sas_call
+def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Quantity,
+            num_cores: int = NUM_CORES):
+    """
+    A convenient Python wrapper for the SAS emosaic command. Every image associated with the source,
+    that is in the energy band specified by the user, will be added together.
+    :param List[BaseSource] sources: A single source object, or a list of source objects.
+    :param str to_mosaic: The data type to produce a mosaic for, can be either image or expmap.
+    :param Quantity lo_en: The lower energy limit for the combined image, in astropy energy units.
+    :param Quantity hi_en: The upper energy limit for the combined image, in astropy energy units.
+    :param int num_cores: The number of cores to use (if running locally), default is set to
+    90% of available.
+    """
+    # This function supports passing both individual sources and sets of sources
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+    elif to_mosaic not in ["image", "expmap"]:
+        raise ValueError("The only valid choices for to_mosaic are image and expmap.")
+    # Don't do much value checking in this module, but this one is so fundamental that I will do it
+    elif lo_en > hi_en:
+        raise ValueError("lo_en cannot be greater than hi_en")
+
+    # To make a mosaic we need to have the individual products in the first place
+    if to_mosaic == "image":
+        sources = evselect_image(sources, lo_en, hi_en)
+    elif to_mosaic == "expmap":
+        sources = eexpmap(sources, lo_en, hi_en)
+
+    # This is necessary because the decorator will reduce a one element list of source objects to a single
+    # source object. Useful for the user, not so much here where the code expects an iterable.
+    if not isinstance(sources, list):
+        sources = [sources]
+
+    mosaic_cmd = "cd {d}; emosaic imagesets='{ims}' mosaicedset={mim}"
+
+    sources_cmds = []
+    sources_paths = []
+    sources_extras = []
+    sources_types = []
+    for source in sources:
+        # TODO Maybe check that 'master' products don't already exist
+        en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+        # This fetches all image objects with the passed energy bounds
+        matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic) if en_id in match]
+        paths = [product[1].path for product in matches if product[1].usable]
+        obs_ids = [product[0] for product in matches if product[1].usable]
+        obs_ids_set = []
+        for obs_id in obs_ids:
+            if obs_id not in obs_ids_set:
+                obs_ids_set.append(obs_id)
+
+        # The problem I have here is that merged images don't belong to a particular ObsID, so where do they
+        # go in the xga_output folder? I've arbitrarily decided to save it in the folder of the first ObsID
+        # associated with a given source.
+        dest_dir = OUTPUT + "{o}/".format(o=obs_ids_set[0])
+        mosaic = "{os}_{l}-{u}keVmerged_{t}.fits".format(os="_".join(obs_ids_set), l=lo_en.value, u=hi_en.value,
+                                                         t=to_mosaic)
+
+        sources_cmds.append(array([mosaic_cmd.format(ims=" ".join(paths), mim=mosaic, d=dest_dir)]))
+        sources_paths.append(array([dest_dir + mosaic]))
+        # This contains any other information that will be needed to instantiate the class
+        # once the SAS cmd has run
+        # The 'all' values for obs and inst here are crucial, they will tell the source object that the final
+        # product is assigned to that these are 'master' products - combinations of all available data
+        sources_extras.append(array([{"lo_en": lo_en, "hi_en": hi_en, "obs_id": "all", "instrument": "all"}]))
+        sources_types.append(full(sources_cmds[-1].shape, fill_value=to_mosaic))
+
+    stack = False  # This tells the sas_call routine that this command won't be part of a stack
+    execute = True  # This should be executed immediately
+    # I only return num_cores here so it has a reason to be passed to this function, really
+    # it could just be picked up in the decorator.
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
 
 
 def evselect_spec():

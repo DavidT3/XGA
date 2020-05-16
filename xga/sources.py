@@ -39,6 +39,9 @@ class BaseSource:
         self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
+        # This is an important dictionary, mosaiced images and exposure maps will live here, which is what most
+        # users should be using for analyses
+        self._merged_products = {}
 
         if redshift is not None:
             self.lum_dist = cosmology.luminosity_distance(self.redshift)
@@ -171,18 +174,26 @@ class BaseSource:
         p_type = prod_obj.type
 
         # Double check that something is trying to add products from another source to the current one.
-        if obs_id not in self._products:
+        if obs_id != 'all' and obs_id not in self._products:
             raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
-        elif inst not in self._products[obs_id]:
+        elif inst != 'all' and inst not in self._products[obs_id]:
             raise NotAssociatedError("{i} is not associated with XMM observation {o}".format(i=inst, o=obs_id))
 
-        if en_key is not None:
+        if en_key is not None and obs_id != 'all':
             # If there is no entry for this energy band already, we must make one
             if en_key not in self._products[obs_id][inst]:
                 self._products[obs_id][inst][en_key] = {}
             self._products[obs_id][inst][en_key][p_type] = prod_obj
-        else:
+        elif en_key is None and obs_id != 'all':
             self._products[obs_id][inst][p_type] = prod_obj
+        # Here we deal with merged products
+        elif en_key is not None and obs_id == 'all':
+            # If there is no entry for this energy band already, we must make one
+            if en_key not in self._merged_products:
+                self._merged_products[en_key] = {}
+            self._merged_products[en_key][p_type] = prod_obj
+        elif en_key is None and obs_id == 'all':
+            self._merged_products[p_type] = prod_obj
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None) -> List[list]:
         """

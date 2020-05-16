@@ -151,7 +151,8 @@ class BaseProduct:
                                                                           b=error["message"]))
             # This is for any unresolved errors.
             for error in self._other_error:
-                raise UnknownCommandlineError("{}".format(error))
+                if "warning" not in error:
+                    raise UnknownCommandlineError("{}".format(error))
 
     @property
     def obs_id(self) -> str:
