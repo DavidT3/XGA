@@ -8,7 +8,7 @@ from subprocess import Popen, PIPE
 import pandas as pd
 import pkg_resources
 from astropy.io import fits
-from astropy.units import Quantity
+from astropy.units import Quantity, def_unit
 from numpy import nan, floor
 from tqdm import tqdm
 
@@ -22,6 +22,7 @@ except ModuleNotFoundError:
     raise HeasoftError("Unable to import PyXspec, you have to make sure to set a PYTHON environment "
                        "variable before installing HEASOFT/XSPEC.")
 
+# TODO Maybe check that Heasoft is correctly configured, with all the files to make CCFs
 # This one I'm less likely to relax to a warnings
 if "SAS_DIR" not in os.environ:
     raise SASNotFoundError("SAS_DIR environment variable is not set, "
@@ -48,7 +49,8 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required/{obs_id}/pn_exp1_clean_evts.fits",
              "clean_mos1_evts": "/this/is/required/{obs_id}/mos1_exp1_clean_evts.fits",
              "clean_mos2_evts": "/this/is/required/{obs_id}/mos2_exp1_clean_evts.fits",
-             "ccf_index_file": "/this/is/optional/{obs_id}/odf/ccf.cif",
+             "attitude_file": "/this/is/required/{obs_id}/attitude.fits",
+             "odf_path": "/this/is/required/{obs_id}/odf/",
              "lo_en": ['0.50', '2.00'],
              "hi_en": ['2.00', '10.00'],
              "pn_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-pn_merged_img.fits",
@@ -193,7 +195,8 @@ else:
     xga_conf = ConfigParser()
     # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
     xga_conf.read(CONFIG_FILE)
-    keys_to_check = ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts"]
+    keys_to_check = ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file",
+                     "odf_path"]
     # Here I check that the installer has actually changed the three events file paths
     all_changed = all([xga_conf["XMM_FILES"][key] != XMM_FILES[key] for key in keys_to_check])
     if not all_changed:
@@ -260,6 +263,11 @@ else:
     # TODO Remove this once I have figured out how to support HPCs
     elif COMPUTE_MODE in ["sge", "slurm"]:
         raise NotImplementedError("I don't support HPCs yet!")
+
+    xmm_sky = def_unit("xmm_sky")
+    xmm_det = def_unit("xmm_det")
+
+
 
 
 

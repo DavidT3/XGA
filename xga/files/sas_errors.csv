@@ -861,3 +861,4 @@ zeroConvolverNorm,colsmooth
 ZeroExposure,rgsspectrum
 zeroNormConvolver,asmooth
 zerosInConvolver,colsmooth
+InvalidSummaryFile,cifbuild

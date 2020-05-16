@@ -3,14 +3,15 @@
 
 import os
 from typing import Tuple, List, Dict
+import sys
 
 import numpy as np
 from astropy.io import fits
 from astropy import wcs
-from astropy.units import Quantity
+from astropy.units import Quantity, UnitBase, UnitsError, deg, pix
 
 from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError
-from xga.utils import SASERROR_LIST, SASWARNING_LIST
+from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, xmm_det
 # TODO Maybe do a regions object but not fully decided on that yet
 
 
@@ -32,7 +33,7 @@ class BaseProduct:
         # Saving this in attributes for future reference
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
-        self._sas_error, self._other_error = self.parse_stderr()
+        self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
         self._obs_id = obs_id
         self._inst = instrument
         self.og_cmd = gen_cmd
@@ -62,42 +63,43 @@ class BaseProduct:
             self.usable = False
         self._path = prod_path
 
-    def parse_stderr(self) -> Tuple[List[Dict], List]:
+    def parse_stderr(self) -> Tuple[List[Dict], List[Dict], List]:
         """
         This method parses the stderr associated with the generation of a product into errors confirmed to have
         come from SAS, and other unidentifiable errors. The SAS errors are returned with the actual error
         name, the error message, and the SAS routine that caused the error.
-        :return: A list of dictionaries containing parsed, confirmed SAS errors, and another list of
-        unidentifiable errors that occured in the stderr.
-        :rtype: Tuple[List[Dict], List]
+        :return: A list of dictionaries containing parsed, confirmed SAS errors, another containing SAS warnings,
+        and another list of unidentifiable errors that occured in the stderr.
+        :rtype: Tuple[List[Dict], List[Dict], List]
         """
-        # TODO Remove this when I know where the warnings are written to, then update the parser to deal with
-        #  warnings as well.
-        if "warning" in self.unprocessed_stderr:
-            print("FOUND A WARNING IN STDERR")
-            SASWARNING_LIST
-
-        # Defined as empty as they are returned by this method
-        parsed_sas_errs = []
-        other_err_lines = []
-        # err_str being "" is ideal, hopefully means that nothing has gone wrong
-        if self.unprocessed_stderr != "":
-            self.usable = False
-            # Errors will be added to the error summary, then raised later
-            # That way if people try except the error away the object will have been constructed properly
-            err_lines = self.unprocessed_stderr.split('\n')  # Fingers crossed each line is a separate error
-            # This is a crude way of looking for SAS error strings ONLY
-            sas_err_lines = [line for line in err_lines if "** " in line and ": error" in line]
-            for err in sas_err_lines:
+        def find_sas(split_stderr: list, err_type: str) -> Tuple[dict, List[str]]:
+            """
+            Function to search for and parse SAS errors and warnings.
+            :param list split_stderr: The stderr string split on line endings.
+            :param str err_type: Should this look for errors or warnings?
+            :return: Returns the dictionary of parsed errors/warnings, as well as all lines
+            with SAS errors/warnings in.
+            :rtype: Tuple[dict, List[str]]
+            """
+            parsed_sas = []
+            # This is a crude way of looking for SAS error/warning strings ONLY
+            sas_lines = [line for line in split_stderr if "** " in line and ": {}".format(err_type) in line]
+            for err in sas_lines:
                 try:
                     # This tries to split out the SAS task that produced the error
                     originator = err.split("** ")[-1].split(":")[0]
                     # And this should split out the actual error name
-                    err_ident = err.split(": error (")[-1].split(")")[0]
+                    err_ident = err.split(": {} (".format(err_type))[-1].split(")")[0]
                     # Actual error message
                     err_body = err.split("({})".format(err_ident))[-1].strip("\n").strip(", ").strip(" ")
-                    # Checking to see if the error identity is in the list of SAS errors
-                    sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident in sas_err]
+
+                    if err_type == "error":
+                        # Checking to see if the error identity is in the list of SAS errors
+                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident in sas_err]
+                    elif err_type == "warning":
+                        # Checking to see if the error identity is in the list of SAS warnings
+                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident in sas_err]
+
                     if len(sas_err_match) != 1:
                         originator = ""
                         err_ident = ""
@@ -107,12 +109,25 @@ class BaseProduct:
                     err_ident = ""
                     err_body = ""
 
-                parsed_sas_errs.append({"originator": originator, "name": err_ident,
-                                        "message": err_body})
-            # These are impossible to predict the form of, so they won't be parsed
-            other_err_lines = [line for line in err_lines if line not in sas_err_lines]
+                parsed_sas.append({"originator": originator, "name": err_ident, "message": err_body})
+            return parsed_sas, sas_lines
 
-        return parsed_sas_errs, other_err_lines
+        # Defined as empty as they are returned by this method
+        parsed_sas_errs = []
+        parsed_sas_warns = []
+        other_err_lines = []
+        # err_str being "" is ideal, hopefully means that nothing has gone wrong
+        if self.unprocessed_stderr != "":
+            # Errors will be added to the error summary, then raised later
+            # That way if people try except the error away the object will have been constructed properly
+            err_lines = self.unprocessed_stderr.split('\n')  # Fingers crossed each line is a separate error
+            parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
+            parsed_sas_warns, sas_warn_lines = find_sas(err_lines, "warning")
+
+            # These are impossible to predict the form of, so they won't be parsed
+            other_err_lines = [line for line in err_lines if line not in sas_err_lines
+                               and line not in sas_warn_lines and line != ""]
+        return parsed_sas_errs, parsed_sas_warns, other_err_lines
 
     @property
     def sas_error(self) -> List[Dict]:
@@ -131,11 +146,13 @@ class BaseProduct:
         if raise_flag:
             # I know this won't ever get to the later errors, I might change how this works later
             for error in self._sas_error:
+                self.usable = False  # Just to make sure this object isn't used if the user uses try, except
                 raise SASGenerationError("{e} raised by {t} - {b}".format(e=error["name"], t=error["originator"],
                                                                           b=error["message"]))
             # This is for any unresolved errors.
             for error in self._other_error:
-                raise UnknownCommandlineError("{}".format(error))
+                if "warning" not in error:
+                    raise UnknownCommandlineError("{}".format(error))
 
     @property
     def obs_id(self) -> str:
@@ -179,8 +196,25 @@ class BaseProduct:
         """
         return self._prod_type
 
+    @property
+    def errors(self) -> List[dict]:
+        """
+        Property getter for SAS errors detected during the generation of a product.
+        :return: A list of dictionaries of parsed errors.
+        :rtype: List[dict]
+        """
+        return self._sas_error
 
-# TODO Probably add methods for coordinate transforms using the wcses (including radius)
+    @property
+    def warnings(self) -> List[dict]:
+        """
+        Property getter for SAS warnings detected during the generation of a product.
+        :return: A list of dictionaries of parsed errors.
+        :rtype: List[dict]
+        """
+        return self._sas_error
+
+
 class Image(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
@@ -266,7 +300,7 @@ class Image(BaseProduct):
         # Calling this ensures the image object is read into memory
         if self._im_obj is None:
             self._read_on_demand()
-        return self._im_obj["PRIMARY"].data
+        return self._im_obj["PRIMARY"].data.copy()
 
     @data.setter
     def data(self, new_im_arr: np.ndarray):
@@ -392,6 +426,83 @@ class Image(BaseProduct):
         self._im_obj.close()
         self._im_obj = None
 
+    def coord_conv(self, coord_pair: Quantity, output_unit: UnitBase) -> Quantity:
+        """
+        This will use the loaded WCSes, and astropy coordinates (including custom ones defined for this module),
+        to perform common coordinate conversions for this product object.
+        :param coord_pair: The input coordinate quantity to convert, in units of either deg,
+        pix, xmm_sky, or xmm_det (xmm_sky and xmm_det are defined for this module).
+        :param output_unit: The astropy unit to convert to, can be either deg, pix, xmm_sky, or
+        xmm_det (xmm_sky and xmm_det are defined for this module).
+        :return: The converted coordinates.
+        :rtype: Quantity
+        """
+        allowed_units = ["deg", "xmm_sky", "xmm_det", "pix"]
+        input_unit = coord_pair.unit.name
+        out_name = output_unit.name
+
+        # First off do some type checking
+        if not isinstance(coord_pair, Quantity):
+            raise TypeError("Please pass an astropy Quantity for the coord_pair.")
+        # The coordinate pair must have two elements, no more no less
+        elif coord_pair.shape != (2,):
+            raise ValueError("Please supply x and y coordinates in one object.")
+        # I know the proper way with astropy units is to do .to() but its easier with WCS this way
+        elif input_unit not in allowed_units:
+            raise UnitsError("Those coordinate units are not supported by this method, "
+                             "please use one of these: {}".format(", ".join(allowed_units)))
+        elif out_name not in allowed_units:
+            raise UnitsError("That output unit is not supported by this method, "
+                             "please use one of these: {}".format(", ".join(allowed_units)))
+
+        # Check for presence of the right WCS
+        if (input_unit == "xmm_sky" or out_name == "xmm_sky") and self.skyxy_wcs is None:
+            raise ValueError("There is no XMM Sky XY WCS associated with this product.")
+        elif (input_unit == "xmm_det" or out_name == "xmm_det") and self.detxy_wcs is None:
+            raise ValueError("There is no XMM Detector XY WCS associated with this product.")
+
+        # Now to do the actual conversion, which will include checking that the correct WCS is loaded
+        # These go between degrees and pixels
+        if input_unit == "deg" and out_name == "pix":
+            # The second argument all_world2pix defines the origin, for numpy coords it should be 0
+            out_coord = Quantity(self.radec_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
+        elif input_unit == "pix" and out_name == "deg":
+            out_coord = Quantity(self.radec_wcs.all_pix2world(*coord_pair, 0), output_unit)
+
+        # These go between degrees and XMM sky XY coordinates
+        elif input_unit == "deg" and out_name == "xmm_sky":
+            interim = self.radec_wcs.all_world2pix(*coord_pair, 0)
+            out_coord = Quantity(self.skyxy_wcs.all_pix2world(*interim, 0), xmm_sky)
+        elif input_unit == "xmm_sky" and out_name == "deg":
+            interim = self.skyxy_wcs.all_world2pix(*coord_pair, 0)
+            out_coord = Quantity(self.radec_wcs.all_pix2world(*interim, 0), deg)
+
+        # These go between XMM sky XY and pixel coordinates
+        elif input_unit == "xmm_sky" and out_name == "pix":
+            out_coord = Quantity(self.skyxy_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
+        elif input_unit == "pix" and out_name == "xmm_sky":
+            out_coord = Quantity(self.skyxy_wcs.all_pix2world(*coord_pair, 0), output_unit)
+
+        # These go between degrees and XMM Det XY coordinates
+        elif input_unit == "deg" and out_name == "xmm_det":
+            interim = self.radec_wcs.all_world2pix(*coord_pair, 0)
+            out_coord = Quantity(self.detxy_wcs.all_pix2world(*interim, 0), xmm_sky)
+        elif input_unit == "xmm_det" and out_name == "deg":
+            interim = self.detxy_wcs.all_world2pix(*coord_pair, 0)
+            out_coord = Quantity(self.radec_wcs.all_pix2world(*interim, 0), deg)
+
+        # These go between XMM det XY and pixel coordinates
+        elif input_unit == "xmm_det" and out_name == "pix":
+            out_coord = Quantity(self.detxy_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
+        elif input_unit == "pix" and out_name == "xmm_det":
+            out_coord = Quantity(self.detxy_wcs.all_pix2world(*coord_pair, 0), output_unit)
+
+        # It is possible to convert between XMM coordinates and pixel and supply coordinates
+        # outside the range covered by an image, but we can at least catch the error
+        if out_name == "pix" and any(coord < 0 for coord in out_coord):
+            raise ValueError("Pixel coordinates cannot be less than 0.")
+        return out_coord
+
 
 class ExpMap(Image):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
@@ -399,11 +510,24 @@ class ExpMap(Image):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, raise_properly)
         self._prod_type = "expmap"
 
+    def exp_time(self, at_coord: Quantity) -> float:
+        """
+        A simple method that converts the given coordinates to pixels, then finds the exposure time
+        at those coordinates.
+        :param Quantity at_coord: A pair of coordinates to find the exposure time for.
+        :return: The exposure time at the supplied coordinates.
+        :rtype: float
+        """
+        pix_coord = self.coord_conv(at_coord, pix).value
+        exp = self.data[pix_coord[0], pix_coord[1]]
+        return float(exp)
+
 
 class EventList(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+        self._prod_type = "events"
 
 
 # TODO So these are 'stack' products, with each next step relying on the one before, so while they are a single
