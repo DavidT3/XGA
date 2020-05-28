@@ -20,3 +20,8 @@ Dynamic and optional (fill out the lo_en and hi_en headers to define the energy 
 ## XGA assumes that all your XMM obsid folders live in the same directory
 
 ## XGA assumes that region files are in a DS9 format
+
+
+## Made a design decision that XGA will expect region files in the XCS format
+* DS9 standard
+* With XCS colours - green = extended, red = point etc.

@@ -464,9 +464,10 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
         sources_paths.append(array([dest_dir + mosaic]))
         # This contains any other information that will be needed to instantiate the class
         # once the SAS cmd has run
-        # The 'all' values for obs and inst here are crucial, they will tell the source object that the final
+        # The 'combined' values for obs and inst here are crucial, they will tell the source object that the final
         # product is assigned to that these are 'master' products - combinations of all available data
-        sources_extras.append(array([{"lo_en": lo_en, "hi_en": hi_en, "obs_id": "all", "instrument": "all"}]))
+        sources_extras.append(array([{"lo_en": lo_en, "hi_en": hi_en, "obs_id": "combined",
+                                      "instrument": "combined"}]))
         sources_types.append(full(sources_cmds[-1].shape, fill_value=to_mosaic))
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
