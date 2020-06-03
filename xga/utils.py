@@ -64,7 +64,7 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
 # List of XMM products supported by XGA that are allowed to be energy bound
 ENERGY_BOUND_PRODUCTS = ["image", "expmap", "reg_image", "reg_expmap", "psfmap"]
 # List of all XMM products supported by XGA
-ALLOWED_PRODUCTS = ["spec", "arf", "rmf", "grp_spec", "regions", "events"] + ENERGY_BOUND_PRODUCTS
+ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events"] + ENERGY_BOUND_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]
 
 # Here we read in files that list the errors and warnings in SAS
@@ -199,6 +199,8 @@ def dict_search(key: str, var: dict) -> list:
                     yield [str(k), result]
 
 
+# TODO Rewrite this to be vectorised? Masks get returned as a 512 x 512 x N array?
+# TODO Then move it to image tools
 def annular_mask(cen_x: int, cen_y: int, inn_rad: int, out_rad: int, len_x: int, len_y: int,
                  start_ang: Quantity = Quantity(0, 'deg'), stop_ang: Quantity = Quantity(360, 'deg')) -> ndarray:
     """
@@ -229,8 +231,8 @@ def annular_mask(cen_x: int, cen_y: int, inn_rad: int, out_rad: int, len_x: int,
         raise ValueError("start_ang cannot be greater than or equal to stop_ang.")
     elif start_ang > Quantity(360, 'deg') or stop_ang > Quantity(360, 'deg'):
         raise ValueError("start_ang and stop_ang cannot be greater than 360 degrees.")
-    elif start_ang < Quantity(0, 'deg') or stop_ang < Quantity(0, 'deg'):
-        raise ValueError("start_ang and stop_ang cannot be less than 0 degrees.")
+    elif stop_ang < Quantity(0, 'deg'):
+        raise ValueError("stop_ang cannot be less than 0 degrees.")
     else:
         # Don't want to pass astropy objects to numpy functions, but do need the angles in radians
         start_ang = start_ang.to('rad').value

@@ -11,9 +11,10 @@ from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
 from tqdm import tqdm
 from typing import List, Tuple
+import warnings
 
-from xga.sources import BaseSource
-from xga.products import BaseProduct, Image, ExpMap
+from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
+from xga.products import BaseProduct, Image, ExpMap, Spectrum
 from xga.utils import energy_to_channel, xmm_det, xmm_sky, xga_conf
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES
 
@@ -47,6 +48,9 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         # I can't take momentarily advantage of the error parsing I built into the product classes
         prod = BaseProduct(p_path[0], "", "", out, err, cmd)
         prod = None
+    elif p_type == "spectrum":
+        # TODO Update this initilisation when the Spectrum is more complete
+        prod = Spectrum(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
     else:
         raise NotImplementedError("Not implemented yet")
 
@@ -179,6 +183,7 @@ def sas_call(sas_func):
     return wrapper
 
 
+# TODO Perhaps remove the option to add to the SAS expression
 @sas_call
 def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
                    add_expr: str = "", num_cores: int = NUM_CORES):
@@ -418,7 +423,8 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
-    elif to_mosaic not in ["image", "expmap"]:
+
+    if to_mosaic not in ["image", "expmap"]:
         raise ValueError("The only valid choices for to_mosaic are image and expmap.")
     # Don't do much value checking in this module, but this one is so fundamental that I will do it
     elif lo_en > hi_en:
@@ -477,21 +483,161 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
 
 
-def evselect_spec():
-    raise NotImplementedError("Haven't quite got around to doing this bit yet")
+@sas_call
+def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bool = True,
+                      num_cores: int = NUM_CORES):
+    """
+    A wrapper for all of the SAS processes necessary to generate an XMM spectrum that can be analysed
+    in XSPEC. Every observation associated with this source, and every instrument associated with that
+    observation, will have a spectrum generated using the specified region type as as boundary.
+    :param List[BaseSource] sources: A single source object, or a list of source objects.
+    :param str boundary_type: Tells the method what region source you want to use, for instance r500 or r200.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+    ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+    slightly on position on the detector.
+    :param int num_cores: The number of cores to use (if running locally), default is set to
+    90% of available.
+    """
+    allowed_bounds = ["region", "r2500", "r500", "r200"]
+    # This function supports passing both individual sources and sets of sources
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
+    if not all([type(src) != BaseSource for src in sources]):
+        raise TypeError("You cannot generate spectra from a BaseSource object, really you shouldn't be using "
+                        "them at all, they are mostly useful as a superclass.")
+    elif not all([src.detected for src in sources]):
+        warnings.warn("Not all of these sources have been detected, the spectra generated may not be helpful.")
+    elif boundary_type not in allowed_bounds:
+        raise ValueError("The only valid choices for boundary_type are:\n {}".format(", ".join(allowed_bounds)))
+    elif boundary_type in ["r2500", "r500", "r200"] and not all([type(src) == GalaxyCluster for src in sources]):
+        raise TypeError("You cannot use ExtendedSource classes with {}, "
+                        "they have no overdensity radii.".format(boundary_type))
+
+    # Have to make sure that all observations have an up to date cif file.
+    cifbuild(sources)
+
+    # Define the various SAS commands that need to be populated, for a useful spectrum you also need ARF/RMF
+    spec_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; evselect table={e} withspectrumset=yes " \
+               "spectrumset={s} energycolumn=PI spectralbinsize=5 withspecranges=yes specchannelmin=0 " \
+               "specchannelmax={u} {ex}"
+
+    rmf_cmd = "rmfgen rmfset={r} spectrumset={s} detmaptype=flat extendedsource={es}"
+
+    # Don't need to run backscale separately, as this arfgen call will do it automatically
+    arf_cmd = "arfgen spectrumset={s} arfset={a} withrmfset=yes rmfset={r} badpixlocation={e} " \
+              "extendedsource={es} detmaptype=flat setbackscale=yes"
+
+    stack = False  # This tells the sas_call routine that this command won't be part of a stack
+    execute = True  # This should be executed immediately
+
+    sources_cmds = []
+    sources_paths = []
+    sources_extras = []
+    sources_types = []
+    for source in sources:
+        # rmfgen and arfgen both take arguments that describe if something is an extended source or not,
+        #  so we check the source type
+        if isinstance(source, (ExtendedSource, GalaxyCluster)):
+            ex_src = "yes"
+        else:
+            ex_src = "no"
+        cmds = []
+        final_paths = []
+        extra_info = []
+        # Check which event lists are associated with each individual source
+        for pack in source.get_products("events"):
+            obs_id = pack[0]
+            inst = pack[1]
+
+            # Got to check if this spectrum already exists
+            exists = [match for match in source.get_products("spectrum", obs_id, inst) if boundary_type in match]
+            if len(exists) == 1 and exists[0][-1].usable:
+                continue
+
+            # This method returns a SAS expression for the source and background regions - excluding interlopers
+            reg, b_reg = source.get_sas_region(boundary_type, obs_id, inst, xmm_sky)
+
+            # Some settings depend on the instrument, XCS uses different patterns for different instruments
+            if "pn" in inst:
+                # Also the upper channel limit is different for EPN and EMOS detectors
+                spec_lim = 20479
+                expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0) && {s}'".format(s=reg)
+                b_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0) && {s}'".format(s=b_reg)
+            elif "mos" in inst:
+                spec_lim = 11999
+                expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0) && {s}'".format(s=reg)
+                b_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0) && {s}'".format(s=b_reg)
+            else:
+                raise ValueError("You somehow have an illegal value for the instrument name...")
+
+            # Just grabs the event list object
+            evt_list = pack[-1]
+            # Sets up the file names of the output files
+            dest_dir = OUTPUT + "{o}/{i}_temp/".format(o=obs_id, i=inst)
+            spec = "{o}_{i}_{bt}_spec.fits".format(o=obs_id, i=inst, bt=boundary_type)
+            b_spec = "{o}_{i}_{bt}_backspec.fits".format(o=obs_id, i=inst, bt=boundary_type)
+            arf = "{o}_{i}_{bt}.arf".format(o=obs_id, i=inst, bt=boundary_type)
+            b_arf = "{o}_{i}_{bt}_back.arf".format(o=obs_id, i=inst, bt=boundary_type)
+            ccf = dest_dir + "ccf.cif"
+
+            # Fills out the evselect command to make the main and background spectra
+            s_cmd_str = spec_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, s=spec, u=spec_lim, ex=expr)
+            sb_cmd_str = spec_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, s=b_spec, u=spec_lim, ex=b_expr)
+
+            # This chunk adds rmfgen commands depending on whether we're using a universal RMF or
+            #  an individual one for each spectrum. Also adds arfgen commands on the end, as they depend on
+            #  the rmf.
+            if one_rmf:
+                rmf = "{o}_{i}_{bt}.rmf".format(o=obs_id, i=inst, bt="universal")
+                b_rmf = rmf
+            else:
+                rmf = "{o}_{i}_{bt}.rmf".format(o=obs_id, i=inst, bt=boundary_type)
+                b_rmf = "{o}_{i}_{bt}_back.rmf".format(o=obs_id, i=inst, bt=boundary_type)
+
+            if one_rmf and not os.path.exists(dest_dir + rmf):
+                cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
+                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src), sb_cmd_str,
+                                    arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src)])
+            elif not one_rmf and not os.path.exists(dest_dir + rmf):
+                cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
+                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src)]) + ";"
+                cmd_str += ";".join([sb_cmd_str, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src),
+                                    arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src)])
+            else:
+                cmd_str = ";".join([s_cmd_str, arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path,
+                                                              es=ex_src)]) + ";"
+                cmd_str += ";".join([sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path,
+                                                                es=ex_src)])
+
+            # Adds clean up commands to move all generated files and remove temporary directory
+            cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+            cmds.append(cmd_str)  # Adds the full command to the set
+            # If something got interrupted and the temp directory still exists, this will remove it
+            if os.path.exists(dest_dir):
+                rmtree(dest_dir)
+            # Makes sure the whole path to the temporary directory is created
+            os.makedirs(dest_dir)
+
+            final_paths.append(os.path.join(OUTPUT, obs_id, spec))
+            extra_info.append({"reg_type": boundary_type, "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
+                               "arf_path": os.path.join(OUTPUT, obs_id, arf),
+                               "b_spec_path": os.path.join(OUTPUT, obs_id, b_spec),
+                               "b_rmf_path": os.path.join(OUTPUT, obs_id, b_rmf),
+                               "b_arf_path": os.path.join(OUTPUT, obs_id, b_arf),
+                               "obs_id": obs_id, "instrument": inst})
+
+        sources_cmds.append(array(cmds))
+        sources_paths.append(array(final_paths))
+        # This contains any other information that will be needed to instantiate the class
+        # once the SAS cmd has run
+        sources_extras.append(array(extra_info))
+        sources_types.append(full(sources_cmds[-1].shape, fill_value="spectrum"))
+
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
+
+# TODO Implement regioned image so I can actually test that my SAS regions are sensible
 
 
-def arfgen():
-    raise NotImplementedError("Haven't quite got around to doing this bit yet")
-
-
-def rmfgen():
-    raise NotImplementedError("Haven't quite got around to doing this bit yet")
-
-
-def backscale():
-    raise NotImplementedError("Haven't quite got around to doing this bit yet")
-
-
-def specgroup():
+def evselect_annular_spectrum():
     raise NotImplementedError("Haven't quite got around to doing this bit yet")

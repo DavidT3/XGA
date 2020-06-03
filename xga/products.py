@@ -241,7 +241,7 @@ class Image(BaseProduct):
         self._wcs_xmmdetXdetY = None
         self._energy_bounds = (lo_en, hi_en)
         self._prod_type = "image"
-        self._data = None
+        self._im_data = None
         self._header = None
 
     def _read_on_demand(self):
@@ -256,7 +256,8 @@ class Image(BaseProduct):
             # Using read only mode because it still allows the user to make changes to the object in memory,
             # they just can't overwrite the original image.
 
-            with fits.open(self.path, mode="readonly", memmap=False) as temp_im:
+            # print("EL READO", self.obs_id, self.instrument, self._prod_type)
+            with fits.open(self.path, mode="readonly", memmap=True) as temp_im:
                 data = temp_im[0].data
 
                 data = data.newbyteorder().byteswap()
@@ -271,7 +272,7 @@ class Image(BaseProduct):
                 new_data = np.empty_like(data)
                 np.copyto(new_data, data)
 
-                self._data = new_data
+                self._im_data = new_data
                 del temp_im[0].data
                 del data
                 header = temp_im[0].header
@@ -279,8 +280,8 @@ class Image(BaseProduct):
                 del header
 
             temp_im.close(verbose=True)
-            del temp_im
-            gc.collect()
+            # del temp_im
+            # gc.collect()
 
             # data = fits.getdata(self.path)
             # if data.min() < 0:
@@ -291,7 +292,7 @@ class Image(BaseProduct):
             # self._header = fits.getheader(self.path)
 
             # As the image must be loaded to know the shape, I've waited until here to set the _shape attribute
-            self._shape = self._data.shape
+            self._shape = self._im_data.shape
             # Will actually construct an image WCS as well because why not?
             # XMM images typically have two, both useful, so we'll find all available and store them
             wcses = wcs.find_all_wcs(self._header)
@@ -327,13 +328,13 @@ class Image(BaseProduct):
         # This has to be run first, to check the image is loaded, otherwise how can we know the shape?
         # This if is here rather than in the method as some other properties of this class don't need the
         # image object, just some products derived from it.
-        if self._data is None:
+        if self._im_data is None:
             self._read_on_demand()
         # There will not be a setter for this property, no-one is allowed to change the shape of the image.
         return self._shape
 
     @property
-    def data(self) -> np.ndarray:
+    def im_data(self) -> np.ndarray:
         """
         Property getter for the actual image data, in the form of a numpy array. Doesn't include
         any of the other stuff you get in a fits image, thats found in the hdulist property.
@@ -341,12 +342,12 @@ class Image(BaseProduct):
         :rtype: np.ndarray
         """
         # Calling this ensures the image object is read into memory
-        if self._data is None:
+        if self._im_data is None:
             self._read_on_demand()
-        return self._data
+        return self._im_data
 
-    @data.setter
-    def data(self, new_im_arr: np.ndarray):
+    @im_data.setter
+    def im_data(self, new_im_arr: np.ndarray):
         """
         Property setter for the image data. As the fits image is loaded in read-only mode,
         this won't alter the actual file (which is what I was going for), but it does allow
@@ -354,7 +355,7 @@ class Image(BaseProduct):
         :param np.ndarray new_im_arr: The new image data.
         """
         # Calling this ensures the image object is read into memory
-        if self._data is None:
+        if self._im_data is None:
             self._read_on_demand()
 
         # Have to make sure the input is of the right type, and the right shape
@@ -364,7 +365,7 @@ class Image(BaseProduct):
             raise ValueError("You may only assign a numpy array to the data attribute if it "
                              "is the same shape as the original.")
         else:
-            self._data = new_im_arr
+            self._im_data = new_im_arr
 
     # This one doesn't get a setter, as I require this WCS to not be none in the _read_on_demand method
     @property
@@ -553,7 +554,7 @@ class ExpMap(Image):
         :rtype: float
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        exp = self.data[pix_coord[0], pix_coord[1]]
+        exp = self.im_data[pix_coord[0], pix_coord[1]]
         return float(exp)
 
 
@@ -564,15 +565,15 @@ class EventList(BaseProduct):
         self._prod_type = "events"
 
 
-# TODO So these are 'stack' products, with each next step relying on the one before, so while they are a single
-#  object they will get the paths of every file that should have been created.
-class Spec(BaseProduct):
+# TODO Flesh out
+class Spectrum(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+        print("BOIIIIII")
 
 
-class AnnSpec(BaseProduct):
+class AnnularSpectra(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
