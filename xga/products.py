@@ -8,12 +8,14 @@ from typing import Tuple, List, Dict
 import numpy as np
 from astropy import wcs
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix
-from fitsio import read, read_header, FITSHDR
+from fitsio import read, read_header, FITSHDR, FITS
 
 from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
 
+# TODO Actually perhaps the usable attribute should only be accessible as a property? Don't think
+#  users should be allowed to change it.
 class BaseProduct:
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
@@ -27,8 +29,11 @@ class BaseProduct:
         """
         # So this flag indicates whether we think this data product can be used for analysis
         self.usable = True
-        # Hopefully uses the path setter method
-        self.path = path
+        if os.path.exists(path):
+            self._path = path
+        else:
+            self._path = None
+            self.usable = False
         # Saving this in attributes for future reference
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
@@ -530,12 +535,215 @@ class EventList(BaseProduct):
         self._prod_type = "events"
 
 
-# TODO Flesh out
+# As I've decided to go with command line xspec, this object is going to be pretty small, mostly
+# storing file paths etc. Perhaps I'll think of some more features to add to it though
 class Spectrum(BaseProduct):
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, raise_properly: bool = True):
+    def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
+                 reg_type: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 raise_properly: bool = True):
+
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
         self._prod_type = "spectrum"
+
+        if os.path.exists(rmf_path):
+            self._rmf = rmf_path
+        else:
+            self._rmf = None
+            self.usable = False
+
+        if os.path.exists(arf_path):
+            self._arf = arf_path
+        else:
+            self._arf = None
+            self.usable = False
+
+        if os.path.exists(b_path):
+            self._back_spec = b_path
+        else:
+            self._back_spec = None
+            self.usable = False
+
+        if os.path.exists(b_rmf_path):
+            self._back_rmf = b_rmf_path
+        else:
+            self._back_rmf = None
+            self.usable = False
+
+        if os.path.exists(b_arf_path):
+            self._back_arf = b_arf_path
+        else:
+            self._arf_rmf = None
+            self.usable = False
+
+        allowed_regs = ["region", "r2500", "r500", "r200"]
+        if reg_type in allowed_regs:
+            self._reg_type = reg_type
+        else:
+            self.usable = False
+            self._reg_type = None
+            raise ValueError("{0} is not a support region type, "
+                             "please use one of these; {1}".format(reg_type, ", ".join(allowed_regs)))
+
+        self._update_spec_headers("main")
+        self._update_spec_headers("back")
+
+    def _update_spec_headers(self, which_spec: str):
+        """
+        An internal method that will 'push' the current class attributes that hold the paths to data products
+        (like ARF and RMF) to the relevant spectrum file.
+        :param str which_spec: A flag that tells the method whether to update the header of
+         the main or background spectrum.
+        """
+        # This function is meant for internal use only, so I won't check that the passed-in file paths
+        #  actually exist. This will have been checked already
+        if which_spec == "main":
+            with FITS(self._path, 'rw') as spec_fits:
+                spec_fits[1].write_key("RESPFILE", self._rmf)
+                spec_fits[1].write_key("ANCRFILE", self._arf)
+                spec_fits[1].write_key("BACKFILE", self._back_spec)
+        elif which_spec == "back":
+            with FITS(self._back_spec, 'rw') as spec_fits:
+                spec_fits[1].write_key("RESPFILE", self._back_rmf)
+                spec_fits[1].write_key("ANCRFILE", self._back_arf)
+        else:
+            raise ValueError("Illegal value for which_spec, you shouldn't be using this internal function!")
+
+    @property
+    def path(self) -> str:
+        """
+        This method returns the path to the spectrum file of this object.
+        :return: The path to the spectrum file associated with this object.
+        :rtype: str
+        """
+        return self._path
+
+    @path.setter
+    def path(self, new_path: str):
+        """
+        This setter updates the path to the spectrum file, and then updates that file with the current values of
+        the RMF, ARF, and background spectrum paths. WARNING: This does permanently alter the file, so use your
+        own spectrum file with caution.
+        :param str new_path: The updated path to the spectrum file.
+        """
+        if os.path.exists(new_path):
+            self._path = new_path
+            # Call this here because it'll replace any existing arf and rmf file paths with the ones
+            #  currently loaded in the instance of this object.
+            self._update_spec_headers("main")
+        else:
+            raise FileNotFoundError("The new spectrum file does not exist")
+
+    @property
+    def rmf(self) -> str:
+        """
+        This method returns the path to the RMF file of the main spectrum of this object.
+        :return: The path to the RMF file associated with the main spectrum of this object.
+        :rtype: str
+        """
+        return self._rmf
+
+    @rmf.setter
+    def rmf(self, new_path: str):
+        """
+        This setter updates the path to the main RMF file, then writes that change to the actual spectrum file.
+        WARNING: This permanently alters the file, use with caution!
+        :param str new_path: The path to the new RMF file.
+        """
+        if os.path.exists(new_path):
+            self._rmf = new_path
+            # Push to the actual file
+            self._update_spec_headers("main")
+        else:
+            raise FileNotFoundError("The new RMF file does not exist")
+
+    @property
+    def arf(self) -> str:
+        """
+        This method returns the path to the ARF file of the main spectrum of this object.
+        :return: The path to the ARF file associated with the main spectrum of this object.
+        :rtype: str
+        """
+        return self._arf
+
+    @arf.setter
+    def arf(self, new_path: str):
+        """
+        This setter updates the path to the main ARF file, then writes that change to the actual spectrum file.
+        WARNING: This permanently alters the file, use with caution!
+        :param str new_path: The path to the new ARF file.
+        """
+        if os.path.exists(new_path):
+            self._arf = new_path
+            self._update_spec_headers("main")
+        else:
+            raise FileNotFoundError("The new ARF file does not exist")
+
+    @property
+    def background(self) -> str:
+        """
+        This method returns the path to the background spectrum.
+        :return: Path of the background spectrum.
+        :rtype: str
+        """
+        return self._back_spec
+
+    @background.setter
+    def background(self, new_path: str):
+        """
+        This method is the setter for the background spectrum. It can be used to change the background
+        spectrum file associated with this object, and will write that change to the actual spectrum file.
+        WARNING: This permanently alters the file, use with caution!
+        :param str new_path: The path to the new background spectrum.
+        """
+        if os.path.exists(new_path):
+            self._back_spec = new_path
+            self._update_spec_headers("main")
+        else:
+            raise FileNotFoundError("The new background spectrum file does not exist")
+
+    @property
+    def background_rmf(self) -> str:
+        """
+        This method returns the path to the background spectrum's RMF file.
+        :return: The path the the background spectrum's RMF.
+        :rtype: str
+        """
+        return self._back_rmf
+
+    @background_rmf.setter
+    def background_rmf(self, new_path: str):
+        """
+        This setter method will change the RMF associated with the background spectrum, then write
+        that change to the background spectrum file.
+        :param str new_path: The path to the background spectrum's new RMF.
+        """
+        if os.path.exists(new_path):
+            self._back_rmf = new_path
+            self._update_spec_headers("back")
+        else:
+            raise FileNotFoundError("That new background RMF file does not exist")
+
+    @property
+    def background_arf(self) -> str:
+        """
+        This method returns the path to the background spectrum's ARF file.
+        :return: The path the the background spectrum's ARF.
+        :rtype: str
+        """
+        return self._back_arf
+
+    @background_arf.setter
+    def background_arf(self, new_path: str):
+        """
+        This setter method will change the ARF associated with the background spectrum, then write
+        that change to the background spectrum file.
+        :param str new_path: The path to the background spectrum's new ARF.
+        """
+        if os.path.exists(new_path):
+            self._back_arf = new_path
+            self._update_spec_headers("back")
+        else:
+            raise FileNotFoundError("That new background ARF file does not exist")
 
 
 class AnnularSpectra(BaseProduct):
@@ -545,7 +753,7 @@ class AnnularSpectra(BaseProduct):
 
 
 # Defining a dictionary to map from string product names to their associated classes
-PROD_MAP = {"image": Image, "expmap": ExpMap, "events": EventList}
+PROD_MAP = {"image": Image, "expmap": ExpMap, "events": EventList, "spectrum": Spectrum}
 
 
 

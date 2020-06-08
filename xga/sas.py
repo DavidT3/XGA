@@ -48,8 +48,10 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = BaseProduct(p_path[0], "", "", out, err, cmd)
         prod = None
     elif p_type == "spectrum":
-        # TODO Update this initilisation when the Spectrum is more complete
-        prod = Spectrum(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
+        prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
+                        extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info["reg_type"],
+                        extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
+
     else:
         raise NotImplementedError("Not implemented yet")
 
@@ -482,6 +484,8 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
 
 
+# TODO Have to allow this to make grouped spectra, set default of 5 counts per bin, avoids bins with 0 counts,
+#  which XSPEC does not like
 @sas_call
 def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bool = True,
                       num_cores: int = NUM_CORES):

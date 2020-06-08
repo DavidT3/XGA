@@ -20,6 +20,8 @@ from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
 # Got to make sure we're able to import the PyXspec module.
 # Currently raises an error, but perhaps later on I'll relax this to a warning.
 try:
+    # TODO The check for the pyXSPEC module is no longer necessary, I'll be using command line xspec,
+    #  so will have to check for that instead.
     import xspec
 except ModuleNotFoundError:
     raise HeasoftError("Unable to import PyXspec, you have to make sure to set a PYTHON environment "

@@ -4,6 +4,6 @@
 # TODO Here will live all of my spectral analysis stuff. Deprojection (eventually...), background models,
 #  anything I or anyone else can think of
 
-
+# TODO Maybe a basic spectrum viewer?
 
 
