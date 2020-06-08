@@ -4,14 +4,16 @@
 import os
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
+from typing import List
 
 import pandas as pd
 import pkg_resources
 from astropy.io import fits
 from astropy.units import Quantity, def_unit
-from numpy import nan, floor, ogrid, ndarray, arctan2, sqrt, pi, round
+from astropy.wcs import WCS
+from fitsio.header import FITSHDR
+from numpy import nan, floor, ogrid, ndarray, arctan2, pi
 from tqdm import tqdm
-import sys
 
 from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
 
@@ -270,6 +272,36 @@ def annular_mask(cen_x: int, cen_y: int, inn_rad: int, out_rad: int, len_x: int,
         ann_mask[cen_y, cen_x] = True
 
     return ann_mask
+
+
+def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
+    """
+    A play on the function of the same name in astropy.io.fits, except this one will take a fitsio header object
+    as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
+    header, and uses their critical values to construct astropy WCS objects.
+    :return: A list of astropy WCS objects extracted from the input header.
+    :rtype: List[WCS]
+    """
+    wcs_search = [k.split("CTYPE")[-1][-1] for k in hdr.keys() if "CTYPE" in k]
+    wcs_nums = [w for w in wcs_search if w.isdigit()]
+    wcs_not_nums = [w for w in wcs_search if not w.isdigit()]
+    if len(wcs_nums) != 2 and len(wcs_nums) != 0:
+        raise KeyError("There are an odd number of CTYPEs with no extra key ")
+    elif len(wcs_nums) == 2:
+        wcs_keys = [""] + list(set(wcs_not_nums))
+    elif len(wcs_nums) == 0:
+        wcs_keys = list(set(wcs_not_nums))
+
+    wcses = []
+    for key in wcs_keys:
+        w = WCS(naxis=2)
+        w.wcs.crpix = [hdr["CRPIX1{}".format(key)], hdr["CRPIX2{}".format(key)]]
+        w.wcs.cdelt = [hdr["CDELT1{}".format(key)], hdr["CDELT2{}".format(key)]]
+        w.wcs.crval = [hdr["CRVAL1{}".format(key)], hdr["CRVAL2{}".format(key)]]
+        w.wcs.ctype = [hdr["CTYPE1{}".format(key)], hdr["CTYPE2{}".format(key)]]
+        wcses.append(w)
+
+    return wcses
 
 
 if not os.path.exists(CONFIG_PATH):

@@ -11,24 +11,18 @@ from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitBase
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
-    EllipseAnnulusSkyRegion, CircleAnnulusSkyRegion, EllipseAnnulusPixelRegion, PixCoord, \
-    CircleAnnulusPixelRegion, EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
+    EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
+
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
-    MultipleMatchError, NoRegionsError, NoProductAvailableError
-from xga.sourcetools import simple_xmm_match, nhlookup
-from xga.utils import ENERGY_BOUND_PRODUCTS, ALLOWED_PRODUCTS, XMM_INST, dict_search, annular_mask, \
-    xmm_det, xmm_sky
+    MultipleMatchError, NoProductAvailableError
 from xga.products import PROD_MAP, EventList, BaseProduct, Image
-
-import sys
+from xga.sourcetools import simple_xmm_match, nhlookup
+from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
 warnings.simplefilter('ignore', wcs.FITSFixedWarning)
-
-
-# TODO Perhaps detection and source matching needs to be more sophisticated
 
 
 class BaseSource:

@@ -7,6 +7,7 @@ from astropy.cosmology import Planck15
 from astropy.units.quantity import Quantity
 from numpy import array, ndarray, pi
 from pandas import DataFrame
+
 from xga import CENSUS
 from xga.exceptions import HeasoftError, NoMatchFoundError
 

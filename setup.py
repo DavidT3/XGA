@@ -2,10 +2,6 @@
 from setuptools import setup, find_packages
 import versioneer
 
-# TODO Add something here that checks for the presence of SAS environment variables
-
-# TODO add attempted import of xspec, as it can't go in the install requires section
-
 setup(name='xga',
       packages=find_packages(),
       version=versioneer.get_version(),

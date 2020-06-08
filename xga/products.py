@@ -2,23 +2,16 @@
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2020, 15:17. Copyright (c) David J Turner
 
 import os
-from typing import Tuple, List, Dict
-import sys
-from copy import deepcopy
-import gc
 import warnings
-from tempfile import TemporaryFile
-from time import sleep
-import psutil
+from typing import Tuple, List, Dict
 
 import numpy as np
-from astropy.io import fits
 from astropy import wcs
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix
+from fitsio import read, read_header, FITSHDR
 
 from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError
-from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, xmm_det
-# TODO Maybe do a regions object but not fully decided on that yet
+from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
 
 class BaseProduct:
@@ -78,14 +71,14 @@ class BaseProduct:
         and another list of unidentifiable errors that occured in the stderr.
         :rtype: Tuple[List[Dict], List[Dict], List]
         """
-        def find_sas(split_stderr: list, err_type: str) -> Tuple[dict, List[str]]:
+        def find_sas(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
             """
             Function to search for and parse SAS errors and warnings.
             :param list split_stderr: The stderr string split on line endings.
             :param str err_type: Should this look for errors or warnings?
             :return: Returns the dictionary of parsed errors/warnings, as well as all lines
             with SAS errors/warnings in.
-            :rtype: Tuple[dict, List[str]]
+            :rtype: Tuple[List[dict], List[str]]
             """
             parsed_sas = []
             # This is a crude way of looking for SAS error/warning strings ONLY
@@ -253,49 +246,20 @@ class Image(BaseProduct):
         if self.usable:
             # Not all images produced by SAS are going to be needed all the time, so they will only be read in if
             # asked for.
-            # Using read only mode because it still allows the user to make changes to the object in memory,
-            # they just can't overwrite the original image.
-
-            # print("EL READO", self.obs_id, self.instrument, self._prod_type)
-            with fits.open(self.path, mode="readonly", memmap=True) as temp_im:
-                data = temp_im[0].data
-
-                data = data.newbyteorder().byteswap()
-                data = data.astype("float32")
-
-                if data.min() < 0:
-                    # TODO PERHAPS RESTORE THIS?
-                    # warnings.warn("You are loading an {} with elements that are < 0, "
-                    #               "they will be set to 0.".format(self._prod_type))
-                    data[data < 0] = 0
-                # XMM exposure maps are float 32 by default, though admittedly images could be opened as int
-                new_data = np.empty_like(data)
-                np.copyto(new_data, data)
-
-                self._im_data = new_data
-                del temp_im[0].data
-                del data
-                header = temp_im[0].header
-                self._header = header
-                del header
-
-            temp_im.close(verbose=True)
-            # del temp_im
-            # gc.collect()
-
-            # data = fits.getdata(self.path)
-            # if data.min() < 0:
-            #     warnings.warn("You are loading an {} with elements that are < 0, "
-            #                   "they will be set to 0.".format(self._prod_type))
-            #     data[data < 0] = 0
-            # self._data = data
-            # self._header = fits.getheader(self.path)
+            self._im_data = read(self.path)
+            if self._im_data.min() < 0:
+                # This throws a non-fatal warning to let the user know there are negative pixel values,
+                #  and that they're being 'corrected'
+                warnings.warn("You are loading an {} with elements that are < 0, "
+                              "they will be set to 0.".format(self._prod_type))
+                self._im_data[self._im_data < 0] = 0
+            self._header = read_header(self.path)
 
             # As the image must be loaded to know the shape, I've waited until here to set the _shape attribute
             self._shape = self._im_data.shape
             # Will actually construct an image WCS as well because why not?
             # XMM images typically have two, both useful, so we'll find all available and store them
-            wcses = wcs.find_all_wcs(self._header)
+            wcses = find_all_wcs(self._header)
 
             # Just iterating through and assigning to the relevant attributes
             for w in wcses:
@@ -334,7 +298,7 @@ class Image(BaseProduct):
         return self._shape
 
     @property
-    def im_data(self) -> np.ndarray:
+    def data(self) -> np.ndarray:
         """
         Property getter for the actual image data, in the form of a numpy array. Doesn't include
         any of the other stuff you get in a fits image, thats found in the hdulist property.
@@ -346,8 +310,8 @@ class Image(BaseProduct):
             self._read_on_demand()
         return self._im_data
 
-    @im_data.setter
-    def im_data(self, new_im_arr: np.ndarray):
+    @data.setter
+    def data(self, new_im_arr: np.ndarray):
         """
         Property setter for the image data. As the fits image is loaded in read-only mode,
         this won't alter the actual file (which is what I was going for), but it does allow
@@ -451,13 +415,14 @@ class Image(BaseProduct):
             else:
                 self._wcs_xmmdetXdetY = input_wcs
     
-    # This absolutely doesn't get a setter considering its the main object with all the information in
+    # This absolutely doesn't get a setter considering its the header object with all the information
+    #  about the image in.
     @property
-    def header(self) -> fits.header.Header:
+    def header(self) -> FITSHDR:
         """
         Property getter allowing access to the astropy fits header object created when the image was read in.
         :return: The header of the primary data table of the image that was read in.
-        :rtype: fits.header.Header
+        :rtype: FITSHDR
         """
         return self._header
 
@@ -554,7 +519,7 @@ class ExpMap(Image):
         :rtype: float
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        exp = self.im_data[pix_coord[0], pix_coord[1]]
+        exp = self._im_data[pix_coord[0], pix_coord[1]]
         return float(exp)
 
 
@@ -570,7 +535,7 @@ class Spectrum(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
-        print("BOIIIIII")
+        self._prod_type = "spectrum"
 
 
 class AnnularSpectra(BaseProduct):

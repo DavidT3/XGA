@@ -1,22 +1,21 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2020, 13:22. Copyright (c) David J Turner
 
-from astropy.units import Quantity
-import astropy.units as u
 import os
-import sys
-from shutil import rmtree
-from numpy import array, full
-from multiprocessing.dummy import Pool
-from subprocess import Popen, PIPE
-from tqdm import tqdm
-from typing import List, Tuple
 import warnings
+from multiprocessing.dummy import Pool
+from shutil import rmtree
+from subprocess import Popen, PIPE
+from typing import List, Tuple
 
-from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
-from xga.products import BaseProduct, Image, ExpMap, Spectrum
-from xga.utils import energy_to_channel, xmm_det, xmm_sky, xga_conf
+from astropy.units import Quantity
+from numpy import array, full
+from tqdm import tqdm
+
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES
+from xga.products import BaseProduct, Image, ExpMap, Spectrum
+from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
+from xga.utils import energy_to_channel, xmm_sky
 
 
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
