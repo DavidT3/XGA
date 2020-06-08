@@ -4,12 +4,15 @@
 import os
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
+from typing import List
 
 import pandas as pd
 import pkg_resources
 from astropy.io import fits
 from astropy.units import Quantity, def_unit
-from numpy import nan, floor
+from astropy.wcs import WCS
+from fitsio.header import FITSHDR
+from numpy import nan, floor, ogrid, ndarray, arctan2, pi
 from tqdm import tqdm
 
 from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
@@ -63,7 +66,7 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
 # List of XMM products supported by XGA that are allowed to be energy bound
 ENERGY_BOUND_PRODUCTS = ["image", "expmap", "reg_image", "reg_expmap", "psfmap"]
 # List of all XMM products supported by XGA
-ALLOWED_PRODUCTS = ["spec", "arf", "rmf", "grp_spec", "regions", "events"] + ENERGY_BOUND_PRODUCTS
+ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events"] + ENERGY_BOUND_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]
 
 # Here we read in files that list the errors and warnings in SAS
@@ -171,6 +174,134 @@ def energy_to_channel(energy: Quantity) -> int:
     energy = energy.to("eV").value
     chan = int(energy)
     return chan
+
+
+def dict_search(key: str, var: dict) -> list:
+    """
+    This simple function was very lightly modified from a stackoverflow answer, and is an
+    efficient method of searching through a nested dictionary structure for specfic keys
+    (and yielding the values associated with them). In this case will extract all of a
+    specific product type for a given source.
+    :param key: The key in the dictionary to search for and extract values.
+    :param var: The variable to search, likely to be either a dictionary or a string.
+    :return list[list]: Returns information on keys and values
+    """
+
+    # Check that the input is actually a dictionary
+    if hasattr(var, 'items'):
+        for k, v in var.items():
+            if k == key:
+                yield v
+            # Here is where we dive deeper, recursively searching lower dictionary levels.
+            if isinstance(v, dict):
+                for result in dict_search(key, v):
+                    # We yield a string of the result and the key, as we'll need to return the
+                    # ObsID and Instrument information from these product searches as well.
+                    # This will mean the output is an unpleasantly nested list, but we can solve that.
+                    yield [str(k), result]
+
+
+# TODO Rewrite this to be vectorised? Masks get returned as a 512 x 512 x N array?
+# TODO Then move it to image tools
+def annular_mask(cen_x: int, cen_y: int, inn_rad: int, out_rad: int, len_x: int, len_y: int,
+                 start_ang: Quantity = Quantity(0, 'deg'), stop_ang: Quantity = Quantity(360, 'deg')) -> ndarray:
+    """
+    A hopefully handy little function to generate annular (or circular) masks in the form of numpy arrays.
+    It produces the mask for a given shape of image, centered at supplied coordinates, and with inner and
+    outer radii supplied by the user also. Angular limits can also be supplied to give the mask an annular
+    dependence.
+    :param int cen_x: Numpy array x-coordinate of the center for this mask.
+    :param int cen_y: Numpy array y-coordinate of the center for this mask.
+    :param int inn_rad: Pixel radius for the inner part of the annular mask.
+    :param int out_rad: Pixel radius for the outer part of the annular mask.
+    :param Quantity start_ang: Lower angular limit for the mask.
+    :param Quantity stop_ang: Upper angular limit for the mask.
+    :param int len_x: Length in the x direction of the array/image this mask is for.
+    :param int len_y: Length in the y direction of the array/image this mask is for.
+    :return: The generated mask array.
+    :rtype: ndarray
+    """
+    # Making use of the astropy units module, check that we are being pass actual angle values
+    if start_ang.unit not in ['deg', 'rad']:
+        raise ValueError("start_angle unit type {} is not an accepted angle unit, "
+                         "please use deg or rad.".format(start_ang.unit))
+    elif stop_ang.unit not in ['deg', 'rad']:
+        raise ValueError("stop_angle unit type {} is not an accepted angle unit, "
+                         "please use deg or rad.".format(stop_ang.unit))
+    # Enforcing some common sense rules on the angles
+    elif start_ang >= stop_ang:
+        raise ValueError("start_ang cannot be greater than or equal to stop_ang.")
+    elif start_ang > Quantity(360, 'deg') or stop_ang > Quantity(360, 'deg'):
+        raise ValueError("start_ang and stop_ang cannot be greater than 360 degrees.")
+    elif stop_ang < Quantity(0, 'deg'):
+        raise ValueError("stop_ang cannot be less than 0 degrees.")
+    else:
+        # Don't want to pass astropy objects to numpy functions, but do need the angles in radians
+        start_ang = start_ang.to('rad').value
+        stop_ang = stop_ang.to('rad').value
+
+    # This sets up the cartesian coordinate grid of x and y values
+    arr_y, arr_x = ogrid[:len_y, :len_x]
+
+    # Go to polar coordinates
+    rec_x = arr_x - cen_x
+    rec_y = arr_y - cen_y
+    # Leave this as r**2 to avoid square rooting and involving floats
+    arr_r_squared = rec_x**2 + rec_y**2
+
+    # arctan2 does just perform arctan on two values, but then uses the signs of those values to
+    # decide the quadrant of the output
+    arr_theta = (arctan2(rec_x, rec_y) - start_ang) % (2*pi)  # Normalising to 0-2pi range
+
+    # This applies common sense rules to inner and out radii, also slightly changes the mask term
+    # if inn_rad == out_rad
+    if inn_rad > out_rad:
+        raise ValueError("inn_rad value cannot be greater than out_rad")
+    # If the user sets inner radius to 0, they'll expect a circular mask that includes the central pixel
+    elif inn_rad < out_rad and inn_rad == 0:
+        rad_mask = arr_r_squared <= out_rad ** 2
+    elif inn_rad < out_rad and inn_rad != 0:
+        rad_mask = (arr_r_squared <= out_rad**2) & (arr_r_squared > inn_rad**2)
+    elif inn_rad == out_rad:
+        rad_mask = arr_r_squared == inn_rad**2
+
+    ang_mask = arr_theta <= (stop_ang - start_ang)
+    ann_mask = rad_mask * ang_mask
+    # Just ensures that the central pixel is included if a non-default angle range is used.
+    if inn_rad == 0:
+        ann_mask[cen_y, cen_x] = True
+
+    return ann_mask
+
+
+def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
+    """
+    A play on the function of the same name in astropy.io.fits, except this one will take a fitsio header object
+    as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
+    header, and uses their critical values to construct astropy WCS objects.
+    :return: A list of astropy WCS objects extracted from the input header.
+    :rtype: List[WCS]
+    """
+    wcs_search = [k.split("CTYPE")[-1][-1] for k in hdr.keys() if "CTYPE" in k]
+    wcs_nums = [w for w in wcs_search if w.isdigit()]
+    wcs_not_nums = [w for w in wcs_search if not w.isdigit()]
+    if len(wcs_nums) != 2 and len(wcs_nums) != 0:
+        raise KeyError("There are an odd number of CTYPEs with no extra key ")
+    elif len(wcs_nums) == 2:
+        wcs_keys = [""] + list(set(wcs_not_nums))
+    elif len(wcs_nums) == 0:
+        wcs_keys = list(set(wcs_not_nums))
+
+    wcses = []
+    for key in wcs_keys:
+        w = WCS(naxis=2)
+        w.wcs.crpix = [hdr["CRPIX1{}".format(key)], hdr["CRPIX2{}".format(key)]]
+        w.wcs.cdelt = [hdr["CDELT1{}".format(key)], hdr["CDELT2{}".format(key)]]
+        w.wcs.crval = [hdr["CRVAL1{}".format(key)], hdr["CRVAL2{}".format(key)]]
+        w.wcs.ctype = [hdr["CTYPE1{}".format(key)], hdr["CTYPE2{}".format(key)]]
+        wcses.append(w)
+
+    return wcses
 
 
 if not os.path.exists(CONFIG_PATH):

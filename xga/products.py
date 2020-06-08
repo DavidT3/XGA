@@ -2,17 +2,16 @@
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2020, 15:17. Copyright (c) David J Turner
 
 import os
+import warnings
 from typing import Tuple, List, Dict
-import sys
 
 import numpy as np
-from astropy.io import fits
 from astropy import wcs
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix
+from fitsio import read, read_header, FITSHDR
 
 from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError
-from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, xmm_det
-# TODO Maybe do a regions object but not fully decided on that yet
+from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
 
 class BaseProduct:
@@ -72,14 +71,14 @@ class BaseProduct:
         and another list of unidentifiable errors that occured in the stderr.
         :rtype: Tuple[List[Dict], List[Dict], List]
         """
-        def find_sas(split_stderr: list, err_type: str) -> Tuple[dict, List[str]]:
+        def find_sas(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
             """
             Function to search for and parse SAS errors and warnings.
             :param list split_stderr: The stderr string split on line endings.
             :param str err_type: Should this look for errors or warnings?
             :return: Returns the dictionary of parsed errors/warnings, as well as all lines
             with SAS errors/warnings in.
-            :rtype: Tuple[dict, List[str]]
+            :rtype: Tuple[List[dict], List[str]]
             """
             parsed_sas = []
             # This is a crude way of looking for SAS error/warning strings ONLY
@@ -229,30 +228,39 @@ class Image(BaseProduct):
         :param bool raise_properly: Shall we actually raise the errors as Python errors?
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
-        self._im_obj = None
         self._shape = None
         self._wcs_radec = None
         self._wcs_xmmXY = None
         self._wcs_xmmdetXdetY = None
         self._energy_bounds = (lo_en, hi_en)
         self._prod_type = "image"
+        self._im_data = None
+        self._header = None
 
     def _read_on_demand(self):
         """
         Internal method to read the image associated with this Image object into memory when it is requested by
         another method. Doing it on-demand saves on wasting memory.
         """
+        # Usable flag to check that nothing went wrong in the image generation
         if self.usable:
             # Not all images produced by SAS are going to be needed all the time, so they will only be read in if
             # asked for.
-            # Using read only mode because it still allows the user to make changes to the object in memory,
-            # they just can't overwrite the original image.
-            self._im_obj = fits.open(self.path, mode="readonly")
+            self._im_data = read(self.path)
+            if self._im_data.min() < 0:
+                # This throws a non-fatal warning to let the user know there are negative pixel values,
+                #  and that they're being 'corrected'
+                warnings.warn("You are loading an {} with elements that are < 0, "
+                              "they will be set to 0.".format(self._prod_type))
+                self._im_data[self._im_data < 0] = 0
+            self._header = read_header(self.path)
+
             # As the image must be loaded to know the shape, I've waited until here to set the _shape attribute
-            self._shape = self._im_obj["PRIMARY"].data.shape
+            self._shape = self._im_data.shape
             # Will actually construct an image WCS as well because why not?
             # XMM images typically have two, both useful, so we'll find all available and store them
-            wcses = wcs.find_all_wcs(self._im_obj["PRIMARY"].header)
+            wcses = find_all_wcs(self._header)
+
             # Just iterating through and assigning to the relevant attributes
             for w in wcses:
                 axes = [ax.lower() for ax in w.axis_type_names]
@@ -284,7 +292,7 @@ class Image(BaseProduct):
         # This has to be run first, to check the image is loaded, otherwise how can we know the shape?
         # This if is here rather than in the method as some other properties of this class don't need the
         # image object, just some products derived from it.
-        if self._im_obj is None:
+        if self._im_data is None:
             self._read_on_demand()
         # There will not be a setter for this property, no-one is allowed to change the shape of the image.
         return self._shape
@@ -298,9 +306,9 @@ class Image(BaseProduct):
         :rtype: np.ndarray
         """
         # Calling this ensures the image object is read into memory
-        if self._im_obj is None:
+        if self._im_data is None:
             self._read_on_demand()
-        return self._im_obj["PRIMARY"].data.copy()
+        return self._im_data
 
     @data.setter
     def data(self, new_im_arr: np.ndarray):
@@ -311,17 +319,17 @@ class Image(BaseProduct):
         :param np.ndarray new_im_arr: The new image data.
         """
         # Calling this ensures the image object is read into memory
-        if self._im_obj is None:
+        if self._im_data is None:
             self._read_on_demand()
 
         # Have to make sure the input is of the right type, and the right shape
         if not isinstance(new_im_arr, np.ndarray):
             raise TypeError("You may only assign a numpy array to the data attribute.")
-        elif new_im_arr.shape != self.shape:
+        elif new_im_arr.shape != self._shape:
             raise ValueError("You may only assign a numpy array to the data attribute if it "
                              "is the same shape as the original.")
         else:
-            self._im_obj["PRIMARY"].data = new_im_arr
+            self._im_data = new_im_arr
 
     # This one doesn't get a setter, as I require this WCS to not be none in the _read_on_demand method
     @property
@@ -407,24 +415,16 @@ class Image(BaseProduct):
             else:
                 self._wcs_xmmdetXdetY = input_wcs
     
-    # This absolutely doesn't get a setter considering its the main object with all the information in, it does
-    # get a deleter though because I'm nice like that
+    # This absolutely doesn't get a setter considering its the header object with all the information
+    #  about the image in.
     @property
-    def hdulist(self) -> fits.hdu.hdulist.HDUList:
+    def header(self) -> FITSHDR:
         """
-        Property getter allowing access to the astropy fits object created when the image was read in.
-        :return: The result of the fits.open call on the product associated with an Image object.
-        :rtype: fits.hdu.hdulist.HDUList
+        Property getter allowing access to the astropy fits header object created when the image was read in.
+        :return: The header of the primary data table of the image that was read in.
+        :rtype: FITSHDR
         """
-        return self._im_obj
-
-    @hdulist.deleter
-    def hdulist(self):
-        """
-        Property deleter to unload the fits HDUlist object.
-        """
-        self._im_obj.close()
-        self._im_obj = None
+        return self._header
 
     def coord_conv(self, coord_pair: Quantity, output_unit: UnitBase) -> Quantity:
         """
@@ -519,7 +519,7 @@ class ExpMap(Image):
         :rtype: float
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        exp = self.data[pix_coord[0], pix_coord[1]]
+        exp = self._im_data[pix_coord[0], pix_coord[1]]
         return float(exp)
 
 
@@ -530,15 +530,15 @@ class EventList(BaseProduct):
         self._prod_type = "events"
 
 
-# TODO So these are 'stack' products, with each next step relying on the one before, so while they are a single
-#  object they will get the paths of every file that should have been created.
-class Spec(BaseProduct):
+# TODO Flesh out
+class Spectrum(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+        self._prod_type = "spectrum"
 
 
-class AnnSpec(BaseProduct):
+class AnnularSpectra(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)

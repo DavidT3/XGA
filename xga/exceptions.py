@@ -197,3 +197,66 @@ class NoValidObservationsError(Exception):
             return '{}'.format(self.message)
         else:
             return 'NoValidObservationsError has been raised'
+
+
+class MultipleMatchError(Exception):
+    def __init__(self, *args):
+        """
+        Error raised when more than one match for a specific type of object is found in a single region file.
+        Hopefully this error is never raised, it probably shouldn't!
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'MultipleMatchError has been raised'
+
+
+class NoRegionsError(Exception):
+    def __init__(self, *args):
+        """
+        Error raised when there are no appropriate regions available for an attempted analysis.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'NoRegionsError has been raised'
+
+
+class NoProductAvailableError(Exception):
+    def __init__(self, *args):
+        """
+        Error raised when requesting a product from an XGA source that hasn't yet been generated.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'NoProductAvailableError has been raised'
+
+
+
+
+
