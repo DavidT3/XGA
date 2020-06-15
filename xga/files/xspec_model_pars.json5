@@ -198,5 +198,5 @@
 "zvphabs": ["nH", "He", "C", "N", "O", "Ne", "Na", "Mg", "Al", "Si", "S", "Cl", "Ar", "Ca", "Cr", "Fe", "Co", "Ni", "Redshift"],
 "zwabs": ["nH", "Redshift"],
 "zwndabs": ["nH", "WindowE", "Redshift"],
-"zxipcf": ["Nh", "log_xi", "CvrFract", "Redshift"],
+"zxipcf": ["Nh", "log_xi", "CvrFract", "Redshift"]
 }
