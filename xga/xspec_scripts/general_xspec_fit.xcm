@@ -45,6 +45,7 @@ ignore bad
 model {m}
 /*
 
+
 # Get the number of parameters in a variable, for iterating through later
 set num_pars [tcloutr modpar]
 # This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra

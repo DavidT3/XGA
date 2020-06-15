@@ -24,6 +24,7 @@ puts $par_name_file "{"
 set par_unit_file [open "../files/xspec_model_units.json5" w]
 puts $par_unit_file "{"
 
+
 foreach m $add_data {
     set par_names \[
     set par_units \[

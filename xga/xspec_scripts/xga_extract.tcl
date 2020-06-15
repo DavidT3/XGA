@@ -134,6 +134,7 @@ proc xga_extract { args } {
 
 
 
+
 # This chunk will write plotting data for the spectra to separate fits files and add them to the main
 #  IT HAS TO GO BEFORE LUM CALC OTHERWISE THE MODEL DATA READ OUT WILL BE THE MODEL WITH NH=0
     for {set spec_i 1} {$spec_i < $num_spec+1} {incr spec_i} {
