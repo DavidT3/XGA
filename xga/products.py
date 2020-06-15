@@ -251,7 +251,7 @@ class Image(BaseProduct):
         if self.usable:
             # Not all images produced by SAS are going to be needed all the time, so they will only be read in if
             # asked for.
-            self._im_data = read(self.path)
+            self._im_data = read(self.path).astype("float64")
             if self._im_data.min() < 0:
                 # This throws a non-fatal warning to let the user know there are negative pixel values,
                 #  and that they're being 'corrected'

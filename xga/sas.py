@@ -232,6 +232,9 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
             obs_id = pack[0]
             inst = pack[1]
 
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
+
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             exists = [match for match in source.get_products("image", obs_id, inst) if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
@@ -293,6 +296,9 @@ def cifbuild(sources: List[BaseSource], num_cores: int = NUM_CORES):
         extra_info = []
         for obs_id in source.obs_ids:
             odf_path = source.get_odf_path(obs_id)
+
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
 
             dest_dir = "{out}{obs}/".format(out=OUTPUT, obs=obs_id)
             if not os.path.exists(dest_dir):
@@ -366,6 +372,10 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
         for pack in source.get_products("events"):
             obs_id = pack[0]
             inst = pack[1]
+
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
+
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             exists = [match for match in source.get_products("expmap", obs_id, inst) if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
@@ -460,6 +470,9 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
             if obs_id not in obs_ids_set:
                 obs_ids_set.append(obs_id)
 
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
+
         # The problem I have here is that merged images don't belong to a particular ObsID, so where do they
         # go in the xga_output folder? I've arbitrarily decided to save it in the folder of the first ObsID
         # associated with a given source.
@@ -553,6 +566,9 @@ def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bo
             obs_id = pack[0]
             inst = pack[1]
 
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
+
             # Got to check if this spectrum already exists
             exists = [match for match in source.get_products("spectrum", obs_id, inst) if boundary_type in match]
             if len(exists) == 1 and exists[0][-1].usable:
@@ -633,7 +649,7 @@ def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bo
         sources_cmds.append(array(cmds))
         sources_paths.append(array(final_paths))
         # This contains any other information that will be needed to instantiate the class
-        # once the SAS cmd has run
+        #  once the SAS cmd has run
         sources_extras.append(array(extra_info))
         sources_types.append(full(sources_cmds[-1].shape, fill_value="spectrum"))
 

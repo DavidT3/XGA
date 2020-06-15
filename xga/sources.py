@@ -15,7 +15,7 @@ from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSk
 
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
-    MultipleMatchError, NoProductAvailableError
+    MultipleMatchError, NoProductAvailableError, NoMatchFoundError
 from xga.products import PROD_MAP, EventList, BaseProduct, Image
 from xga.sourcetools import simple_xmm_match, nhlookup
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky
@@ -33,7 +33,10 @@ class BaseSource:
         # Don't know if I'll always use the simple method
         self._obs = simple_xmm_match(ra, dec)["ObsID"].values
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
-        on_axis_match = simple_xmm_match(ra, dec, 5)["ObsID"].values
+        try:
+            on_axis_match = simple_xmm_match(ra, dec, 5)["ObsID"].values
+        except NoMatchFoundError:
+            on_axis_match = np.array([])
         self.onaxis = np.isin(self._obs, on_axis_match)
         # nhlookup returns average and weighted average values, so just take the first
         self.nH = nhlookup(ra, dec)[0]
@@ -74,6 +77,16 @@ class BaseSource:
         self._back_masks = None
         self._within_source_regions = None
         self._within_back_regions = None
+
+    @property
+    def ra_dec(self) -> Quantity:
+        """
+        A getter for the original ra and dec entered by the user.
+        :return: The ra-dec coordinates entered by the user when the source was first defined
+        :rtype: Quantity
+        """
+        # Easier for it be internally kep as a numpy array, but I want the user to have astropy coordinates
+        return Quantity(self._ra_dec, 'deg')
 
     # TODO Check for XGA generated products and load them in perhaps.
     def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
@@ -700,6 +713,7 @@ class BaseSource:
         print("-----------------------------------------------------")
         print("Source Name - {}".format(self.source_name))
         print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
+        print("nH - {} cm^-2".format(self.nH))
         print("XMM Observations - {}".format(self.__len__()))
         print("On-Axis - {}".format(self.onaxis.sum()))
         print("With regions - {}".format(len(self._initial_regions)))
