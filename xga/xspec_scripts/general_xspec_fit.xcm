@@ -14,6 +14,12 @@ source /home/dt237/code/PycharmProjects/XGA/xga/xspec_scripts/xga_extract.tcl
 # Set the statistic type to Cash
 statistic cstat
 
+# Allow the user to select the abundance table to use
+abund {ab}
+
+# The user can also decide which fitting method to use
+method {md}
+
 # We want plotting data to be in terms of energies, not channels
 setplot energy
 
