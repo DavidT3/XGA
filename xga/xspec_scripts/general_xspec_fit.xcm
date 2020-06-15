@@ -18,6 +18,9 @@ abund {ab}
 # The user can also decide which fitting method to use
 method {md}
 
+# The source object cosmology is used to setup XSPEC cosmo
+cosmo {H0} {q0} {lamb0}
+
 # We want plotting data to be in terms of energies, not channels
 setplot energy
 
