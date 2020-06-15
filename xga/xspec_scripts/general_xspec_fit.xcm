@@ -1,6 +1,9 @@
+#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2020, 12:18. Copyright (c) David J Turner
+
 # This XSPEC script template requires quite a few parameters to be filled in, using the Python formatting
-#  syntax. This *should* act as a general script for model combinations (don't know about multiple temp models), so
-#  long as the formatted parameter values are valid.
+#  syntax. This *should* act as a general script for model combinations, so long as the formatted
+#  parameter values are valid.
 
 # This loads the XGA custom readout script, used to save fit results, spectra information,
 #  and plotting data to a fits file

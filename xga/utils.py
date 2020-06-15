@@ -14,6 +14,7 @@ from astropy.wcs import WCS
 from fitsio.header import FITSHDR
 from numpy import nan, floor, ogrid, ndarray, arctan2, pi
 from tqdm import tqdm
+import json
 
 from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
 
@@ -77,6 +78,15 @@ warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warn
 # Just the names of the errors in two handy constants
 SASERROR_LIST = errors["ErrName"].values
 SASWARNING_LIST = warnings["WarnName"].values
+
+# XSPEC file extraction (and base fit) scripts
+XGA_EXTRACT = pkg_resources.resource_filename(__name__, "xspec_scripts/xga_extract.tcl")
+BASE_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/general_xspec_fit.xcm")
+# Useful jsons of all XSPEC models, their required parameters, and those parameter's units
+with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json5"), 'r') as filey:
+    MODEL_PARS = json.load(filey)
+with open(pkg_resources.resource_filename(__name__, "files/xspec_model_units.json5"), 'r') as filey:
+    MODEL_UNITS = json.load(filey)
 
 
 def xmm_obs_id_test(test_string: str) -> bool:

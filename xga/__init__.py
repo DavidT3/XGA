@@ -3,7 +3,8 @@
 
 from ._version import get_versions
 
-from xga.utils import xga_conf, CENSUS, OUTPUT, COMPUTE_MODE, NUM_CORES
+from xga.utils import xga_conf, CENSUS, OUTPUT, COMPUTE_MODE, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, \
+    MODEL_PARS, MODEL_UNITS
 
 __version__ = get_versions()['version']
 del get_versions
