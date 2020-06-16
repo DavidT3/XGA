@@ -238,6 +238,7 @@ proc xga_extract { args } {
     rm -f $speccdfile
     set fileid [open $speccdfile w]
 
+    puts $fileid "SPEC_PATH 1000A"
     puts $fileid "EXPOSURE E"
     puts $fileid "COUNT_RATE E"
     puts $fileid "COUNT_RATE_ERR E"
@@ -263,7 +264,7 @@ proc xga_extract { args } {
 # write the text output
     set outstr ""
     for {set spec_i 1} {$spec_i < $num_spec+1} {incr spec_i} {
-        append outstr "[lindex $times $spec_i-1] [lindex $rates $spec_i-1] [lindex $rates_errs $spec_i-1] "
+        append outstr "[tcloutr filename $spec_i] [lindex $times $spec_i-1] [lindex $rates $spec_i-1] [lindex $rates_errs $spec_i-1] "
         for {set li 0} {$li < [llength $lums]} {incr li} {
             append outstr "[lindex [lindex $lums $li] $spec_i-1] [lindex [lindex $lum_min_err $li] $spec_i-1] [lindex [lindex $lum_max_err $li] $spec_i-1] "
             }
