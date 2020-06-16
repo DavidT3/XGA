@@ -155,6 +155,6 @@ for {{set i 0}} {{$i < [llength $lum_low_lims]}} {{incr i}} {{
     }}
 
 # And finally we run the custom XGA script that extracts all the information we want
-xga_extract {of} $lum_lim_pairs {redshift} {lel}
+xga_extract {of} $lum_lim_pairs {redshift} {lel} {m}
 
 exit

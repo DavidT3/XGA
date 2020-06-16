@@ -11,14 +11,15 @@ proc xga_extract { args } {
 
 # parse the arguments and find the name of the out file
 # The first argument should be the name of the output file, the second is a list of energy limit
-#  pairs to calculate luminosity in, the third is the relevant redshift, and the last is
-#  the confidence level for Lx errors
+#  pairs to calculate luminosity in, the third is the relevant redshift, the fourth is
+#  the confidence level for Lx errors, and the last is the name of the model used to fit
    set FITSfile [lindex $args 0]
 
 # Parse the arguments related to luminosity calculations
    set energy_lims [lindex $args 1]
    set redshift [lindex $args 2]
    set conf [lindex $args 3]
+   set mod_name [lindex $args 4]
 
 # find how many spectra are loaded in - need this for some loops
     set num_spec [tcloutr datasets]
@@ -75,6 +76,7 @@ proc xga_extract { args } {
     set fileid [open $cdfile w]
 
 # Name all the columns I am adding manually to the fit result table
+    puts $fileid "MODEL 100A"
     puts $fileid "TOTAL_EXPOSURE E"
     puts $fileid "TOTAL_COUNT_RATE E"
     puts $fileid "TOTAL_COUNT_RATE_ERR E"
@@ -114,7 +116,8 @@ proc xga_extract { args } {
 # Write the text output
 # These are the values that will always go in this table, the next chunk is more dynamic and depends how many pars
 #  there are.
-    set outstr "$total_time $total_rate $total_rate_err $count $fit_stat $test_stat $dof "
+    set outstr "$mod_name $total_time $total_rate $total_rate_err $count $fit_stat $test_stat $dof "
+    puts $outstr
     for {set ipar 1} {$ipar <= $numpar} {incr ipar} {
 	if { $spardel($ipar) > 0 } {
 # Write the parameter value and errors to the outstring here, the errors ARE NOT written as confidence levels, but
