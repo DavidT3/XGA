@@ -25,3 +25,5 @@ Dynamic and optional (fill out the lo_en and hi_en headers to define the energy 
 ## Made a design decision that XGA will expect region files in the XCS format
 * DS9 standard
 * With XCS colours - green = extended, red = point etc.
+
+## XGA was designed and tested with XSPEC 12.10.1

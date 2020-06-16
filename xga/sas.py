@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 12:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 17:56. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -87,7 +87,6 @@ def sas_call(sas_func):
         source_rep = []  # For repr calls of each source object, needed for assigning products to sources
         for ind in range(len(cmd_list)):
             source: BaseSource = sources[ind]
-            source_rep.append(repr(source))
             if len(cmd_list[ind]) > 0:
                 # If there are commands to add to a source queue, then do it
                 source.update_queue(cmd_list[ind], p_type[ind], paths[ind], extra_info[ind], to_stack)

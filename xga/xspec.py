@@ -1,11 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 11:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 17:56. Copyright (c) David J Turner
 
 import os
 import warnings
 from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
-from typing import List, Tuple
+from typing import List
 
 import astropy.units as u
 from astropy.units import Quantity
@@ -13,7 +13,6 @@ from tqdm import tqdm
 
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
 from xga.exceptions import NoProductAvailableError
-from xga.products import BaseProduct
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 
 
@@ -47,8 +46,8 @@ def xspec_call(sas_func):
     :return:
     """
     def wrapper(*args, **kwargs):
-        # The first argument of all of these SAS functions will be the source object (or a list of),
-        # so rather than return them from the sas function I'll just access them like this.
+        # The first argument of all of these XSPEC functions will be the source object (or a list of),
+        # so rather than return them from the XSPEC model function I'll just access them like this.
         if isinstance(args[0], BaseSource):
             sources = [args[0]]
         elif isinstance(args[0], list):
@@ -58,94 +57,48 @@ def xspec_call(sas_func):
         src_lookup = [repr(src) for src in sources]
 
         # This is the output from whatever function this is a decorator for
-        cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info = sas_func(*args, **kwargs)
+        # First return is a list of paths of XSPEC scripts to execute, second is the expected output paths,
+        #  and 3rd is the number of cores to use.
+        script_list, paths, cores = sas_func(*args, **kwargs)
 
-        all_run = []  # Combined command list for all sources
-        all_type = []  # Combined expected type list for all sources
-        all_path = []  # Combined expected path list for all sources
-        all_extras = []  # Combined extra information list for all sources
-        source_rep = []  # For repr calls of each source object, needed for assigning products to sources
-        for ind in range(len(cmd_list)):
-            source: BaseSource = sources[ind]
-            source_rep.append(repr(source))
-            if len(cmd_list[ind]) > 0:
-                # If there are commands to add to a source queue, then do it
-                source.update_queue(cmd_list[ind], p_type[ind], paths[ind], extra_info[ind], to_stack)
-
-            # If we do want to execute the commands this time round, we read them out for all sources
-            # and add them to these master lists
-            if to_execute:
-                to_run, expected_type, expected_path, extras = source.get_queue()
-                all_run += to_run
-                all_type += expected_type
-                all_path += expected_path
-                all_extras += extras
-                source_rep += [repr(source)] * len(to_run)
-
-        # This is what the returned products get stored in before they're assigned to sources
+        # This is what the returned information from the execute command gets stored in before being parceled out
+        #  to source and spectrum objects
         results = {s: [] for s in src_lookup}
-        if to_execute and COMPUTE_MODE == "local" and len(all_run) > 0:
-            # Will run the commands locally in a pool
-            raised_errors = []
-            prod_type_str = ", ".join(set(all_type))
-            with tqdm(total=len(all_run), desc="Generating products of type(s) " + prod_type_str) as gen, \
-                    Pool(cores) as pool:
-                def callback(results_in: Tuple[BaseProduct, str]):
+        if COMPUTE_MODE == "local" and len(script_list) > 0:
+            # This mode runs the XSPEC locally in a multiprocessing pool.
+            with tqdm(total=len(script_list), desc="Running XSPEC Models Fits") as fit, Pool(cores) as pool:
+                def callback(results_in):
                     """
                     Callback function for the apply_async pool method, gets called when a task finishes
                     and something is returned.
-                    :param Tuple[BaseProduct, str] results_in: Results of the command call.
                     """
-                    nonlocal gen  # The progress bar will need updating
+                    nonlocal fit  # The progress bar will need updating
                     nonlocal results  # The dictionary the command call results are added to
                     if results_in[0] is None:
-                        gen.update(1)
+                        fit.update(1)
                         return
                     else:
-                        prod_obj, rel_src = results_in
+                        prod_obj, rel_src, successful = results_in
                         results[rel_src].append(prod_obj)
-                        gen.update(1)
+                        fit.update(1)
 
-                def err_callback(err):
-                    """
-                    The callback function for errors that occur inside a task running in the pool.
-                    :param err: An error that occurred inside a task.
-                    """
-                    nonlocal raised_errors
-                    nonlocal gen
-
-                    if err is not None:
-                        # Rather than throwing an error straight away I append them all to a list for later.
-                        raised_errors.append(err)
-                    gen.update(1)
-
-                for cmd_ind, cmd in enumerate(all_run):
-                    # These are just the relevant entries in all these lists for the current command
-                    # Just defined like this to save on line length for apply_async call.
-                    exp_type = all_type[cmd_ind]
-                    exp_path = all_path[cmd_ind]
-                    ext = all_extras[cmd_ind]
-                    src = source_rep[cmd_ind]
-                    pool.apply_async(execute_cmd, args=(str(cmd), str(exp_type), exp_path, ext, src),
-                                     error_callback=err_callback, callback=callback)
+                for s_ind, s in enumerate(script_list):
+                    pth = paths[s_ind]
+                    src = src_lookup[s_ind]
+                    pool.apply_async(execute_cmd, args=(s, pth, src), callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
-                for error in raised_errors:
-                    raise error
-
-        elif to_execute and COMPUTE_MODE == "sge" and len(all_run) > 0:
+        elif COMPUTE_MODE == "sge" and len(script_list) > 0:
             # This section will run the code on an HPC that uses the Sun Grid Engine for job submission.
             raise NotImplementedError("How did you even get here?")
 
-        elif to_execute and COMPUTE_MODE == "slurm" and len(all_run) > 0:
+        elif COMPUTE_MODE == "slurm" and len(script_list) > 0:
             # This section will run the code on an HPC that uses slurm for job submission.
             raise NotImplementedError("How did you even get here?")
 
-        elif to_execute and len(all_run) == 0:
-            # It is possible to call a wrapped SAS function and find that the products already exist.
-            # print("All requested products already exist")
-            pass
+        elif len(script_list) == 0:
+            warnings.warn("All requested XSPEC fits had already been run.")
 
         # Now we assign products to source objects
         for entry in results:
@@ -164,6 +117,7 @@ def xspec_call(sas_func):
     return wrapper
 
 
+@xspec_call
 def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quantity = Quantity(3.0, "keV"),
                      start_met: float = 0.3, lum_en: List[Quantity] = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
                      freeze_nh: bool = True, freeze_met: bool = True,
@@ -289,12 +243,14 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
                                lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
                                of=out_file, redshift=source.redshift, lel=lum_conf)
 
+        # Write out the filled-in template to its destination
         with open(script_file, 'w') as xcm:
             xcm.write(script)
 
-        script_paths.append(script_file)
-        outfile_paths.append(out_file)
-
+        # If the fit has already been performed we do not wish to perform it again
+        if not os.path.exists(script_file) or not os.path.exists(out_file):
+            script_paths.append(script_file)
+            outfile_paths.append(out_file)
     return script_paths, outfile_paths, num_cores
 
 

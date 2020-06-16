@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 11:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 17:56. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -17,9 +17,9 @@ from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSk
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError
-from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum
+from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap
 from xga.sourcetools import simple_xmm_match, nhlookup
-from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky
+from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -33,8 +33,8 @@ class BaseSource:
             self._name = name
         else:
             # self.ra_dec rather than _ra_dec because ra_dec is in astropy degree units
-            sky_obj = SkyCoord(ra=self.ra_dec[0], dec=self.ra_dec[1])
-            crd_str = sky_obj.to_string("hmsdms").replace("h", "").replace("m", "").replace("s", "").replace("d", "")
+            s = SkyCoord(ra=self.ra_dec[0], dec=self.ra_dec[1])
+            crd_str = s.to_string("hmsdms").replace("h", "").replace("m", "").replace("s", "").replace("d", "")
             ra_str, dec_str = crd_str.split(" ")
             # Use the standard naming convention if one wasn't passed on initialisation of the source
             # Need it because its used for naming files later on.
@@ -53,6 +53,11 @@ class BaseSource:
         self._nH = nhlookup(ra, dec)[0]
         self._redshift = redshift
         self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
+
+        # If there is an existing XGA output directory, then it makes sense to search for products that XGA
+        #  may have already generated and load them in - saves us wasting time making them again.
+        if os.path.exists(OUTPUT):
+            self._existing_xga_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
@@ -100,7 +105,6 @@ class BaseSource:
         # Easier for it be internally kep as a numpy array, but I want the user to have astropy coordinates
         return Quantity(self._ra_dec, 'deg')
 
-    # TODO Check for XGA generated products and load them in perhaps.
     def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
@@ -109,11 +113,12 @@ class BaseSource:
         :rtype: Tuple[dict, dict, dict]
         """
 
-        def gen_file_names(en_lims: tuple) -> Tuple[str, dict]:
+        def read_default_products(en_lims: tuple) -> Tuple[str, dict]:
             """
             This nested function takes pairs of energy limits defined in the config file and runs
-            through the XMM products (also defined in the config file), filling in the energy limits and
-            checking if the file paths exist. Those that do exist are returned in a dictionary.
+            through the default XMM products defined in the config file, filling in the energy limits and
+            checking if the file paths exist. Those that do exist are read into the relevant product object and
+            returned.
             :param tuple en_lims: A tuple containing a lower and upper energy limit to generate file names for,
             the first entry should be the lower limit, the second the upper limit.
             :return: A dictionary key based on the energy limits for the file paths to be stored under, and the
@@ -180,7 +185,7 @@ class BaseSource:
                 att_dict[obs_id] = att_file
                 odf_dict[obs_id] = odf_path
                 # Dictionary updated with derived product names
-                map_ret = map(gen_file_names, en_comb)
+                map_ret = map(read_default_products, en_comb)
                 obs_dict[obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
                 if os.path.exists(reg_file):
                     # Regions dictionary updated with path to region file, if it exists
@@ -239,6 +244,107 @@ class BaseSource:
             self._merged_products[extra_key][p_type] = prod_obj
         elif extra_key is None and obs_id == "combined":
             self._merged_products[p_type] = prod_obj
+
+    # TODO MAKE IT ACTUALLY LOAD IN OLD FITS
+    def _existing_xga_products(self):
+        """
+        A method specifically for searching an existing XGA output directory for relevant files and loading
+        them in as XGA products. This will retrieve images, exposure maps, and spectra; then the source product
+        structure is updated. The method also finds previous fit results and loads them in.
+        """
+        def parse_image_like(file_path: str, exact_type: str) -> BaseProduct:
+            """
+            Very simple little function that takes the path to an XGA generated image-like product (so either an
+            image or an exposure map), parses the file path and makes an XGA object of the correct type by using
+            the exact_type variable.
+            :param file_path: Absolute path to an XGA-generated XMM data product.
+            :param exact_type: Either 'image' or 'expmap', the type of product that the file_path leads to.
+            :return: An XGA product object.
+            :rtype: BaseProduct
+            """
+            # Get rid of the absolute part of the path, then split by _ to get the information from the file name
+            im_info = file_path.split("/")[-1].split("_")
+            # I know its hard coded but this will always be the case, these are files I generate with XGA.
+            ins = im_info[1]
+            lo_en, hi_en = im_info[-1].split("keV")[0].split("-")
+            # Have to be astropy quantities before passing them into the Product declaration
+            lo_en = Quantity(float(lo_en), "keV")
+            hi_en = Quantity(float(hi_en), "keV")
+
+            # Different types of Product objects, the empty strings are because I don't have the stdout, stderr,
+            #  or original commands for these objects.
+            if exact_type == "image":
+                final_obj = Image(im, obs, ins, "", "", "", lo_en, hi_en)
+            elif exact_type == "expmap":
+                final_obj = ExpMap(im, obs, ins, "", "", "", lo_en, hi_en)
+            else:
+                raise TypeError("Only image and expmap are allowed.")
+
+            return final_obj
+
+        og_dir = os.getcwd()
+        for obs in self._obs:
+            if os.path.exists(OUTPUT + obs):
+                os.chdir(OUTPUT + obs)
+                # I've put as many checks as possible in this to make sure it only finds genuine XGA files,
+                #  I'll probably put a few more checks later
+
+                # Images read in, pretty simple process - the name of the current source doesn't matter because
+                #  standard images/exposure maps are for the WHOLE observation.
+                ims = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
+                       "img" in f and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
+                for im in ims:
+                    self.update_products(parse_image_like(im, "image"))
+
+                # Exposure maps read in, same process as images
+                exs = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
+                       "expmap" in f and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
+                for ex in exs:
+                    self.update_products(parse_image_like(ex, "expmap"))
+
+                # For spectra we search for products that have the name of this object in, as they are for
+                #  specific parts of the observation.
+                named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and self._name in f
+                         and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
+                specs = [f for f in named if "spec" in f and "back" not in f and "ann" not in f]
+                for sp in specs:
+                    # Filename contains a lot of useful information, so splitting it out to get it
+                    sp_info = sp.split("/")[-1].split("_")
+                    inst = sp_info[1]
+                    reg_type = sp_info[-2]
+                    # Fairly self explanatory, need to find all the separate products needed to define an XGA
+                    #  spectrum
+                    arf = [f for f in named if "arf" in f and "ann" not in f and "back" not in f
+                           and inst in f and reg_type in f]
+                    rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" not in f
+                           and inst in f and reg_type in f]
+                    # As RMFs can be generated for source and background spectra separately, or one for both,
+                    #  we need to check for matching RMFs to the spectrum we found
+                    if len(rmf) == 0:
+                        rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" not in f
+                               and inst in f and "universal" in f]
+
+                    # Exact same checks for the background spectrum
+                    back = [f for f in named if "backspec" in f and "ann" not in f and inst in f and reg_type in f]
+                    back_arf = [f for f in named if "arf" in f and "ann" not in f and inst in f and reg_type in f
+                                and "back" in f]
+                    back_rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" in f and inst in f
+                                and reg_type in f]
+                    if len(back_rmf) == 0:
+                        back_rmf = rmf
+
+                    # If exactly one match has been found for all of the products, we define an XGA spectrum and
+                    #  add it the source object.
+                    if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and \
+                            len(back_rmf) == 1:
+                        obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], reg_type, obs, inst,
+                                       "", "", "")
+                        self.update_products(obj)
+
+                # TODO Add different read in loops for annular spectra and maybe regioned images once I
+                #  add them into XGA.
+
+        os.chdir(og_dir)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None) -> List[list]:
         """
