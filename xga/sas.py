@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 11:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 12:19. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -499,7 +499,6 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
 
 # TODO Have to allow this to make grouped spectra, set default of 5 counts per bin, avoids bins with 0 counts,
 #  which XSPEC does not like
-# TODO make directories and name output spectral files better.
 @sas_call
 def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = True,
                       num_cores: int = NUM_CORES):
@@ -594,11 +593,11 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
             # Just grabs the event list object
             evt_list = pack[-1]
             # Sets up the file names of the output files
-            dest_dir = OUTPUT + "{o}/{i}_temp/".format(o=obs_id, i=inst)
-            spec = "{o}_{i}_{bt}_spec.fits".format(o=obs_id, i=inst, bt=reg_type)
-            b_spec = "{o}_{i}_{bt}_backspec.fits".format(o=obs_id, i=inst, bt=reg_type)
-            arf = "{o}_{i}_{bt}.arf".format(o=obs_id, i=inst, bt=reg_type)
-            b_arf = "{o}_{i}_{bt}_back.arf".format(o=obs_id, i=inst, bt=reg_type)
+            dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source.name)
+            spec = "{o}_{i}_{n}_{bt}_spec.fits".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+            b_spec = "{o}_{i}_{n}_{bt}_backspec.fits".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+            arf = "{o}_{i}_{n}_{bt}.arf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+            b_arf = "{o}_{i}_{n}_{bt}_back.arf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
             ccf = dest_dir + "ccf.cif"
 
             # Fills out the evselect command to make the main and background spectra
@@ -609,11 +608,11 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
             #  an individual one for each spectrum. Also adds arfgen commands on the end, as they depend on
             #  the rmf.
             if one_rmf:
-                rmf = "{o}_{i}_{bt}.rmf".format(o=obs_id, i=inst, bt="universal")
+                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source.name, bt="universal")
                 b_rmf = rmf
             else:
-                rmf = "{o}_{i}_{bt}.rmf".format(o=obs_id, i=inst, bt=reg_type)
-                b_rmf = "{o}_{i}_{bt}_back.rmf".format(o=obs_id, i=inst, bt=reg_type)
+                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+                b_rmf = "{o}_{i}_{n}_{bt}_back.rmf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
 
             if one_rmf and not os.path.exists(dest_dir + rmf):
                 cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
