@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2020, 15:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 11:27. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -744,6 +744,18 @@ class Spectrum(BaseProduct):
             self._update_spec_headers("back")
         else:
             raise FileNotFoundError("That new background ARF file does not exist")
+
+    # This is an intrinsic property of the generated spectrum, so users will not be allowed to change this
+    @property
+    def reg_type(self) -> str:
+        """
+        Getter method for the type of region this spectrum was generated for. e.g. 'region' - which would
+        mean it represents the spectrum inside a region specificied by region files, or 'r500' - which
+        would mean the radius of a cluster where the mean density is 500 times critical density of the Universe.
+        :return: The region type this spectrum was generated for
+        :rtype: str
+        """
+        return self._reg_type
 
 
 class AnnularSpectra(BaseProduct):

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/04/2020, 21:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 11:27. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -9,6 +9,7 @@ import numpy as np
 from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
+from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
     EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
@@ -16,7 +17,7 @@ from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSk
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError
-from xga.products import PROD_MAP, EventList, BaseProduct, Image
+from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum
 from xga.sourcetools import simple_xmm_match, nhlookup
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky
 
@@ -26,9 +27,19 @@ warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class BaseSource:
-    def __init__(self, ra, dec, redshift=None, name='', cosmology=Planck15):
-        self.source_name = name
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
         self._ra_dec = np.array([ra, dec])
+        if name is not None:
+            self._name = name
+        else:
+            # self.ra_dec rather than _ra_dec because ra_dec is in astropy degree units
+            sky_obj = SkyCoord(ra=self.ra_dec[0], dec=self.ra_dec[1])
+            crd_str = sky_obj.to_string("hmsdms").replace("h", "").replace("m", "").replace("s", "").replace("d", "")
+            ra_str, dec_str = crd_str.split(" ")
+            # Use the standard naming convention if one wasn't passed on initialisation of the source
+            # Need it because its used for naming files later on.
+            self._name = "J" + ra_str[:ra_str.index(".")+2] + dec_str[:dec_str.index(".")+2]
+
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
         self._obs = simple_xmm_match(ra, dec)["ObsID"].values
@@ -37,10 +48,10 @@ class BaseSource:
             on_axis_match = simple_xmm_match(ra, dec, 5)["ObsID"].values
         except NoMatchFoundError:
             on_axis_match = np.array([])
-        self.onaxis = np.isin(self._obs, on_axis_match)
+        self._onaxis = np.isin(self._obs, on_axis_match)
         # nhlookup returns average and weighted average values, so just take the first
-        self.nH = nhlookup(ra, dec)[0]
-        self.redshift = redshift
+        self._nH = nhlookup(ra, dec)[0]
+        self._redshift = redshift
         self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
@@ -49,8 +60,9 @@ class BaseSource:
         # users should be using for analyses
         self._merged_products = {}  # TODO Should this just be a part of _products?
 
+        self._cosmo = cosmology
         if redshift is not None:
-            self.lum_dist = cosmology.luminosity_distance(self.redshift)
+            self.lum_dist = self._cosmo.luminosity_distance(self._redshift)
         self._initial_regions, self._initial_region_matches = self._load_regions(region_dict)
 
         # This is a queue for products to be generated for this source, will be a numpy array in practise.
@@ -192,9 +204,11 @@ class BaseSource:
 
         en_bnds = prod_obj.energy_bounds
         if en_bnds[0] is not None and en_bnds[1] is not None:
-            en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+            extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+        elif type(prod_obj) == Spectrum:
+            extra_key = prod_obj.reg_type
         else:
-            en_key = None
+            extra_key = None
 
         # All information about where to place it in our storage hierarchy can be pulled from the product
         # object itself
@@ -210,20 +224,20 @@ class BaseSource:
         elif inst != "combined" and inst not in self._products[obs_id]:
             raise NotAssociatedError("{i} is not associated with XMM observation {o}".format(i=inst, o=obs_id))
 
-        if en_key is not None and obs_id != "combined":
+        if extra_key is not None and obs_id != "combined":
             # If there is no entry for this energy band already, we must make one
-            if en_key not in self._products[obs_id][inst]:
-                self._products[obs_id][inst][en_key] = {}
-            self._products[obs_id][inst][en_key][p_type] = prod_obj
-        elif en_key is None and obs_id != "combined":
+            if extra_key not in self._products[obs_id][inst]:
+                self._products[obs_id][inst][extra_key] = {}
+            self._products[obs_id][inst][extra_key][p_type] = prod_obj
+        elif extra_key is None and obs_id != "combined":
             self._products[obs_id][inst][p_type] = prod_obj
         # Here we deal with merged products
-        elif en_key is not None and obs_id == "combined":
+        elif extra_key is not None and obs_id == "combined":
             # If there is no entry for this energy band already, we must make one
-            if en_key not in self._merged_products:
-                self._merged_products[en_key] = {}
-            self._merged_products[en_key][p_type] = prod_obj
-        elif en_key is None and obs_id == "combined":
+            if extra_key not in self._merged_products:
+                self._merged_products[extra_key] = {}
+            self._merged_products[extra_key][p_type] = prod_obj
+        elif extra_key is None and obs_id == "combined":
             self._merged_products[p_type] = prod_obj
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None) -> List[list]:
@@ -706,16 +720,62 @@ class BaseSource:
 
         return final_src, final_back
 
+    @property
+    def nH(self) -> float:
+        """
+        Property getter for neutral hydrogen column attribute.
+        :return: Neutral hydrogen column surface density.
+        :rtype: float
+        """
+        return self._nH
+
+    @property
+    def redshift(self):
+        """
+        Property getter for the redshift of this source object.
+        :return: Redshift value
+        :rtype: float
+        """
+        return self._redshift
+
+    @property
+    def on_axis_obs_ids(self):
+        """
+        This method returns an array of ObsIDs that this source is approximately on axis in.
+        :return: ObsIDs for which the source is approximately on axis.
+        :rtype: np.ndarray
+        """
+        return self._obs[self._onaxis]
+
+    @property
+    def cosmo(self) -> Cosmology:
+        """
+        This method returns whatever cosmology object is associated with this source object.
+        :return: An astropy cosmology object specified for this source on initialization.
+        :rtype: Cosmology
+        """
+        return self._cosmo
+
+    # This is used to name files and directories so this is not allowed to change.
+    @property
+    def name(self) -> str:
+        """
+        The name of the source, either given at initialisation or generated from the user-supplied coordinates.
+        :return: The name of the source.
+        :rtype: str
+        """
+        return self._name
+
     def info(self):
         """
         Very simple function that just prints a summary of the BaseSource object.
         """
         print("-----------------------------------------------------")
-        print("Source Name - {}".format(self.source_name))
+        print("Source Name - {}".format(self._name))
         print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
         print("nH - {} cm^-2".format(self.nH))
         print("XMM Observations - {}".format(self.__len__()))
-        print("On-Axis - {}".format(self.onaxis.sum()))
+        print("On-Axis - {}".format(self._onaxis.sum()))
         print("With regions - {}".format(len(self._initial_regions)))
         print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
         print("Obs with one match - {}".format(sum([1 for o in self._initial_region_matches if
@@ -738,7 +798,7 @@ class BaseSource:
 # TODO I don't know how all this mask stuff will do with merged products - may have to rejig later
 # TODO Don't forget to write another info() method for extended source
 class ExtendedSource(BaseSource):
-    def __init__(self, ra, dec, redshift=None, name='', cosmology=Planck15):
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
         super().__init__(ra, dec, redshift, name, cosmology)
 
         # This uses the added context of the type of source to find (or not find) matches in region files
@@ -838,7 +898,7 @@ class ExtendedSource(BaseSource):
 
 
 class GalaxyCluster(ExtendedSource):
-    def __init__(self, ra, dec, redshift=None, name='', cosmology=Planck15):
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
         super().__init__(ra, dec, redshift, name, cosmology)
         # Don't know if these should be stored as astropy Quantity objects, may add that later
         self._central_coords = {obs: {inst: {} for inst in self._products[obs]} for obs in self.obs_ids}
@@ -926,7 +986,7 @@ class GalaxyCluster(ExtendedSource):
 
 
 class PointSource(BaseSource):
-    def __init__(self, ra, dec, redshift=None, name='', cosmology=Planck15):
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
         super().__init__(ra, dec, redshift, name, cosmology)
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by regfiles or by users, will be stored

@@ -1,6 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2020, 12:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 11:27. Copyright (c) David J Turner
 
+import json
 import os
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
@@ -14,7 +15,6 @@ from astropy.wcs import WCS
 from fitsio.header import FITSHDR
 from numpy import nan, floor, ogrid, ndarray, arctan2, pi
 from tqdm import tqdm
-import json
 
 from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
 
@@ -87,6 +87,8 @@ with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json
     MODEL_PARS = json.load(filey)
 with open(pkg_resources.resource_filename(__name__, "files/xspec_model_units.json5"), 'r') as filey:
     MODEL_UNITS = json.load(filey)
+ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
+XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
 
 
 def xmm_obs_id_test(test_string: str) -> bool:

@@ -48,7 +48,6 @@ ignore **:**-{lo_cut} **:{hi_cut}-**
 ignore bad
 
 # Now we must define the model, but without setting any parameters (thats what /* does)
-
 model {m}
 /*
 
