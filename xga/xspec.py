@@ -1,40 +1,62 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 17:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 12:07. Copyright (c) David J Turner
 
 import os
 import warnings
 from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
-from typing import List
+from typing import List, Tuple
 
 import astropy.units as u
 from astropy.units import Quantity
+from fitsio import FITS
 from tqdm import tqdm
-
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
 from xga.exceptions import NoProductAvailableError
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 
 
-def execute_cmd(x_script: str, out_file: str, src: str):
+# TODO It may be necessary to put query yes in the XSPEC scripts so they keep running whatever questions
+#  pop up while they're going.
+
+
+def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool, list, list]:
     """
     This function is called for the local compute option. It will run the supplied XSPEC script, then check
     parse the output for errors and check that the expected output file has been created
     :param str x_script: The path to an XSPEC script to be run.
     :param str out_file: The expected path for the output file of that XSPEC script.
     :param str src: A string representation of the source object that this fit is associated with.
-    :return:
-    :rtype:
+    :return: FITS object of the results, string repr of the source associated with this fit, boolean variable
+    describing if this fit can be used, list of any errors found, list of any warnings found.
+    :rtype: Tuple[FITS, str, bool, list, list]
     """
     cmd = "xspec - {}".format(x_script)
+    # TODO Perhaps introduce a timeout here if its necessary
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
-    out = out.decode("UTF-8")
-    err = err.decode("UTF-8")
+    out = out.decode("UTF-8").split("\n")
+    err = err.decode("UTF-8").split("\n")
 
-    usable = True
-    # TODO Parse the output strings and look for problems
+    # TODO Change the ***Error part if it doesn't actually work
+    err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line]
+    warn_out_lines = [line.split("***Warning: ")[-1] for line in out if "***Warning" in line]
+    err_err_lines = [line.split("***Error: ")[-1] for line in err if "***Error" in line]
+    warn_err_lines = [line.split("***Warning: ")[-1] for line in err if "***Warning" in line]
 
-    return out_file, src, usable
+    if len(err_out_lines) == 0 and len(err_err_lines) == 0:
+        usable = True
+    else:
+        usable = False
+
+    error = err_out_lines + err_err_lines
+    warn = warn_out_lines + warn_err_lines
+
+    res_tables = FITS(out_file)
+    tab_names = [tab.get_extname() for tab in res_tables]
+    if "results" not in tab_names or "spec_info" not in tab_names:
+        usable = False
+
+    return res_tables, src, usable, error, warn
 
 
 def xspec_call(sas_func):
@@ -59,7 +81,7 @@ def xspec_call(sas_func):
         # This is the output from whatever function this is a decorator for
         # First return is a list of paths of XSPEC scripts to execute, second is the expected output paths,
         #  and 3rd is the number of cores to use.
-        script_list, paths, cores = sas_func(*args, **kwargs)
+        script_list, paths, cores, reg_type = sas_func(*args, **kwargs)
 
         # This is what the returned information from the execute command gets stored in before being parceled out
         #  to source and spectrum objects
@@ -78,8 +100,8 @@ def xspec_call(sas_func):
                         fit.update(1)
                         return
                     else:
-                        prod_obj, rel_src, successful = results_in
-                        results[rel_src].append(prod_obj)
+                        res_fits, rel_src, successful, err_list, warn_list = results_in
+                        results[rel_src] = [res_fits, successful, err_list, warn_list]
                         fit.update(1)
 
                 for s_ind, s in enumerate(script_list):
@@ -100,15 +122,27 @@ def xspec_call(sas_func):
         elif len(script_list) == 0:
             warnings.warn("All requested XSPEC fits had already been run.")
 
-        # Now we assign products to source objects
+        # Now we assign the fit results to source objects
         for entry in results:
             # Made this lookup list earlier, using string representations of source objects.
-            # Finds the ind of the list of sources that we should add this set of products to
+            # Finds the ind of the list of sources that we should add these results to
             ind = src_lookup.index(entry)
-            for product in results[entry]:
-                # For each product produced for this source, we add it to the storage hierarchy
-                sources[ind].update_products(product)
+            s = sources[ind]
+            # Is this fit usable?
+            res_set = results[entry]
+            if res_set[1]:
+                glob_res = res_set[0]["RESULTS"][0]
+                model = glob_res["MODEL"]
 
+                for line_ind, line in enumerate(res_set[0]["SPEC_INFO"]):
+                    sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                    spec = [match for match in s.get_products("spectrum", sp_info[0], sp_info[1])
+                            if reg_type in match and match[-1].usable][0][-1]
+
+                    spec.add_fit_data(str(model), line, res_set[0]["PLOT"+str(line_ind+1)])
+                    s.update_products(spec)
+
+            res_set[0].close()
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
         if len(sources) == 1:
@@ -228,6 +262,7 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
 
         # There has to be a directory to write this xspec script to, as well as somewhere for the fit output
         #  to be stored
+        # TODO THESE FILE NAMES SHOULD BE REGION AND MODEL SPECIFIC
         dest_dir = OUTPUT + "XSPEC/" + source.name + "/"
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
@@ -251,7 +286,7 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
         if not os.path.exists(script_file) or not os.path.exists(out_file):
             script_paths.append(script_file)
             outfile_paths.append(out_file)
-    return script_paths, outfile_paths, num_cores
+    return script_paths, outfile_paths, num_cores, reg_type
 
 
 def double_temp_apec():

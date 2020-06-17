@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 11:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 12:07. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,8 +8,7 @@ from typing import Tuple, List, Dict
 import numpy as np
 from astropy import wcs
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix
-from fitsio import read, read_header, FITSHDR, FITS
-
+from fitsio import read, read_header, FITSHDR, FITS, hdu
 from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
@@ -587,6 +586,11 @@ class Spectrum(BaseProduct):
         self._update_spec_headers("main")
         self._update_spec_headers("back")
 
+        self._exp = None
+        self._plot_data = {}
+        self._luminosity = {}
+        self._count_rate = {}
+
     def _update_spec_headers(self, which_spec: str):
         """
         An internal method that will 'push' the current class attributes that hold the paths to data products
@@ -756,6 +760,60 @@ class Spectrum(BaseProduct):
         :rtype: str
         """
         return self._reg_type
+
+    def add_fit_data(self, model: str, tab_line, plot_data: hdu.table.TableHDU):
+        """
+        Method that adds information specific to a spectrum from an XSPEC fit to this object. This includes
+        individual spectrum exposure and count rate, as well as calculated luminosities, and plotting
+        information for data and model.
+        :param str model: String representation of the XSPEC model fitted to the data.
+        :param tab_line: The line of the SPEC_INFO table produced by xga_extract.tcl that is relevant to this
+        spectrum object.
+        :param hdu.table.TableHDU plot_data: The PLOT{N} table in the file produced by xga_extract.tcl that is
+        relevant to this spectrum object.
+        """
+        # This stores the exposure time that XSPEC uses for this specific spectrum.
+        if self._exp is not None:
+            self._exp = tab_line["EXPOSURE"]
+
+        # This is the count rate and error for this spectrum.
+        self._count_rate[model] = [tab_line["COUNT_RATE"], tab_line["COUNT_RATE_ERR"]]
+
+        # Searches for column headers with 'Lx' in them (this has to be dynamic as the user can calculate
+        #  luminosity in as many bands as they like)
+        lx_inds = np.where(np.char.find(tab_line.dtype.names, "Lx") == 0)[0]
+        lx_cols = np.array(tab_line.dtype.names)[lx_inds]
+
+        # Constructs a dictionary of luminosities and their errors for the different energy bands
+        #  in this XSPEC fit.
+        lx_dict = {}
+        for col in lx_cols:
+            lx_info = col.split("_")
+            if lx_info[2][-1] == "-" or lx_info[2][-1] == "+":
+                en_band = "bound_{l}-{u}".format(l=lx_info[1], u=lx_info[2][:-1])
+                err_type = lx_info[-1][-1]
+            else:
+                en_band = "bound_{l}-{u}".format(l=lx_info[1], u=lx_info[2])
+                err_type = ""
+
+            if en_band not in lx_dict:
+                lx_dict[en_band] = [0, 0, 0]
+
+            if err_type == "":
+                lx_dict[en_band][0] = float(tab_line[col])*(10**44)
+            elif err_type == "-":
+                lx_dict[en_band][1] = float(tab_line[col])*(10**44)
+            elif err_type == "+":
+                lx_dict[en_band][2] = float(tab_line[col])*(10**44)
+
+        self._luminosity[model] = lx_dict
+
+        self._plot_data[model] = {"x": plot_data["X"][:], "x_err": plot_data["XERR"][:],
+                                  "y": plot_data["Y"][:], "y_err": plot_data["YERR"][:],
+                                  "model": plot_data["YMODEL"][:]}
+
+    def view(self):
+        raise NotImplementedError("Done in a minute")
 
 
 class AnnularSpectra(BaseProduct):
