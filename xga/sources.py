@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 17:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 13:32. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -13,7 +13,6 @@ from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
     EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
-
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError
@@ -220,6 +219,9 @@ class BaseSource:
         obs_id = prod_obj.obs_id
         inst = prod_obj.instrument
         p_type = prod_obj.type
+
+        # The product gets the name of this source object added to it
+        prod_obj.obj_name = self.name
 
         # TODO This will need to be able to write spectra to a region type as well, once that's implemented
 

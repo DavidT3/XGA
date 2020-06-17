@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 12:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 13:32. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -132,7 +132,7 @@ def xspec_call(sas_func):
             res_set = results[entry]
             if res_set[1]:
                 glob_res = res_set[0]["RESULTS"][0]
-                model = glob_res["MODEL"]
+                model = glob_res["MODEL"].strip(" ")
 
                 for line_ind, line in enumerate(res_set[0]["SPEC_INFO"]):
                     sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")

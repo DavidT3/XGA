@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 12:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 13:32. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -9,6 +9,8 @@ import numpy as np
 from astropy import wcs
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix
 from fitsio import read, read_header, FITSHDR, FITS, hdu
+from matplotlib import pyplot as plt
+from matplotlib.ticker import ScalarFormatter, FuncFormatter
 from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
@@ -42,6 +44,7 @@ class BaseProduct:
         self.og_cmd = gen_cmd
         self._energy_bounds = (None, None)
         self._prod_type = None
+        self._obj_name = None
 
         self.raise_errors(raise_properly)
 
@@ -217,6 +220,25 @@ class BaseProduct:
         """
         return self._sas_error
 
+    @property
+    def obj_name(self) -> str:
+        """
+        Method to return the name of the object a product is associated with. The product becomes
+        aware of this once it is added to a source object.
+        :return: The name of the source object this product is associated with.
+        :rtype: str
+        """
+        return self._obj_name
+
+    # This needs a setter, as this property only becomes not-None when the product is added to a source object.
+    @obj_name.setter
+    def obj_name(self, name: str):
+        """
+        Property setter for the obj_name attribute of a product, should only really be called by a source object,
+        not by a user.
+        :param str name: The name of the source object associated with this product.
+        """
+        self._obj_name = name
 
 class Image(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
@@ -812,9 +834,85 @@ class Spectrum(BaseProduct):
                                   "y": plot_data["Y"][:], "y_err": plot_data["YERR"][:],
                                   "model": plot_data["YMODEL"][:]}
 
-    def view(self):
-        raise NotImplementedError("Done in a minute")
+    def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV")):
+        """
+        Very simple method to plot the data/models associated with this Spectrum object,
+        between certain energy limits.
+        :param Quantity lo_en: The lower energy limit from which to plot the spectrum.
+        :param Quantity hi_en: The upper energy limit to plot the spectrum to.
+        """
+        if lo_en > hi_en:
+            raise ValueError("hi_en cannot be greater than lo_en")
+        else:
+            lo_en = lo_en.to("keV").value
+            hi_en = hi_en.to("keV").value
 
+        if len(self._plot_data.keys()) != 0:
+            # Create figure object
+            plt.figure(figsize=(8, 5))
+            # Tasty serif font
+            plt.rc('font', family='serif')
+
+            # Set the plot up to look nice and professional.
+            ax = plt.gca()
+            ax.minorticks_on()
+            ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+            # Set the title with all relevant information about the spectrum object in it
+            plt.title("{n} - {o}{i} {r} Spectrum".format(n=self.obj_name, o=self.obs_id, i=self.instrument.upper(),
+                                                         r=self.reg_type))
+            for mod_ind, mod in enumerate(self._plot_data):
+                x = self._plot_data[mod]["x"]
+                # If the defaults are left, just update them to the min and max of the dataset
+                #  to avoid unsightly gaps at the sides of the plot
+                if lo_en == 0.:
+                    lo_en = x.min()
+                if hi_en == 30.0:
+                    hi_en = x.max()
+
+                # Cut the x dataset to just the energy range we want
+                plot_x = x[(x > lo_en) & (x < hi_en)]
+
+                if mod_ind == 0:
+                    # Read out the data just for line length reasons
+                    # Make the cuts based on energy values supplied to the view method
+                    plot_y = self._plot_data[mod]["y"][(x > lo_en) & (x < hi_en)]
+                    plot_xerr = self._plot_data[mod]["x_err"][(x > lo_en) & (x < hi_en)]
+                    plot_yerr = self._plot_data[mod]["y_err"][(x > lo_en) & (x < hi_en)]
+                    plot_mod = self._plot_data[mod]["model"][(x > lo_en) & (x < hi_en)]
+
+                    plt.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+", label="data", zorder=1)
+                else:
+                    # Don't want to replot data points as they should be identical, so if there is another model
+                    #  only it will be plotted
+                    plot_mod = self._plot_data[mod]["model"][(x > lo_en) & (x < hi_en)]
+
+                # The model line is put on
+                plt.plot(plot_x, plot_mod, label=mod, linewidth=1.5)
+
+            # Generate the legend for the data and model(s)
+            plt.legend(loc="best")
+
+            # Ensure axis is limited to the chosen energy range
+            plt.xlim(lo_en, hi_en)
+
+            plt.xlabel("Energy [keV]")
+            plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
+
+            ax.set_xscale("log")
+            ax.xaxis.set_major_formatter(ScalarFormatter())
+            ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+            plt.tight_layout()
+            # Display the spectrum
+            plt.show()
+
+            # Wipe the figure
+            plt.close("all")
+
+        else:
+            warnings.warn("There are no XSPEC fits associated with this Spectrum")
 
 class AnnularSpectra(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
