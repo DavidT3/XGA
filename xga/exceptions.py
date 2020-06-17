@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2020, 16:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -257,6 +257,23 @@ class NoProductAvailableError(Exception):
             return 'NoProductAvailableError has been raised'
 
 
+class ModelNotAssociatedError(Exception):
+    def __init__(self, *args):
+        """
+        Error raised when values from a model fit that isn't associated with a particular product object.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'ModelNotAssociatedError has been raised'
 
 
 

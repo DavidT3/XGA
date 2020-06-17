@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 13:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -11,7 +11,7 @@ from astropy.units import Quantity, UnitBase, UnitsError, deg, pix
 from fitsio import read, read_header, FITSHDR, FITS, hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
-from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError
+from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError, ModelNotAssociatedError
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
 
@@ -556,8 +556,7 @@ class EventList(BaseProduct):
         self._prod_type = "events"
 
 
-# As I've decided to go with command line xspec, this object is going to be pretty small, mostly
-# storing file paths etc. Perhaps I'll think of some more features to add to it though
+# TODO Add property getter for luminosity values
 class Spectrum(BaseProduct):
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
                  reg_type: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
@@ -610,7 +609,7 @@ class Spectrum(BaseProduct):
 
         self._exp = None
         self._plot_data = {}
-        self._luminosity = {}
+        self._luminosities = {}
         self._count_rate = {}
 
     def _update_spec_headers(self, which_spec: str):
@@ -783,6 +782,21 @@ class Spectrum(BaseProduct):
         """
         return self._reg_type
 
+    @property
+    def exposure(self) -> Quantity:
+        """
+        Property that returns the spectrum exposure time used by XSPEC.
+        :return: Spectrum exposure time.
+        :rtype: Quantity
+        """
+        if self._exp is None:
+            warnings.warn("There are no XSPEC fits associated with this Spectrum")
+            exp = Quantity(-1, 's')
+        else:
+            exp = Quantity(self._exp, 's')
+
+        return exp
+
     def add_fit_data(self, model: str, tab_line, plot_data: hdu.table.TableHDU):
         """
         Method that adds information specific to a spectrum from an XSPEC fit to this object. This includes
@@ -795,8 +809,8 @@ class Spectrum(BaseProduct):
         relevant to this spectrum object.
         """
         # This stores the exposure time that XSPEC uses for this specific spectrum.
-        if self._exp is not None:
-            self._exp = tab_line["EXPOSURE"]
+        if self._exp is None:
+            self._exp = float(tab_line["EXPOSURE"])
 
         # This is the count rate and error for this spectrum.
         self._count_rate[model] = [tab_line["COUNT_RATE"], tab_line["COUNT_RATE_ERR"]]
@@ -828,11 +842,24 @@ class Spectrum(BaseProduct):
             elif err_type == "+":
                 lx_dict[en_band][2] = float(tab_line[col])*(10**44)
 
-        self._luminosity[model] = lx_dict
+        self._luminosities[model] = lx_dict
 
         self._plot_data[model] = {"x": plot_data["X"][:], "x_err": plot_data["XERR"][:],
                                   "y": plot_data["Y"][:], "y_err": plot_data["YERR"][:],
                                   "model": plot_data["YMODEL"][:]}
+
+    def get_luminosities(self, model: str) -> Dict:
+        """
+        Returns the luminosities measured for this spectrum from a given model.
+        :param model: Name of model to fetch luminosities for.
+        :return: Dictionary of all luminosities (and their uncertainties) measured for this spectrum
+        from the given model.
+        :rtype: Dict
+        """
+        if model not in self._luminosities:
+            raise ModelNotAssociatedError("This spectrum has not been fit with {}".format(model))
+
+        return self._luminosities[model]
 
     def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV")):
         """
@@ -883,7 +910,7 @@ class Spectrum(BaseProduct):
 
                     plt.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+", label="data", zorder=1)
                 else:
-                    # Don't want to replot data points as they should be identical, so if there is another model
+                    # Don't want to re-plot data points as they should be identical, so if there is another model
                     #  only it will be plotted
                     plot_mod = self._plot_data[mod]["model"][(x > lo_en) & (x < hi_en)]
 
@@ -913,6 +940,7 @@ class Spectrum(BaseProduct):
 
         else:
             warnings.warn("There are no XSPEC fits associated with this Spectrum")
+
 
 class AnnularSpectra(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,

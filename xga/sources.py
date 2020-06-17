@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 13:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -93,6 +93,14 @@ class BaseSource:
         self._back_masks = None
         self._within_source_regions = None
         self._within_back_regions = None
+
+        # Initialisation of fit result attributes
+        self._fit_results = {}
+        self._test_stat = {}
+        self._dof = {}
+        self._total_count_rate = {}
+        self._total_exp = {}
+        self._luminosities = {}
 
     @property
     def ra_dec(self) -> Quantity:
@@ -222,8 +230,6 @@ class BaseSource:
 
         # The product gets the name of this source object added to it
         prod_obj.obj_name = self.name
-
-        # TODO This will need to be able to write spectra to a region type as well, once that's implemented
 
         # Double check that something is trying to add products from another source to the current one.
         if obs_id != "combined" and obs_id not in self._products:
@@ -358,7 +364,6 @@ class BaseSource:
         :return: List of matching products.
         :rtype: List[list]
         """
-
         def unpack_list(to_unpack: list):
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
@@ -873,6 +878,71 @@ class BaseSource:
         :rtype: str
         """
         return self._name
+
+    # TODO Pass through units in column headers?
+    def add_fit_data(self, model: str, reg_type: str, tab_line, lums: dict):
+        """
+        A method that stores fit results and global information about a the set of spectra in a source object.
+        Any variable parameters in the fit are stored in an internal dictionary structure, as are any luminosities
+        calculated. Other parameters of interest are store in other internal attributes.
+        :param str model:
+        :param str reg_type:
+        :param tab_line:
+        :param dict lums:
+        """
+        # Just headers that will always be present in tab_line that are not fit parameters
+        not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
+                   'NUM_UNLINKED_THAWED_VARS', 'FIT_STATISTIC', 'TEST_STATISTIC', 'DOF']
+
+        # Various global values of interest
+        self._total_exp[reg_type] = float(tab_line["TOTAL_EXPOSURE"])
+        if reg_type not in self._total_count_rate:
+            self._total_count_rate[reg_type] = {}
+            self._test_stat[reg_type] = {}
+            self._dof[reg_type] = {}
+        self._total_count_rate[reg_type][model] = [float(tab_line["TOTAL_COUNT_RATE"]),
+                                                   float(tab_line["TOTAL_COUNT_RATE_ERR"])]
+        self._test_stat[reg_type][model] = float(tab_line["TEST_STATISTIC"])
+        self._dof[reg_type][model] = float(tab_line["DOF"])
+
+        # The parameters available will obviously be dynamic, so have to find out what they are and then
+        #  then for each result find the +- errors
+        par_headers = [n for n in tab_line.dtype.names if n not in not_par]
+        mod_res = {}
+        for par in par_headers:
+            # The parameter name and the parameter index used by XSPEC are separated by |
+            par_info = par.split("|")
+            par_name = par_info[0]
+
+            # The parameter index can also have an - or + after it if the entry in question is an uncertainty
+            if par_info[1][-1] == "-":
+                ident = par_info[1][:-1]
+                pos = 1
+            elif par_info[1][-1] == "+":
+                ident = par_info[1][:-1]
+                pos = 2
+            else:
+                ident = par_info[1]
+                pos = 0
+
+            # Sets up the dictionary structure for the results
+            if par_name not in mod_res:
+                mod_res[par_name] = {ident: [0, 0, 0]}
+            elif ident not in mod_res[par_name]:
+                mod_res[par_name][ident] = [0, 0, 0]
+
+            mod_res[par_name][ident][pos] = float(tab_line[par])
+
+        # Storing the fit results
+        if reg_type not in self._fit_results:
+            self._fit_results[reg_type] = {}
+        self._fit_results[reg_type][model] = mod_res
+
+        # And now storing the luminosity results
+        if reg_type not in self._luminosities:
+            self._luminosities[reg_type] = {}
+        self._luminosities[reg_type][model] = lums
+
 
     def info(self):
         """

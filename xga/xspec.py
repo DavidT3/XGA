@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 13:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -130,19 +130,42 @@ def xspec_call(sas_func):
             s = sources[ind]
             # Is this fit usable?
             res_set = results[entry]
-            if res_set[1]:
-                glob_res = res_set[0]["RESULTS"][0]
-                model = glob_res["MODEL"].strip(" ")
 
+            if len(res_set) != 0 and res_set[1]:
+                global_results = res_set[0]["RESULTS"][0]
+                model = global_results["MODEL"].strip(" ")
+
+                av_lums = {}
                 for line_ind, line in enumerate(res_set[0]["SPEC_INFO"]):
                     sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                    # Finds the appropriate matching spectrum object for the current table line
                     spec = [match for match in s.get_products("spectrum", sp_info[0], sp_info[1])
                             if reg_type in match and match[-1].usable][0][-1]
 
+                    # Adds information from this fit to the spectrum object.
                     spec.add_fit_data(str(model), line, res_set[0]["PLOT"+str(line_ind+1)])
-                    s.update_products(spec)
+                    s.update_products(spec)  # Adds the updated spectrum object back into the source
 
-            res_set[0].close()
+                    # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                    #  to help construct the combined luminosity needed to pass to the source object 'add_fit_data'
+                    #  method
+                    processed_lums = spec.get_luminosities(model)
+                    for en_band in processed_lums:
+                        if en_band not in av_lums:
+                            av_lums[en_band] = processed_lums[en_band]
+                        else:
+                            av_lums[en_band] = [av_lums[en_band][i] + processed_lums[en_band][i]
+                                                for i in range(0, 3)]
+
+                for en_band in av_lums:
+                    # TODO THIS IS A GARBAGE METHOD OF COMBINING THE LUMINOSITY VALUES
+                    av_lums[en_band] = [val / (line_ind+1) for val in av_lums[en_band]]
+
+                # Push global fit results, luminosities etc. into the corresponding source object.
+                s.add_fit_data(model, reg_type, global_results, av_lums)
+
+            if len(res_set) != 0:
+                res_set[0].close()
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
         if len(sources) == 1:
@@ -262,13 +285,12 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
 
         # There has to be a directory to write this xspec script to, as well as somewhere for the fit output
         #  to be stored
-        # TODO THESE FILE NAMES SHOULD BE REGION AND MODEL SPECIFIC
         dest_dir = OUTPUT + "XSPEC/" + source.name + "/"
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
         # Defining where the output summary file of the fit is written
-        out_file = dest_dir + source.name + ".fits"
-        script_file = dest_dir + source.name + ".xcm"
+        out_file = dest_dir + source.name + "_" + reg_type + "_" + model + ".fits"
+        script_file = dest_dir + source.name + "_" + reg_type + "_" + model + ".xcm"
 
         # The template is filled out here, taking everything we have generated and everything the user
         #  passed in. The result is an XSPEC script that can be run as is.

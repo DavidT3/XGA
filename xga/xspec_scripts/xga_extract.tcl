@@ -99,9 +99,10 @@ proc xga_extract { args } {
 	    lappend idents $ipar
         if { $spardel($ipar) > 0 } {
 # Each parameter gets three columns; the value, the -error, and the +error
-            puts $fileid [concat $pname$ipar " E " $punit]
-            puts $fileid [concat E$pname$ipar- " E " $punit]
-            puts $fileid [concat E$pname$ipar+ " E " $punit]
+            set divid "|"
+            puts $fileid [concat $pname$divid$ipar " E " $punit]
+            puts $fileid [concat $pname$divid$ipar- " E " $punit]
+            puts $fileid [concat $pname$divid$ipar+ " E " $punit]
             incr count
 	    }
     }
