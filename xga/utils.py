@@ -1,6 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2020, 12:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 11:27. Copyright (c) David J Turner
 
+import json
 import os
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
@@ -20,6 +21,8 @@ from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
 # Got to make sure we're able to import the PyXspec module.
 # Currently raises an error, but perhaps later on I'll relax this to a warning.
 try:
+    # TODO The check for the pyXSPEC module is no longer necessary, I'll be using command line xspec,
+    #  so will have to check for that instead.
     import xspec
 except ModuleNotFoundError:
     raise HeasoftError("Unable to import PyXspec, you have to make sure to set a PYTHON environment "
@@ -75,6 +78,17 @@ warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warn
 # Just the names of the errors in two handy constants
 SASERROR_LIST = errors["ErrName"].values
 SASWARNING_LIST = warnings["WarnName"].values
+
+# XSPEC file extraction (and base fit) scripts
+XGA_EXTRACT = pkg_resources.resource_filename(__name__, "xspec_scripts/xga_extract.tcl")
+BASE_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/general_xspec_fit.xcm")
+# Useful jsons of all XSPEC models, their required parameters, and those parameter's units
+with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json5"), 'r') as filey:
+    MODEL_PARS = json.load(filey)
+with open(pkg_resources.resource_filename(__name__, "files/xspec_model_units.json5"), 'r') as filey:
+    MODEL_UNITS = json.load(filey)
+ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
+XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
 
 
 def xmm_obs_id_test(test_string: str) -> bool:

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/04/2020, 21:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -9,16 +9,16 @@ import numpy as np
 from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
+from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
     EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
-
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
-    MultipleMatchError, NoProductAvailableError
-from xga.products import PROD_MAP, EventList, BaseProduct, Image
+    MultipleMatchError, NoProductAvailableError, NoMatchFoundError
+from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap
 from xga.sourcetools import simple_xmm_match, nhlookup
-from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky
+from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -26,19 +26,37 @@ warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class BaseSource:
-    def __init__(self, ra, dec, redshift=None, name='', cosmology=Planck15):
-        self.source_name = name
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
         self._ra_dec = np.array([ra, dec])
+        if name is not None:
+            self._name = name
+        else:
+            # self.ra_dec rather than _ra_dec because ra_dec is in astropy degree units
+            s = SkyCoord(ra=self.ra_dec[0], dec=self.ra_dec[1])
+            crd_str = s.to_string("hmsdms").replace("h", "").replace("m", "").replace("s", "").replace("d", "")
+            ra_str, dec_str = crd_str.split(" ")
+            # Use the standard naming convention if one wasn't passed on initialisation of the source
+            # Need it because its used for naming files later on.
+            self._name = "J" + ra_str[:ra_str.index(".")+2] + dec_str[:dec_str.index(".")+2]
+
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
         self._obs = simple_xmm_match(ra, dec)["ObsID"].values
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
-        on_axis_match = simple_xmm_match(ra, dec, 5)["ObsID"].values
-        self.onaxis = np.isin(self._obs, on_axis_match)
+        try:
+            on_axis_match = simple_xmm_match(ra, dec, 5)["ObsID"].values
+        except NoMatchFoundError:
+            on_axis_match = np.array([])
+        self._onaxis = np.isin(self._obs, on_axis_match)
         # nhlookup returns average and weighted average values, so just take the first
-        self.nH = nhlookup(ra, dec)[0]
-        self.redshift = redshift
+        self._nH = nhlookup(ra, dec)[0]
+        self._redshift = redshift
         self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
+
+        # If there is an existing XGA output directory, then it makes sense to search for products that XGA
+        #  may have already generated and load them in - saves us wasting time making them again.
+        if os.path.exists(OUTPUT):
+            self._existing_xga_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
@@ -46,8 +64,9 @@ class BaseSource:
         # users should be using for analyses
         self._merged_products = {}  # TODO Should this just be a part of _products?
 
+        self._cosmo = cosmology
         if redshift is not None:
-            self.lum_dist = cosmology.luminosity_distance(self.redshift)
+            self.lum_dist = self._cosmo.luminosity_distance(self._redshift)
         self._initial_regions, self._initial_region_matches = self._load_regions(region_dict)
 
         # This is a queue for products to be generated for this source, will be a numpy array in practise.
@@ -75,7 +94,24 @@ class BaseSource:
         self._within_source_regions = None
         self._within_back_regions = None
 
-    # TODO Check for XGA generated products and load them in perhaps.
+        # Initialisation of fit result attributes
+        self._fit_results = {}
+        self._test_stat = {}
+        self._dof = {}
+        self._total_count_rate = {}
+        self._total_exp = {}
+        self._luminosities = {}
+
+    @property
+    def ra_dec(self) -> Quantity:
+        """
+        A getter for the original ra and dec entered by the user.
+        :return: The ra-dec coordinates entered by the user when the source was first defined
+        :rtype: Quantity
+        """
+        # Easier for it be internally kep as a numpy array, but I want the user to have astropy coordinates
+        return Quantity(self._ra_dec, 'deg')
+
     def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
@@ -84,11 +120,12 @@ class BaseSource:
         :rtype: Tuple[dict, dict, dict]
         """
 
-        def gen_file_names(en_lims: tuple) -> Tuple[str, dict]:
+        def read_default_products(en_lims: tuple) -> Tuple[str, dict]:
             """
             This nested function takes pairs of energy limits defined in the config file and runs
-            through the XMM products (also defined in the config file), filling in the energy limits and
-            checking if the file paths exist. Those that do exist are returned in a dictionary.
+            through the default XMM products defined in the config file, filling in the energy limits and
+            checking if the file paths exist. Those that do exist are read into the relevant product object and
+            returned.
             :param tuple en_lims: A tuple containing a lower and upper energy limit to generate file names for,
             the first entry should be the lower limit, the second the upper limit.
             :return: A dictionary key based on the energy limits for the file paths to be stored under, and the
@@ -155,7 +192,7 @@ class BaseSource:
                 att_dict[obs_id] = att_file
                 odf_dict[obs_id] = odf_path
                 # Dictionary updated with derived product names
-                map_ret = map(gen_file_names, en_comb)
+                map_ret = map(read_default_products, en_comb)
                 obs_dict[obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
                 if os.path.exists(reg_file):
                     # Regions dictionary updated with path to region file, if it exists
@@ -179,9 +216,11 @@ class BaseSource:
 
         en_bnds = prod_obj.energy_bounds
         if en_bnds[0] is not None and en_bnds[1] is not None:
-            en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+            extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+        elif type(prod_obj) == Spectrum:
+            extra_key = prod_obj.reg_type
         else:
-            en_key = None
+            extra_key = None
 
         # All information about where to place it in our storage hierarchy can be pulled from the product
         # object itself
@@ -189,7 +228,8 @@ class BaseSource:
         inst = prod_obj.instrument
         p_type = prod_obj.type
 
-        # TODO This will need to be able to write spectra to a region type as well, once that's implemented
+        # The product gets the name of this source object added to it
+        prod_obj.obj_name = self.name
 
         # Double check that something is trying to add products from another source to the current one.
         if obs_id != "combined" and obs_id not in self._products:
@@ -197,21 +237,122 @@ class BaseSource:
         elif inst != "combined" and inst not in self._products[obs_id]:
             raise NotAssociatedError("{i} is not associated with XMM observation {o}".format(i=inst, o=obs_id))
 
-        if en_key is not None and obs_id != "combined":
+        if extra_key is not None and obs_id != "combined":
             # If there is no entry for this energy band already, we must make one
-            if en_key not in self._products[obs_id][inst]:
-                self._products[obs_id][inst][en_key] = {}
-            self._products[obs_id][inst][en_key][p_type] = prod_obj
-        elif en_key is None and obs_id != "combined":
+            if extra_key not in self._products[obs_id][inst]:
+                self._products[obs_id][inst][extra_key] = {}
+            self._products[obs_id][inst][extra_key][p_type] = prod_obj
+        elif extra_key is None and obs_id != "combined":
             self._products[obs_id][inst][p_type] = prod_obj
         # Here we deal with merged products
-        elif en_key is not None and obs_id == "combined":
+        elif extra_key is not None and obs_id == "combined":
             # If there is no entry for this energy band already, we must make one
-            if en_key not in self._merged_products:
-                self._merged_products[en_key] = {}
-            self._merged_products[en_key][p_type] = prod_obj
-        elif en_key is None and obs_id == "combined":
+            if extra_key not in self._merged_products:
+                self._merged_products[extra_key] = {}
+            self._merged_products[extra_key][p_type] = prod_obj
+        elif extra_key is None and obs_id == "combined":
             self._merged_products[p_type] = prod_obj
+
+    # TODO MAKE IT ACTUALLY LOAD IN OLD FITS
+    def _existing_xga_products(self):
+        """
+        A method specifically for searching an existing XGA output directory for relevant files and loading
+        them in as XGA products. This will retrieve images, exposure maps, and spectra; then the source product
+        structure is updated. The method also finds previous fit results and loads them in.
+        """
+        def parse_image_like(file_path: str, exact_type: str) -> BaseProduct:
+            """
+            Very simple little function that takes the path to an XGA generated image-like product (so either an
+            image or an exposure map), parses the file path and makes an XGA object of the correct type by using
+            the exact_type variable.
+            :param file_path: Absolute path to an XGA-generated XMM data product.
+            :param exact_type: Either 'image' or 'expmap', the type of product that the file_path leads to.
+            :return: An XGA product object.
+            :rtype: BaseProduct
+            """
+            # Get rid of the absolute part of the path, then split by _ to get the information from the file name
+            im_info = file_path.split("/")[-1].split("_")
+            # I know its hard coded but this will always be the case, these are files I generate with XGA.
+            ins = im_info[1]
+            lo_en, hi_en = im_info[-1].split("keV")[0].split("-")
+            # Have to be astropy quantities before passing them into the Product declaration
+            lo_en = Quantity(float(lo_en), "keV")
+            hi_en = Quantity(float(hi_en), "keV")
+
+            # Different types of Product objects, the empty strings are because I don't have the stdout, stderr,
+            #  or original commands for these objects.
+            if exact_type == "image":
+                final_obj = Image(im, obs, ins, "", "", "", lo_en, hi_en)
+            elif exact_type == "expmap":
+                final_obj = ExpMap(im, obs, ins, "", "", "", lo_en, hi_en)
+            else:
+                raise TypeError("Only image and expmap are allowed.")
+
+            return final_obj
+
+        og_dir = os.getcwd()
+        for obs in self._obs:
+            if os.path.exists(OUTPUT + obs):
+                os.chdir(OUTPUT + obs)
+                # I've put as many checks as possible in this to make sure it only finds genuine XGA files,
+                #  I'll probably put a few more checks later
+
+                # Images read in, pretty simple process - the name of the current source doesn't matter because
+                #  standard images/exposure maps are for the WHOLE observation.
+                ims = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
+                       "img" in f and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
+                for im in ims:
+                    self.update_products(parse_image_like(im, "image"))
+
+                # Exposure maps read in, same process as images
+                exs = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
+                       "expmap" in f and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
+                for ex in exs:
+                    self.update_products(parse_image_like(ex, "expmap"))
+
+                # For spectra we search for products that have the name of this object in, as they are for
+                #  specific parts of the observation.
+                named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and self._name in f
+                         and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
+                specs = [f for f in named if "spec" in f and "back" not in f and "ann" not in f]
+                for sp in specs:
+                    # Filename contains a lot of useful information, so splitting it out to get it
+                    sp_info = sp.split("/")[-1].split("_")
+                    inst = sp_info[1]
+                    reg_type = sp_info[-2]
+                    # Fairly self explanatory, need to find all the separate products needed to define an XGA
+                    #  spectrum
+                    arf = [f for f in named if "arf" in f and "ann" not in f and "back" not in f
+                           and inst in f and reg_type in f]
+                    rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" not in f
+                           and inst in f and reg_type in f]
+                    # As RMFs can be generated for source and background spectra separately, or one for both,
+                    #  we need to check for matching RMFs to the spectrum we found
+                    if len(rmf) == 0:
+                        rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" not in f
+                               and inst in f and "universal" in f]
+
+                    # Exact same checks for the background spectrum
+                    back = [f for f in named if "backspec" in f and "ann" not in f and inst in f and reg_type in f]
+                    back_arf = [f for f in named if "arf" in f and "ann" not in f and inst in f and reg_type in f
+                                and "back" in f]
+                    back_rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" in f and inst in f
+                                and reg_type in f]
+                    if len(back_rmf) == 0:
+                        back_rmf = rmf
+
+                    # If exactly one match has been found for all of the products, we define an XGA spectrum and
+                    #  add it the source object.
+                    if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and \
+                            len(back_rmf) == 1:
+                        obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], reg_type, obs, inst,
+                                       "", "", "")
+                        self.update_products(obj)
+
+                # TODO Add different read in loops for annular spectra and maybe regioned images once I
+                #  add them into XGA.
+
+        os.chdir(og_dir)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None) -> List[list]:
         """
@@ -223,7 +364,6 @@ class BaseSource:
         :return: List of matching products.
         :rtype: List[list]
         """
-
         def unpack_list(to_unpack: list):
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
@@ -693,15 +833,127 @@ class BaseSource:
 
         return final_src, final_back
 
+    @property
+    def nH(self) -> float:
+        """
+        Property getter for neutral hydrogen column attribute.
+        :return: Neutral hydrogen column surface density.
+        :rtype: float
+        """
+        return self._nH
+
+    @property
+    def redshift(self):
+        """
+        Property getter for the redshift of this source object.
+        :return: Redshift value
+        :rtype: float
+        """
+        return self._redshift
+
+    @property
+    def on_axis_obs_ids(self):
+        """
+        This method returns an array of ObsIDs that this source is approximately on axis in.
+        :return: ObsIDs for which the source is approximately on axis.
+        :rtype: np.ndarray
+        """
+        return self._obs[self._onaxis]
+
+    @property
+    def cosmo(self) -> Cosmology:
+        """
+        This method returns whatever cosmology object is associated with this source object.
+        :return: An astropy cosmology object specified for this source on initialization.
+        :rtype: Cosmology
+        """
+        return self._cosmo
+
+    # This is used to name files and directories so this is not allowed to change.
+    @property
+    def name(self) -> str:
+        """
+        The name of the source, either given at initialisation or generated from the user-supplied coordinates.
+        :return: The name of the source.
+        :rtype: str
+        """
+        return self._name
+
+    # TODO Pass through units in column headers?
+    def add_fit_data(self, model: str, reg_type: str, tab_line, lums: dict):
+        """
+        A method that stores fit results and global information about a the set of spectra in a source object.
+        Any variable parameters in the fit are stored in an internal dictionary structure, as are any luminosities
+        calculated. Other parameters of interest are store in other internal attributes.
+        :param str model:
+        :param str reg_type:
+        :param tab_line:
+        :param dict lums:
+        """
+        # Just headers that will always be present in tab_line that are not fit parameters
+        not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
+                   'NUM_UNLINKED_THAWED_VARS', 'FIT_STATISTIC', 'TEST_STATISTIC', 'DOF']
+
+        # Various global values of interest
+        self._total_exp[reg_type] = float(tab_line["TOTAL_EXPOSURE"])
+        if reg_type not in self._total_count_rate:
+            self._total_count_rate[reg_type] = {}
+            self._test_stat[reg_type] = {}
+            self._dof[reg_type] = {}
+        self._total_count_rate[reg_type][model] = [float(tab_line["TOTAL_COUNT_RATE"]),
+                                                   float(tab_line["TOTAL_COUNT_RATE_ERR"])]
+        self._test_stat[reg_type][model] = float(tab_line["TEST_STATISTIC"])
+        self._dof[reg_type][model] = float(tab_line["DOF"])
+
+        # The parameters available will obviously be dynamic, so have to find out what they are and then
+        #  then for each result find the +- errors
+        par_headers = [n for n in tab_line.dtype.names if n not in not_par]
+        mod_res = {}
+        for par in par_headers:
+            # The parameter name and the parameter index used by XSPEC are separated by |
+            par_info = par.split("|")
+            par_name = par_info[0]
+
+            # The parameter index can also have an - or + after it if the entry in question is an uncertainty
+            if par_info[1][-1] == "-":
+                ident = par_info[1][:-1]
+                pos = 1
+            elif par_info[1][-1] == "+":
+                ident = par_info[1][:-1]
+                pos = 2
+            else:
+                ident = par_info[1]
+                pos = 0
+
+            # Sets up the dictionary structure for the results
+            if par_name not in mod_res:
+                mod_res[par_name] = {ident: [0, 0, 0]}
+            elif ident not in mod_res[par_name]:
+                mod_res[par_name][ident] = [0, 0, 0]
+
+            mod_res[par_name][ident][pos] = float(tab_line[par])
+
+        # Storing the fit results
+        if reg_type not in self._fit_results:
+            self._fit_results[reg_type] = {}
+        self._fit_results[reg_type][model] = mod_res
+
+        # And now storing the luminosity results
+        if reg_type not in self._luminosities:
+            self._luminosities[reg_type] = {}
+        self._luminosities[reg_type][model] = lums
+
+
     def info(self):
         """
         Very simple function that just prints a summary of the BaseSource object.
         """
         print("-----------------------------------------------------")
-        print("Source Name - {}".format(self.source_name))
+        print("Source Name - {}".format(self._name))
         print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
+        print("nH - {} cm^-2".format(self.nH))
         print("XMM Observations - {}".format(self.__len__()))
-        print("On-Axis - {}".format(self.onaxis.sum()))
+        print("On-Axis - {}".format(self._onaxis.sum()))
         print("With regions - {}".format(len(self._initial_regions)))
         print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
         print("Obs with one match - {}".format(sum([1 for o in self._initial_region_matches if
@@ -724,7 +976,7 @@ class BaseSource:
 # TODO I don't know how all this mask stuff will do with merged products - may have to rejig later
 # TODO Don't forget to write another info() method for extended source
 class ExtendedSource(BaseSource):
-    def __init__(self, ra, dec, redshift=None, name='', cosmology=Planck15):
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
         super().__init__(ra, dec, redshift, name, cosmology)
 
         # This uses the added context of the type of source to find (or not find) matches in region files
@@ -824,7 +1076,7 @@ class ExtendedSource(BaseSource):
 
 
 class GalaxyCluster(ExtendedSource):
-    def __init__(self, ra, dec, redshift=None, name='', cosmology=Planck15):
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
         super().__init__(ra, dec, redshift, name, cosmology)
         # Don't know if these should be stored as astropy Quantity objects, may add that later
         self._central_coords = {obs: {inst: {} for inst in self._products[obs]} for obs in self.obs_ids}
@@ -912,7 +1164,7 @@ class GalaxyCluster(ExtendedSource):
 
 
 class PointSource(BaseSource):
-    def __init__(self, ra, dec, redshift=None, name='', cosmology=Planck15):
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
         super().__init__(ra, dec, redshift, name, cosmology)
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by regfiles or by users, will be stored

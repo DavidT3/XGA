@@ -1,0 +1,160 @@
+#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2020, 15:37. Copyright (c) David J Turner
+
+# This XSPEC script template requires quite a few parameters to be filled in, using the Python formatting
+#  syntax. This *should* act as a general script for model combinations, so long as the formatted
+#  parameter values are valid.
+
+# This loads the XGA custom readout script, used to save fit results, spectra information,
+#  and plotting data to a fits file
+source {xsp}
+
+# Set the statistic type to Cash
+statistic cstat
+
+# Allow the user to select the abundance table to use
+abund {ab}
+
+# The user can also decide which fitting method to use
+method {md}
+
+# The source object cosmology is used to setup XSPEC cosmo
+cosmo {H0} {q0} {lamb0}
+
+# We want plotting data to be in terms of energies, not channels
+setplot energy
+
+# Set up a list of paths to the spectra we want to fit, done like this to make it more dynamic
+# Double curly brackets because Python format will replace the inner ones, then the outer ones will create a
+#  TCL list of paths.
+
+set spec_paths {sp}
+
+# Now put the number of spectra in a variable
+set num_spec [llength $spec_paths]
+
+# For loop here to load in all the spectra, iterating over path list
+set counter 1
+foreach p $spec_paths {{
+    # Loads each spectrum into its own data and plot group
+    data $counter:$counter $p
+    incr counter
+    }}
+
+# Now we ignore the energy range that we don't want to use, for all loaded spectra
+ignore **:**-{lo_cut} **:{hi_cut}-**
+
+# If any channels have been labelled bad, this will discount them from analysis
+ignore bad
+
+# Now we must define the model, but without setting any parameters (thats what /* does)
+model {m}
+/*
+
+
+# Get the number of parameters in a variable, for iterating through later
+set num_pars [tcloutr modpar]
+# This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
+set num_uniq_par [expr {{$num_pars / $num_spec}}]
+
+# Need the user's parameter choices, initially in the form of a name list and a value list, then an array
+#  Also have lists that define whether a parameter in the model will be linked across different spectra, and whether
+#  a parameter is frozen during fitting
+set par_names {pn}
+set par_values {pv}
+set linking {lk}
+set freezing {fr}
+
+# Probably isn't necessary as the inputs should be governed by XGA, but doing some checks
+if {{[llength $par_names] != $num_uniq_par}} {{
+    puts "par_names list is not the length expected by the defined model"
+    exit
+}} elseif {{[llength $par_values] != $num_uniq_par}} {{
+    puts "par_values list is not the length expected by the defined model"
+    exit
+}} elseif {{[llength $linking] != $num_uniq_par}} {{
+    puts "linking list is not the length expected by the defined model"
+    exit
+}} elseif {{[llength $freezing] != $num_uniq_par}} {{
+    puts "freezing list is not the length expected by the defined model"
+    exit
+}}
+
+# Just combines them into an array, so we can pass a parameter name and get a value, link bool, and freeze bool
+array set par_arr {{}}
+array set link_arr {{}}
+array set freeze_arr {{}}
+for {{set i 0}} {{$i < [llength $par_names]}} {{incr i}} {{
+    set temp_key [lindex $par_names $i]
+    set temp_contents [array get par_arr]
+
+    # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+    set key_count 1
+    while {{$temp_key in $temp_contents}} {{
+        set temp_key [concat [lindex $par_names $i]_$key_count]
+        incr key_count
+        }}
+
+    set par_arr($temp_key) [lindex $par_values $i]
+    set link_arr($temp_key) [lindex $linking $i]
+    set freeze_arr($temp_key) [lindex $freezing $i]
+    }}
+
+
+# Here we iterate through the parameters and set them up in XSPEC, including user choices on linking and freezing
+set sep_cnt 1
+set sep_par_lst {{}}
+for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
+    set cur_par [lindex [tcloutr pinfo $i] 0]
+
+    if {{$sep_cnt <= $num_uniq_par}} {{
+        # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+        set key_count 1
+        while {{$cur_par in $sep_par_lst}} {{
+            set cur_par [concat [lindex [tcloutr pinfo $i] 0]_$key_count]
+            incr key_count
+            }}
+        lappend sep_par_lst $cur_par
+    }} else {{
+        puts $sep_par_lst
+        set sep_cnt 1
+        set sep_par_lst {{$cur_par}}
+    }}
+
+    if {{$i <= $num_uniq_par}} {{
+        newpar $i $par_arr($cur_par)
+    }} elseif {{$i > $num_uniq_par && $link_arr($cur_par) == "F"}} {{
+        newpar $i $par_arr($cur_par)
+        }}
+
+    if {{$freeze_arr($cur_par) == "T"}} {{
+        freeze $i
+    }} else {{
+        thaw $i
+        }}
+
+    incr sep_cnt
+    }}
+
+# Now of course we run the model fit
+fit 100
+
+# Calculate errors on the fit parameters; error just ignores those parameters that are frozen
+error {el},1-$num_pars
+
+# This is where the lower and upper energy limits for the luminosity calculations go
+set lum_low_lims {lll}
+set lum_upp_lims {lul}
+
+set lum_lim_pairs {{}}
+for {{set i 0}} {{$i < [llength $lum_low_lims]}} {{incr i}} {{
+    set interim {{}}
+    lappend interim [lindex $lum_low_lims $i]
+    lappend interim [lindex $lum_upp_lims $i]
+    lappend lum_lim_pairs $interim
+    }}
+
+# And finally we run the custom XGA script that extracts all the information we want
+xga_extract {of} $lum_lim_pairs {redshift} {lel} {m}
+
+exit

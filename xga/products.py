@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2020, 15:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,12 +8,15 @@ from typing import Tuple, List, Dict
 import numpy as np
 from astropy import wcs
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix
-from fitsio import read, read_header, FITSHDR
-
-from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError
+from fitsio import read, read_header, FITSHDR, FITS, hdu
+from matplotlib import pyplot as plt
+from matplotlib.ticker import ScalarFormatter, FuncFormatter
+from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError, ModelNotAssociatedError
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
 
+# TODO Actually perhaps the usable attribute should only be accessible as a property? Don't think
+#  users should be allowed to change it.
 class BaseProduct:
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
@@ -27,8 +30,11 @@ class BaseProduct:
         """
         # So this flag indicates whether we think this data product can be used for analysis
         self.usable = True
-        # Hopefully uses the path setter method
-        self.path = path
+        if os.path.exists(path):
+            self._path = path
+        else:
+            self._path = None
+            self.usable = False
         # Saving this in attributes for future reference
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
@@ -38,6 +44,7 @@ class BaseProduct:
         self.og_cmd = gen_cmd
         self._energy_bounds = (None, None)
         self._prod_type = None
+        self._obj_name = None
 
         self.raise_errors(raise_properly)
 
@@ -213,6 +220,25 @@ class BaseProduct:
         """
         return self._sas_error
 
+    @property
+    def obj_name(self) -> str:
+        """
+        Method to return the name of the object a product is associated with. The product becomes
+        aware of this once it is added to a source object.
+        :return: The name of the source object this product is associated with.
+        :rtype: str
+        """
+        return self._obj_name
+
+    # This needs a setter, as this property only becomes not-None when the product is added to a source object.
+    @obj_name.setter
+    def obj_name(self, name: str):
+        """
+        Property setter for the obj_name attribute of a product, should only really be called by a source object,
+        not by a user.
+        :param str name: The name of the source object associated with this product.
+        """
+        self._obj_name = name
 
 class Image(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
@@ -246,7 +272,7 @@ class Image(BaseProduct):
         if self.usable:
             # Not all images produced by SAS are going to be needed all the time, so they will only be read in if
             # asked for.
-            self._im_data = read(self.path)
+            self._im_data = read(self.path).astype("float64")
             if self._im_data.min() < 0:
                 # This throws a non-fatal warning to let the user know there are negative pixel values,
                 #  and that they're being 'corrected'
@@ -530,12 +556,390 @@ class EventList(BaseProduct):
         self._prod_type = "events"
 
 
-# TODO Flesh out
+# TODO Add property getter for luminosity values
 class Spectrum(BaseProduct):
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, raise_properly: bool = True):
+    def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
+                 reg_type: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 raise_properly: bool = True):
+
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
         self._prod_type = "spectrum"
+
+        if os.path.exists(rmf_path):
+            self._rmf = rmf_path
+        else:
+            self._rmf = None
+            self.usable = False
+
+        if os.path.exists(arf_path):
+            self._arf = arf_path
+        else:
+            self._arf = None
+            self.usable = False
+
+        if os.path.exists(b_path):
+            self._back_spec = b_path
+        else:
+            self._back_spec = None
+            self.usable = False
+
+        if os.path.exists(b_rmf_path):
+            self._back_rmf = b_rmf_path
+        else:
+            self._back_rmf = None
+            self.usable = False
+
+        if os.path.exists(b_arf_path):
+            self._back_arf = b_arf_path
+        else:
+            self._arf_rmf = None
+            self.usable = False
+
+        allowed_regs = ["region", "r2500", "r500", "r200"]
+        if reg_type in allowed_regs:
+            self._reg_type = reg_type
+        else:
+            self.usable = False
+            self._reg_type = None
+            raise ValueError("{0} is not a support region type, "
+                             "please use one of these; {1}".format(reg_type, ", ".join(allowed_regs)))
+
+        self._update_spec_headers("main")
+        self._update_spec_headers("back")
+
+        self._exp = None
+        self._plot_data = {}
+        self._luminosities = {}
+        self._count_rate = {}
+
+    def _update_spec_headers(self, which_spec: str):
+        """
+        An internal method that will 'push' the current class attributes that hold the paths to data products
+        (like ARF and RMF) to the relevant spectrum file.
+        :param str which_spec: A flag that tells the method whether to update the header of
+         the main or background spectrum.
+        """
+        # This function is meant for internal use only, so I won't check that the passed-in file paths
+        #  actually exist. This will have been checked already
+        if which_spec == "main":
+            with FITS(self._path, 'rw') as spec_fits:
+                spec_fits[1].write_key("RESPFILE", self._rmf)
+                spec_fits[1].write_key("ANCRFILE", self._arf)
+                spec_fits[1].write_key("BACKFILE", self._back_spec)
+        elif which_spec == "back":
+            with FITS(self._back_spec, 'rw') as spec_fits:
+                spec_fits[1].write_key("RESPFILE", self._back_rmf)
+                spec_fits[1].write_key("ANCRFILE", self._back_arf)
+        else:
+            raise ValueError("Illegal value for which_spec, you shouldn't be using this internal function!")
+
+    @property
+    def path(self) -> str:
+        """
+        This method returns the path to the spectrum file of this object.
+        :return: The path to the spectrum file associated with this object.
+        :rtype: str
+        """
+        return self._path
+
+    @path.setter
+    def path(self, new_path: str):
+        """
+        This setter updates the path to the spectrum file, and then updates that file with the current values of
+        the RMF, ARF, and background spectrum paths. WARNING: This does permanently alter the file, so use your
+        own spectrum file with caution.
+        :param str new_path: The updated path to the spectrum file.
+        """
+        if os.path.exists(new_path):
+            self._path = new_path
+            # Call this here because it'll replace any existing arf and rmf file paths with the ones
+            #  currently loaded in the instance of this object.
+            self._update_spec_headers("main")
+        else:
+            raise FileNotFoundError("The new spectrum file does not exist")
+
+    @property
+    def rmf(self) -> str:
+        """
+        This method returns the path to the RMF file of the main spectrum of this object.
+        :return: The path to the RMF file associated with the main spectrum of this object.
+        :rtype: str
+        """
+        return self._rmf
+
+    @rmf.setter
+    def rmf(self, new_path: str):
+        """
+        This setter updates the path to the main RMF file, then writes that change to the actual spectrum file.
+        WARNING: This permanently alters the file, use with caution!
+        :param str new_path: The path to the new RMF file.
+        """
+        if os.path.exists(new_path):
+            self._rmf = new_path
+            # Push to the actual file
+            self._update_spec_headers("main")
+        else:
+            raise FileNotFoundError("The new RMF file does not exist")
+
+    @property
+    def arf(self) -> str:
+        """
+        This method returns the path to the ARF file of the main spectrum of this object.
+        :return: The path to the ARF file associated with the main spectrum of this object.
+        :rtype: str
+        """
+        return self._arf
+
+    @arf.setter
+    def arf(self, new_path: str):
+        """
+        This setter updates the path to the main ARF file, then writes that change to the actual spectrum file.
+        WARNING: This permanently alters the file, use with caution!
+        :param str new_path: The path to the new ARF file.
+        """
+        if os.path.exists(new_path):
+            self._arf = new_path
+            self._update_spec_headers("main")
+        else:
+            raise FileNotFoundError("The new ARF file does not exist")
+
+    @property
+    def background(self) -> str:
+        """
+        This method returns the path to the background spectrum.
+        :return: Path of the background spectrum.
+        :rtype: str
+        """
+        return self._back_spec
+
+    @background.setter
+    def background(self, new_path: str):
+        """
+        This method is the setter for the background spectrum. It can be used to change the background
+        spectrum file associated with this object, and will write that change to the actual spectrum file.
+        WARNING: This permanently alters the file, use with caution!
+        :param str new_path: The path to the new background spectrum.
+        """
+        if os.path.exists(new_path):
+            self._back_spec = new_path
+            self._update_spec_headers("main")
+        else:
+            raise FileNotFoundError("The new background spectrum file does not exist")
+
+    @property
+    def background_rmf(self) -> str:
+        """
+        This method returns the path to the background spectrum's RMF file.
+        :return: The path the the background spectrum's RMF.
+        :rtype: str
+        """
+        return self._back_rmf
+
+    @background_rmf.setter
+    def background_rmf(self, new_path: str):
+        """
+        This setter method will change the RMF associated with the background spectrum, then write
+        that change to the background spectrum file.
+        :param str new_path: The path to the background spectrum's new RMF.
+        """
+        if os.path.exists(new_path):
+            self._back_rmf = new_path
+            self._update_spec_headers("back")
+        else:
+            raise FileNotFoundError("That new background RMF file does not exist")
+
+    @property
+    def background_arf(self) -> str:
+        """
+        This method returns the path to the background spectrum's ARF file.
+        :return: The path the the background spectrum's ARF.
+        :rtype: str
+        """
+        return self._back_arf
+
+    @background_arf.setter
+    def background_arf(self, new_path: str):
+        """
+        This setter method will change the ARF associated with the background spectrum, then write
+        that change to the background spectrum file.
+        :param str new_path: The path to the background spectrum's new ARF.
+        """
+        if os.path.exists(new_path):
+            self._back_arf = new_path
+            self._update_spec_headers("back")
+        else:
+            raise FileNotFoundError("That new background ARF file does not exist")
+
+    # This is an intrinsic property of the generated spectrum, so users will not be allowed to change this
+    @property
+    def reg_type(self) -> str:
+        """
+        Getter method for the type of region this spectrum was generated for. e.g. 'region' - which would
+        mean it represents the spectrum inside a region specificied by region files, or 'r500' - which
+        would mean the radius of a cluster where the mean density is 500 times critical density of the Universe.
+        :return: The region type this spectrum was generated for
+        :rtype: str
+        """
+        return self._reg_type
+
+    @property
+    def exposure(self) -> Quantity:
+        """
+        Property that returns the spectrum exposure time used by XSPEC.
+        :return: Spectrum exposure time.
+        :rtype: Quantity
+        """
+        if self._exp is None:
+            warnings.warn("There are no XSPEC fits associated with this Spectrum")
+            exp = Quantity(-1, 's')
+        else:
+            exp = Quantity(self._exp, 's')
+
+        return exp
+
+    def add_fit_data(self, model: str, tab_line, plot_data: hdu.table.TableHDU):
+        """
+        Method that adds information specific to a spectrum from an XSPEC fit to this object. This includes
+        individual spectrum exposure and count rate, as well as calculated luminosities, and plotting
+        information for data and model.
+        :param str model: String representation of the XSPEC model fitted to the data.
+        :param tab_line: The line of the SPEC_INFO table produced by xga_extract.tcl that is relevant to this
+        spectrum object.
+        :param hdu.table.TableHDU plot_data: The PLOT{N} table in the file produced by xga_extract.tcl that is
+        relevant to this spectrum object.
+        """
+        # This stores the exposure time that XSPEC uses for this specific spectrum.
+        if self._exp is None:
+            self._exp = float(tab_line["EXPOSURE"])
+
+        # This is the count rate and error for this spectrum.
+        self._count_rate[model] = [tab_line["COUNT_RATE"], tab_line["COUNT_RATE_ERR"]]
+
+        # Searches for column headers with 'Lx' in them (this has to be dynamic as the user can calculate
+        #  luminosity in as many bands as they like)
+        lx_inds = np.where(np.char.find(tab_line.dtype.names, "Lx") == 0)[0]
+        lx_cols = np.array(tab_line.dtype.names)[lx_inds]
+
+        # Constructs a dictionary of luminosities and their errors for the different energy bands
+        #  in this XSPEC fit.
+        lx_dict = {}
+        for col in lx_cols:
+            lx_info = col.split("_")
+            if lx_info[2][-1] == "-" or lx_info[2][-1] == "+":
+                en_band = "bound_{l}-{u}".format(l=lx_info[1], u=lx_info[2][:-1])
+                err_type = lx_info[-1][-1]
+            else:
+                en_band = "bound_{l}-{u}".format(l=lx_info[1], u=lx_info[2])
+                err_type = ""
+
+            if en_band not in lx_dict:
+                lx_dict[en_band] = [0, 0, 0]
+
+            if err_type == "":
+                lx_dict[en_band][0] = float(tab_line[col])*(10**44)
+            elif err_type == "-":
+                lx_dict[en_band][1] = float(tab_line[col])*(10**44)
+            elif err_type == "+":
+                lx_dict[en_band][2] = float(tab_line[col])*(10**44)
+
+        self._luminosities[model] = lx_dict
+
+        self._plot_data[model] = {"x": plot_data["X"][:], "x_err": plot_data["XERR"][:],
+                                  "y": plot_data["Y"][:], "y_err": plot_data["YERR"][:],
+                                  "model": plot_data["YMODEL"][:]}
+
+    def get_luminosities(self, model: str) -> Dict:
+        """
+        Returns the luminosities measured for this spectrum from a given model.
+        :param model: Name of model to fetch luminosities for.
+        :return: Dictionary of all luminosities (and their uncertainties) measured for this spectrum
+        from the given model.
+        :rtype: Dict
+        """
+        if model not in self._luminosities:
+            raise ModelNotAssociatedError("This spectrum has not been fit with {}".format(model))
+
+        return self._luminosities[model]
+
+    def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV")):
+        """
+        Very simple method to plot the data/models associated with this Spectrum object,
+        between certain energy limits.
+        :param Quantity lo_en: The lower energy limit from which to plot the spectrum.
+        :param Quantity hi_en: The upper energy limit to plot the spectrum to.
+        """
+        if lo_en > hi_en:
+            raise ValueError("hi_en cannot be greater than lo_en")
+        else:
+            lo_en = lo_en.to("keV").value
+            hi_en = hi_en.to("keV").value
+
+        if len(self._plot_data.keys()) != 0:
+            # Create figure object
+            plt.figure(figsize=(8, 5))
+            # Tasty serif font
+            plt.rc('font', family='serif')
+
+            # Set the plot up to look nice and professional.
+            ax = plt.gca()
+            ax.minorticks_on()
+            ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+            # Set the title with all relevant information about the spectrum object in it
+            plt.title("{n} - {o}{i} {r} Spectrum".format(n=self.obj_name, o=self.obs_id, i=self.instrument.upper(),
+                                                         r=self.reg_type))
+            for mod_ind, mod in enumerate(self._plot_data):
+                x = self._plot_data[mod]["x"]
+                # If the defaults are left, just update them to the min and max of the dataset
+                #  to avoid unsightly gaps at the sides of the plot
+                if lo_en == 0.:
+                    lo_en = x.min()
+                if hi_en == 30.0:
+                    hi_en = x.max()
+
+                # Cut the x dataset to just the energy range we want
+                plot_x = x[(x > lo_en) & (x < hi_en)]
+
+                if mod_ind == 0:
+                    # Read out the data just for line length reasons
+                    # Make the cuts based on energy values supplied to the view method
+                    plot_y = self._plot_data[mod]["y"][(x > lo_en) & (x < hi_en)]
+                    plot_xerr = self._plot_data[mod]["x_err"][(x > lo_en) & (x < hi_en)]
+                    plot_yerr = self._plot_data[mod]["y_err"][(x > lo_en) & (x < hi_en)]
+                    plot_mod = self._plot_data[mod]["model"][(x > lo_en) & (x < hi_en)]
+
+                    plt.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+", label="data", zorder=1)
+                else:
+                    # Don't want to re-plot data points as they should be identical, so if there is another model
+                    #  only it will be plotted
+                    plot_mod = self._plot_data[mod]["model"][(x > lo_en) & (x < hi_en)]
+
+                # The model line is put on
+                plt.plot(plot_x, plot_mod, label=mod, linewidth=1.5)
+
+            # Generate the legend for the data and model(s)
+            plt.legend(loc="best")
+
+            # Ensure axis is limited to the chosen energy range
+            plt.xlim(lo_en, hi_en)
+
+            plt.xlabel("Energy [keV]")
+            plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
+
+            ax.set_xscale("log")
+            ax.xaxis.set_major_formatter(ScalarFormatter())
+            ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+            plt.tight_layout()
+            # Display the spectrum
+            plt.show()
+
+            # Wipe the figure
+            plt.close("all")
+
+        else:
+            warnings.warn("There are no XSPEC fits associated with this Spectrum")
 
 
 class AnnularSpectra(BaseProduct):
@@ -545,7 +949,7 @@ class AnnularSpectra(BaseProduct):
 
 
 # Defining a dictionary to map from string product names to their associated classes
-PROD_MAP = {"image": Image, "expmap": ExpMap, "events": EventList}
+PROD_MAP = {"image": Image, "expmap": ExpMap, "events": EventList, "spectrum": Spectrum}
 
 
 

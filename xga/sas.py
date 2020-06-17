@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2020, 13:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 17:56. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -27,7 +27,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     :param str p_type: The product type that will be produced by this command.
     :param str p_path: The final output path of the product.
     :param dict extra_info: Any extra information required to define the product object.
-    :param str src: A string representation of the source object that this project is associated with.
+    :param str src: A string representation of the source object that this product is associated with.
     :return: The product object, and the string representation of the associated source object.
     :rtype: Tuple[BaseProduct, str]
     """
@@ -48,8 +48,10 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = BaseProduct(p_path[0], "", "", out, err, cmd)
         prod = None
     elif p_type == "spectrum":
-        # TODO Update this initilisation when the Spectrum is more complete
-        prod = Spectrum(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
+        prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
+                        extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info["reg_type"],
+                        extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
+
     else:
         raise NotImplementedError("Not implemented yet")
 
@@ -85,7 +87,6 @@ def sas_call(sas_func):
         source_rep = []  # For repr calls of each source object, needed for assigning products to sources
         for ind in range(len(cmd_list)):
             source: BaseSource = sources[ind]
-            source_rep.append(repr(source))
             if len(cmd_list[ind]) > 0:
                 # If there are commands to add to a source queue, then do it
                 source.update_queue(cmd_list[ind], p_type[ind], paths[ind], extra_info[ind], to_stack)
@@ -230,6 +231,9 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
             obs_id = pack[0]
             inst = pack[1]
 
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
+
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             exists = [match for match in source.get_products("image", obs_id, inst) if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
@@ -291,6 +295,9 @@ def cifbuild(sources: List[BaseSource], num_cores: int = NUM_CORES):
         extra_info = []
         for obs_id in source.obs_ids:
             odf_path = source.get_odf_path(obs_id)
+
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
 
             dest_dir = "{out}{obs}/".format(out=OUTPUT, obs=obs_id)
             if not os.path.exists(dest_dir):
@@ -364,6 +371,10 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
         for pack in source.get_products("events"):
             obs_id = pack[0]
             inst = pack[1]
+
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
+
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             exists = [match for match in source.get_products("expmap", obs_id, inst) if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
@@ -458,6 +469,9 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
             if obs_id not in obs_ids_set:
                 obs_ids_set.append(obs_id)
 
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
+
         # The problem I have here is that merged images don't belong to a particular ObsID, so where do they
         # go in the xga_output folder? I've arbitrarily decided to save it in the folder of the first ObsID
         # associated with a given source.
@@ -482,15 +496,17 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
 
 
+# TODO Have to allow this to make grouped spectra, set default of 5 counts per bin, avoids bins with 0 counts,
+#  which XSPEC does not like
 @sas_call
-def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bool = True,
+def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = True,
                       num_cores: int = NUM_CORES):
     """
     A wrapper for all of the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
     observation, will have a spectrum generated using the specified region type as as boundary.
     :param List[BaseSource] sources: A single source object, or a list of source objects.
-    :param str boundary_type: Tells the method what region source you want to use, for instance r500 or r200.
+    :param str reg_type: Tells the method what region source you want to use, for instance r500 or r200.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
     ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
     slightly on position on the detector.
@@ -507,11 +523,11 @@ def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bo
                         "them at all, they are mostly useful as a superclass.")
     elif not all([src.detected for src in sources]):
         warnings.warn("Not all of these sources have been detected, the spectra generated may not be helpful.")
-    elif boundary_type not in allowed_bounds:
-        raise ValueError("The only valid choices for boundary_type are:\n {}".format(", ".join(allowed_bounds)))
-    elif boundary_type in ["r2500", "r500", "r200"] and not all([type(src) == GalaxyCluster for src in sources]):
+    elif reg_type not in allowed_bounds:
+        raise ValueError("The only valid choices for reg_type are:\n {}".format(", ".join(allowed_bounds)))
+    elif reg_type in ["r2500", "r500", "r200"] and not all([type(src) == GalaxyCluster for src in sources]):
         raise TypeError("You cannot use ExtendedSource classes with {}, "
-                        "they have no overdensity radii.".format(boundary_type))
+                        "they have no overdensity radii.".format(reg_type))
 
     # Have to make sure that all observations have an up to date cif file.
     cifbuild(sources)
@@ -549,13 +565,16 @@ def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bo
             obs_id = pack[0]
             inst = pack[1]
 
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
+
             # Got to check if this spectrum already exists
-            exists = [match for match in source.get_products("spectrum", obs_id, inst) if boundary_type in match]
+            exists = [match for match in source.get_products("spectrum", obs_id, inst) if reg_type in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
 
             # This method returns a SAS expression for the source and background regions - excluding interlopers
-            reg, b_reg = source.get_sas_region(boundary_type, obs_id, inst, xmm_sky)
+            reg, b_reg = source.get_sas_region(reg_type, obs_id, inst, xmm_sky)
 
             # Some settings depend on the instrument, XCS uses different patterns for different instruments
             if "pn" in inst:
@@ -573,11 +592,11 @@ def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bo
             # Just grabs the event list object
             evt_list = pack[-1]
             # Sets up the file names of the output files
-            dest_dir = OUTPUT + "{o}/{i}_temp/".format(o=obs_id, i=inst)
-            spec = "{o}_{i}_{bt}_spec.fits".format(o=obs_id, i=inst, bt=boundary_type)
-            b_spec = "{o}_{i}_{bt}_backspec.fits".format(o=obs_id, i=inst, bt=boundary_type)
-            arf = "{o}_{i}_{bt}.arf".format(o=obs_id, i=inst, bt=boundary_type)
-            b_arf = "{o}_{i}_{bt}_back.arf".format(o=obs_id, i=inst, bt=boundary_type)
+            dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source.name)
+            spec = "{o}_{i}_{n}_{bt}_spec.fits".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+            b_spec = "{o}_{i}_{n}_{bt}_backspec.fits".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+            arf = "{o}_{i}_{n}_{bt}.arf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+            b_arf = "{o}_{i}_{n}_{bt}_back.arf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
             ccf = dest_dir + "ccf.cif"
 
             # Fills out the evselect command to make the main and background spectra
@@ -588,11 +607,11 @@ def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bo
             #  an individual one for each spectrum. Also adds arfgen commands on the end, as they depend on
             #  the rmf.
             if one_rmf:
-                rmf = "{o}_{i}_{bt}.rmf".format(o=obs_id, i=inst, bt="universal")
+                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source.name, bt="universal")
                 b_rmf = rmf
             else:
-                rmf = "{o}_{i}_{bt}.rmf".format(o=obs_id, i=inst, bt=boundary_type)
-                b_rmf = "{o}_{i}_{bt}_back.rmf".format(o=obs_id, i=inst, bt=boundary_type)
+                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+                b_rmf = "{o}_{i}_{n}_{bt}_back.rmf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
 
             if one_rmf and not os.path.exists(dest_dir + rmf):
                 cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
@@ -619,7 +638,7 @@ def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bo
             os.makedirs(dest_dir)
 
             final_paths.append(os.path.join(OUTPUT, obs_id, spec))
-            extra_info.append({"reg_type": boundary_type, "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
+            extra_info.append({"reg_type": reg_type, "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
                                "arf_path": os.path.join(OUTPUT, obs_id, arf),
                                "b_spec_path": os.path.join(OUTPUT, obs_id, b_spec),
                                "b_rmf_path": os.path.join(OUTPUT, obs_id, b_rmf),
@@ -629,7 +648,7 @@ def evselect_spectrum(sources: List[BaseSource], boundary_type: str, one_rmf: bo
         sources_cmds.append(array(cmds))
         sources_paths.append(array(final_paths))
         # This contains any other information that will be needed to instantiate the class
-        # once the SAS cmd has run
+        #  once the SAS cmd has run
         sources_extras.append(array(extra_info))
         sources_types.append(full(sources_cmds[-1].shape, fill_value="spectrum"))
 

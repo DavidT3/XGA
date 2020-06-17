@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2020, 12:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2020, 20:02. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
@@ -50,7 +50,7 @@ def nhlookup(src_ra: float, src_dec: float) -> ndarray:
         raise HeasoftError("HEASOFT nH command scraped output cannot be converted to float")
 
     # Returns both the average and weighted average nH values, as output by HEASOFT nH tool.
-    nh_vals = array([average_nh, weighed_av_nh])
+    nh_vals = Quantity(array([average_nh, weighed_av_nh]) / 10**22, "10^22 cm^-2")
     return nh_vals
 
 
@@ -82,7 +82,7 @@ def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
     Converts radius in length units to radius on sky in degrees.
     :param Quantity rad: Radius for conversion.
     :param Cosmology cosmo: An instance of an astropy cosmology, the default is Planck15.
-    :param float z: The redshift of the source.
+    :param float z: The _redshift of the source.
     :return: The radius in degrees.
     :rtype: Quantity
     """
