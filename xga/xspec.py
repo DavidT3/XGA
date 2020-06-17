@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 22:52. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -130,6 +130,8 @@ def xspec_call(sas_func):
             s = sources[ind]
             # Is this fit usable?
             res_set = results[entry]
+
+            # TODO Feed warnings and errors into global fit results
 
             if len(res_set) != 0 and res_set[1]:
                 global_results = res_set[0]["RESULTS"][0]

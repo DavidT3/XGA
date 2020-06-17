@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 22:52. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -11,6 +11,7 @@ from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase
+from fitsio import FITS
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
     EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
 from xga import xga_conf
@@ -52,11 +53,6 @@ class BaseSource:
         self._nH = nhlookup(ra, dec)[0]
         self._redshift = redshift
         self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
-
-        # If there is an existing XGA output directory, then it makes sense to search for products that XGA
-        #  may have already generated and load them in - saves us wasting time making them again.
-        if os.path.exists(OUTPUT):
-            self._existing_xga_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
@@ -101,6 +97,12 @@ class BaseSource:
         self._total_count_rate = {}
         self._total_exp = {}
         self._luminosities = {}
+
+        # If there is an existing XGA output directory, then it makes sense to search for products that XGA
+        #  may have already generated and load them in - saves us wasting time making them again.
+        # This goes at the end of init to make sure everything necessary has been declared
+        if os.path.exists(OUTPUT):
+            self._existing_xga_products()
 
     @property
     def ra_dec(self) -> Quantity:
@@ -253,7 +255,6 @@ class BaseSource:
         elif extra_key is None and obs_id == "combined":
             self._merged_products[p_type] = prod_obj
 
-    # TODO MAKE IT ACTUALLY LOAD IN OLD FITS
     def _existing_xga_products(self):
         """
         A method specifically for searching an existing XGA output directory for relevant files and loading
@@ -348,11 +349,53 @@ class BaseSource:
                         obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], reg_type, obs, inst,
                                        "", "", "")
                         self.update_products(obj)
-
-                # TODO Add different read in loops for annular spectra and maybe regioned images once I
-                #  add them into XGA.
-
         os.chdir(og_dir)
+
+        # Now loading in previous fits
+        if os.path.exists(OUTPUT + "XSPEC/" + self.name):
+            prev_fits = [OUTPUT + "XSPEC/" + self.name + "/" + f
+                         for f in os.listdir(OUTPUT + "XSPEC/" + self.name) if ".xcm" not in f and ".fits" in f]
+            for fit in prev_fits:
+                fit_info = fit.split("/")[-1].split("_")
+                reg_type = fit_info[1]
+                fit_model = fit_info[-1].split(".")[0]
+                fit_data = FITS(fit)
+
+                # This bit is largely copied from xspec.py, sorry for my laziness
+                global_results = fit_data["RESULTS"][0]
+                model = global_results["MODEL"].strip(" ")
+
+                av_lums = {}
+                for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                    sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                    # Finds the appropriate matching spectrum object for the current table line
+                    spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1])
+                            if reg_type in match and match[-1].usable][0][-1]
+
+                    # Adds information from this fit to the spectrum object.
+                    spec.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)])
+                    self.update_products(spec)  # Adds the updated spectrum object back into the source
+
+                    # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                    #  to help construct the combined luminosity needed to pass to the source object 'add_fit_data'
+                    #  method
+                    processed_lums = spec.get_luminosities(model)
+                    for en_band in processed_lums:
+                        if en_band not in av_lums:
+                            av_lums[en_band] = processed_lums[en_band]
+                        else:
+                            av_lums[en_band] = [av_lums[en_band][i] + processed_lums[en_band][i]
+                                                for i in range(0, 3)]
+
+                for en_band in av_lums:
+                    # TODO THIS IS A GARBAGE METHOD OF COMBINING THE LUMINOSITY VALUES
+                    av_lums[en_band] = [val / (line_ind + 1) for val in av_lums[en_band]]
+
+                # Push global fit results, luminosities etc. into the corresponding source object.
+                self.add_fit_data(model, reg_type, global_results, av_lums)
+
+        # TODO Add different read in loops for annular spectra and maybe regioned images once I
+        #  add them into XGA.
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None) -> List[list]:
         """
@@ -880,6 +923,7 @@ class BaseSource:
         return self._name
 
     # TODO Pass through units in column headers?
+    # TODO Add get methods for new information
     def add_fit_data(self, model: str, reg_type: str, tab_line, lums: dict):
         """
         A method that stores fit results and global information about a the set of spectra in a source object.
@@ -942,7 +986,6 @@ class BaseSource:
         if reg_type not in self._luminosities:
             self._luminosities[reg_type] = {}
         self._luminosities[reg_type][model] = lums
-
 
     def info(self):
         """

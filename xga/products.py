@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 22:52. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -240,6 +240,8 @@ class BaseProduct:
         """
         self._obj_name = name
 
+
+# TODO Add view methods for image class
 class Image(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
@@ -549,6 +551,9 @@ class ExpMap(Image):
         return float(exp)
 
 
+# TODO Add RateMap class
+
+
 class EventList(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
@@ -848,6 +853,7 @@ class Spectrum(BaseProduct):
                                   "y": plot_data["Y"][:], "y_err": plot_data["YERR"][:],
                                   "model": plot_data["YMODEL"][:]}
 
+    # TODO Add get methods for the fit parameters
     def get_luminosities(self, model: str) -> Dict:
         """
         Returns the luminosities measured for this spectrum from a given model.
