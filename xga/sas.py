@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 17:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 10:13. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -11,7 +11,6 @@ from typing import List, Tuple
 from astropy.units import Quantity
 from numpy import array, full
 from tqdm import tqdm
-
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES
 from xga.products import BaseProduct, Image, ExpMap, Spectrum
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -537,10 +536,10 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
                "spectrumset={s} energycolumn=PI spectralbinsize=5 withspecranges=yes specchannelmin=0 " \
                "specchannelmax={u} {ex}"
 
-    rmf_cmd = "rmfgen rmfset={r} spectrumset={s} detmaptype=flat extendedsource={es}"
+    rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype=flat extendedsource={es}"
 
     # Don't need to run backscale separately, as this arfgen call will do it automatically
-    arf_cmd = "arfgen spectrumset={s} arfset={a} withrmfset=yes rmfset={r} badpixlocation={e} " \
+    arf_cmd = "arfgen spectrumset='{s}' arfset={a} withrmfset=yes rmfset='{r}' badpixlocation={e} " \
               "extendedsource={es} detmaptype=flat setbackscale=yes"
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
@@ -589,14 +588,18 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
             else:
                 raise ValueError("You somehow have an illegal value for the instrument name...")
 
+            # Some of the SAS tasks have issues with filenames with a '+' in them for some reason, so this
+            #  replaces any + symbols that may be in the source name with another character
+            source_name = source.name.replace("+", "x")
+
             # Just grabs the event list object
             evt_list = pack[-1]
             # Sets up the file names of the output files
-            dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source.name)
-            spec = "{o}_{i}_{n}_{bt}_spec.fits".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
-            b_spec = "{o}_{i}_{n}_{bt}_backspec.fits".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
-            arf = "{o}_{i}_{n}_{bt}.arf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
-            b_arf = "{o}_{i}_{n}_{bt}_back.arf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+            dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source_name)
+            spec = "{o}_{i}_{n}_{bt}_spec.fits".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
+            b_spec = "{o}_{i}_{n}_{bt}_backspec.fits".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
+            arf = "{o}_{i}_{n}_{bt}.arf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
+            b_arf = "{o}_{i}_{n}_{bt}_back.arf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
             ccf = dest_dir + "ccf.cif"
 
             # Fills out the evselect command to make the main and background spectra
@@ -607,11 +610,11 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
             #  an individual one for each spectrum. Also adds arfgen commands on the end, as they depend on
             #  the rmf.
             if one_rmf:
-                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source.name, bt="universal")
+                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source_name, bt="universal")
                 b_rmf = rmf
             else:
-                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
-                b_rmf = "{o}_{i}_{n}_{bt}_back.rmf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
+                b_rmf = "{o}_{i}_{n}_{bt}_back.rmf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
 
             if one_rmf and not os.path.exists(dest_dir + rmf):
                 cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),

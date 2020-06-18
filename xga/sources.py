@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 22:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 10:13. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -313,8 +313,11 @@ class BaseSource:
 
                 # For spectra we search for products that have the name of this object in, as they are for
                 #  specific parts of the observation.
-                named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and self._name in f
-                         and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
+                # Have to replace any + characters with x, as thats what we did in evselect_spectrum due to SAS
+                #  having some issues with the + character in file names
+                named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
+                         self._name.replace("+", "x") in f and obs in f
+                         and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
                 specs = [f for f in named if "spec" in f and "back" not in f and "ann" not in f]
                 for sp in specs:
                     # Filename contains a lot of useful information, so splitting it out to get it
@@ -994,7 +997,7 @@ class BaseSource:
         print("-----------------------------------------------------")
         print("Source Name - {}".format(self._name))
         print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
-        print("nH - {} cm^-2".format(self.nH))
+        print("nH - {}".format(self.nH))
         print("XMM Observations - {}".format(self.__len__()))
         print("On-Axis - {}".format(self._onaxis.sum()))
         print("With regions - {}".format(len(self._initial_regions)))
@@ -1003,7 +1006,9 @@ class BaseSource:
                                                     self._initial_region_matches[o].sum() == 1])))
         print("Obs with >1 matches - {}".format(sum([1 for o in self._initial_region_matches if
                                                      self._initial_region_matches[o].sum() > 1])))
-        # print("Total livetime - {} [seconds]".format(round(self.livetime, 2)))
+        print("Images associated - {}".format(len(self.get_products("image"))))
+        print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
+        print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
         print("-----------------------------------------------------\n")
 
     def __len__(self) -> int:
