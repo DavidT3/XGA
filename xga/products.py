@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 18:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 21:01. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,6 +8,7 @@ from typing import Tuple, List, Dict
 import numpy as np
 from astropy import wcs
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix
+from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize
 from fitsio import read, read_header, FITSHDR, FITS, hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
@@ -15,8 +16,6 @@ from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedPr
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
 
-# TODO Actually perhaps the usable attribute should only be accessible as a property? Don't think
-#  users should be allowed to change it.
 class BaseProduct:
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
@@ -29,12 +28,12 @@ class BaseProduct:
         :param bool raise_properly: Shall we actually raise the errors as Python errors?
         """
         # So this flag indicates whether we think this data product can be used for analysis
-        self.usable = True
+        self._usable = True
         if os.path.exists(path):
             self._path = path
         else:
             self._path = None
-            self.usable = False
+            self._usable = False
         # Saving this in attributes for future reference
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
@@ -47,6 +46,16 @@ class BaseProduct:
         self._obj_name = None
 
         self.raise_errors(raise_properly)
+
+    # Users are not allowed to change this, so just a getter.
+    @property
+    def usable(self) -> bool:
+        """
+        Returns whether this product instance should be considered usable for an analysis.
+        :return: A boolean flag describing whether this product should be used.
+        :rtype: bool
+        """
+        return self._usable
 
     @property
     def path(self) -> str:
@@ -250,7 +259,6 @@ class BaseProduct:
         self._obj_name = name
 
 
-# TODO Add view methods for image class
 class Image(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
@@ -540,6 +548,40 @@ class Image(BaseProduct):
             raise ValueError("Pixel coordinates cannot be less than 0.")
         return out_coord
 
+    def view(self):
+        """
+        Quick and dirty method to view this image. Absolutely no user configuration is allowed, that feature
+        is for other parts of XGA. Produces an image with log-scaling, and using the colour map gnuplot2.
+        """
+        # Create figure object
+        plt.figure(figsize=(7, 6))
+
+        # Turns off any ticks and tick labels, we don't want them in an image
+        ax = plt.gca()
+        ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
+        ax.xaxis.set_ticklabels([])
+        ax.yaxis.set_ticklabels([])
+
+        # Set the title with all relevant information about the image object in it
+        plt.title("Log Scaled {n} - {o}{i} {l}-{u}keV {t}".format(n=self.obj_name, o=self.obs_id,
+                                                                  i=self.instrument.upper(),
+                                                                  l=self._energy_bounds[0].to("keV").value,
+                                                                  u=self._energy_bounds[1].to("keV").value,
+                                                                  t=self.type))
+
+        # As this is a very quick view method, users will not be offered a choice of scaling
+        #  There will be a more in depth way of viewing cluster data eventually
+        norm = ImageNormalize(data=self.data, interval=MinMaxInterval(), stretch=LogStretch())
+        # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
+        plt.imshow(self.data, norm=norm, origin="lower", cmap="gnuplot2")
+        plt.colorbar()
+        plt.tight_layout()
+        # Display the image
+        plt.show()
+
+        # Wipe the figure
+        plt.close("all")
+
 
 class ExpMap(Image):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
@@ -570,7 +612,6 @@ class EventList(BaseProduct):
         self._prod_type = "events"
 
 
-# TODO Add property getter for luminosity values
 class Spectrum(BaseProduct):
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
                  reg_type: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
@@ -827,7 +868,7 @@ class Spectrum(BaseProduct):
             self._exp = float(tab_line["EXPOSURE"])
 
         # This is the count rate and error for this spectrum.
-        self._count_rate[model] = [tab_line["COUNT_RATE"], tab_line["COUNT_RATE_ERR"]]
+        self._count_rate[model] = [float(tab_line["COUNT_RATE"]), float(tab_line["COUNT_RATE_ERR"])]
 
         # Searches for column headers with 'Lx' in them (this has to be dynamic as the user can calculate
         #  luminosity in as many bands as they like)
@@ -862,7 +903,6 @@ class Spectrum(BaseProduct):
                                   "y": plot_data["Y"][:], "y_err": plot_data["YERR"][:],
                                   "model": plot_data["YMODEL"][:]}
 
-    # TODO Add get methods for the fit parameters
     def get_luminosities(self, model: str) -> Dict:
         """
         Returns the luminosities measured for this spectrum from a given model.
@@ -875,6 +915,21 @@ class Spectrum(BaseProduct):
             raise ModelNotAssociatedError("This spectrum has not been fit with {}".format(model))
 
         return self._luminosities[model]
+
+    def get_rate(self, model: str) -> Quantity:
+        """
+        Fetches the count rate for a particular model fitted to this spectrum.
+        :param model: The model to fetch count rate for.
+        :return: Count rate in counts per second.
+        :rtype: Quantity
+        """
+        if model not in self._count_rate:
+            warnings.warn("There are no XSPEC fits associated with this Spectrum")
+            rate = Quantity(-1, 's^-1')
+        else:
+            rate = Quantity(self._count_rate[model], 's^-1')
+
+        return rate
 
     def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV")):
         """
@@ -892,8 +947,6 @@ class Spectrum(BaseProduct):
         if len(self._plot_data.keys()) != 0:
             # Create figure object
             plt.figure(figsize=(8, 5))
-            # Tasty serif font
-            plt.rc('font', family='serif')
 
             # Set the plot up to look nice and professional.
             ax = plt.gca()

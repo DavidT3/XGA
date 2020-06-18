@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 18:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 21:01. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -16,10 +16,6 @@ from xga.exceptions import NoProductAvailableError
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 
 
-# TODO It may be necessary to put query yes in the XSPEC scripts so they keep running whatever questions
-#  pop up while they're going.
-
-
 def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool, list, list]:
     """
     This function is called for the local compute option. It will run the supplied XSPEC script, then check
@@ -32,12 +28,10 @@ def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool
     :rtype: Tuple[FITS, str, bool, list, list]
     """
     cmd = "xspec - {}".format(x_script)
-    # TODO Perhaps introduce a timeout here if its necessary
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8").split("\n")
     err = err.decode("UTF-8").split("\n")
 
-    # TODO Change the ***Error part if it doesn't actually work
     err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line]
     warn_out_lines = [line.split("***Warning: ")[-1] for line in out if "***Warning" in line]
     err_err_lines = [line.split("***Error: ")[-1] for line in err if "***Error" in line]
@@ -51,9 +45,13 @@ def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool
     error = err_out_lines + err_err_lines
     warn = warn_out_lines + warn_err_lines
 
-    res_tables = FITS(out_file)
-    tab_names = [tab.get_extname() for tab in res_tables]
-    if "results" not in tab_names or "spec_info" not in tab_names:
+    if os.path.exists(out_file):
+        res_tables = FITS(out_file)
+        tab_names = [tab.get_extname() for tab in res_tables]
+        if "results" not in tab_names or "spec_info" not in tab_names:
+            usable = False
+    else:
+        res_tables = None
         usable = False
 
     return res_tables, src, usable, error, warn
@@ -131,8 +129,6 @@ def xspec_call(sas_func):
             # Is this fit usable?
             res_set = results[entry]
 
-            # TODO Feed warnings and errors into global fit results
-            # TODO Raise errors if they exist
             if len(res_set) != 0 and res_set[1]:
                 global_results = res_set[0]["RESULTS"][0]
                 model = global_results["MODEL"].strip(" ")
@@ -165,6 +161,10 @@ def xspec_call(sas_func):
 
                 # Push global fit results, luminosities etc. into the corresponding source object.
                 s.add_fit_data(model, reg_type, global_results, av_lums)
+
+            elif len(res_set) != 0 and not res_set[1]:
+                for err in res_set[2]:
+                    raise err
 
             if len(res_set) != 0:
                 res_set[0].close()

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 12:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 21:01. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -401,6 +401,7 @@ class BaseSource:
         # TODO Add different read in loops for annular spectra and maybe regioned images once I
         #  add them into XGA.
 
+    # TODO GET FIT RESULTS METHOD
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, just_obj: bool = True) -> List[list]:
         """
         This is the getter for the products data structure of Source objects. Passing a 'product type'

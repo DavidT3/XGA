@@ -1,8 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 11:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 21:01. Copyright (c) David J Turner
 
 import json
 import os
+import shutil
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
 from typing import List
@@ -15,20 +16,14 @@ from astropy.wcs import WCS
 from fitsio.header import FITSHDR
 from numpy import nan, floor, ogrid, ndarray, arctan2, pi
 from tqdm import tqdm
-
 from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
 
-# Got to make sure we're able to import the PyXspec module.
+# Got to make sure we can access command line XSPEC.
 # Currently raises an error, but perhaps later on I'll relax this to a warning.
-try:
-    # TODO The check for the pyXSPEC module is no longer necessary, I'll be using command line xspec,
-    #  so will have to check for that instead.
-    import xspec
-except ModuleNotFoundError:
+if shutil.which("xspec") is None:
     raise HeasoftError("Unable to import PyXspec, you have to make sure to set a PYTHON environment "
                        "variable before installing HEASOFT/XSPEC.")
 
-# TODO Maybe check that Heasoft is correctly configured, with all the files to make CCFs
 # This one I'm less likely to relax to a warnings
 if "SAS_DIR" not in os.environ:
     raise SASNotFoundError("SAS_DIR environment variable is not set, "
