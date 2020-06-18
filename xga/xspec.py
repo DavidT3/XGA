@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 22:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 12:05. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -246,7 +246,8 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for source in sources:
         # Find matching spectrum objects associated with the current source, and checking if they are valid
-        spec_objs = [match for match in source.get_products("spectrum") if reg_type in match and match[-1].usable]
+        spec_objs = [match for match in source.get_products("spectrum", just_obj=False)
+                     if reg_type in match and match[-1].usable]
         # Obviously we can't do a fit if there are no spectra, so throw an error if thats the case
         if len(spec_objs) == 0:
             raise NoProductAvailableError("There are no matching spectra for this source object, you "

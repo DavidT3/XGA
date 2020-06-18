@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 10:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 12:05. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -226,7 +226,7 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events"):
+        for pack in source.get_products("events", just_obj=False):
             obs_id = pack[0]
             inst = pack[1]
 
@@ -234,7 +234,8 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
                 os.mkdir(OUTPUT + obs_id)
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("image", obs_id, inst) if en_id in match]
+            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
+                      if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
 
@@ -367,7 +368,7 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events"):
+        for pack in source.get_products("events", just_obj=False):
             obs_id = pack[0]
             inst = pack[1]
 
@@ -375,11 +376,13 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
                 os.mkdir(OUTPUT + obs_id)
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("expmap", obs_id, inst) if en_id in match]
+            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False)
+                      if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
             # Generating an exposure map requires a reference image.
-            ref_im = [match for match in source.get_products("image", obs_id, inst) if en_id in match][0][-1]
+            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
+                      if en_id in match][0][-1]
             # It also requires an attitude file
             att = source.get_att_file(obs_id)
             # Set up the paths and names of files
@@ -460,7 +463,8 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
         # TODO Maybe check that 'master' products don't already exist
         en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
         # This fetches all image objects with the passed energy bounds
-        matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic) if en_id in match]
+        matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic, just_obj=False)
+                   if en_id in match]
         paths = [product[1].path for product in matches if product[1].usable]
         obs_ids = [product[0] for product in matches if product[1].usable]
         obs_ids_set = []
@@ -560,7 +564,7 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events"):
+        for pack in source.get_products("events", just_obj=False):
             obs_id = pack[0]
             inst = pack[1]
 
@@ -568,7 +572,8 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
                 os.mkdir(OUTPUT + obs_id)
 
             # Got to check if this spectrum already exists
-            exists = [match for match in source.get_products("spectrum", obs_id, inst) if reg_type in match]
+            exists = [match for match in source.get_products("spectrum", obs_id, inst, just_obj=False)
+                      if reg_type in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
 
