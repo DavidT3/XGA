@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 12:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 18:43. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -132,7 +132,7 @@ def xspec_call(sas_func):
             res_set = results[entry]
 
             # TODO Feed warnings and errors into global fit results
-
+            # TODO Raise errors if they exist
             if len(res_set) != 0 and res_set[1]:
                 global_results = res_set[0]["RESULTS"][0]
                 model = global_results["MODEL"].strip(" ")
@@ -141,7 +141,7 @@ def xspec_call(sas_func):
                 for line_ind, line in enumerate(res_set[0]["SPEC_INFO"]):
                     sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                     # Finds the appropriate matching spectrum object for the current table line
-                    spec = [match for match in s.get_products("spectrum", sp_info[0], sp_info[1])
+                    spec = [match for match in s.get_products("spectrum", sp_info[0], sp_info[1], just_obj=False)
                             if reg_type in match and match[-1].usable][0][-1]
 
                     # Adds information from this fit to the spectrum object.

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 22:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 18:43. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -136,13 +136,22 @@ class BaseProduct:
         return parsed_sas_errs, parsed_sas_warns, other_err_lines
 
     @property
-    def sas_error(self) -> List[Dict]:
+    def sas_errors(self) -> List[Dict]:
         """
         Property getter for the confirmed SAS errors associated with a product.
         :return: The list of confirmed SAS errors.
         :rtype: List[Dict]
         """
         return self._sas_error
+
+    @property
+    def sas_warnings(self) -> List[Dict]:
+        """
+        Property getter for the confirmed SAS warnings associated with a product.
+        :return: The list of confirmed SAS warnings.
+        :rtype: List[Dict]
+        """
+        return self._sas_warn
 
     def raise_errors(self, raise_flag: bool):
         """
@@ -181,17 +190,6 @@ class BaseProduct:
         """
         return self._inst
 
-    # This is a fundamental property of the generated product, so I won't allow it be changed.
-    @property
-    def energy_bounds(self) -> Tuple[Quantity, Quantity]:
-        """
-        Getter method for the energy_bounds property, which returns the rest frame energy band that this
-        product was generated in.
-        :return: Tuple containing the lower and upper energy limits as Astropy quantities.
-        :rtype: Tuple[Quantity, Quantity]
-        """
-        return self._energy_bounds
-
     @property
     def type(self) -> str:
         """
@@ -219,6 +217,17 @@ class BaseProduct:
         :rtype: List[dict]
         """
         return self._sas_error
+
+    # This is a fundamental property of the generated product, so I won't allow it be changed.
+    @property
+    def energy_bounds(self) -> Tuple[Quantity, Quantity]:
+        """
+        Getter method for the energy_bounds property, which returns the rest frame energy band that this
+        product was generated in.
+        :return: Tuple containing the lower and upper energy limits as Astropy quantities.
+        :rtype: Tuple[Quantity, Quantity]
+        """
+        return self._energy_bounds
 
     @property
     def obj_name(self) -> str:
@@ -538,7 +547,7 @@ class ExpMap(Image):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, raise_properly)
         self._prod_type = "expmap"
 
-    def exp_time(self, at_coord: Quantity) -> float:
+    def get_exp(self, at_coord: Quantity) -> float:
         """
         A simple method that converts the given coordinates to pixels, then finds the exposure time
         at those coordinates.
@@ -548,7 +557,7 @@ class ExpMap(Image):
         """
         pix_coord = self.coord_conv(at_coord, pix).value
         exp = self._im_data[pix_coord[0], pix_coord[1]]
-        return float(exp)
+        return Quantity(exp, "s")
 
 
 # TODO Add RateMap class
