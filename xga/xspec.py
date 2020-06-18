@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 21:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 23:29. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -14,6 +14,9 @@ from tqdm import tqdm
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
 from xga.exceptions import NoProductAvailableError
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
+
+
+# TODO Make xga_extract deal with no redshift better
 
 
 def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool, list, list]:
@@ -164,6 +167,7 @@ def xspec_call(sas_func):
 
             elif len(res_set) != 0 and not res_set[1]:
                 for err in res_set[2]:
+                    # TODO This needs to be a proper XGA exception
                     raise err
 
             if len(res_set) != 0:

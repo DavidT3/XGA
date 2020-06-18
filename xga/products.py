@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 21:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 23:29. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -845,8 +845,7 @@ class Spectrum(BaseProduct):
         :rtype: Quantity
         """
         if self._exp is None:
-            warnings.warn("There are no XSPEC fits associated with this Spectrum")
-            exp = Quantity(-1, 's')
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this Spectrum")
         else:
             exp = Quantity(self._exp, 's')
 
@@ -924,8 +923,7 @@ class Spectrum(BaseProduct):
         :rtype: Quantity
         """
         if model not in self._count_rate:
-            warnings.warn("There are no XSPEC fits associated with this Spectrum")
-            rate = Quantity(-1, 's^-1')
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this Spectrum")
         else:
             rate = Quantity(self._count_rate[model], 's^-1')
 

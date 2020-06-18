@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 21:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 23:29. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -16,7 +16,8 @@ from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSk
     EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
-    MultipleMatchError, NoProductAvailableError, NoMatchFoundError
+    MultipleMatchError, NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, \
+    ParameterNotAssociatedError
 from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap
 from xga.sourcetools import simple_xmm_match, nhlookup
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
@@ -115,6 +116,7 @@ class BaseSource:
         # Easier for it be internally kep as a numpy array, but I want the user to have astropy coordinates
         return Quantity(self._ra_dec, 'deg')
 
+    # TODO Rejig this to go through update_products, otherwise source name doesn't get set properly.
     def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
@@ -932,7 +934,6 @@ class BaseSource:
         return self._name
 
     # TODO Pass through units in column headers?
-    # TODO Add get methods for new information
     def add_fit_data(self, model: str, reg_type: str, tab_line, lums: dict):
         """
         A method that stores fit results and global information about a the set of spectra in a source object.
@@ -995,6 +996,58 @@ class BaseSource:
         if reg_type not in self._luminosities:
             self._luminosities[reg_type] = {}
         self._luminosities[reg_type][model] = lums
+
+    def get_result(self, reg_type: str, model: str, par: str = None):
+        """
+        Important method that will retrieve fit results from the source object. Either for a specific
+        parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
+        all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
+         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
+        of such numpy arrays, with the keys corresponding to parameter names.
+        :param str reg_type: The type of region that the fitted spectra were generated from.
+        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str par: The name of the parameter you want a result for.
+        :return: The requested result value, and uncertainties.
+        """
+        # Bunch of checks to make sure the requested results actually exist
+        if len(self._fit_results) == 0:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this source")
+        elif reg_type not in self._fit_results:
+            raise ModelNotAssociatedError("{} has no associated XSPEC fit to this source.".format(reg_type))
+        elif model not in self._fit_results[reg_type]:
+            raise ModelNotAssociatedError("{0} has not been fitted to {1} spectra "
+                                          "of this source.".format(model, reg_type))
+        elif par is not None and par not in self._fit_results[reg_type][model]:
+            av_pars = ", ".join(self._fit_results[reg_type][model].keys())
+            raise ParameterNotAssociatedError("{0} was not a free parameter in the {1} fit to this source, "
+                                              "the options are {2}".format(par, model, av_pars))
+
+        # Read out into variable for readabilities sake
+        fit_data = self._fit_results[reg_type][model]
+        proc_data = {}  # Where the output will ive
+        for p_key in fit_data:
+            # Used to shape the numpy array the data is transferred into
+            num_entries = len(fit_data[p_key])
+            # 'Empty' new array to write out the results into, done like this because results are stored
+            #  in nested dictionaries with their XSPEC parameter number as an extra key
+            new_data = np.zeros((num_entries, 3))
+
+            # If a parameter is unlinked in a fit with multiple spectra (like normalisation for instance),
+            #  there can be N entries for the same parameter, writing them out in order to a numpy array
+            for incr, par_index in enumerate(fit_data[p_key]):
+                new_data[incr, :] = fit_data[p_key][par_index]
+
+            # Just makes the output a little nicer if there is only one entry
+            if new_data.shape[0] == 1:
+                proc_data[p_key] = new_data[0]
+            else:
+                proc_data[p_key] = new_data
+
+        # If no specific parameter was requested, the user gets all of them
+        if par is None:
+            return proc_data
+        else:
+            return proc_data[par]
 
     def info(self):
         """
