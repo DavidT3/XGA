@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 23:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 10:35. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -12,7 +12,8 @@ from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize
 from fitsio import read, read_header, FITSHDR, FITS, hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
-from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError, ModelNotAssociatedError
+from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError, ModelNotAssociatedError, \
+    ParameterNotAssociatedError
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
 
@@ -890,11 +891,11 @@ class Spectrum(BaseProduct):
                 lx_dict[en_band] = [0, 0, 0]
 
             if err_type == "":
-                lx_dict[en_band][0] = float(tab_line[col])*(10**44)
+                lx_dict[en_band][0] = Quantity(float(tab_line[col])*(10**44), "erg s^-1")
             elif err_type == "-":
-                lx_dict[en_band][1] = float(tab_line[col])*(10**44)
+                lx_dict[en_band][1] = Quantity(float(tab_line[col])*(10**44), "erg s^-1")
             elif err_type == "+":
-                lx_dict[en_band][2] = float(tab_line[col])*(10**44)
+                lx_dict[en_band][2] = Quantity(float(tab_line[col])*(10**44), "erg s^-1")
 
         self._luminosities[model] = lx_dict
 
@@ -902,18 +903,43 @@ class Spectrum(BaseProduct):
                                   "y": plot_data["Y"][:], "y_err": plot_data["YERR"][:],
                                   "model": plot_data["YMODEL"][:]}
 
-    def get_luminosities(self, model: str) -> Dict:
+    def get_luminosities(self, model: str, lo_en: Quantity = None, hi_en: Quantity = None):
         """
         Returns the luminosities measured for this spectrum from a given model.
         :param model: Name of model to fetch luminosities for.
-        :return: Dictionary of all luminosities (and their uncertainties) measured for this spectrum
-        from the given model.
-        :rtype: Dict
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :return: Luminosity measurement, either for all energy bands, or the one requested with the energy
+        limit parameters. Luminosity measurements are presented as three column numpy arrays, with column 0
+        being the value, column 1 being err-, and column 2 being err+.
         """
-        if model not in self._luminosities:
-            raise ModelNotAssociatedError("This spectrum has not been fit with {}".format(model))
+        # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
+        #  bounds. If the limits are none then so is the energy key
+        if lo_en is not None and hi_en is not None and lo_en > hi_en:
+            raise ValueError("The low energy limit cannot be greater than the high energy limit")
+        elif lo_en is not None and hi_en is not None:
+            en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
+        else:
+            en_key = None
 
-        return self._luminosities[model]
+        # Checks that the requested region, model and energy band actually exist
+        if len(self._luminosities) == 0:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this source")
+        elif model not in self._luminosities:
+            av_mods = ", ".join(self._luminosities.keys())
+            raise ModelNotAssociatedError("{0} has not been fitted to this spectrum; "
+                                          "available models are {1}".format(model, av_mods))
+        elif en_key is not None and en_key not in self._luminosities[model]:
+            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[model].keys()])
+            raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
+                                              "energy bands are {b}".format(l=lo_en.to("keV").value,
+                                                                            u=hi_en.to("keV").value,
+                                                                            m=model, b=av_bands))
+
+        if en_key is None:
+            return self._luminosities[model]
+        else:
+            return self._luminosities[model][en_key]
 
     def get_rate(self, model: str) -> Quantity:
         """

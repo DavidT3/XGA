@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 23:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 10:35. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -997,12 +997,12 @@ class BaseSource:
             self._luminosities[reg_type] = {}
         self._luminosities[reg_type][model] = lums
 
-    def get_result(self, reg_type: str, model: str, par: str = None):
+    def get_results(self, reg_type: str, model: str, par: str = None):
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
         all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
-         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
+        column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
         of such numpy arrays, with the keys corresponding to parameter names.
         :param str reg_type: The type of region that the fitted spectra were generated from.
         :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
@@ -1013,10 +1013,13 @@ class BaseSource:
         if len(self._fit_results) == 0:
             raise ModelNotAssociatedError("There are no XSPEC fits associated with this source")
         elif reg_type not in self._fit_results:
-            raise ModelNotAssociatedError("{} has no associated XSPEC fit to this source.".format(reg_type))
+            av_regs = ", ".join(self._fit_results.keys())
+            raise ModelNotAssociatedError("{0} has no associated XSPEC fit to this source; available regions are "
+                                          "{1}".format(reg_type, av_regs))
         elif model not in self._fit_results[reg_type]:
-            raise ModelNotAssociatedError("{0} has not been fitted to {1} spectra "
-                                          "of this source.".format(model, reg_type))
+            av_mods = ", ".join(self._fit_results[reg_type].keys())
+            raise ModelNotAssociatedError("{0} has not been fitted to {1} spectra of this source; available "
+                                          "models are  {2}".format(model, reg_type, av_mods))
         elif par is not None and par not in self._fit_results[reg_type][model]:
             av_pars = ", ".join(self._fit_results[reg_type][model].keys())
             raise ParameterNotAssociatedError("{0} was not a free parameter in the {1} fit to this source, "
@@ -1048,6 +1051,52 @@ class BaseSource:
             return proc_data
         else:
             return proc_data[par]
+
+    def get_luminosities(self, reg_type: str, model: str, lo_en: Quantity = None, hi_en: Quantity = None):
+        """
+        Get method for luminosities calculated from model fits to spectra associated with this source.
+        Either for given energy limits (that must have been specified when the fit was first performed), or
+        for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
+        the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
+        :param str reg_type: The type of region that the fitted spectra were generated from.
+        :param str model: The name of the fitted model that you're requesting the
+        luminosities from (e.g. tbabs*apec).
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :return: The requested luminosity value, and uncertainties.
+        """
+        # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
+        #  bounds. If the limits are none then so is the energy key
+        if lo_en is not None and hi_en is not None and lo_en > hi_en:
+            raise ValueError("The low energy limit cannot be greater than the high energy limit")
+        elif lo_en is not None and hi_en is not None:
+            en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
+        else:
+            en_key = None
+
+        # Checks that the requested region, model and energy band actually exist
+        if len(self._luminosities) == 0:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this source")
+        elif reg_type not in self._luminosities:
+            av_regs = ", ".join(self._luminosities.keys())
+            raise ModelNotAssociatedError("{0} has no associated XSPEC fit to this source; available regions are "
+                                          "{1}".format(reg_type, av_regs))
+        elif model not in self._luminosities[reg_type]:
+            av_mods = ", ".join(self._luminosities[reg_type].keys())
+            raise ModelNotAssociatedError("{0} has not been fitted to {1} spectra of this source; "
+                                          "available models are {2}".format(model, reg_type, av_mods))
+        elif en_key is not None and en_key not in self._luminosities[reg_type][model]:
+            av_bands = ", ".join([en.split("_")[-1]+"keV" for en in self._luminosities[reg_type][model].keys()])
+            raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
+                                              "energy bands are {b}".format(l=lo_en.to("keV").value,
+                                                                            u=hi_en.to("keV").value,
+                                                                            m=model, b=av_bands))
+
+        # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
+        if en_key is None:
+            return self._luminosities[reg_type][model]
+        else:
+            return self._luminosities[reg_type][model][en_key]
 
     def info(self):
         """

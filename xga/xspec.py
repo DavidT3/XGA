@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 23:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 10:35. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,6 +8,7 @@ from subprocess import Popen, PIPE
 from typing import List, Tuple
 
 import astropy.units as u
+import numpy as np
 from astropy.units import Quantity
 from fitsio import FITS
 from tqdm import tqdm
@@ -160,7 +161,7 @@ def xspec_call(sas_func):
 
                 for en_band in av_lums:
                     # TODO THIS IS A GARBAGE METHOD OF COMBINING THE LUMINOSITY VALUES
-                    av_lums[en_band] = [val / (line_ind+1) for val in av_lums[en_band]]
+                    av_lums[en_band] = np.array([val / (line_ind+1) for val in av_lums[en_band]])
 
                 # Push global fit results, luminosities etc. into the corresponding source object.
                 s.add_fit_data(model, reg_type, global_results, av_lums)
