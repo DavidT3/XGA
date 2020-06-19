@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 13:51. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -27,9 +27,8 @@ from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky,
 warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
-# TODO Let it be optional whether it loads in existing products and fit results
 class BaseSource:
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=False, load_fits=False):
         self._ra_dec = np.array([ra, dec])
         if name is not None:
             self._name = name
@@ -102,9 +101,10 @@ class BaseSource:
 
         # If there is an existing XGA output directory, then it makes sense to search for products that XGA
         #  may have already generated and load them in - saves us wasting time making them again.
+        # The user does have control over whether this happens or not though.
         # This goes at the end of init to make sure everything necessary has been declared
-        if os.path.exists(OUTPUT):
-            self._existing_xga_products()
+        if os.path.exists(OUTPUT) and load_products:
+            self._existing_xga_products(load_fits)
 
     @property
     def ra_dec(self) -> Quantity:
@@ -116,7 +116,6 @@ class BaseSource:
         # Easier for it be internally kep as a numpy array, but I want the user to have astropy coordinates
         return Quantity(self._ra_dec, 'deg')
 
-    # TODO Rejig this to go through update_products, otherwise source name doesn't get set properly.
     def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
@@ -153,6 +152,8 @@ class BaseSource:
             prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
                                             gen_cmd="", lo_en=lo, hi_en=hi)
                          for key, file in files.items() if os.path.exists(file)}
+            for prod in prod_objs:
+                prod_objs[prod].obj_name = self._name
             # As these files existed already, I don't have any stdout/err strings to pass, also no
             # command string.
 
@@ -258,11 +259,12 @@ class BaseSource:
         elif extra_key is None and obs_id == "combined":
             self._merged_products[p_type] = prod_obj
 
-    def _existing_xga_products(self):
+    def _existing_xga_products(self, read_fits: bool):
         """
         A method specifically for searching an existing XGA output directory for relevant files and loading
         them in as XGA products. This will retrieve images, exposure maps, and spectra; then the source product
         structure is updated. The method also finds previous fit results and loads them in.
+        :param bool read_fits: Boolean flag that controls whether past fits are read back in or not.
         """
         def parse_image_like(file_path: str, exact_type: str) -> BaseProduct:
             """
@@ -358,7 +360,7 @@ class BaseSource:
         os.chdir(og_dir)
 
         # Now loading in previous fits
-        if os.path.exists(OUTPUT + "XSPEC/" + self.name):
+        if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
             prev_fits = [OUTPUT + "XSPEC/" + self.name + "/" + f
                          for f in os.listdir(OUTPUT + "XSPEC/" + self.name) if ".xcm" not in f and ".fits" in f]
             for fit in prev_fits:
@@ -405,7 +407,6 @@ class BaseSource:
         # TODO Add different read in loops for annular spectra and maybe regioned images once I
         #  add them into XGA.
 
-    # TODO GET FIT RESULTS METHOD
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, just_obj: bool = True) -> List[list]:
         """
         This is the getter for the products data structure of Source objects. Passing a 'product type'
@@ -1134,8 +1135,8 @@ class BaseSource:
 # TODO I don't know how all this mask stuff will do with merged products - may have to rejig later
 # TODO Don't forget to write another info() method for extended source
 class ExtendedSource(BaseSource):
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
-        super().__init__(ra, dec, redshift, name, cosmology)
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=False, load_fits=False):
+        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
 
         # This uses the added context of the type of source to find (or not find) matches in region files
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("ext")
@@ -1234,8 +1235,8 @@ class ExtendedSource(BaseSource):
 
 
 class GalaxyCluster(ExtendedSource):
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
-        super().__init__(ra, dec, redshift, name, cosmology)
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=False, load_fits=False):
+        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
         # Don't know if these should be stored as astropy Quantity objects, may add that later
         self._central_coords = {obs: {inst: {} for inst in self._products[obs]} for obs in self.obs_ids}
         # The first coordinate will be the ra and dec that the user input to create the source instance
@@ -1322,8 +1323,8 @@ class GalaxyCluster(ExtendedSource):
 
 
 class PointSource(BaseSource):
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15):
-        super().__init__(ra, dec, redshift, name, cosmology)
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=False, load_fits=False):
+        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by regfiles or by users, will be stored
         self._regions, self._alt_match_regions, self._other_sources = self._source_type_match("pnt")

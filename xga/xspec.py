@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 13:51. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -12,7 +12,7 @@ from astropy.units import Quantity
 from fitsio import FITS
 from tqdm import tqdm
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
-from xga.exceptions import NoProductAvailableError, XSPECFitError
+from xga.exceptions import NoProductAvailableError, XSPECFitError, ModelNotAssociatedError
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 
 
@@ -313,7 +313,9 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
             xcm.write(script)
 
         # If the fit has already been performed we do not wish to perform it again
-        if not os.path.exists(script_file) or not os.path.exists(out_file):
+        try:
+            res = source.get_results(reg_type, model)
+        except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
     return script_paths, outfile_paths, num_cores, reg_type
