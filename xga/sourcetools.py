@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2020, 20:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:58. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
@@ -7,7 +7,6 @@ from astropy.cosmology import Planck15
 from astropy.units.quantity import Quantity
 from numpy import array, ndarray, pi
 from pandas import DataFrame
-
 from xga import CENSUS
 from xga.exceptions import HeasoftError, NoMatchFoundError
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 23:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:58. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -295,4 +295,20 @@ class ParameterNotAssociatedError(Exception):
             return 'ParameterNotAssociatedError has been raised'
 
 
+class XSPECFitError(Exception):
+    def __init__(self, *args):
+        """
+        This error is raised when their is a problem during an XSPEC fit instigated by XGA.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
 
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'XSPECFitError has been raised'

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:58. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -12,7 +12,7 @@ from astropy.units import Quantity
 from fitsio import FITS
 from tqdm import tqdm
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
-from xga.exceptions import NoProductAvailableError
+from xga.exceptions import NoProductAvailableError, XSPECFitError
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 
 
@@ -169,8 +169,7 @@ def xspec_call(sas_func):
 
             elif len(res_set) != 0 and not res_set[1]:
                 for err in res_set[2]:
-                    # TODO This needs to be a proper XGA exception
-                    raise err
+                    raise XSPECFitError(err)
 
             if len(res_set) != 0:
                 res_set[0].close()
