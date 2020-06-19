@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 10:35. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:46. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -12,8 +12,8 @@ from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize
 from fitsio import read, read_header, FITSHDR, FITS, hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
-from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError, ModelNotAssociatedError, \
-    ParameterNotAssociatedError
+from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError, \
+    ModelNotAssociatedError, ParameterNotAssociatedError
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
 

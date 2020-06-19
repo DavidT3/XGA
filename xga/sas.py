@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 12:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:46. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -661,8 +661,6 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
         sources_types.append(full(sources_cmds[-1].shape, fill_value="spectrum"))
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
-
-# TODO Implement regioned image so I can actually test that my SAS regions are sensible
 
 
 def evselect_annular_spectrum():

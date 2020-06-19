@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 10:35. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:46. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,7 +8,6 @@ from subprocess import Popen, PIPE
 from typing import List, Tuple
 
 import astropy.units as u
-import numpy as np
 from astropy.units import Quantity
 from fitsio import FITS
 from tqdm import tqdm
@@ -137,7 +136,7 @@ def xspec_call(sas_func):
                 global_results = res_set[0]["RESULTS"][0]
                 model = global_results["MODEL"].strip(" ")
 
-                av_lums = {}
+                inst_lums = {}
                 for line_ind, line in enumerate(res_set[0]["SPEC_INFO"]):
                     sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                     # Finds the appropriate matching spectrum object for the current table line
@@ -149,22 +148,24 @@ def xspec_call(sas_func):
                     s.update_products(spec)  # Adds the updated spectrum object back into the source
 
                     # The add_fit_data method formats the luminosities nicely, so we grab them back out
-                    #  to help construct the combined luminosity needed to pass to the source object 'add_fit_data'
-                    #  method
+                    #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
                     processed_lums = spec.get_luminosities(model)
-                    for en_band in processed_lums:
-                        if en_band not in av_lums:
-                            av_lums[en_band] = processed_lums[en_band]
-                        else:
-                            av_lums[en_band] = [av_lums[en_band][i] + processed_lums[en_band][i]
-                                                for i in range(0, 3)]
+                    if spec.instrument not in inst_lums:
+                        inst_lums[spec.instrument] = processed_lums
 
-                for en_band in av_lums:
-                    # TODO THIS IS A GARBAGE METHOD OF COMBINING THE LUMINOSITY VALUES
-                    av_lums[en_band] = np.array([val / (line_ind+1) for val in av_lums[en_band]])
+                # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                #  consistent
+                if "pn" in inst_lums:
+                    chosen_lums = inst_lums["pn"]
+                # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                elif "mos2" in inst_lums:
+                    chosen_lums = inst_lums["mos2"]
+                else:
+                    chosen_lums = inst_lums["mos1"]
 
                 # Push global fit results, luminosities etc. into the corresponding source object.
-                s.add_fit_data(model, reg_type, global_results, av_lums)
+                s.add_fit_data(model, reg_type, global_results, chosen_lums)
 
             elif len(res_set) != 0 and not res_set[1]:
                 for err in res_set[2]:
