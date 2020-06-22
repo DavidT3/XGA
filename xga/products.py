@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:43. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -13,7 +13,7 @@ from fitsio import read, read_header, FITSHDR, FITS, hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
 from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError, \
-    ModelNotAssociatedError, ParameterNotAssociatedError
+    ModelNotAssociatedError, ParameterNotAssociatedError, RateMapPairError
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
 
@@ -616,7 +616,20 @@ class ExpMap(Image):
 
 class RateMap(Image):
     def __init__(self, xga_image: Image, xga_expmap: ExpMap):
-        # TODO Put in checks that the image and exposure maps actually match
+        if type(xga_image) != Image or type(xga_expmap) != ExpMap:
+            raise TypeError("xga_image must be an XGA Image object, and xga_expmap must be an "
+                            "XGA ExpMap object.")
+
+        if xga_image.obs_id != xga_expmap.obs_id:
+            raise RateMapPairError("The ObsIDs of xga_image ({0}) and xga_expmap ({1}) "
+                                   "do not match".format(xga_image.obs_id, xga_expmap.obs_id))
+        elif xga_image.instrument != xga_expmap.instrument:
+            raise RateMapPairError("The instruments of xga_image ({0}) and xga_expmap ({1}) "
+                                   "do not match".format(xga_image.instrument, xga_expmap.instrument))
+        elif xga_image.energy_bounds != xga_expmap.energy_bounds:
+            raise RateMapPairError("The energy bounds of xga_image ({0}) and xga_expmap ({1}) "
+                                   "do not match".format(xga_image.energy_bounds, xga_expmap.energy_bounds))
+
         super().__init__(xga_image.path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
                          xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1])
         self._prod_type = "ratemap"
