@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:15. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -76,7 +76,7 @@ class BaseProduct:
         if not os.path.exists(prod_path):
             prod_path = None
             # We won't be able to make use of this product if it isn't where we think it is
-            self.usable = False
+            self._usable = False
         self._path = prod_path
 
     def parse_stderr(self) -> Tuple[List[Dict], List[Dict], List]:
@@ -280,7 +280,7 @@ class Image(BaseProduct):
         self._wcs_xmmdetXdetY = None
         self._energy_bounds = (lo_en, hi_en)
         self._prod_type = "image"
-        self._im_data = None
+        self._data = None
         self._header = None
 
     def _read_on_demand(self):
@@ -292,17 +292,17 @@ class Image(BaseProduct):
         if self.usable:
             # Not all images produced by SAS are going to be needed all the time, so they will only be read in if
             # asked for.
-            self._im_data = read(self.path).astype("float64")
-            if self._im_data.min() < 0:
+            self._data = read(self.path).astype("float64")
+            if self._data.min() < 0:
                 # This throws a non-fatal warning to let the user know there are negative pixel values,
                 #  and that they're being 'corrected'
                 warnings.warn("You are loading an {} with elements that are < 0, "
                               "they will be set to 0.".format(self._prod_type))
-                self._im_data[self._im_data < 0] = 0
+                self._data[self._data < 0] = 0
             self._header = read_header(self.path)
 
             # As the image must be loaded to know the shape, I've waited until here to set the _shape attribute
-            self._shape = self._im_data.shape
+            self._shape = self._data.shape
             # Will actually construct an image WCS as well because why not?
             # XMM images typically have two, both useful, so we'll find all available and store them
             wcses = find_all_wcs(self._header)
@@ -311,11 +311,14 @@ class Image(BaseProduct):
             for w in wcses:
                 axes = [ax.lower() for ax in w.axis_type_names]
                 if "ra" in axes and "dec" in axes:
-                    self._wcs_radec = w
+                    if self._wcs_radec is None:
+                        self._wcs_radec = w
                 elif "x" in axes and "y" in axes:
-                    self._wcs_xmmXY = w
+                    if self._wcs_xmmXY is None:
+                        self._wcs_xmmXY = w
                 elif "detx" in axes and "dety" in axes:
-                    self._wcs_xmmdetXdetY = w
+                    if self._wcs_xmmdetXdetY is None:
+                        self._wcs_xmmdetXdetY = w
                 else:
                     raise ValueError("This type of WCS is not recognised!")
 
@@ -338,7 +341,7 @@ class Image(BaseProduct):
         # This has to be run first, to check the image is loaded, otherwise how can we know the shape?
         # This if is here rather than in the method as some other properties of this class don't need the
         # image object, just some products derived from it.
-        if self._im_data is None:
+        if self._data is None:
             self._read_on_demand()
         # There will not be a setter for this property, no-one is allowed to change the shape of the image.
         return self._shape
@@ -352,9 +355,9 @@ class Image(BaseProduct):
         :rtype: np.ndarray
         """
         # Calling this ensures the image object is read into memory
-        if self._im_data is None:
+        if self._data is None:
             self._read_on_demand()
-        return self._im_data
+        return self._data
 
     @data.setter
     def data(self, new_im_arr: np.ndarray):
@@ -365,7 +368,7 @@ class Image(BaseProduct):
         :param np.ndarray new_im_arr: The new image data.
         """
         # Calling this ensures the image object is read into memory
-        if self._im_data is None:
+        if self._data is None:
             self._read_on_demand()
 
         # Have to make sure the input is of the right type, and the right shape
@@ -375,7 +378,7 @@ class Image(BaseProduct):
             raise ValueError("You may only assign a numpy array to the data attribute if it "
                              "is the same shape as the original.")
         else:
-            self._im_data = new_im_arr
+            self._data = new_im_arr
 
     # This one doesn't get a setter, as I require this WCS to not be none in the _read_on_demand method
     @property
@@ -563,12 +566,20 @@ class Image(BaseProduct):
         ax.xaxis.set_ticklabels([])
         ax.yaxis.set_ticklabels([])
 
-        # Set the title with all relevant information about the image object in it
-        plt.title("Log Scaled {n} - {o}{i} {l}-{u}keV {t}".format(n=self.obj_name, o=self.obs_id,
-                                                                  i=self.instrument.upper(),
-                                                                  l=self._energy_bounds[0].to("keV").value,
-                                                                  u=self._energy_bounds[1].to("keV").value,
-                                                                  t=self.type))
+        # Check if this is a combined product, because if it is then ObsID and instrument are both 'combined'
+        #  and it makes the title ugly
+        if self.obs_id != "combined":
+            # Set the title with all relevant information about the image object in it
+            plt.title("Log Scaled {n} - {o}{i} {l}-{u}keV {t}".format(n=self.obj_name, o=self.obs_id,
+                                                                      i=self.instrument.upper(),
+                                                                      l=self._energy_bounds[0].to("keV").value,
+                                                                      u=self._energy_bounds[1].to("keV").value,
+                                                                      t=self.type))
+        else:
+            plt.title("Log Scaled {n} - Combined {l}-{u}keV {t}".format(n=self.obj_name,
+                                                                   l=self._energy_bounds[0].to("keV").value,
+                                                                   u=self._energy_bounds[1].to("keV").value,
+                                                                   t=self.type))
 
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in depth way of viewing cluster data eventually
@@ -596,14 +607,99 @@ class ExpMap(Image):
         at those coordinates.
         :param Quantity at_coord: A pair of coordinates to find the exposure time for.
         :return: The exposure time at the supplied coordinates.
-        :rtype: float
+        :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        exp = self._im_data[pix_coord[0], pix_coord[1]]
+        exp = self._data[pix_coord[0], pix_coord[1]]
         return Quantity(exp, "s")
 
 
-# TODO Add RateMap class
+class RateMap(Image):
+    def __init__(self, xga_image: Image, xga_expmap: ExpMap):
+        # TODO Put in checks that the image and exposure maps actually match
+        super().__init__(xga_image.path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
+                         xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1])
+        self._prod_type = "ratemap"
+
+        # Runs read on demand to grab the data for the image, as this was the input path to the super init call
+        self._read_on_demand()
+        # That reads in the WCS information (important), and stores the im data in _data
+        # That is read out into this variable
+        self._im_data = self.data
+        # Then the path is changed, so that the exposure map file becomes the focus
+        self._path = xga_expmap.path
+        # Read on demand runs again and grabs the exposure map data
+        self._read_on_demand()
+        # Again read out into variable
+        self._ex_data = self.data
+
+        # Then divide image by exposure map to get rate map data.
+        # Numpy divide lets me specify where we wish to divide, so we don't get any NaN results and divide by
+        #  zero warnings
+        self._data = np.divide(self._im_data, self._ex_data, out=np.zeros_like(self._im_data),
+                               where=self._ex_data != 0)
+
+        # Use exposure maps and basic edge detection to find the edges of the CCDs
+        #  The exposure map values calculated on the edge of a CCD can be much smaller than it should be,
+        #  which in turn can boost the rate map value there - hence useful to know which elements of an array
+        #  are on an edge.
+        det_map = self._ex_data.copy()
+        # Turn the exposure map into something simpler, either on a detector or not
+        det_map[self._ex_data != 0] = 1
+
+        # Do the diff from top to bottom of the image, the append option adds a line of zeros at the end
+        #  otherwise the resulting array would only be N-1 elements 'high'.
+        hori_edges = np.diff(det_map, axis=0, append=0)
+        # A 1 in this array means you're going from no chip to on chip, which means the coordinate where 1
+        # is recorded is offset by 1 from the actual edge of the chip elements of this array.
+        need_corr_y, need_corr_x = np.where(hori_edges == 1)
+        # So that's why we add one to those y coordinates (as this is the vertical pass of np.diff
+        new_y = need_corr_y + 1
+        # Then make sure chip edge = 1, and everything else = 0
+        hori_edges[need_corr_y, need_corr_x] = 0
+        hori_edges[new_y, need_corr_x] = 1
+        # -1 in this means going from chip to not-chip
+        hori_edges[hori_edges == -1] = 1
+
+        # The same process is repeated here, but in the x direction, so you're finding vertical edges
+        vert_edges = np.diff(det_map, axis=1, append=0)
+        need_corr_y, need_corr_x = np.where(vert_edges == 1)
+        new_x = need_corr_x + 1
+        vert_edges[need_corr_y, need_corr_x] = 0
+        vert_edges[need_corr_y, new_x] = 1
+        vert_edges[vert_edges == -1] = 1
+
+        # Both passes are combined into one, with possible values of 0 (no edge), 1 (edge detected in one pass),
+        #  and 2 (edge detected in both pass). Then configure the array to act as a mask that removes the
+        #  edge pixels
+        comb = hori_edges + vert_edges
+        comb[comb == 0] = -1
+        comb[comb != -1] = False
+        comb[comb == -1] = 1
+
+        # Store that mask as an attribute.
+        self._edge_mask = comb
+
+    def get_rate(self, at_coord: Quantity) -> float:
+        """
+        A simple method that converts the given coordinates to pixels, then finds the rate (in photons
+        per second) and returns it.
+        :param Quantity at_coord: A pair of coordinates to find the photon rate for.
+        :return: The photon rate at the supplied coordinates.
+        :rtype: Quantity
+        """
+        pix_coord = self.coord_conv(at_coord, pix).value
+        # print(pix_coord)
+        # norm = ImageNormalize(self._data, interval=MinMaxInterval(), stretch=LogStretch())
+        # plt.imshow(self._data, origin="lower", norm=norm)
+        # plt.axhline(pix_coord[0], color="white", linewidth=0.5)
+        # plt.axvline(pix_coord[1], color="white", linewidth=0.5)
+        # plt.show()
+        #
+        # import sys
+        # sys.exit()
+        rate = self._data[pix_coord[0], pix_coord[1]]
+        return Quantity(rate, "s^-1")
 
 
 class EventList(BaseProduct):
@@ -625,37 +721,37 @@ class Spectrum(BaseProduct):
             self._rmf = rmf_path
         else:
             self._rmf = None
-            self.usable = False
+            self._usable = False
 
         if os.path.exists(arf_path):
             self._arf = arf_path
         else:
             self._arf = None
-            self.usable = False
+            self._usable = False
 
         if os.path.exists(b_path):
             self._back_spec = b_path
         else:
             self._back_spec = None
-            self.usable = False
+            self._usable = False
 
         if os.path.exists(b_rmf_path):
             self._back_rmf = b_rmf_path
         else:
             self._back_rmf = None
-            self.usable = False
+            self._usable = False
 
         if os.path.exists(b_arf_path):
             self._back_arf = b_arf_path
         else:
             self._arf_rmf = None
-            self.usable = False
+            self._usable = False
 
         allowed_regs = ["region", "r2500", "r500", "r200"]
         if reg_type in allowed_regs:
             self._reg_type = reg_type
         else:
-            self.usable = False
+            self._usable = False
             self._reg_type = None
             raise ValueError("{0} is not a support region type, "
                              "please use one of these; {1}".format(reg_type, ", ".join(allowed_regs)))

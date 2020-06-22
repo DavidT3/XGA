@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/06/2020, 21:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:15. Copyright (c) David J Turner
 
 import json
 import os
@@ -62,7 +62,8 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "mos2_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_expmap.fits",
              "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
 # List of XMM products supported by XGA that are allowed to be energy bound
-ENERGY_BOUND_PRODUCTS = ["image", "expmap", "reg_image", "reg_expmap", "psfmap"]
+ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap",
+                         "psfmap"]
 # List of all XMM products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events"] + ENERGY_BOUND_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]

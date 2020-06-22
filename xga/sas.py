@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 12:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:15. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -487,7 +487,7 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
         # This contains any other information that will be needed to instantiate the class
         # once the SAS cmd has run
         # The 'combined' values for obs and inst here are crucial, they will tell the source object that the final
-        # product is assigned to that these are 'master' products - combinations of all available data
+        # product is assigned to that these are merged products - combinations of all available data
         sources_extras.append(array([{"lo_en": lo_en, "hi_en": hi_en, "obs_id": "combined",
                                       "instrument": "combined"}]))
         sources_types.append(full(sources_cmds[-1].shape, fill_value=to_mosaic))

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 13:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:15. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -18,7 +18,7 @@ from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, \
     ParameterNotAssociatedError
-from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap
+from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap, RateMap
 from xga.sourcetools import simple_xmm_match, nhlookup
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
 
@@ -57,9 +57,6 @@ class BaseSource:
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
-        # This is an important dictionary, mosaic images and exposure maps will live here, which is what most
-        # users should be using for analyses
-        self._merged_products = {}  # TODO Should this just be a part of _products?
 
         self._cosmo = cosmology
         if redshift is not None:
@@ -152,6 +149,10 @@ class BaseSource:
             prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
                                             gen_cmd="", lo_en=lo, hi_en=hi)
                          for key, file in files.items() if os.path.exists(file)}
+            # If both an image and an exposure map are present for this energy band, a RateMap object is generated
+            if "image" in prod_objs and "expmap" in prod_objs:
+                prod_objs["ratemap"] = RateMap(prod_objs["image"], prod_objs["expmap"])
+            # Adds in the source name to the products
             for prod in prod_objs:
                 prod_objs[prod].obj_name = self._name
             # As these files existed already, I don't have any stdout/err strings to pass, also no
@@ -217,6 +218,8 @@ class BaseSource:
         with this source or the instrument is not associated with the ObsID.
         :param BaseProduct prod_obj: The new product object to be added to the source object.
         """
+        # TODO Make this generate RateMap objects when matching Image and ExpMap objects are available
+        #  if both products are marked as usable.
         if not isinstance(prod_obj, BaseProduct):
             raise TypeError("Only product objects can be assigned to sources.")
 
@@ -234,6 +237,15 @@ class BaseSource:
         inst = prod_obj.instrument
         p_type = prod_obj.type
 
+        # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
+        #  together - merged products do get a 'combined' prefix on their product type key though
+        if obs_id == "combined":
+            p_type = "combined_" + p_type
+
+        # 'Combined' will effectively be stored as another ObsID
+        if "combined" not in self._products:
+            self._products["combined"] = {}
+
         # The product gets the name of this source object added to it
         prod_obj.obj_name = self.name
 
@@ -244,21 +256,48 @@ class BaseSource:
             raise NotAssociatedError("{i} is not associated with XMM observation {o}".format(i=inst, o=obs_id))
 
         if extra_key is not None and obs_id != "combined":
-            # If there is no entry for this energy band already, we must make one
+            # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
             if extra_key not in self._products[obs_id][inst]:
                 self._products[obs_id][inst][extra_key] = {}
             self._products[obs_id][inst][extra_key][p_type] = prod_obj
         elif extra_key is None and obs_id != "combined":
             self._products[obs_id][inst][p_type] = prod_obj
-        # Here we deal with merged products
+        # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
+        #  and ObsID = 'combined'
         elif extra_key is not None and obs_id == "combined":
-            # If there is no entry for this energy band already, we must make one
-            if extra_key not in self._merged_products:
-                self._merged_products[extra_key] = {}
-            self._merged_products[extra_key][p_type] = prod_obj
+            if extra_key not in self._products[obs_id]:
+                self._products[obs_id][extra_key] = {}
+            self._products[obs_id][extra_key][p_type] = prod_obj
         elif extra_key is None and obs_id == "combined":
-            self._merged_products[p_type] = prod_obj
+            self._products[obs_id][p_type] = prod_obj
 
+        # Finally, we do a quick check for matching pairs of images and exposure maps, because if they
+        #  exist then we can generate a RateMap product object.
+        if p_type == "image" or p_type == "expmap":
+            # Check for existing images, exposure maps, and rate maps that match the product that has just
+            #  been added (if that product is an image or exposure map).
+            ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False) if extra_key in prod]
+            exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False) if extra_key in prod]
+            rts = [prod for prod in self.get_products("ratemap", obs_id, inst, just_obj=False) if extra_key in prod]
+            # If we find that there is one match each for image and exposure map,
+            #  and no ratemap, then we make one
+            if len(ims) == 1 and len(exs) == 1 and ims[0][-1].usable and exs[0][-1].usable and len(rts) == 0:
+                new_rt = RateMap(ims[0][-1], exs[0][-1])
+                new_rt.obj_name = self.name
+                self._products[obs_id][inst][extra_key]["ratemap"] = new_rt
+
+        # The combined images and exposure maps do much the same thing but they're in a separate part
+        #  of the if statement because they get named and stored in slightly different ways
+        elif p_type == "combined_image" or p_type == "combined_expmap":
+            ims = [prod for prod in self.get_products("combined_image", just_obj=False) if extra_key in prod]
+            exs = [prod for prod in self.get_products("combined_expmap", just_obj=False) if extra_key in prod]
+            rts = [prod for prod in self.get_products("combined_ratemap", just_obj=False) if extra_key in prod]
+            if len(ims) == 1 and len(exs) == 1 and ims[0][-1].usable and exs[0][-1].usable and len(rts) == 0:
+                new_rt = RateMap(ims[0][-1], exs[0][-1])
+                new_rt.obj_name = self.name
+                self._products[obs_id][extra_key]["combined_ratemap"] = new_rt
+
+    # TODO Load in combined images and exposure maps that already exist
     def _existing_xga_products(self, read_fits: bool):
         """
         A method specifically for searching an existing XGA output directory for relevant files and loading
@@ -439,7 +478,9 @@ class BaseSource:
 
         # Only certain product identifier are allowed
         if p_type not in ALLOWED_PRODUCTS:
-            raise UnknownProductError("Requested product type not recognised.")
+            prod_str = ", ".join(ALLOWED_PRODUCTS)
+            raise UnknownProductError("{p} is not a recognised product type. Allowed product types are "
+                                      "{l}".format(p=p_type, l=prod_str))
         elif obs_id not in self._products and obs_id is not None:
             raise NotAssociatedError("{} is not associated with this source.".format(obs_id))
         elif inst not in XMM_INST and inst is not None:
