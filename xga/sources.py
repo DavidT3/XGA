@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 17:19. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1235,7 +1235,6 @@ class ExtendedSource(BaseSource):
             # Ensures we only do regions for instruments that do have at least an events list.
             for inst in self._products[obs_id]:
                 self._reg_masks[obs_id][inst], self._back_masks[obs_id][inst] = self._generate_mask(obs_id, inst)
-
         if all([val is None for val in self._regions.values()]):
             self._detected = False
         else:

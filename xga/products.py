@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 17:19. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -704,6 +704,40 @@ class RateMap(Image):
         pix_coord = self.coord_conv(at_coord, pix).value
         rate = self._data[pix_coord[1], pix_coord[0]]
         return Quantity(rate, "s^-1")
+
+    def simple_peak(self, mask: np.ndarray, out_unit: UnitBase = deg):
+        """
+        Simplest possible way to find the position of the peak of X-ray emission in a ratemap. This method
+        takes a mask in the form of a numpy array, which allows the user to mask out parts of the ratemap
+        that shouldn't be searched (outside of a certain region, or within point sources for instance).
+        :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
+        aren't to be searched, and 1 for those that are.
+        :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
+        :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
+        the user's mask), in units of out_unit, as specified by the user.
+        :rtype: Quantity
+        """
+        if mask.shape != self._data.shape:
+            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
+                             "({1}).".format(mask.shape, self._data.shape))
+
+        # Creates the data array that we'll be searching. Takes into account the passed mask, as well as
+        #  the edge mask designed to remove pixels at the edges of detectors, where RateMap values can
+        #  be artificially boosted.
+        masked_data = self._data * mask * self._edge_mask
+        # Uses argmax to find the flattened coordinate of the max value, then unravel_index to convert
+        #  it back to a 2D coordinate
+        max_coords = np.unravel_index(np.argmax(masked_data == masked_data.max()), masked_data.shape)
+        # Defines an astropy pix quantity of the peak coordinates
+        peak_pix = Quantity([max_coords[1], max_coords[0]], pix)
+        # Don't bother converting if the desired output coordinates are already pix, but otherwise use this
+        #  objects coord_conv function to move to desired coordinate units.
+        if out_unit != pix:
+            peak_conv = self.coord_conv(peak_pix, out_unit)
+        else:
+            peak_conv = peak_pix
+
+        return peak_conv
 
 
 class EventList(BaseProduct):
