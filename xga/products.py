@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:24. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -610,7 +610,7 @@ class ExpMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        exp = self._data[pix_coord[0], pix_coord[1]]
+        exp = self._data[pix_coord[1], pix_coord[0]]
         return Quantity(exp, "s")
 
 
@@ -689,16 +689,7 @@ class RateMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        # print(pix_coord)
-        # norm = ImageNormalize(self._data, interval=MinMaxInterval(), stretch=LogStretch())
-        # plt.imshow(self._data, origin="lower", norm=norm)
-        # plt.axhline(pix_coord[0], color="white", linewidth=0.5)
-        # plt.axvline(pix_coord[1], color="white", linewidth=0.5)
-        # plt.show()
-        #
-        # import sys
-        # sys.exit()
-        rate = self._data[pix_coord[0], pix_coord[1]]
+        rate = self._data[pix_coord[1], pix_coord[0]]
         return Quantity(rate, "s^-1")
 
 
