@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 17:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/06/2020, 21:07. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -12,6 +12,8 @@ from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize
 from fitsio import read, read_header, FITSHDR, FITS, hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
+from scipy.cluster.hierarchy import fclusterdata
+
 from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError, \
     ModelNotAssociatedError, ParameterNotAssociatedError, RateMapPairError
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
@@ -490,72 +492,80 @@ class Image(BaseProduct):
         input_unit = coord_pair.unit.name
         out_name = output_unit.name
 
-        # First off do some type checking
-        if not isinstance(coord_pair, Quantity):
-            raise TypeError("Please pass an astropy Quantity for the coord_pair.")
-        # The coordinate pair must have two elements, no more no less
-        elif coord_pair.shape != (2,):
-            raise ValueError("Please supply x and y coordinates in one object.")
-        # I know the proper way with astropy units is to do .to() but its easier with WCS this way
-        elif input_unit not in allowed_units:
-            raise UnitsError("Those coordinate units are not supported by this method, "
-                             "please use one of these: {}".format(", ".join(allowed_units)))
-        elif out_name not in allowed_units:
-            raise UnitsError("That output unit is not supported by this method, "
-                             "please use one of these: {}".format(", ".join(allowed_units)))
+        if input_unit != out_name:
+            # First off do some type checking
+            if not isinstance(coord_pair, Quantity):
+                raise TypeError("Please pass an astropy Quantity for the coord_pair.")
+            # The coordinate pair must have two elements, no more no less
+            elif coord_pair.shape != (2,):
+                raise ValueError("Please supply x and y coordinates in one object.")
+            # I know the proper way with astropy units is to do .to() but its easier with WCS this way
+            elif input_unit not in allowed_units:
+                raise UnitsError("Those coordinate units are not supported by this method, "
+                                 "please use one of these: {}".format(", ".join(allowed_units)))
+            elif out_name not in allowed_units:
+                raise UnitsError("That output unit is not supported by this method, "
+                                 "please use one of these: {}".format(", ".join(allowed_units)))
 
-        # Check for presence of the right WCS
-        if (input_unit == "xmm_sky" or out_name == "xmm_sky") and self.skyxy_wcs is None:
-            raise ValueError("There is no XMM Sky XY WCS associated with this product.")
-        elif (input_unit == "xmm_det" or out_name == "xmm_det") and self.detxy_wcs is None:
-            raise ValueError("There is no XMM Detector XY WCS associated with this product.")
+            # Check for presence of the right WCS
+            if (input_unit == "xmm_sky" or out_name == "xmm_sky") and self.skyxy_wcs is None:
+                raise ValueError("There is no XMM Sky XY WCS associated with this product.")
+            elif (input_unit == "xmm_det" or out_name == "xmm_det") and self.detxy_wcs is None:
+                raise ValueError("There is no XMM Detector XY WCS associated with this product.")
 
-        # Now to do the actual conversion, which will include checking that the correct WCS is loaded
-        # These go between degrees and pixels
-        if input_unit == "deg" and out_name == "pix":
-            # The second argument all_world2pix defines the origin, for numpy coords it should be 0
-            out_coord = Quantity(self.radec_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
-        elif input_unit == "pix" and out_name == "deg":
-            out_coord = Quantity(self.radec_wcs.all_pix2world(*coord_pair, 0), output_unit)
+            # Now to do the actual conversion, which will include checking that the correct WCS is loaded
+            # These go between degrees and pixels
+            if input_unit == "deg" and out_name == "pix":
+                # The second argument all_world2pix defines the origin, for numpy coords it should be 0
+                out_coord = Quantity(self.radec_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
+            elif input_unit == "pix" and out_name == "deg":
+                out_coord = Quantity(self.radec_wcs.all_pix2world(*coord_pair, 0), output_unit)
 
-        # These go between degrees and XMM sky XY coordinates
-        elif input_unit == "deg" and out_name == "xmm_sky":
-            interim = self.radec_wcs.all_world2pix(*coord_pair, 0)
-            out_coord = Quantity(self.skyxy_wcs.all_pix2world(*interim, 0), xmm_sky)
-        elif input_unit == "xmm_sky" and out_name == "deg":
-            interim = self.skyxy_wcs.all_world2pix(*coord_pair, 0)
-            out_coord = Quantity(self.radec_wcs.all_pix2world(*interim, 0), deg)
+            # These go between degrees and XMM sky XY coordinates
+            elif input_unit == "deg" and out_name == "xmm_sky":
+                interim = self.radec_wcs.all_world2pix(*coord_pair, 0)
+                out_coord = Quantity(self.skyxy_wcs.all_pix2world(*interim, 0), xmm_sky)
+            elif input_unit == "xmm_sky" and out_name == "deg":
+                interim = self.skyxy_wcs.all_world2pix(*coord_pair, 0)
+                out_coord = Quantity(self.radec_wcs.all_pix2world(*interim, 0), deg)
 
-        # These go between XMM sky XY and pixel coordinates
-        elif input_unit == "xmm_sky" and out_name == "pix":
-            out_coord = Quantity(self.skyxy_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
-        elif input_unit == "pix" and out_name == "xmm_sky":
-            out_coord = Quantity(self.skyxy_wcs.all_pix2world(*coord_pair, 0), output_unit)
+            # These go between XMM sky XY and pixel coordinates
+            elif input_unit == "xmm_sky" and out_name == "pix":
+                out_coord = Quantity(self.skyxy_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
+            elif input_unit == "pix" and out_name == "xmm_sky":
+                out_coord = Quantity(self.skyxy_wcs.all_pix2world(*coord_pair, 0), output_unit)
 
-        # These go between degrees and XMM Det XY coordinates
-        elif input_unit == "deg" and out_name == "xmm_det":
-            interim = self.radec_wcs.all_world2pix(*coord_pair, 0)
-            out_coord = Quantity(self.detxy_wcs.all_pix2world(*interim, 0), xmm_sky)
-        elif input_unit == "xmm_det" and out_name == "deg":
-            interim = self.detxy_wcs.all_world2pix(*coord_pair, 0)
-            out_coord = Quantity(self.radec_wcs.all_pix2world(*interim, 0), deg)
+            # These go between degrees and XMM Det XY coordinates
+            elif input_unit == "deg" and out_name == "xmm_det":
+                interim = self.radec_wcs.all_world2pix(*coord_pair, 0)
+                out_coord = Quantity(self.detxy_wcs.all_pix2world(*interim, 0), xmm_sky)
+            elif input_unit == "xmm_det" and out_name == "deg":
+                interim = self.detxy_wcs.all_world2pix(*coord_pair, 0)
+                out_coord = Quantity(self.radec_wcs.all_pix2world(*interim, 0), deg)
 
-        # These go between XMM det XY and pixel coordinates
-        elif input_unit == "xmm_det" and out_name == "pix":
-            out_coord = Quantity(self.detxy_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
-        elif input_unit == "pix" and out_name == "xmm_det":
-            out_coord = Quantity(self.detxy_wcs.all_pix2world(*coord_pair, 0), output_unit)
+            # These go between XMM det XY and pixel coordinates
+            elif input_unit == "xmm_det" and out_name == "pix":
+                out_coord = Quantity(self.detxy_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
+            elif input_unit == "pix" and out_name == "xmm_det":
+                out_coord = Quantity(self.detxy_wcs.all_pix2world(*coord_pair, 0), output_unit)
 
-        # It is possible to convert between XMM coordinates and pixel and supply coordinates
-        # outside the range covered by an image, but we can at least catch the error
-        if out_name == "pix" and any(coord < 0 for coord in out_coord):
-            raise ValueError("Pixel coordinates cannot be less than 0.")
+            # It is possible to convert between XMM coordinates and pixel and supply coordinates
+            # outside the range covered by an image, but we can at least catch the error
+            if out_name == "pix" and any(coord < 0 for coord in out_coord):
+                raise ValueError("Pixel coordinates cannot be less than 0.")
+        elif input_unit == out_name and out_name == 'pix':
+            out_coord = coord_pair.astype(int)
+        else:
+            out_coord = coord_pair
+
         return out_coord
 
-    def view(self):
+    def view(self, cross_hair: Quantity = None):
         """
         Quick and dirty method to view this image. Absolutely no user configuration is allowed, that feature
         is for other parts of XGA. Produces an image with log-scaling, and using the colour map gnuplot2.
+        :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
+        the coordinates.
         """
         # Create figure object
         plt.figure(figsize=(7, 6))
@@ -585,6 +595,11 @@ class Image(BaseProduct):
         #  There will be a more in depth way of viewing cluster data eventually
         norm = ImageNormalize(data=self.data, interval=MinMaxInterval(), stretch=LogStretch())
         # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
+        if cross_hair is not None:
+            pix_coord = self.coord_conv(cross_hair, pix).value
+            plt.axvline(pix_coord[0], color="white", linewidth=0.5)
+            plt.axhline(pix_coord[1], color="white", linewidth=0.5)
+
         plt.imshow(self.data, norm=norm, origin="lower", cmap="gnuplot2")
         plt.colorbar()
         plt.tight_layout()
@@ -725,6 +740,72 @@ class RateMap(Image):
         #  the edge mask designed to remove pixels at the edges of detectors, where RateMap values can
         #  be artificially boosted.
         masked_data = self._data * mask * self._edge_mask
+
+        # Uses argmax to find the flattened coordinate of the max value, then unravel_index to convert
+        #  it back to a 2D coordinate
+        max_coords = np.unravel_index(np.argmax(masked_data == masked_data.max()), masked_data.shape)
+        # Defines an astropy pix quantity of the peak coordinates
+        peak_pix = Quantity([max_coords[1], max_coords[0]], pix)
+        # Don't bother converting if the desired output coordinates are already pix, but otherwise use this
+        #  objects coord_conv function to move to desired coordinate units.
+        if out_unit != pix:
+            peak_conv = self.coord_conv(peak_pix, out_unit)
+        else:
+            peak_conv = peak_pix
+
+        return peak_conv
+
+    def clustering_peak(self, mask: np.ndarray, out_unit: UnitBase = deg, top_frac: float = 0.05):
+        """
+        An experimental peak finding function that cuts out the top 5% (by default) of array elements
+        (by value), and runs a hierarchical clustering algorithm on their positions. The motivation
+        for this is that the cluster peak will likely be contained in that top 5%, and the only other
+        pixels that might be involved are remnants of poorly removed point sources. So when clusters have
+        been formed, we can take the one with the most entries, and find the maximal pixel of that cluster.
+        Will be consistent with simple_peak under ideal circumstances.
+        :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
+        aren't to be searched, and 1 for those that are.
+        :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
+        :param float top_frac: The fraction of the elements (ordered in descending value) that should be used
+        to generate clusters, and thus be considered for the cluster centre.
+        :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
+        the user's mask), in units of out_unit, as specified by the user.
+        :rtype: Quantity
+        """
+        if mask.shape != self._data.shape:
+            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
+                             "({1}).".format(mask.shape, self._data.shape))
+
+        # Creates the data array that we'll be searching. Takes into account the passed mask, as well as
+        #  the edge mask designed to remove pixels at the edges of detectors, where RateMap values can
+        #  be artificially boosted.
+        masked_data = self._data * mask * self._edge_mask
+        # How many non-zero elements are there in the array
+        num_value = len(masked_data[masked_data != 0])
+        # Find the number that corresponds to the top 5% (by default)
+        to_select = round(num_value * top_frac)
+        # Grab the inds of the pixels that are in the top 5% of values (by default)
+        inds = np.unravel_index(np.argpartition(masked_data.flatten(), -to_select)[-to_select:], masked_data.shape)
+        # Just formatting quickly for input into the clustering algorithm
+        pairs = [[inds[0][i], inds[1][i]] for i in range(len(inds[0]))]
+        # Hierarchical clustering using the inconsistent criterion with threshold 1. 'If a cluster node and all its
+        # descendants have an inconsistent value less than or equal to 1, then all its leaf descendants belong to
+        # the same flat cluster. When no non-singleton cluster meets this criterion, every node is assigned to its
+        # own cluster.'
+        cluster_inds = fclusterdata(pairs, 1)
+
+        # Finds how many clusters there are, and how many points belong to each cluster
+        uniq_vals, uniq_cnts = np.unique(cluster_inds, return_counts=True)
+        # Choose the cluster with the most points associated with it
+        chosen_clust = uniq_vals[np.argmax(uniq_cnts)]
+        # Retrieves the inds for the main merged_data in the chosen cluster
+        chosen_inds = np.where(cluster_inds == chosen_clust)[0]
+        cutout = np.zeros(masked_data.shape)
+        # Make a masking array to select only the points in the cluster
+        cutout[inds[0][chosen_inds], inds[1][chosen_inds]] = 1
+        # Mask the data
+        masked_data = masked_data * cutout
+
         # Uses argmax to find the flattened coordinate of the max value, then unravel_index to convert
         #  it back to a 2D coordinate
         max_coords = np.unravel_index(np.argmax(masked_data == masked_data.max()), masked_data.shape)
