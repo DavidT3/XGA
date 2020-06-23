@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 17:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/06/2020, 08:46. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -218,8 +218,6 @@ class BaseSource:
         with this source or the instrument is not associated with the ObsID.
         :param BaseProduct prod_obj: The new product object to be added to the source object.
         """
-        # TODO Make this generate RateMap objects when matching Image and ExpMap objects are available
-        #  if both products are marked as usable.
         if not isinstance(prod_obj, BaseProduct):
             raise TypeError("Only product objects can be assigned to sources.")
 
@@ -526,12 +524,21 @@ class BaseSource:
 
         for obs_id in reg_paths:
             ds9_regs = read_ds9(reg_paths[obs_id])
-            inst = [k for k in self._products[obs_id] if k in ["pn", "mos1", "mos2"]][0]
-            en = [k for k in self._products[obs_id][inst] if "-" in k][0]
-            # Making an assumption here, that if there are regions there will be images
-            # Getting the radec_wcs property from the Image object
-            w = self._products[obs_id][inst][en]["image"].radec_wcs
             if isinstance(ds9_regs[0], PixelRegion):
+                # If regions exist in pixel coordinates, we need an image WCS to convert them to RA-DEC, so we need
+                #  one of the images supplied in the config file, not anything that XGA generates.
+                #  But as this method is only run once, before XGA generated products are loaded in, it
+                #  should be fine
+                inst = [k for k in self._products[obs_id] if k in ["pn", "mos1", "mos2"]][0]
+                en = [k for k in self._products[obs_id][inst] if "-" in k][0]
+                # Making an assumption here, that if there are regions there will be images
+                # Getting the radec_wcs property from the Image object
+                im = [i for i in self.get_products("image", obs_id, inst, just_obj=False) if en in i]
+
+                if len(im) != 1:
+                    raise NoProductAvailableError("There is no image available to translate pixel regions "
+                                                  "to RA-DEC.")
+                w = im[0][-1].radec_wcs
                 sky_regs = [reg.to_sky(w) for reg in ds9_regs]
                 reg_dict[obs_id] = np.array(sky_regs)
             else:
@@ -540,6 +547,9 @@ class BaseSource:
             # Quickly calculating distance between source and center of regions, then sorting
             # and getting indices. Thus I only match to the closest 5 regions.
             diff_sort = np.array([dist_from_source(r) for r in reg_dict[obs_id]]).argsort()
+            # Unfortunately due to a limitation of the regions module I think you need images
+            #  to do this contains match...
+            # TODO Come up with an alternative to this that can work without a WCS
             within = np.array([reg.contains(SkyCoord(*self._ra_dec, unit='deg'), w)
                                for reg in reg_dict[obs_id][diff_sort[0:5]]])
 
@@ -690,7 +700,7 @@ class BaseSource:
         #   reg_type = "ext_less_ten_counts"
 
         # TODO Comment this method better
-        # TODO Maybe remove the combined regions thing, I don't know if its actually useful for anything
+        # TODO DEFINITELY REMOVE COMBINED REGIONS ITS TOO LIKELY TO BRING THINGS CRASHING DOWN ROUND OUR EARS
         # Here we store the actual matched sources
         results_dict = {}
         # And in this one go all the sources that aren't the matched source, we'll need to subtract them.
@@ -1173,27 +1183,29 @@ class BaseSource:
         return len(self._products)
 
 
-# TODO I don't know how all this mask stuff will do with merged products - may have to rejig later
 # TODO Don't forget to write another info() method for extended source
 class ExtendedSource(BaseSource):
+    # TODO Calculate peak for each mask and corresponding ratemap, store them
+    # TODO Add optional SINGLE custom region in case no detection
+    # TODO Don't know how to deal with merged ratemaps in this scenario
     def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=False, load_fits=False):
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
 
         # This uses the added context of the type of source to find (or not find) matches in region files
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("ext")
 
-        # TODO Warning about alt_match regions?
+        # Run through any alternative matches and raise warnings if there are alternative matches
+        for o in self._alt_match_regions:
+            if len(self._alt_match_regions[o]) > 0:
+                warnings.warn("There are {0} alternative matches for observation "
+                              "{1}".format(len(self._alt_match_regions[o]), o))
 
         # Here we figure out what other sources are within the chosen extended source region
         self._within_source_regions = {}
         self._back_regions = {}
         self._within_back_regions = {}
-        # TODO Can't decide if I need a mask for every instrument, should the coordinates be guaranteed to be
-        #  the same by this point?
         self._reg_masks = {obs: {inst: {} for inst in self._products[obs]} for obs in self.obs_ids}
         self._back_masks = {obs: {inst: {} for inst in self._products[obs]} for obs in self.obs_ids}
-        # TODO Actually when I implement checking the xga_output directory there could be merged products
-        #  at initialisation
         # Iterating through obs_ids rather than _region keys because the _region dictionary will contain
         #  a combined region that cannot be used yet - the user cannot have generated any merged images yet.
         for obs_id in self.obs_ids:
@@ -1212,12 +1224,9 @@ class ExtendedSource(BaseSource):
                 # Here we multiply the inner width/height by 1.05 (to just slightly clear the source region),
                 #  and the outer width/height by 1.5 (standard for XCS) - though probably that number should
                 #  be dynamic
-                # TODO Don't know if the 1.5 multiplier should just be hard-coded, might come back to this later.
-
                 # Ideally this would be an annulus region, but they are bugged in regions v0.4, so we must bodge
                 # b_reg = EllipseAnnulusPixelRegion(center=m.center, inner_width=m.width, outer_width=3*m.width,
                 #                                   inner_height=m.height, outer_height=3*m.height, angle=m.angle)
-
                 in_reg = EllipsePixelRegion(m.center, m.width*1.05, m.height*1.05, m.angle)
                 b_reg = EllipsePixelRegion(m.center, m.width*1.5, m.height*1.5,
                                            m.angle).symmetric_difference(in_reg)
