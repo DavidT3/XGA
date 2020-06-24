@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 11:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 16:41. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -639,6 +639,50 @@ class ExpMap(Image):
         return Quantity(exp, "s")
 
 
+# class FFTConv(object):
+#     def __init__(self, grid, pixsize):
+#         """
+#         grid:2d numpy array
+#         pixsize:float
+#         """
+#         self.grid = grid
+#         self.pixsize = pixsize
+#     def _getFilter(self, radius):
+#         return self.U_Schneider(radius)
+#     def _rgrid(self, R):
+#         # Setup basic Q
+#         npix = int(((R)/self.pixsize))
+#         _ = np.arange(-npix, npix+1)
+#         ds = self.cartesian([_,_])
+#         rgrid = np.hypot(ds[:, 0], ds[:, 1]).reshape((len(_), len(_)))*self.pixsize
+#     def U_Schneider(self, R):
+#         npix = int((R)/self.pixsize)
+#         _ = np.arange(-npix, npix+1)
+#         ds = self.cartesian([_,_])
+#         rgrid = np.hypot(ds[:, 0], ds[:, 1]).reshape((len(_), len(_)))*self.pixsize
+#         func = 9./(np.pi*R**2) * (1.-(rgrid/R)**2)*(1./3.-(rgrid/R)**2)
+#         res = (rgrid<R) * func
+#         return res/np.sum(rgrid<R)
+#     @staticmethod
+#     def cartesian(arrays):
+#         arrays = [np.asarray(a) for a in arrays]
+#         shape = (len(x) for x in arrays)
+#         ix = np.indices(shape, dtype=int)
+#         ix = ix.reshape(len(arrays), -1).T
+#         for n, arr in enumerate(arrays):
+#             ix[:, n] = arrays[n][ix[:, n]]
+#         return ix
+#     def fftconvolve(self, radius):
+#         """
+#         Computes aperture mass map.
+#         Cuts the field to be the same size as the original one
+#         """
+#         filt = self._getFilter(radius)
+#         ncut = int(filt.shape[0]/2)
+#         res =signal.fftconvolve(self.grid, filt)[ncut:-ncut,ncut:-ncut]
+#         return res
+
+
 class RateMap(Image):
     def __init__(self, xga_image: Image, xga_expmap: ExpMap):
         if type(xga_image) != Image or type(xga_expmap) != ExpMap:
@@ -906,14 +950,14 @@ class Spectrum(BaseProduct):
             self._arf_rmf = None
             self._usable = False
 
-        allowed_regs = ["region", "r2500", "r500", "r200"]
+        allowed_regs = ["region", "r2500", "r500", "r200", "custom"]
         if reg_type in allowed_regs:
             self._reg_type = reg_type
         else:
             self._usable = False
             self._reg_type = None
-            raise ValueError("{0} is not a support region type, "
-                             "please use one of these; {1}".format(reg_type, ", ".join(allowed_regs)))
+            raise ValueError("{0} is not a supported region type, please use one of these; "
+                             "{1}".format(reg_type, ", ".join(allowed_regs)))
 
         self._update_spec_headers("main")
         self._update_spec_headers("back")
