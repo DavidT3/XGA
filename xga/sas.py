@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 16:41. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -11,6 +11,7 @@ from typing import List, Tuple
 from astropy.units import Quantity
 from numpy import array, full
 from tqdm import tqdm
+
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES
 from xga.products import BaseProduct, Image, ExpMap, Spectrum
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -516,7 +517,7 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
     :param int num_cores: The number of cores to use (if running locally), default is set to
     90% of available.
     """
-    allowed_bounds = ["region", "r2500", "r500", "r200"]
+    allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]

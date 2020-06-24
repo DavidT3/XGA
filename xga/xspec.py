@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/06/2020, 13:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 16:41. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -11,6 +11,7 @@ import astropy.units as u
 from astropy.units import Quantity
 from fitsio import FITS
 from tqdm import tqdm
+
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
 from xga.exceptions import NoProductAvailableError, XSPECFitError, ModelNotAssociatedError
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
@@ -208,7 +209,7 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
     :param str fit_method: The XSPEC fit method to use.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     """
-    allowed_bounds = ["region", "r2500", "r500", "r200"]
+    allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]

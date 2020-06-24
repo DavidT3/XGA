@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 11:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 16:41. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -472,6 +472,7 @@ class BaseSource:
         # TODO Add different read in loops for annular spectra and maybe regioned images once I
         #  add them into XGA.
 
+    # TODO Add an option to search with extra key as well
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
         """
@@ -697,7 +698,6 @@ class BaseSource:
         """
         return self._obs
 
-    # TODO Could probably create a master list of regions using intersection, union etc.
     def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
         """
         A method that looks for matches not just based on position, but also on the type of source
@@ -790,11 +790,11 @@ class BaseSource:
         :return: The method returns both the source region and the associated background region.
         :rtype: Tuple[SkyRegion, SkyRegion]
         """
-        allowed_rtype = ["r2500", "r500", "r200", "region"]
+        allowed_rtype = ["r2500", "r500", "r200", "region", "custom"]
         if type(self) == BaseSource:
             raise TypeError("BaseSource class does not have the necessary information "
                             "to select a source region.")
-        elif obs_id not in self.obs_ids:
+        elif obs_id is not None and obs_id not in self.obs_ids:
             raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
         elif reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
@@ -803,17 +803,20 @@ class BaseSource:
         elif reg_type == "region" and obs_id is not None:
             chosen = self._regions[obs_id]
             chosen_back = self._back_regions[obs_id]
-        elif reg_type != "region" and not type(self) == GalaxyCluster:
+        elif reg_type in ["r2500", "r500", "r200"] and not type(self) == GalaxyCluster:
             raise TypeError("Only GalaxyCluster source objects support over-density radii.")
-        elif reg_type != "region" and type(self) == GalaxyCluster:
+        elif reg_type != "region" and reg_type in self._regions:
             chosen = self._regions[reg_type]
             chosen_back = self._back_regions[reg_type]
+        elif reg_type != "region" and reg_type not in self._regions:
+            raise ValueError("{} is a valid region type, but is not associated with this "
+                             "source.".format(reg_type))
         else:
             raise ValueError("OH NO")
 
         return chosen, chosen_back
 
-    def get_nuisance_regions(self, obs_id: str) -> Tuple[list, list]:
+    def get_nuisance_regions(self, obs_id: str = None) -> Tuple[list, list]:
         """
         This fetches two lists of region objects that describe all the regions that AREN'T the source, and
         regions that also matched to the source coordinates but were not accepted as the source respectively.
@@ -830,25 +833,48 @@ class BaseSource:
 
         return self._other_regions[obs_id], self._alt_match_regions[obs_id]
 
-    def get_mask(self, obs_id: str, inst: str) -> Tuple[np.ndarray, np.ndarray]:
+    def get_mask(self, reg_type: str, obs_id: str = None, inst: str = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         A method to retrieve the mask generated for a particular observation-image combination. The mask
         can be used on an image in pixel coordinates.
+        :param str reg_type: The type of region which we wish to get from the source.
         :param obs_id: The ObsID for which you wish to retrieve image masks.
         :param inst: The XMM instrument for which you wish to retrieve image masks.
         :return: Two boolean numpy arrays that can be used as image masks, the first is for the source,
         the second is for the source's background region.
         :rtype: Tuple[np.ndarray, np.ndarray]
         """
+        allowed_rtype = ["r2500", "r500", "r200", "region", "custom"]
         if type(self) == BaseSource:
             raise TypeError("BaseSource class does not have the necessary information "
                             "to select a source region, so it cannot generate masks.")
-        elif obs_id not in self.obs_ids:
+        elif obs_id is not None and obs_id not in self.obs_ids:
             raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
-        return self._reg_masks[obs_id][inst], self._back_masks[obs_id][inst]
+        elif obs_id is not None and inst is not None and inst not in self._reg_masks[obs_id]:
+            raise NotAssociatedError("The instrument {i} is not associated with observation {o} of this "
+                                     "source.".format(i=inst, o=obs_id))
+        elif reg_type not in allowed_rtype:
+            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
+        elif reg_type == "region" and obs_id is None:
+            raise ValueError("ObsID cannot be None when getting region file regions.")
+        elif reg_type == "region" and obs_id is not None:
+            chosen = self._reg_masks[obs_id][inst]
+            chosen_back = self._back_masks[obs_id][inst]
+        elif reg_type in ["r2500", "r500", "r200"] and not type(self) == GalaxyCluster:
+            raise TypeError("Only GalaxyCluster source objects support over-density radii.")
+        elif reg_type != "region" and reg_type in self._reg_masks:
+            chosen = self._reg_masks[reg_type]
+            chosen_back = self._back_masks[reg_type]
+        elif reg_type != "region" and reg_type not in self._reg_masks:
+            raise ValueError("{} is a valid region type, but is not associated with this "
+                             "source.".format(reg_type))
+        else:
+            raise ValueError("OH NO")
 
-    def get_sas_region(self, reg_type: str, obs_id: str, inst: str,
-                       output_unit: UnitBase = xmm_sky) -> Tuple[str, str]:
+        return chosen, chosen_back
+
+    def get_sas_region(self, reg_type: str, obs_id: str, inst: str, output_unit: UnitBase = xmm_sky) \
+            -> Tuple[str, str]:
         """
         Converts region objects into strings that can be used as part of a SAS command; for instance producing
         a spectrum within one region. This method returns both the source region and associated background
@@ -933,15 +959,7 @@ class BaseSource:
                                 "I don't even know how you got here".format(type(reg)))
 
             return shape_str
-
-        allowed_rtype = ["r2500", "r500", "r200", "region"]
-        if type(self) == BaseSource:
-            raise TypeError("BaseSource class does not have the necessary information "
-                            "to select a source region.")
-        elif obs_id not in self.obs_ids:
-            raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
-        elif reg_type not in allowed_rtype:
-            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
+        allowed_rtype = ["r2500", "r500", "r200", "region", "custom"]
 
         if output_unit == xmm_det:
             c_str = "DETX,DETY"
@@ -951,11 +969,36 @@ class BaseSource:
             raise NotImplementedError("Only detector and sky coordinates are currently "
                                       "supported for generating SAS region strings.")
 
-        rel_im = list(self.get_products("image", obs_id, inst, just_obj=False))[0][-1]
-        source = sas_shape(self._regions[obs_id], rel_im)
-        src_interloper = [sas_shape(i, rel_im) for i in self._within_source_regions[obs_id]]
-        back = sas_shape(self._back_regions[obs_id], rel_im)
-        back_interloper = [sas_shape(i, rel_im) for i in self._within_back_regions[obs_id]]
+        if type(self) == BaseSource:
+            raise TypeError("BaseSource class does not have the necessary information "
+                            "to select a source region.")
+        elif obs_id not in self.obs_ids:
+            raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
+        elif reg_type not in allowed_rtype:
+            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
+        elif reg_type == "region":
+            source = self._regions[obs_id]
+            source_interlopers = self._within_source_regions[obs_id]
+            back = self._back_regions[obs_id]
+            background_interlopers = self._within_back_regions[obs_id]
+        elif reg_type in ["r2500", "r500", "r200"] and not type(self) == GalaxyCluster:
+            raise TypeError("Only GalaxyCluster source objects support over-density radii.")
+        elif reg_type != "region" and reg_type in self._regions:
+            source = self._regions[reg_type]
+            source_interlopers = self._within_source_regions[reg_type]
+            back = self._back_regions[reg_type]
+            background_interlopers = self._within_back_regions[reg_type]
+        elif reg_type != "region" and reg_type not in self._regions:
+            raise ValueError("{} is a valid region type, but is not associated with this "
+                             "source.".format(reg_type))
+        else:
+            raise ValueError("OH NO")
+
+        rel_im = self.get_products("image", obs_id, inst, just_obj=True)[0]
+        source = sas_shape(source, rel_im)
+        src_interloper = [sas_shape(i, rel_im) for i in source_interlopers]
+        back = sas_shape(back, rel_im)
+        back_interloper = [sas_shape(i, rel_im) for i in background_interlopers]
 
         if len(src_interloper) == 0:
             final_src = source
@@ -1211,12 +1254,8 @@ class BaseSource:
         return len(self._products)
 
 
-# TODO This feels unpleasantly messy
 # TODO Don't forget to write another info() method for extended source
 class ExtendedSource(BaseSource):
-    # TODO Calculate peak for each mask and corresponding ratemap, store them
-    # TODO Don't know how to deal with merged ratemaps in this scenario
-    # TODO I guess I'll have to make sure the required products already exist
     def __init__(self, ra, dec, redshift=None, name=None, region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
                  back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
@@ -1247,9 +1286,7 @@ class ExtendedSource(BaseSource):
         # Iterating through obs_ids rather than _region keys because the _region dictionary will contain
         #  a combined region that cannot be used yet - the user cannot have generated any merged images yet.
         for obs_id in self.obs_ids:
-            # TODO THIS MEANS THAT SOME INTERLOPERS WON'T BE REMOVED FROM THE BACKGROUND REGION - SEE ISSUE
             other_regs = self._other_regions[obs_id]
-            # TODO Check that this is right, its only using one instrument
             im = list(self.get_products("image", obs_id, just_obj=True))[0]
 
             match_reg = self._regions[obs_id]
@@ -1284,14 +1321,22 @@ class ExtendedSource(BaseSource):
                 src_reg, bck_reg = self.get_source_region("region", obs_id)
                 self._reg_masks[obs_id][inst], self._back_masks[obs_id][inst] \
                     = self._generate_mask(cur_im, src_reg, bck_reg)
+
+        # Checks if the object has been detected in all observations
         if all([val is None for val in self._regions.values()]):
             self._detected = False
         else:
             self._detected = True
 
-        # TODO Actually do something with the custom regions
         if self._custom_region_radius is not None:
-            cust_reg, cust_back_reg, cust_reg_mask, cust_back_reg_mask = self._setup_custom_region()
+            cust_reg, cust_back_reg, src_inter, bck_inter, cust_reg_mask, cust_back_reg_mask, edgy \
+                = self._setup_custom_region()
+            self._regions["custom"] = cust_reg
+            self._back_regions["custom"] = cust_back_reg
+            self._reg_masks["custom"] = cust_reg_mask
+            self._back_masks["custom"] = cust_back_reg_mask
+            self._within_source_regions["custom"] = src_inter
+            self._within_back_regions["custom"] = src_inter
         else:
             cust_reg = None
             cust_back_reg = None
@@ -1353,14 +1398,15 @@ class ExtendedSource(BaseSource):
 
         return mask
 
-    def _setup_custom_region(self) -> Tuple[SkyRegion, SkyRegion, np.ndarray, np.ndarray]:
+    def _setup_custom_region(self) -> Tuple[SkyRegion, SkyRegion, np.ndarray, np.ndarray,
+                                            np.ndarray, np.ndarray, bool]:
         """
         This method is used to construct a custom region for the ExtendedSource class, using the custom
         radius passed in by the user. If the user also decided to use the X-ray peak as the centre of the
         custom region, it will do iterative peak finding and re-centre the region. It returns region objects
         and masks for the source and background.
         :return: Region objects and masks for the custom region and its background region.
-        :rtype: Tuple[SkyRegion, SkyRegion, np.ndarray, np.ndarray]
+        :rtype: Tuple[SkyRegion, SkyRegion, np.ndarray, np.ndarray, np.ndarray, np.ndarray, bool]
         """
         # Start off with the central coordinates of the custom region as the user's passed RA and DEC
         central_coords = SkyCoord(*self.ra_dec.to("deg"))
@@ -1381,21 +1427,18 @@ class ExtendedSource(BaseSource):
 
         # Find a suitable combined ratemap - I've decided this custom region (global region if you will)
         #  will be based around the use of complete products.
-        comb_ratemap = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False)
+        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False)
                         if "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value) in rt]
 
-        if len(comb_ratemap) != 0:
-            comb_ratemap = comb_ratemap[0]
+        if len(comb_rt) != 0:
+            comb_rt = comb_rt[0]
         else:
             # TODO Add in automatic generation
             raise NotImplementedError("This should automatically generate necessary merged products,"
                                       " but it doesn't yet...")
 
         # Determine if the initial coordinates are near an edge
-        near_edge = comb_ratemap.near_edge(self.ra_dec)
-        print(near_edge)
-        import sys
-        sys.exit()
+        near_edge = comb_rt.near_edge(self.ra_dec)
 
         # If use_peak was set to True, the code will iterate until it converges on a peak within a 500kpc region
         if self._use_peak:
@@ -1412,9 +1455,9 @@ class ExtendedSource(BaseSource):
                 # Define a 500kpc radius region centered on the current central_coords
                 cust_reg = CircleSkyRegion(central_coords, search_aperture)
                 # Generate the source mask for the peak finding method
-                aperture_mask = self._generate_mask(comb_ratemap, cust_reg)
+                aperture_mask = self._generate_mask(comb_rt, cust_reg)
                 # Find the peak using the experimental clustering_peak method
-                peak, near_edge = comb_ratemap.clustering_peak(aperture_mask, deg)
+                peak, near_edge = comb_rt.clustering_peak(aperture_mask, deg)
                 # Calculate the distance between new peak and old central coordinates
                 separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
                                       abs(peak[1].value - central_coords.dec.value) ** 2), deg)
@@ -1434,16 +1477,36 @@ class ExtendedSource(BaseSource):
         # Define a background region
         # Annoyingly I can't remember why I had to do the regions as pixel first, but I promise there was
         #  a good reason at the time.
-        pix_src_reg = cust_reg.to_pixel(comb_ratemap.radec_wcs)
+        pix_src_reg = cust_reg.to_pixel(comb_rt.radec_wcs)
         in_reg = CirclePixelRegion(pix_src_reg.center, pix_src_reg.radius * self._back_inn_factor)
         pix_bck_reg = CirclePixelRegion(pix_src_reg.center, pix_src_reg.radius
                                         * self._back_out_factor).symmetric_difference(in_reg)
-        cust_back_reg = pix_bck_reg.to_sky(comb_ratemap.radec_wcs)
+        cust_back_reg = pix_bck_reg.to_sky(comb_rt.radec_wcs)
 
         # Make the final masks for source and background regions.
-        src_mask, bck_mask = self._generate_mask(comb_ratemap, cust_reg, cust_back_reg)
+        src_mask, bck_mask = self._generate_mask(comb_rt, cust_reg, cust_back_reg)
 
-        return cust_reg, cust_back_reg, src_mask, bck_mask
+        # Setting up useful lists for adding regions to
+        reg_crossover = []
+        bck_crossover = []
+        # I check through all available region lists to find regions that are within the custom region
+        for obs_id in self._other_regions:
+            other_regs = self._other_regions[obs_id]
+            # Which regions are within the custom source region
+            cross = np.array([cust_reg.intersection(r).to_pixel(comb_rt.radec_wcs).to_mask().data.sum()
+                              != 0 for r in other_regs])
+            reg_crossover += list(np.array(other_regs)[cross])
+
+            # Which regions are within the custom background region
+            bck_cross = np.array([cust_back_reg.intersection(r).to_pixel(comb_rt.radec_wcs).to_mask().data.sum()
+                                  != 0 for r in other_regs])
+            bck_crossover += list(np.array(other_regs)[bck_cross])
+
+        # Just quickly convert the lists to numpy arrays
+        reg_crossover = np.array(reg_crossover)
+        bck_crossover = np.array(bck_crossover)
+
+        return cust_reg, cust_back_reg, reg_crossover, bck_crossover, src_mask, bck_mask, near_edge
 
 
 class GalaxyCluster(ExtendedSource):
