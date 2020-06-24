@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 10:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 11:46. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1391,6 +1391,12 @@ class ExtendedSource(BaseSource):
             raise NotImplementedError("This should automatically generate necessary merged products,"
                                       " but it doesn't yet...")
 
+        # Determine if the initial coordinates are near an edge
+        near_edge = comb_ratemap.near_edge(self.ra_dec)
+        print(near_edge)
+        import sys
+        sys.exit()
+
         # If use_peak was set to True, the code will iterate until it converges on a peak within a 500kpc region
         if self._use_peak:
             # 500kpc in degrees, for the current redshift and cosmology
@@ -1407,7 +1413,9 @@ class ExtendedSource(BaseSource):
                 cust_reg = CircleSkyRegion(central_coords, search_aperture)
                 # Generate the source mask for the peak finding method
                 aperture_mask = self._generate_mask(comb_ratemap, cust_reg)
-                peak = comb_ratemap.clustering_peak(aperture_mask, deg)
+                # Find the peak using the experimental clustering_peak method
+                peak, near_edge = comb_ratemap.clustering_peak(aperture_mask, deg)
+                # Calculate the distance between new peak and old central coordinates
                 separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
                                       abs(peak[1].value - central_coords.dec.value) ** 2), deg)
                 separation = ang_to_rad(separation, self._redshift, self._cosmo)

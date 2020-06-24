@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 10:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 11:46. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -730,8 +730,7 @@ class RateMap(Image):
         rate = self._data[pix_coord[1], pix_coord[0]]
         return Quantity(rate, "s^-1")
 
-    # TODO Both peak finding methods should return a flag if the peak is very near an edge
-    def simple_peak(self, mask: np.ndarray, out_unit: UnitBase = deg):
+    def simple_peak(self, mask: np.ndarray, out_unit: UnitBase = deg) -> Tuple[Quantity, bool]:
         """
         Simplest possible way to find the position of the peak of X-ray emission in a ratemap. This method
         takes a mask in the form of a numpy array, which allows the user to mask out parts of the ratemap
@@ -741,7 +740,7 @@ class RateMap(Image):
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
         the user's mask), in units of out_unit, as specified by the user.
-        :rtype: Quantity
+        :rtype: Tuple[Quantity, bool]
         """
         if mask.shape != self._data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
@@ -764,9 +763,13 @@ class RateMap(Image):
         else:
             peak_conv = peak_pix
 
-        return peak_conv
+        # Find if the peak coordinates sit near an edge/chip gap
+        edge_flag = self.near_edge(peak_pix)
 
-    def clustering_peak(self, mask: np.ndarray, out_unit: UnitBase = deg, top_frac: float = 0.05):
+        return peak_conv, edge_flag
+
+    def clustering_peak(self, mask: np.ndarray, out_unit: UnitBase = deg, top_frac: float = 0.05) \
+            -> Tuple[Quantity, bool]:
         """
         An experimental peak finding function that cuts out the top 5% (by default) of array elements
         (by value), and runs a hierarchical clustering algorithm on their positions. The motivation
@@ -781,7 +784,7 @@ class RateMap(Image):
         to generate clusters, and thus be considered for the cluster centre.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
         the user's mask), in units of out_unit, as specified by the user.
-        :rtype: Quantity
+        :rtype: Tuple[Quantity, bool]
         """
         if mask.shape != self._data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
@@ -829,7 +832,33 @@ class RateMap(Image):
         else:
             peak_conv = peak_pix
 
-        return peak_conv
+        # Find if the peak coordinates sit near an edge/chip gap
+        edge_flag = self.near_edge(peak_pix)
+
+        return peak_conv, edge_flag
+
+    def near_edge(self, coord: Quantity) -> bool:
+        """
+        Uses the edge mask generated for RateMap objects to determine if the passed coordinates are near
+        an edge/chip gap. If the coordinates are within +- 2 pixels of an edge the result will be true.
+        :param Quantity coord: The coordinates to check.
+        :return: A boolean flag as to whether the coordinates are near an edge.
+        :rtype: bool
+        """
+        # Convert to pixel coordinates
+        pix_coord = self.coord_conv(coord, pix).value
+
+        # Checks the edge mask within a 5 by 5 array centered on the peak coord, if there are no edges then
+        #  all elements will be 1 and it will sum to 25.
+        edge_sum = self._edge_mask[pix_coord[1] - 2:pix_coord[1] + 3,
+                                   pix_coord[0] - 2:pix_coord[0] + 3].sum()
+        # If it sums to less then we know that there is an edge near the peak.
+        if edge_sum != 25:
+            edge_flag = True
+        else:
+            edge_flag = False
+
+        return edge_flag
 
 
 class EventList(BaseProduct):
