@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 00:28. Copyright (c) David J Turner
 
 import json
 import os
@@ -16,6 +16,7 @@ from astropy.wcs import WCS
 from fitsio.header import FITSHDR
 from numpy import nan, floor, ogrid, ndarray, arctan2, pi
 from tqdm import tqdm
+
 from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
 
 # Got to make sure we can access command line XSPEC.

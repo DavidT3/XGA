@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 17:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 00:28. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1513,80 +1513,6 @@ class GalaxyCluster(ExtendedSource):
             ra = self._regions[obs_id].center.ra.value
             dec = self._regions[obs_id].center.dec.value
             self._central_coords[obs_id]["region"] = np.array([ra, dec])
-
-        # Once I can actually write this, it will be uncommented and write to _central_coords
-        # self._calc_peaks()
-
-        # TODO MOAAAR COMMENTS
-        # TODO This should probably have PSF deconvolution applied first
-        # TODO I can't really write this properly until I've solved the seg fault question
-        # TODO Doc string this POS
-        def _calc_peaks(self, lo_en: Quantity, hi_en: Quantity, obs_id: str = None, inst: str = None):
-            def unpack_list(to_unpack: list):
-                """
-                A recursive function to go through every layer of a nested list and flatten it all out. It
-                doesn't return anything because to make life easier the 'results' are appended to a variable
-                in the namespace above this one.
-                :param list to_unpack: The list that needs unpacking.
-                """
-                # Must iterate through the given list
-                for entry in to_unpack:
-                    # If the current element is not a list then all is chill, this element is ready for appending
-                    # to the final list
-                    if not isinstance(entry, list):
-                        peak_dump.append(entry)
-                    else:
-                        # If the current element IS a list, then obviously we still have more unpacking to do,
-                        # so we call this function recursively.
-                        unpack_list(entry)
-
-            # Just checking the values of the energy limits
-            if lo_en > hi_en:
-                raise ValueError("lo_en cannot be greater than hi_en")
-            else:
-                en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-
-            matches = []
-            for match in dict_search(en_id, self._central_coords):
-                peak_dump = []
-                unpack_list(match)
-                if (obs_id == peak_dump[0] or obs_id is None) and (inst == peak_dump[1] or inst is None):
-                    matches.append(peak_dump)
-
-            # If we've already calculated the peaks, then we can just return them now and be done
-            if len(matches) != 0:
-                return matches
-
-            # Here we fetch the usable images with the energy bounds specified in the call
-            # These are dictionaries just because I'm not sure the get_products return will always be in
-            # the same order.
-            ims = {"".join(im[:-2]): im[-1] for im in self.get_products("image", obs_id, inst, just_obj=False)
-                   if en_id in im and im[-1].usable}
-            # This module shall find peaks in count-rate maps, not straight images, so we need the expmaps as well
-            exs = {"".join(em[:-2]): em[-1] for em in self.get_products("expmap", obs_id, inst, just_obj=False)
-                   if en_id in em and em[-1].usable}
-
-            if len(ims) == 0:
-                raise NoProductAvailableError("No usable images available in the {l}{lu}-{u}{uu} band"
-                                              "".format(l=lo_en.value, lu=lo_en.unit, u=hi_en.value, uu=hi_en.unit))
-            elif len(exs) == 0:
-                raise NoProductAvailableError("No usable exposure maps available in the {l}{lu}-{u}{uu} band"
-                                              "".format(l=lo_en.value, lu=lo_en.unit, u=hi_en.value, uu=hi_en.unit))
-            elif len(ims) > len(exs):
-                raise ValueError("Not all images have exposure map counterparts")
-            elif len(ims) < len(exs):
-                raise ValueError("Not all exposure maps have image counterparts")
-
-            # rate_maps = {ident: np.divide(ims[ident].im_data, exs[ident].im_data,
-            #                               out=np.zeros_like(ims[ident].im_data),
-            #                               where=exs[ident].im_data != 0) for ident in ims.keys()}
-
-        @property
-        def peak(self):
-            # This one will return the peak of the merged peak, the user will have to use get_peaks if they wish
-            #  for the peaks of the individual data products
-            raise NotImplementedError("I'm working on it")
-            return
 
 
 class PointSource(BaseSource):

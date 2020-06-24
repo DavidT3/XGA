@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 16:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 00:28. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -13,9 +13,11 @@ from fitsio import read, read_header, FITSHDR, FITS, hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
 from scipy.cluster.hierarchy import fclusterdata
+from scipy.signal import fftconvolve
 
 from xga.exceptions import SASGenerationError, UnknownCommandlineError, FailedProductError, \
     ModelNotAssociatedError, ParameterNotAssociatedError, RateMapPairError
+from xga.sourcetools import ang_to_rad
 from xga.utils import SASERROR_LIST, SASWARNING_LIST, xmm_sky, find_all_wcs
 
 
@@ -639,50 +641,6 @@ class ExpMap(Image):
         return Quantity(exp, "s")
 
 
-# class FFTConv(object):
-#     def __init__(self, grid, pixsize):
-#         """
-#         grid:2d numpy array
-#         pixsize:float
-#         """
-#         self.grid = grid
-#         self.pixsize = pixsize
-#     def _getFilter(self, radius):
-#         return self.U_Schneider(radius)
-#     def _rgrid(self, R):
-#         # Setup basic Q
-#         npix = int(((R)/self.pixsize))
-#         _ = np.arange(-npix, npix+1)
-#         ds = self.cartesian([_,_])
-#         rgrid = np.hypot(ds[:, 0], ds[:, 1]).reshape((len(_), len(_)))*self.pixsize
-#     def U_Schneider(self, R):
-#         npix = int((R)/self.pixsize)
-#         _ = np.arange(-npix, npix+1)
-#         ds = self.cartesian([_,_])
-#         rgrid = np.hypot(ds[:, 0], ds[:, 1]).reshape((len(_), len(_)))*self.pixsize
-#         func = 9./(np.pi*R**2) * (1.-(rgrid/R)**2)*(1./3.-(rgrid/R)**2)
-#         res = (rgrid<R) * func
-#         return res/np.sum(rgrid<R)
-#     @staticmethod
-#     def cartesian(arrays):
-#         arrays = [np.asarray(a) for a in arrays]
-#         shape = (len(x) for x in arrays)
-#         ix = np.indices(shape, dtype=int)
-#         ix = ix.reshape(len(arrays), -1).T
-#         for n, arr in enumerate(arrays):
-#             ix[:, n] = arrays[n][ix[:, n]]
-#         return ix
-#     def fftconvolve(self, radius):
-#         """
-#         Computes aperture mass map.
-#         Cuts the field to be the same size as the original one
-#         """
-#         filt = self._getFilter(radius)
-#         ncut = int(filt.shape[0]/2)
-#         res =signal.fftconvolve(self.grid, filt)[ncut:-ncut,ncut:-ncut]
-#         return res
-
-
 class RateMap(Image):
     def __init__(self, xga_image: Image, xga_expmap: ExpMap):
         if type(xga_image) != Image or type(xga_expmap) != ExpMap:
@@ -871,6 +829,65 @@ class RateMap(Image):
         peak_pix = Quantity([max_coords[1], max_coords[0]], pix)
         # Don't bother converting if the desired output coordinates are already pix, but otherwise use this
         #  objects coord_conv function to move to desired coordinate units.
+        if out_unit != pix:
+            peak_conv = self.coord_conv(peak_pix, out_unit)
+        else:
+            peak_conv = peak_pix
+
+        # Find if the peak coordinates sit near an edge/chip gap
+        edge_flag = self.near_edge(peak_pix)
+
+        return peak_conv, edge_flag
+
+    # TODO Comment and docstring properly
+    def convolved_peak(self, mask, redshift, cosmology, out_unit: UnitBase = deg):
+        def cartesian(arrays):
+            arrays = [np.asarray(a) for a in arrays]
+            shape = (len(x) for x in arrays)
+            ix = np.indices(shape, dtype=int)
+            ix = ix.reshape(len(arrays), -1).T
+            for n, arr in enumerate(arrays):
+                ix[:, n] = arrays[n][ix[:, n]]
+            return ix
+
+        def projected_king(r, pix_size, beta):
+            n_pix = int(r / pix_size)
+            _ = np.arange(-n_pix, n_pix + 1)
+            ds = cartesian([_, _])
+            r_grid = np.hypot(ds[:, 0], ds[:, 1]).reshape((len(_), len(_))) * pix_size
+
+            func = (1 + (r_grid / r)**2)**((-3*beta) + 0.5)
+            res = (r_grid < r) * func
+            return res / np.sum(r_grid < r)
+
+        raise NotImplementedError("The convolved peak method sort of works, but needs to be much more general"
+                                  " before its available for proper use.")
+
+        if mask.shape != self._data.shape:
+            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
+                             "({1}).".format(mask.shape, self._data.shape))
+
+        start_pos = self.coord_conv(Quantity([int(self.shape[1]/2), int(self.shape[0]/2)], pix), deg)
+        end_pos = self.coord_conv(Quantity([int(self.shape[1]/2) + 10, int(self.shape[0]/2)], pix), deg)
+
+        separation = Quantity(np.sqrt(abs(start_pos[0].value - end_pos[0].value) ** 2 +
+                                      abs(start_pos[1].value - end_pos[1].value) ** 2), deg)
+
+        resolution = ang_to_rad(separation, redshift, cosmology) / 10
+
+        # TODO Need to make this more general, with different profiles, also need to figure out what
+        #  Lucas's code does and comment it
+        # TODO Should probably go through different projected king profile parameters
+        # TODO Could totally make this into a basic cluster finder combined with clustering algorithm
+        filt = projected_king(1000, resolution.value, 3)
+        n_cut = int(filt.shape[0] / 2)
+        conv_data = fftconvolve(self._data*self._edge_mask, filt)[n_cut:-n_cut, n_cut:-n_cut]
+        mask_conv_data = conv_data * mask
+
+        max_coords = np.unravel_index(np.argmax(mask_conv_data == mask_conv_data.max()), mask_conv_data.shape)
+        # Defines an astropy pix quantity of the peak coordinates
+        peak_pix = Quantity([max_coords[1], max_coords[0]], pix)
+
         if out_unit != pix:
             peak_conv = self.coord_conv(peak_pix, out_unit)
         else:
