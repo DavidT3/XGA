@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 16:48. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 17:17. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -469,9 +469,6 @@ class BaseSource:
                 # Push global fit results, luminosities etc. into the corresponding source object.
                 self.add_fit_data(model, reg_type, global_results, chosen_lums)
 
-        # TODO Add different read in loops for annular spectra and maybe regioned images once I
-        #  add them into XGA.
-
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
         """
@@ -712,23 +709,15 @@ class BaseSource:
         and a final dictionary with sources that aren't the target, or in the 2nd dictionary.
         :rtype: Tuple[Dict, Dict, Dict]
         """
+        # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
+        #  University of Edinburgh - 2005.
         if source_type == "ext":
-            allowed_colours = ["green"]
+            allowed_colours = ["green", "magenta", "blue", "cyan", "yellow"]
         elif source_type == "pnt":
             allowed_colours = ["red"]
         else:
             raise ValueError("{} is not a recognised source type, please "
                              "don't use this internal function!".format(source_type))
-
-        # TODO Decide about all of the other options that XAPA can spit out - this chunk is from XULL
-        # elif reg_colour == "magenta":
-        #   reg_type = "ext_psf"
-        # elif reg_colour == "blue":
-        #   reg_type = "ext_pnt_cont"
-        # elif reg_colour == "cyan":
-        #   reg_type = "ext_run1_cont"
-        # elif reg_colour == "yellow":
-        #   reg_type = "ext_less_ten_counts"
 
         # Here we store the actual matched sources
         results_dict = {}
@@ -1364,7 +1353,6 @@ class ExtendedSource(BaseSource):
             interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                for reg in self._within_source_regions[obs_id]])
         else:
-            # TODO This is pretty inefficient, rethink it?
             all_within = []
             for o in self._within_source_regions:
                 all_within += list(self._within_source_regions[o])
@@ -1429,15 +1417,17 @@ class ExtendedSource(BaseSource):
 
         # Find a suitable combined ratemap - I've decided this custom region (global region if you will)
         #  will be based around the use of complete products.
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False)
-                        if "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value) in rt]
-
+        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
+        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt]
+        
         if len(comb_rt) != 0:
             comb_rt = comb_rt[0]
         else:
-            # TODO Add in automatic generation
-            raise NotImplementedError("This should automatically generate necessary merged products,"
-                                      " but it doesn't yet...")
+            # I didn't want to import this here, but otherwise circular imports become a problem
+            from xga.sas import emosaic
+            emosaic(self, "image", self._peak_lo_en, self._peak_hi_en)
+            emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en)
+            comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
 
         # Determine if the initial coordinates are near an edge
         near_edge = comb_rt.near_edge(self.ra_dec)
