@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 16:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 16:48. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -472,8 +472,7 @@ class BaseSource:
         # TODO Add different read in loops for annular spectra and maybe regioned images once I
         #  add them into XGA.
 
-    # TODO Add an option to search with extra key as well
-    def get_products(self, p_type: str, obs_id: str = None, inst: str = None,
+    def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
         """
         This is the getter for the products data structure of Source objects. Passing a 'product type'
@@ -481,6 +480,7 @@ class BaseSource:
         :param str p_type: Product type identifier. e.g. image or expmap.
         :param str obs_id: Optionally, a specific obs_id to search can be supplied.
         :param str inst: Optionally, a specific instrument to search can be supplied.
+        :param str extra_key: Optionally, an extra key (like an energy bound) can be supplied.
         :param bool just_obj: A boolean flag that controls whether this method returns just the product objects,
         or the other information that goes with it like ObsID and instrument.
         :return: List of matching products.
@@ -523,9 +523,11 @@ class BaseSource:
             unpack_list(match)
             # Only appends if this particular match is for the obs_id and instrument passed to this method
             # Though all matches will be returned if no obs_id/inst is passed
-            if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) and not just_obj:
+            if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
+                    and (extra_key == out[2] or extra_key is None) and not just_obj:
                 matches.append(out)
-            elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) and just_obj:
+            elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
+                    and (extra_key == out[2] or extra_key is None) and just_obj:
                 matches.append(out[-1])
         return matches
 
