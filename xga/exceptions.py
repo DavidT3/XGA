@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/06/2020, 13:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 10:52. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -332,3 +332,27 @@ class RateMapPairError(Exception):
             return '{}'.format(self.message)
         else:
             return 'RateMapPairError has been raised'
+
+
+class PeakConvergenceFailedError(Exception):
+    def __init__(self, *args):
+        """
+        This error is raised when iterating peak finding fails to converge within the allowed number
+        of iterations.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'PeakConvergenceFailedError has been raised'
+
+
+
+

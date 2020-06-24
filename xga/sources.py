@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/06/2020, 08:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 10:52. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -10,16 +10,17 @@ from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
-from astropy.units import Quantity, UnitBase
+from astropy.units import Quantity, UnitBase, deg
 from fitsio import FITS
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
     EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
+
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, \
-    ParameterNotAssociatedError
+    ParameterNotAssociatedError, PeakConvergenceFailedError
 from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap, RateMap
-from xga.sourcetools import simple_xmm_match, nhlookup
+from xga.sourcetools import simple_xmm_match, nhlookup, rad_to_ang, ang_to_rad
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -295,7 +296,6 @@ class BaseSource:
                 new_rt.obj_name = self.name
                 self._products[obs_id][extra_key]["combined_ratemap"] = new_rt
 
-    # TODO Load in combined images and exposure maps that already exist
     def _existing_xga_products(self, read_fits: bool):
         """
         A method specifically for searching an existing XGA output directory for relevant files and loading
@@ -303,21 +303,30 @@ class BaseSource:
         structure is updated. The method also finds previous fit results and loads them in.
         :param bool read_fits: Boolean flag that controls whether past fits are read back in or not.
         """
-        def parse_image_like(file_path: str, exact_type: str) -> BaseProduct:
+        def parse_image_like(file_path: str, exact_type: str, merged: bool = False) -> BaseProduct:
             """
             Very simple little function that takes the path to an XGA generated image-like product (so either an
             image or an exposure map), parses the file path and makes an XGA object of the correct type by using
             the exact_type variable.
-            :param file_path: Absolute path to an XGA-generated XMM data product.
-            :param exact_type: Either 'image' or 'expmap', the type of product that the file_path leads to.
+            :param str file_path: Absolute path to an XGA-generated XMM data product.
+            :param str exact_type: Either 'image' or 'expmap', the type of product that the file_path leads to.
+            :param bool merged: Whether this is a merged file or not.
             :return: An XGA product object.
             :rtype: BaseProduct
             """
             # Get rid of the absolute part of the path, then split by _ to get the information from the file name
             im_info = file_path.split("/")[-1].split("_")
-            # I know its hard coded but this will always be the case, these are files I generate with XGA.
-            ins = im_info[1]
-            lo_en, hi_en = im_info[-1].split("keV")[0].split("-")
+            if not merged:
+                # I know its hard coded but this will always be the case, these are files I generate with XGA.
+                ins = im_info[1]
+                obs_id = im_info[0]
+                en_str = im_info[-1]
+            else:
+                ins = "combined"
+                obs_id = "combined"
+                en_str = im_info[-2]
+
+            lo_en, hi_en = en_str.split("keV")[0].split("-")
             # Have to be astropy quantities before passing them into the Product declaration
             lo_en = Quantity(float(lo_en), "keV")
             hi_en = Quantity(float(hi_en), "keV")
@@ -325,9 +334,9 @@ class BaseSource:
             # Different types of Product objects, the empty strings are because I don't have the stdout, stderr,
             #  or original commands for these objects.
             if exact_type == "image":
-                final_obj = Image(im, obs, ins, "", "", "", lo_en, hi_en)
+                final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
             elif exact_type == "expmap":
-                final_obj = ExpMap(im, obs, ins, "", "", "", lo_en, hi_en)
+                final_obj = ExpMap(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
             else:
                 raise TypeError("Only image and expmap are allowed.")
 
@@ -342,13 +351,13 @@ class BaseSource:
 
                 # Images read in, pretty simple process - the name of the current source doesn't matter because
                 #  standard images/exposure maps are for the WHOLE observation.
-                ims = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
+                ims = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and f[0] != "." and
                        "img" in f and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
                 for im in ims:
                     self.update_products(parse_image_like(im, "image"))
 
                 # Exposure maps read in, same process as images
-                exs = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
+                exs = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and f[0] != "." and
                        "expmap" in f and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
                 for ex in exs:
                     self.update_products(parse_image_like(ex, "expmap"))
@@ -395,6 +404,25 @@ class BaseSource:
                                        "", "", "")
                         self.update_products(obj)
         os.chdir(og_dir)
+
+        # Merged products have all the ObsIDs that they are made up of in their name
+        obs_str = "_".join(self._obs)
+        # They are also always written to the xga_output folder with the name of the first ObsID that goes
+        # into them
+        if os.path.exists(OUTPUT + self._obs[0]):
+            # Follows basically the same process as reading in normal images and exposure maps
+
+            os.chdir(OUTPUT + self._obs[0])
+            # Search for files that match the pattern of a merged image/exposure map
+            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_image" in f
+                          and f[0] != "."]
+            for im in merged_ims:
+                self.update_products(parse_image_like(im, "image", merged=True))
+
+            merged_exs = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_expmap" in f
+                          and f[0] != "."]
+            for ex in merged_exs:
+                self.update_products(parse_image_like(ex, "expmap", merged=True))
 
         # Now loading in previous fits
         if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
@@ -444,7 +472,8 @@ class BaseSource:
         # TODO Add different read in loops for annular spectra and maybe regioned images once I
         #  add them into XGA.
 
-    def get_products(self, p_type: str, obs_id: str = None, inst: str = None, just_obj: bool = True) -> List[list]:
+    def get_products(self, p_type: str, obs_id: str = None, inst: str = None,
+                     just_obj: bool = True) -> List[BaseProduct]:
         """
         This is the getter for the products data structure of Source objects. Passing a 'product type'
         such as 'events' or 'images' will return every matching entry in the products data structure.
@@ -454,7 +483,7 @@ class BaseSource:
         :param bool just_obj: A boolean flag that controls whether this method returns just the product objects,
         or the other information that goes with it like ObsID and instrument.
         :return: List of matching products.
-        :rtype: List[list]
+        :rtype: List[BaseProduct]
         """
         def unpack_list(to_unpack: list):
             """
@@ -699,8 +728,6 @@ class BaseSource:
         # elif reg_colour == "yellow":
         #   reg_type = "ext_less_ten_counts"
 
-        # TODO Comment this method better
-        # TODO DEFINITELY REMOVE COMBINED REGIONS ITS TOO LIKELY TO BRING THINGS CRASHING DOWN ROUND OUR EARS
         # Here we store the actual matched sources
         results_dict = {}
         # And in this one go all the sources that aren't the matched source, we'll need to subtract them.
@@ -708,37 +735,38 @@ class BaseSource:
         # Sources in this dictionary are within the target source region AND matched to initial coordinates,
         # but aren't the chosen source.
         alt_match_dict = {}
-        combined = None
         for obs in self._initial_regions:
+            # If there are no matches then the returned result is just None
             if len(self._initial_regions[obs][self._initial_region_matches[obs]]) == 0:
                 results_dict[obs] = None
             else:
                 interim_reg = []
+                # The only solution I could think of is to go by the XCS standard of region files, so green
+                #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
                 for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
                     if entry.visual["color"] in allowed_colours:
                         interim_reg.append(entry)
 
+                # Different matching possibilities
                 if len(interim_reg) == 0:
                     results_dict[obs] = None
                 elif len(interim_reg) == 1:
-                    if combined is None:
-                        combined = interim_reg[0]
-                    else:
-                        combined = combined.union(interim_reg[0])
                     results_dict[obs] = interim_reg[0]
+                # Matching to multiple extended sources would be very problematic, so throw an error
                 elif len(interim_reg) > 1:
                     raise MultipleMatchError("More than one match to an extended is found in the region file"
                                              "for observation {}".format(obs))
 
+            # Alt match is used for when there is a secondary match to a point source
             alt_match_reg = [entry for entry in self._initial_regions[obs][self._initial_region_matches[obs]]
                              if entry != results_dict[obs]]
             alt_match_dict[obs] = alt_match_reg
 
+            # These are all the sources that aren't a match, and so should be removed from any analysis
             not_source_reg = [reg for reg in self._initial_regions[obs] if reg != results_dict[obs]
                               and reg not in alt_match_reg]
             anti_results_dict[obs] = not_source_reg
 
-        results_dict["combined"] = combined
         return results_dict, alt_match_dict, anti_results_dict
 
     @property
@@ -1183,13 +1211,23 @@ class BaseSource:
         return len(self._products)
 
 
+# TODO This feels unpleasantly messy
 # TODO Don't forget to write another info() method for extended source
 class ExtendedSource(BaseSource):
     # TODO Calculate peak for each mask and corresponding ratemap, store them
-    # TODO Add optional SINGLE custom region in case no detection
     # TODO Don't know how to deal with merged ratemaps in this scenario
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=False, load_fits=False):
+    # TODO I guess I'll have to make sure the required products already exist
+    def __init__(self, ra, dec, redshift=None, name=None, region_radius=None, use_peak=True,
+                 peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
+                 back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
+                 load_products=False, load_fits=False):
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
+        self._custom_region_radius = region_radius
+        self._use_peak = use_peak
+        self._back_inn_factor = back_inn_rad_factor
+        self._back_out_factor = back_out_rad_factor
+        self._peak_lo_en = peak_lo_en.to('keV')
+        self._peak_hi_en = peak_hi_en.to('keV')
 
         # This uses the added context of the type of source to find (or not find) matches in region files
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("ext")
@@ -1209,8 +1247,10 @@ class ExtendedSource(BaseSource):
         # Iterating through obs_ids rather than _region keys because the _region dictionary will contain
         #  a combined region that cannot be used yet - the user cannot have generated any merged images yet.
         for obs_id in self.obs_ids:
+            # TODO THIS MEANS THAT SOME INTERLOPERS WON'T BE REMOVED FROM THE BACKGROUND REGION - SEE ISSUE
             other_regs = self._other_regions[obs_id]
-            im = list(self.get_products("image", obs_id, just_obj=False))[0][-1]
+            # TODO Check that this is right, its only using one instrument
+            im = list(self.get_products("image", obs_id, just_obj=True))[0]
 
             match_reg = self._regions[obs_id]
             m = match_reg.to_pixel(im.radec_wcs)
@@ -1222,18 +1262,15 @@ class ExtendedSource(BaseSource):
             #  to ra-dec and adding to a dictionary of regions.
             if isinstance(match_reg, EllipseSkyRegion):
                 # Here we multiply the inner width/height by 1.05 (to just slightly clear the source region),
-                #  and the outer width/height by 1.5 (standard for XCS) - though probably that number should
-                #  be dynamic
+                #  and the outer width/height by 1.5 (standard for XCS) - default values
                 # Ideally this would be an annulus region, but they are bugged in regions v0.4, so we must bodge
-                # b_reg = EllipseAnnulusPixelRegion(center=m.center, inner_width=m.width, outer_width=3*m.width,
-                #                                   inner_height=m.height, outer_height=3*m.height, angle=m.angle)
-                in_reg = EllipsePixelRegion(m.center, m.width*1.05, m.height*1.05, m.angle)
-                b_reg = EllipsePixelRegion(m.center, m.width*1.5, m.height*1.5,
+                in_reg = EllipsePixelRegion(m.center, m.width*self._back_inn_factor,
+                                            m.height*self._back_inn_factor, m.angle)
+                b_reg = EllipsePixelRegion(m.center, m.width*self._back_out_factor, m.height*self._back_out_factor,
                                            m.angle).symmetric_difference(in_reg)
             elif isinstance(match_reg, CircleSkyRegion):
-                # b_reg = CircleAnnulusPixelRegion(m.center, m.radius, m.radius*1.5)
-                in_reg = CirclePixelRegion(m.center, m.radius * 1.05)
-                b_reg = CirclePixelRegion(m.center, m.radius * 1.5).symmetric_difference(in_reg)
+                in_reg = CirclePixelRegion(m.center, m.radius * self._back_inn_factor)
+                b_reg = CirclePixelRegion(m.center, m.radius * self._back_out_factor).symmetric_difference(in_reg)
 
             self._back_regions[obs_id] = b_reg.to_sky(im.radec_wcs)
             # This part is dealing with the region in sky coordinates,
@@ -1243,44 +1280,162 @@ class ExtendedSource(BaseSource):
             self._within_back_regions[obs_id] = np.array(other_regs)[crossover]
             # Ensures we only do regions for instruments that do have at least an events list.
             for inst in self._products[obs_id]:
-                self._reg_masks[obs_id][inst], self._back_masks[obs_id][inst] = self._generate_mask(obs_id, inst)
+                cur_im = self.get_products("image", obs_id, inst)[0]
+                src_reg, bck_reg = self.get_source_region("region", obs_id)
+                self._reg_masks[obs_id][inst], self._back_masks[obs_id][inst] \
+                    = self._generate_mask(cur_im, src_reg, bck_reg)
         if all([val is None for val in self._regions.values()]):
             self._detected = False
         else:
             self._detected = True
 
-    def _generate_mask(self, obs_id: str, inst: str) -> Tuple[np.ndarray, np.ndarray]:
+        # TODO Actually do something with the custom regions
+        if self._custom_region_radius is not None:
+            cust_reg, cust_back_reg, cust_reg_mask, cust_back_reg_mask = self._setup_custom_region()
+        else:
+            cust_reg = None
+            cust_back_reg = None
+
+    def _generate_mask(self, mask_image: Image, source_region: SkyRegion,
+                       background_region: SkyRegion = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         This uses available region files to generate a mask for the source region in the form of a
         numpy array. It takes into account any sources that were detected within the target source,
         by drilling them out.
-        :param str obs_id: The XMM ObsID of the image to generate a mask for, this is also allowed to
-        be 'combined' when dealing with merged images.
-        :param str inst: The XMM instrument of the image to generate a mask for, this is also allowed to
-        be 'combined' when dealing with merged images.
+        :param Image mask_image: An XGA image object that donates its WCS to convert SkyRegions to pixels.
+        :param SkyRegion source_region: The SkyRegion containing the source to generate a mask for.
+        :param SkyRegion background_region: The SkyRegion containing the background emission to
+        generate a mask for.
         :return: A boolean numpy array that can be used to mask images loaded in as numpy arrays.
         :rtype: Tuple[np.ndarray, np.ndarray]
         """
-        # The mask making code has to be here, as if new merged products are generated by the user it will
-        #  have to be called again and make use of their WCS.
-        inst_im = self.get_products("image", obs_id, inst, just_obj=False)[0][-1]
-        mask = self._regions[obs_id].to_pixel(inst_im.radec_wcs).to_mask().to_image(inst_im.shape)
+        obs_id = mask_image.obs_id
+        mask = source_region.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
 
-        # Now need to drill out any interloping sources, make a mask for that
-        interlopers = sum([reg.to_pixel(inst_im.radec_wcs).to_mask().to_image(inst_im.shape)
-                           for reg in self._within_source_regions[obs_id]])
+        if obs_id != "combined":
+            # Now need to drill out any interloping sources, make a mask for that
+            interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                               for reg in self._within_source_regions[obs_id]])
+        else:
+            # TODO This is pretty inefficient, rethink it?
+            all_within = []
+            for o in self._within_source_regions:
+                all_within += list(self._within_source_regions[o])
+            for o in self._other_regions:
+                all_within += list(self._other_regions[o])
+
+            interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                               for reg in all_within])
         # Wherever the interloper mask is not 0, the global mask must become 0 because there is an
         # interloper source there - circular sentences ftw
         mask[interlopers != 0] = 0
 
-        back_mask = self._back_regions[obs_id].to_pixel(inst_im.radec_wcs).to_mask().to_image(inst_im.shape)
-        interlopers = sum([reg.to_pixel(inst_im.radec_wcs).to_mask().to_image(inst_im.shape)
-                           for reg in self._within_back_regions[obs_id]])
-        # Wherever the interloper mask is not 0, the global mask must become 0 because there is an
-        # interloper source there - circular sentences ftw
-        back_mask[interlopers != 0] = 0
+        if background_region is not None:
+            back_mask = background_region.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+            if obs_id != "combined":
+                # Now need to drill out any interloping sources, make a mask for that
+                interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                                   for reg in self._within_back_regions[obs_id]])
+            else:
+                all_within = []
+                for o in self._within_back_regions:
+                    all_within += list(self._within_back_regions[o])
+                for o in self._other_regions:
+                    all_within += list(self._other_regions[o])
+                interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                                   for reg in all_within])
 
-        return mask, back_mask
+            # Wherever the interloper mask is not 0, the global mask must become 0 because there is an
+            # interloper source there - circular sentences ftw
+            back_mask[interlopers != 0] = 0
+
+            return mask, back_mask
+
+        return mask
+
+    def _setup_custom_region(self) -> Tuple[SkyRegion, SkyRegion, np.ndarray, np.ndarray]:
+        """
+        This method is used to construct a custom region for the ExtendedSource class, using the custom
+        radius passed in by the user. If the user also decided to use the X-ray peak as the centre of the
+        custom region, it will do iterative peak finding and re-centre the region. It returns region objects
+        and masks for the source and background.
+        :return: Region objects and masks for the custom region and its background region.
+        :rtype: Tuple[SkyRegion, SkyRegion, np.ndarray, np.ndarray]
+        """
+        # Start off with the central coordinates of the custom region as the user's passed RA and DEC
+        central_coords = SkyCoord(*self.ra_dec.to("deg"))
+
+        # If a custom region radius is passed, then we define one, though we also need to convert
+        #  whatever the input units are to degrees
+        if self._custom_region_radius.unit == deg:
+            cust_reg = CircleSkyRegion(central_coords, self._custom_region_radius)
+        # As we need radius in degrees, and we need an angular diameter distance to convert to degrees from
+        #  other units, we throw an error if there is no redshift.
+        elif self._custom_region_radius.unit != deg and self.redshift is None:
+            raise ValueError("As you have not supplied a redshift, region_radius can only be in degrees")
+        elif self._custom_region_radius.unit != deg and self.redshift is not None:
+            # Use a handy function I prepared earlier to go to degrees
+            region_radius = rad_to_ang(self._custom_region_radius, self._redshift, cosmo=self._cosmo)
+            self._custom_region_radius = region_radius.copy()
+            cust_reg = CircleSkyRegion(central_coords, region_radius)
+
+        # Find a suitable combined ratemap - I've decided this custom region (global region if you will)
+        #  will be based around the use of complete products.
+        comb_ratemap = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False)
+                        if "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value) in rt]
+
+        if len(comb_ratemap) != 0:
+            comb_ratemap = comb_ratemap[0]
+        else:
+            # TODO Add in automatic generation
+            raise NotImplementedError("This should automatically generate necessary merged products,"
+                                      " but it doesn't yet...")
+
+        # If use_peak was set to True, the code will iterate until it converges on a peak within a 500kpc region
+        if self._use_peak:
+            # 500kpc in degrees, for the current redshift and cosmology
+            search_aperture = rad_to_ang(Quantity(500, "kpc"), self._redshift, cosmo=self._cosmo)
+            # Set an absurdly high initial separation, to make sure it does an initial iteration
+            separation = Quantity(10000, "kpc")
+            # Iteration counter just to kill it if it doesn't converge
+            count = 0
+
+            # Allow 20 iterations before we kill this - alternatively loop will exit when centre converges
+            #  to within 15kpc
+            while count < 20 and separation > Quantity(15, "kpc"):
+                # Define a 500kpc radius region centered on the current central_coords
+                cust_reg = CircleSkyRegion(central_coords, search_aperture)
+                # Generate the source mask for the peak finding method
+                aperture_mask = self._generate_mask(comb_ratemap, cust_reg)
+                peak = comb_ratemap.clustering_peak(aperture_mask, deg)
+                separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
+                                      abs(peak[1].value - central_coords.dec.value) ** 2), deg)
+                separation = ang_to_rad(separation, self._redshift, self._cosmo)
+                central_coords = SkyCoord(*peak.copy())
+                count += 1
+
+            # Unfortunately if the peak convergence fails I have to raise an error
+            if count == 20 and separation > Quantity(15, "kpc"):
+                raise PeakConvergenceFailedError("Peak finding failed to converge within 15kpc for {n} in the "
+                                                 "{l}-{u} energy band.".format(n=self.name, l=self._peak_lo_en,
+                                                                               u=self._peak_hi_en))
+            else:
+                # Otherwise we define the re-centred custom region, with its custom radius
+                cust_reg = CircleSkyRegion(central_coords, self._custom_region_radius)
+
+        # Define a background region
+        # Annoyingly I can't remember why I had to do the regions as pixel first, but I promise there was
+        #  a good reason at the time.
+        pix_src_reg = cust_reg.to_pixel(comb_ratemap.radec_wcs)
+        in_reg = CirclePixelRegion(pix_src_reg.center, pix_src_reg.radius * self._back_inn_factor)
+        pix_bck_reg = CirclePixelRegion(pix_src_reg.center, pix_src_reg.radius
+                                        * self._back_out_factor).symmetric_difference(in_reg)
+        cust_back_reg = pix_bck_reg.to_sky(comb_ratemap.radec_wcs)
+
+        # Make the final masks for source and background regions.
+        src_mask, bck_mask = self._generate_mask(comb_ratemap, cust_reg, cust_back_reg)
+
+        return cust_reg, cust_back_reg, src_mask, bck_mask
 
 
 class GalaxyCluster(ExtendedSource):

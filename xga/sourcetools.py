@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/06/2020, 21:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 10:52. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
@@ -87,10 +87,23 @@ def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
     :return: The radius in degrees.
     :rtype: Quantity
     """
-    d_a = Planck15.angular_diameter_distance(z)
+    d_a = cosmo.angular_diameter_distance(z)
     ang_rad = (rad.to("Mpc") / d_a).to('').value * (180 / pi)
     return Quantity(ang_rad, 'deg')
 
+
+def ang_to_rad(ang: Quantity, z: float, cosmo=Planck15) -> Quantity:
+    """
+    The counterpart to rad_to_ang, this converts from an angle to a radius in kpc.
+    :param Quantity ang: Angle to be converted to radius.
+    :param Cosmology cosmo: An instance of an astropy cosmology, the default is Planck15.
+    :param float z: The _redshift of the source.
+    :return: The radius in kpc.
+    :rtype: Quantity
+    """
+    d_a = cosmo.angular_diameter_distance(z)
+    rad = (ang.to("deg").value * (pi / 180) * d_a).to("kpc")
+    return rad
 
 
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/06/2020, 21:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 10:52. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -560,13 +560,23 @@ class Image(BaseProduct):
 
         return out_coord
 
-    def view(self, cross_hair: Quantity = None):
+    def view(self, cross_hair: Quantity = None, mask: np.ndarray = None):
         """
         Quick and dirty method to view this image. Absolutely no user configuration is allowed, that feature
         is for other parts of XGA. Produces an image with log-scaling, and using the colour map gnuplot2.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
         the coordinates.
+        :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
+        data if they so choose.
         """
+        if mask is not None and mask.shape != self._data.shape:
+            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
+                             "({1}).".format(mask.shape, self._data.shape))
+        elif mask is not None and mask.shape == self._data.shape:
+            plot_data = self._data * mask
+        else:
+            plot_data = self._data
+
         # Create figure object
         plt.figure(figsize=(7, 6))
 
@@ -593,14 +603,14 @@ class Image(BaseProduct):
 
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in depth way of viewing cluster data eventually
-        norm = ImageNormalize(data=self.data, interval=MinMaxInterval(), stretch=LogStretch())
+        norm = ImageNormalize(data=plot_data, interval=MinMaxInterval(), stretch=LogStretch())
         # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
         if cross_hair is not None:
             pix_coord = self.coord_conv(cross_hair, pix).value
             plt.axvline(pix_coord[0], color="white", linewidth=0.5)
             plt.axhline(pix_coord[1], color="white", linewidth=0.5)
 
-        plt.imshow(self.data, norm=norm, origin="lower", cmap="gnuplot2")
+        plt.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
         plt.colorbar()
         plt.tight_layout()
         # Display the image
@@ -720,6 +730,7 @@ class RateMap(Image):
         rate = self._data[pix_coord[1], pix_coord[0]]
         return Quantity(rate, "s^-1")
 
+    # TODO Both peak finding methods should return a flag if the peak is very near an edge
     def simple_peak(self, mask: np.ndarray, out_unit: UnitBase = deg):
         """
         Simplest possible way to find the position of the peak of X-ray emission in a ratemap. This method
