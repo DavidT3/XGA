@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 00:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 13:30. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -839,8 +839,25 @@ class RateMap(Image):
 
         return peak_conv, edge_flag
 
-    # TODO Comment and docstring properly
-    def convolved_peak(self, mask, redshift, cosmology, out_unit: UnitBase = deg):
+    def convolved_peak(self, mask: np.ndarray, redshift: float, cosmology, out_unit: UnitBase = deg) \
+            -> Tuple[Quantity, bool]:
+        """
+        A very experimental peak finding algorithm, credit for the idea and a lot of the code in this function
+        go to Lucas Porth. A radial profile (for instance a project king profile for clusters) is convolved
+        with the ratemap, using a suitable radius for the object type (so for a cluster r might be ~1000kpc). As
+        such objects that are similar to this profile will be boosted preferentially over objects that aren't,
+        making it less likely that we accidentally select the peak brightness pixel from a point source remnant or
+        something similar. The convolved image is then masked to only look at the area of interest, and the peak
+        brightness pixel is found.
+        :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
+        aren't to be searched, and 1 for those that are.
+        :param float redshift: The redshift of the source that we wish to find the X-ray centroid of.
+        :param cosmology: An astropy cosmology object.
+        :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
+        :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
+        the user's mask), in units of out_unit, as specified by the user.
+        :rtype: Tuple[Quantity, bool]
+        """
         def cartesian(arrays):
             arrays = [np.asarray(a) for a in arrays]
             shape = (len(x) for x in arrays)

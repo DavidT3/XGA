@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 00:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 13:30. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -12,13 +12,14 @@ from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase, deg
 from fitsio import FITS
+from numpy import ndarray
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
     EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
 
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, \
-    ParameterNotAssociatedError, PeakConvergenceFailedError
+    ParameterNotAssociatedError, PeakConvergenceFailedError, NoRegionsError
 from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap, RateMap
 from xga.sourcetools import simple_xmm_match, nhlookup, rad_to_ang, ang_to_rad
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
@@ -726,37 +727,46 @@ class BaseSource:
         # Sources in this dictionary are within the target source region AND matched to initial coordinates,
         # but aren't the chosen source.
         alt_match_dict = {}
-        for obs in self._initial_regions:
-            # If there are no matches then the returned result is just None
-            if len(self._initial_regions[obs][self._initial_region_matches[obs]]) == 0:
-                results_dict[obs] = None
-            else:
-                interim_reg = []
-                # The only solution I could think of is to go by the XCS standard of region files, so green
-                #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
-                for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
-                    if entry.visual["color"] in allowed_colours:
-                        interim_reg.append(entry)
-
-                # Different matching possibilities
-                if len(interim_reg) == 0:
+        # Goes through all the ObsIDs associated with this source, and checks if they have regions
+        #  If not then Nones are added to the various dictionaries, otherwise you end up with a list of regions
+        #  with missing ObsIDs
+        for obs in self.obs_ids:
+            if obs in self._initial_regions:
+                # If there are no matches then the returned result is just None
+                if len(self._initial_regions[obs][self._initial_region_matches[obs]]) == 0:
                     results_dict[obs] = None
-                elif len(interim_reg) == 1:
-                    results_dict[obs] = interim_reg[0]
-                # Matching to multiple extended sources would be very problematic, so throw an error
-                elif len(interim_reg) > 1:
-                    raise MultipleMatchError("More than one match to an extended is found in the region file"
-                                             "for observation {}".format(obs))
+                else:
+                    interim_reg = []
+                    # The only solution I could think of is to go by the XCS standard of region files, so green
+                    #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
+                    for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
+                        if entry.visual["color"] in allowed_colours:
+                            interim_reg.append(entry)
 
-            # Alt match is used for when there is a secondary match to a point source
-            alt_match_reg = [entry for entry in self._initial_regions[obs][self._initial_region_matches[obs]]
-                             if entry != results_dict[obs]]
-            alt_match_dict[obs] = alt_match_reg
+                    # Different matching possibilities
+                    if len(interim_reg) == 0:
+                        results_dict[obs] = None
+                    elif len(interim_reg) == 1:
+                        results_dict[obs] = interim_reg[0]
+                    # Matching to multiple extended sources would be very problematic, so throw an error
+                    elif len(interim_reg) > 1:
+                        raise MultipleMatchError("More than one match to an extended is found in the region file"
+                                                 "for observation {}".format(obs))
 
-            # These are all the sources that aren't a match, and so should be removed from any analysis
-            not_source_reg = [reg for reg in self._initial_regions[obs] if reg != results_dict[obs]
-                              and reg not in alt_match_reg]
-            anti_results_dict[obs] = not_source_reg
+                # Alt match is used for when there is a secondary match to a point source
+                alt_match_reg = [entry for entry in self._initial_regions[obs][self._initial_region_matches[obs]]
+                                 if entry != results_dict[obs]]
+                alt_match_dict[obs] = alt_match_reg
+
+                # These are all the sources that aren't a match, and so should be removed from any analysis
+                not_source_reg = [reg for reg in self._initial_regions[obs] if reg != results_dict[obs]
+                                  and reg not in alt_match_reg]
+                anti_results_dict[obs] = not_source_reg
+
+            else:
+                results_dict[obs] = None
+                alt_match_dict[obs] = []
+                anti_results_dict[obs] = []
 
         return results_dict, alt_match_dict, anti_results_dict
 
@@ -1246,16 +1256,20 @@ class BaseSource:
 
 
 # TODO Don't forget to write another info() method for extended source
+# TODO Actually store the peaks in a dictionary
 class ExtendedSource(BaseSource):
     def __init__(self, ra, dec, redshift=None, name=None, region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
                  back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
                  load_products=False, load_fits=False):
+        # Calling the BaseSource init method
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
+        # Setting up a bunch of attributes
         self._custom_region_radius = region_radius
         self._use_peak = use_peak
         self._back_inn_factor = back_inn_rad_factor
         self._back_out_factor = back_out_rad_factor
+        # Make sure the peak energy boundaries are in keV
         self._peak_lo_en = peak_lo_en.to('keV')
         self._peak_hi_en = peak_hi_en.to('keV')
 
@@ -1277,48 +1291,73 @@ class ExtendedSource(BaseSource):
         # Iterating through obs_ids rather than _region keys because the _region dictionary will contain
         #  a combined region that cannot be used yet - the user cannot have generated any merged images yet.
         for obs_id in self.obs_ids:
-            other_regs = self._other_regions[obs_id]
-            im = list(self.get_products("image", obs_id, just_obj=True))[0]
-
             match_reg = self._regions[obs_id]
-            m = match_reg.to_pixel(im.radec_wcs)
-            crossover = np.array([match_reg.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
-                                  for r in other_regs])
-            self._within_source_regions[obs_id] = np.array(other_regs)[crossover]
+            # If the entry here is None, it means the source wasn't detected in the region files
+            if match_reg is not None:
+                other_regs = self._other_regions[obs_id]
+                im = list(self.get_products("image", obs_id, just_obj=True))[0]
 
-            # Here is where we initialise the background regions, first in pixel coords, then converting
-            #  to ra-dec and adding to a dictionary of regions.
-            if isinstance(match_reg, EllipseSkyRegion):
-                # Here we multiply the inner width/height by 1.05 (to just slightly clear the source region),
-                #  and the outer width/height by 1.5 (standard for XCS) - default values
-                # Ideally this would be an annulus region, but they are bugged in regions v0.4, so we must bodge
-                in_reg = EllipsePixelRegion(m.center, m.width*self._back_inn_factor,
-                                            m.height*self._back_inn_factor, m.angle)
-                b_reg = EllipsePixelRegion(m.center, m.width*self._back_out_factor, m.height*self._back_out_factor,
-                                           m.angle).symmetric_difference(in_reg)
-            elif isinstance(match_reg, CircleSkyRegion):
-                in_reg = CirclePixelRegion(m.center, m.radius * self._back_inn_factor)
-                b_reg = CirclePixelRegion(m.center, m.radius * self._back_out_factor).symmetric_difference(in_reg)
+                m = match_reg.to_pixel(im.radec_wcs)
+                crossover = np.array([match_reg.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
+                                      for r in other_regs])
+                self._within_source_regions[obs_id] = np.array(other_regs)[crossover]
 
-            self._back_regions[obs_id] = b_reg.to_sky(im.radec_wcs)
-            # This part is dealing with the region in sky coordinates,
-            b_reg = self._back_regions[obs_id]
-            crossover = np.array([b_reg.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
-                                  for r in other_regs])
-            self._within_back_regions[obs_id] = np.array(other_regs)[crossover]
-            # Ensures we only do regions for instruments that do have at least an events list.
-            for inst in self._products[obs_id]:
-                cur_im = self.get_products("image", obs_id, inst)[0]
-                src_reg, bck_reg = self.get_source_region("region", obs_id)
-                self._reg_masks[obs_id][inst], self._back_masks[obs_id][inst] \
-                    = self._generate_mask(cur_im, src_reg, bck_reg)
+                # Here is where we initialise the background regions, first in pixel coords, then converting
+                #  to ra-dec and adding to a dictionary of regions.
+                if isinstance(match_reg, EllipseSkyRegion):
+                    # Here we multiply the inner width/height by 1.05 (to just slightly clear the source region),
+                    #  and the outer width/height by 1.5 (standard for XCS) - default values
+                    # Ideally this would be an annulus region, but they are bugged in regions v0.4, so we must bodge
+                    in_reg = EllipsePixelRegion(m.center, m.width*self._back_inn_factor,
+                                                m.height*self._back_inn_factor, m.angle)
+                    b_reg = EllipsePixelRegion(m.center, m.width*self._back_out_factor,
+                                               m.height*self._back_out_factor,
+                                               m.angle).symmetric_difference(in_reg)
+                elif isinstance(match_reg, CircleSkyRegion):
+                    in_reg = CirclePixelRegion(m.center, m.radius * self._back_inn_factor)
+                    b_reg = CirclePixelRegion(m.center, m.radius *
+                                              self._back_out_factor).symmetric_difference(in_reg)
 
-        # Checks if the object has been detected in all observations
-        if all([val is None for val in self._regions.values()]):
-            self._detected = False
-        else:
-            self._detected = True
+                self._back_regions[obs_id] = b_reg.to_sky(im.radec_wcs)
+                # This part is dealing with the region in sky coordinates,
+                b_reg = self._back_regions[obs_id]
+                crossover = np.array([b_reg.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
+                                      for r in other_regs])
+                self._within_back_regions[obs_id] = np.array(other_regs)[crossover]
+                # Ensures we only do regions for instruments that do have at least an events list.
+                for inst in self._products[obs_id]:
+                    cur_im = self.get_products("image", obs_id, inst)[0]
+                    src_reg, bck_reg = self.get_source_region("region", obs_id)
+                    self._reg_masks[obs_id][inst], self._back_masks[obs_id][inst] \
+                        = self._generate_mask(cur_im, src_reg, bck_reg)
 
+            else:
+                # Fill out all the various region dictionaries with Nones for when a source isn't detected
+                self._within_source_regions[obs_id] = np.array([])
+                self._back_regions[obs_id] = None
+                self._within_back_regions[obs_id] = np.array([])
+                for inst in self._products[obs_id]:
+                    self._reg_masks[obs_id][inst] = None
+                    self._back_masks[obs_id][inst] = None
+
+        # Constructs the detected dictionary, detailing whether the source has been detected IN REGION FILES
+        #  in each observation.
+        self._detected = {o: self._regions[o] is not None for o in self._regions}
+
+        # If in some of the observations the source has not been detected, a warning will be raised
+        if True in self._detected.values() and False in self._detected.values():
+            warnings.warn("{n} has not been detected in all region files, so generating and fitting products"
+                          " with the 'region' reg_type will not use all available data".format(n=self.name))
+        # If the source wasn't detected in ALL of the observations, then we have to rely on a custom region,
+        #  and if no custom region options are passed by the user then an error is raised.
+        elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is not None:
+            warnings.warn("{n} has not been detected in ANY region files, so generating and fitting products"
+                          " with the 'region' reg_type will not work".format(n=self.name))
+        elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is None:
+            raise NoRegionsError("{n} has not been detected in ANY region files, and no custom region radius"
+                                 "has been passed. No analysis is possible.".format(n=self.name))
+
+        # Constructs the custom region and adds to existing storage structure, if the user wants a custom region
         if self._custom_region_radius is not None:
             cust_reg, cust_back_reg, src_inter, bck_inter, cust_reg_mask, cust_back_reg_mask, edgy \
                 = self._setup_custom_region()
@@ -1332,15 +1371,15 @@ class ExtendedSource(BaseSource):
             cust_reg = None
             cust_back_reg = None
 
-    def _generate_mask(self, mask_image: Image, source_region: SkyRegion,
-                       background_region: SkyRegion = None) -> Tuple[np.ndarray, np.ndarray]:
+    def _generate_mask(self, mask_image: Image, source_region: SkyRegion, back_reg: SkyRegion = None) \
+            -> Tuple[ndarray, ndarray]:
         """
         This uses available region files to generate a mask for the source region in the form of a
         numpy array. It takes into account any sources that were detected within the target source,
         by drilling them out.
         :param Image mask_image: An XGA image object that donates its WCS to convert SkyRegions to pixels.
         :param SkyRegion source_region: The SkyRegion containing the source to generate a mask for.
-        :param SkyRegion background_region: The SkyRegion containing the background emission to
+        :param SkyRegion back_reg: The SkyRegion containing the background emission to
         generate a mask for.
         :return: A boolean numpy array that can be used to mask images loaded in as numpy arrays.
         :rtype: Tuple[np.ndarray, np.ndarray]
@@ -1365,8 +1404,8 @@ class ExtendedSource(BaseSource):
         # interloper source there - circular sentences ftw
         mask[interlopers != 0] = 0
 
-        if background_region is not None:
-            back_mask = background_region.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+        if back_reg is not None:
+            back_mask = back_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
             if obs_id != "combined":
                 # Now need to drill out any interloping sources, make a mask for that
                 interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
@@ -1388,8 +1427,8 @@ class ExtendedSource(BaseSource):
 
         return mask
 
-    def _setup_custom_region(self) -> Tuple[SkyRegion, SkyRegion, np.ndarray, np.ndarray,
-                                            np.ndarray, np.ndarray, bool]:
+    # TODO Does this need to be more general, in preparation for overdensity radii?
+    def _setup_custom_region(self) -> Tuple[SkyRegion, SkyRegion, ndarray, ndarray, ndarray, ndarray, bool]:
         """
         This method is used to construct a custom region for the ExtendedSource class, using the custom
         radius passed in by the user. If the user also decided to use the X-ray peak as the centre of the
@@ -1487,12 +1526,14 @@ class ExtendedSource(BaseSource):
             # Which regions are within the custom source region
             cross = np.array([cust_reg.intersection(r).to_pixel(comb_rt.radec_wcs).to_mask().data.sum()
                               != 0 for r in other_regs])
-            reg_crossover += list(np.array(other_regs)[cross])
+            if len(cross) != 0:
+                reg_crossover += list(np.array(other_regs)[cross])
 
             # Which regions are within the custom background region
             bck_cross = np.array([cust_back_reg.intersection(r).to_pixel(comb_rt.radec_wcs).to_mask().data.sum()
                                   != 0 for r in other_regs])
-            bck_crossover += list(np.array(other_regs)[bck_cross])
+            if len(bck_cross) != 0:
+                bck_crossover += list(np.array(other_regs)[bck_cross])
 
         # Just quickly convert the lists to numpy arrays
         reg_crossover = np.array(reg_crossover)
