@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 14:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 19:59. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -506,17 +506,24 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
 
 
-# TODO Have to allow this to make grouped spectra, set default of 5 counts per bin, avoids bins with 0 counts,
-#  which XSPEC does not like
 @sas_call
-def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = True,
+def evselect_spectrum(sources: List[BaseSource], reg_type: str, group_spec: bool = True, min_counts: int = 5,
+                      min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
                       num_cores: int = NUM_CORES):
     """
     A wrapper for all of the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
-    observation, will have a spectrum generated using the specified region type as as boundary.
+    observation, will have a spectrum generated using the specified region type as as boundary. It is possible
+    to generate both grouped and ungrouped spectra using this function, with the degree of grouping set
+    by the min_counts, min_sn, and oversample parameters.
     :param List[BaseSource] sources: A single source object, or a list of source objects.
     :param str reg_type: Tells the method what region source you want to use, for instance r500 or r200.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
     ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
     slightly on position on the detector.
@@ -552,6 +559,9 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
     # Don't need to run backscale separately, as this arfgen call will do it automatically
     arf_cmd = "arfgen spectrumset='{s}' arfset={a} withrmfset=yes rmfset='{r}' badpixlocation={e} " \
               "extendedsource={es} detmaptype=flat setbackscale=yes"
+
+    # If the user wants to group spectra, then we'll need this template command:
+    grp_cmd = "specgroup spectrumset={s} overwrite=yes backgndset={b} arfset={a} rmfset={r} addfilenames=no"
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -647,6 +657,18 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
                                                               es=ex_src)]) + ";"
                 cmd_str += ";".join([sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path,
                                                                 es=ex_src)])
+
+            # If the user wants to produce grouped spectra, then this if statement is triggered and adds a specgroup
+            #  command at the end. The groupspec command will replace the ungrouped spectrum.
+            if group_spec:
+                new_grp = grp_cmd.format(s=spec, b=b_spec, r=rmf, a=arf)
+                if min_counts is not None:
+                    new_grp += " mincounts={mc}".format(mc=min_counts)
+                if min_sn is not None:
+                    new_grp += " minSN={msn}".format(msn=min_sn)
+                if over_sample is not None:
+                    new_grp += " oversample={os}".format(os=over_sample)
+                cmd_str += "; " + new_grp
 
             # Adds clean up commands to move all generated files and remove temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)

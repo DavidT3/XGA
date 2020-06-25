@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 14:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 19:59. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -175,7 +175,7 @@ class BaseProduct:
         if raise_flag:
             # I know this won't ever get to the later errors, I might change how this works later
             for error in self._sas_error:
-                self.usable = False  # Just to make sure this object isn't used if the user uses try, except
+                self._usable = False  # Just to make sure this object isn't used if the user uses try, except
                 raise SASGenerationError("{e} raised by {t} - {b}".format(e=error["name"], t=error["originator"],
                                                                           b=error["message"]))
             # This is for any unresolved errors.
@@ -637,7 +637,7 @@ class ExpMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        exp = self._data[pix_coord[1], pix_coord[0]]
+        exp = self.data[pix_coord[1], pix_coord[0]]
         return Quantity(exp, "s")
 
 
@@ -729,7 +729,7 @@ class RateMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        rate = self._data[pix_coord[1], pix_coord[0]]
+        rate = self.data[pix_coord[1], pix_coord[0]]
         return Quantity(rate, "s^-1")
 
     def simple_peak(self, mask: np.ndarray, out_unit: UnitBase = deg) -> Tuple[Quantity, bool]:
@@ -744,14 +744,14 @@ class RateMap(Image):
         the user's mask), in units of out_unit, as specified by the user.
         :rtype: Tuple[Quantity, bool]
         """
-        if mask.shape != self._data.shape:
+        if mask.shape != self.data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
-                             "({1}).".format(mask.shape, self._data.shape))
+                             "({1}).".format(mask.shape, self.data.shape))
 
         # Creates the data array that we'll be searching. Takes into account the passed mask, as well as
         #  the edge mask designed to remove pixels at the edges of detectors, where RateMap values can
         #  be artificially boosted.
-        masked_data = self._data * mask * self._edge_mask
+        masked_data = self.data * mask * self._edge_mask
 
         # Uses argmax to find the flattened coordinate of the max value, then unravel_index to convert
         #  it back to a 2D coordinate
@@ -788,14 +788,14 @@ class RateMap(Image):
         the user's mask), in units of out_unit, as specified by the user.
         :rtype: Tuple[Quantity, bool]
         """
-        if mask.shape != self._data.shape:
+        if mask.shape != self.data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
-                             "({1}).".format(mask.shape, self._data.shape))
+                             "({1}).".format(mask.shape, self.data.shape))
 
         # Creates the data array that we'll be searching. Takes into account the passed mask, as well as
         #  the edge mask designed to remove pixels at the edges of detectors, where RateMap values can
         #  be artificially boosted.
-        masked_data = self._data * mask * self._edge_mask
+        masked_data = self.data * mask * self._edge_mask
         # How many non-zero elements are there in the array
         num_value = len(masked_data[masked_data != 0])
         # Find the number that corresponds to the top 5% (by default)
@@ -880,9 +880,9 @@ class RateMap(Image):
         raise NotImplementedError("The convolved peak method sort of works, but needs to be much more general"
                                   " before its available for proper use.")
 
-        if mask.shape != self._data.shape:
+        if mask.shape != self.data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
-                             "({1}).".format(mask.shape, self._data.shape))
+                             "({1}).".format(mask.shape, self.data.shape))
 
         start_pos = self.coord_conv(Quantity([int(self.shape[1]/2), int(self.shape[0]/2)], pix), deg)
         end_pos = self.coord_conv(Quantity([int(self.shape[1]/2) + 10, int(self.shape[0]/2)], pix), deg)
@@ -898,7 +898,7 @@ class RateMap(Image):
         # TODO Could totally make this into a basic cluster finder combined with clustering algorithm
         filt = projected_king(1000, resolution.value, 3)
         n_cut = int(filt.shape[0] / 2)
-        conv_data = fftconvolve(self._data*self._edge_mask, filt)[n_cut:-n_cut, n_cut:-n_cut]
+        conv_data = fftconvolve(self.data*self._edge_mask, filt)[n_cut:-n_cut, n_cut:-n_cut]
         mask_conv_data = conv_data * mask
 
         max_coords = np.unravel_index(np.argmax(mask_conv_data == mask_conv_data.max()), mask_conv_data.shape)
@@ -1015,10 +1015,15 @@ class Spectrum(BaseProduct):
                 spec_fits[1].write_key("RESPFILE", self._rmf)
                 spec_fits[1].write_key("ANCRFILE", self._arf)
                 spec_fits[1].write_key("BACKFILE", self._back_spec)
+                spec_fits[0].write_key("RESPFILE", self._rmf)
+                spec_fits[0].write_key("ANCRFILE", self._arf)
+                spec_fits[0].write_key("BACKFILE", self._back_spec)
         elif which_spec == "back":
             with FITS(self._back_spec, 'rw') as spec_fits:
                 spec_fits[1].write_key("RESPFILE", self._back_rmf)
                 spec_fits[1].write_key("ANCRFILE", self._back_arf)
+                spec_fits[0].write_key("RESPFILE", self._back_rmf)
+                spec_fits[0].write_key("ANCRFILE", self._back_arf)
         else:
             raise ValueError("Illegal value for which_spec, you shouldn't be using this internal function!")
 
