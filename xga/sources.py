@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 13:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 14:27. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -858,9 +858,11 @@ class BaseSource:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
         elif reg_type == "region" and obs_id is None:
             raise ValueError("ObsID cannot be None when getting region file regions.")
-        elif reg_type == "region" and obs_id is not None:
+        elif reg_type == "region" and obs_id is not None and inst is not None:
             chosen = self._reg_masks[obs_id][inst]
             chosen_back = self._back_masks[obs_id][inst]
+        elif reg_type == "region" and obs_id is not None and inst is None:
+            raise ValueError("Inst cannot be None when getting region file regions.")
         elif reg_type in ["r2500", "r500", "r200"] and not type(self) == GalaxyCluster:
             raise TypeError("Only GalaxyCluster source objects support over-density radii.")
         elif reg_type != "region" and reg_type in self._reg_masks:

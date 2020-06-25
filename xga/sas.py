@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 16:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 14:27. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -461,8 +461,14 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     sources_extras = []
     sources_types = []
     for source in sources:
-        # TODO Maybe check that 'master' products don't already exist
         en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+
+        # Checking if the combined product already exists
+        exists = [match for match in source.get_products("combined_{}".format(to_mosaic), just_obj=False)
+                  if en_id in match]
+        if len(exists) == 1 and exists[0][-1].usable:
+            continue
+
         # This fetches all image objects with the passed energy bounds
         matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic, just_obj=False)
                    if en_id in match]
@@ -576,6 +582,11 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
             exists = [match for match in source.get_products("spectrum", obs_id, inst, just_obj=False)
                       if reg_type in match]
             if len(exists) == 1 and exists[0][-1].usable:
+                continue
+
+            # If there is no match to a region, the source region returned by this method will be None,
+            #  and if the user wants to generate spectra from region files, we have to ignore that observations
+            if reg_type == "region" and source.get_source_region("region", obs_id)[0] is None:
                 continue
 
             # This method returns a SAS expression for the source and background regions - excluding interlopers

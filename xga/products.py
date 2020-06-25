@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 13:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 14:27. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -578,6 +578,10 @@ class Image(BaseProduct):
             plot_data = self._data * mask
         else:
             plot_data = self._data
+
+        print(self._data)
+        import sys
+        sys.exit()
 
         # Create figure object
         plt.figure(figsize=(7, 6))
