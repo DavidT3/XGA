@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 14:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/06/2020, 15:22. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -415,6 +415,8 @@ class BaseSource:
 
             os.chdir(OUTPUT + self._obs[0])
             # Search for files that match the pattern of a merged image/exposure map
+            # TODO Make this an exact match to the obs_str, otherwise its possible we might read
+            #  in an old merged image if new observations are added to the obs census
             merged_ims = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_image" in f
                           and f[0] != "."]
             for im in merged_ims:
@@ -1245,6 +1247,7 @@ class BaseSource:
         print("Images associated - {}".format(len(self.get_products("image"))))
         print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
         print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
+
         print("-----------------------------------------------------\n")
 
     def __len__(self) -> int:
@@ -1254,12 +1257,11 @@ class BaseSource:
         :return: The integer length of the top level of the _products nested dictionary.
         :rtype: int
         """
-        return len(self._products)
+        return len(self.obs_ids)
 
 
-# TODO Don't forget to write another info() method for extended source
-# TODO Actually store the peaks in a dictionary
 class ExtendedSource(BaseSource):
+    # TODO Make a view method for this class that plots the measured peaks on the combined ratemap.
     def __init__(self, ra, dec, redshift=None, name=None, region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
                  back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
@@ -1274,6 +1276,10 @@ class ExtendedSource(BaseSource):
         # Make sure the peak energy boundaries are in keV
         self._peak_lo_en = peak_lo_en.to('keV')
         self._peak_hi_en = peak_hi_en.to('keV')
+        self._peaks = {o: {} for o in self.obs_ids}
+        self._peaks.update({"combined": None})
+        self._peaks_near_edge = {o: {} for o in self.obs_ids}
+        self._peaks_near_edge.update({"combined": None})
 
         # This uses the added context of the type of source to find (or not find) matches in region files
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("ext")
@@ -1359,22 +1365,17 @@ class ExtendedSource(BaseSource):
             raise NoRegionsError("{n} has not been detected in ANY region files, and no custom region radius"
                                  "has been passed. No analysis is possible.".format(n=self.name))
 
+        # Call to a method that goes through all the observations and finds the X-ray centroid. Also at the same
+        #  time finds the X-ray centroid of the combined ratemap (an essential piece of information).
+        self._all_peaks()
+        
         # Constructs the custom region and adds to existing storage structure, if the user wants a custom region
         if self._custom_region_radius is not None:
-            cust_reg, cust_back_reg, src_inter, bck_inter, cust_reg_mask, cust_back_reg_mask, edgy \
-                = self._setup_custom_region()
-            self._regions["custom"] = cust_reg
-            self._back_regions["custom"] = cust_back_reg
-            self._reg_masks["custom"] = cust_reg_mask
-            self._back_masks["custom"] = cust_back_reg_mask
-            self._within_source_regions["custom"] = src_inter
-            self._within_back_regions["custom"] = src_inter
-        else:
-            cust_reg = None
-            cust_back_reg = None
+            self._setup_new_region(self._custom_region_radius, "custom")
 
-    def _generate_mask(self, mask_image: Image, source_region: SkyRegion, back_reg: SkyRegion = None) \
-            -> Tuple[ndarray, ndarray]:
+    # TODO There really has to be a better solution to the all_interlopers thing, its so inefficient
+    def _generate_mask(self, mask_image: Image, source_region: SkyRegion, back_reg: SkyRegion = None,
+                       all_interlopers: bool = False) -> Tuple[ndarray, ndarray]:
         """
         This uses available region files to generate a mask for the source region in the form of a
         numpy array. It takes into account any sources that were detected within the target source,
@@ -1383,13 +1384,15 @@ class ExtendedSource(BaseSource):
         :param SkyRegion source_region: The SkyRegion containing the source to generate a mask for.
         :param SkyRegion back_reg: The SkyRegion containing the background emission to
         generate a mask for.
+        :param bool all_interlopers: If this is true, all non source objects from all observations
+        will be iterated through and removed from the mask - its not very efficient...
         :return: A boolean numpy array that can be used to mask images loaded in as numpy arrays.
         :rtype: Tuple[np.ndarray, np.ndarray]
         """
         obs_id = mask_image.obs_id
         mask = source_region.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
 
-        if obs_id != "combined":
+        if not all_interlopers:
             # Now need to drill out any interloping sources, make a mask for that
             interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                for reg in self._within_source_regions[obs_id]])
@@ -1408,7 +1411,7 @@ class ExtendedSource(BaseSource):
 
         if back_reg is not None:
             back_mask = back_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-            if obs_id != "combined":
+            if not all_interlopers:
                 # Now need to drill out any interloping sources, make a mask for that
                 interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                    for reg in self._within_back_regions[obs_id]])
@@ -1426,41 +1429,65 @@ class ExtendedSource(BaseSource):
             back_mask[interlopers != 0] = 0
 
             return mask, back_mask
-
         return mask
 
-    # TODO Does this need to be more general, in preparation for overdensity radii?
-    def _setup_custom_region(self) -> Tuple[SkyRegion, SkyRegion, ndarray, ndarray, ndarray, ndarray, bool]:
+    def _find_peak(self, rt: RateMap) -> Tuple[Quantity, bool, bool]:
         """
-        This method is used to construct a custom region for the ExtendedSource class, using the custom
-        radius passed in by the user. If the user also decided to use the X-ray peak as the centre of the
-        custom region, it will do iterative peak finding and re-centre the region. It returns region objects
-        and masks for the source and background.
-        :return: Region objects and masks for the custom region and its background region.
-        :rtype: Tuple[SkyRegion, SkyRegion, np.ndarray, np.ndarray, np.ndarray, np.ndarray, bool]
+        An internal method that will find the X-ray centroid for the RateMap that has been passed in. It takes
+        the user supplied coordinates from source initialisation as a starting point, finds the peak within a 500kpc
+        radius, re-centres the region, and iterates until the centroid converges to within 15kpc, or until 20
+        20 iterations has been reached.
+        :param rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
+        :return: The peak coordinate, a boolean flag as to whether the returned coordinates are near
+         a chip gap/edge, and a boolean flag as to whether the peak converged.
+        :rtype: Tuple[Quantity, bool, bool]
         """
-        # Start off with the central coordinates of the custom region as the user's passed RA and DEC
         central_coords = SkyCoord(*self.ra_dec.to("deg"))
 
-        # If a custom region radius is passed, then we define one, though we also need to convert
-        #  whatever the input units are to degrees
-        if self._custom_region_radius.unit == deg:
-            cust_reg = CircleSkyRegion(central_coords, self._custom_region_radius)
-        # As we need radius in degrees, and we need an angular diameter distance to convert to degrees from
-        #  other units, we throw an error if there is no redshift.
-        elif self._custom_region_radius.unit != deg and self.redshift is None:
-            raise ValueError("As you have not supplied a redshift, region_radius can only be in degrees")
-        elif self._custom_region_radius.unit != deg and self.redshift is not None:
-            # Use a handy function I prepared earlier to go to degrees
-            region_radius = rad_to_ang(self._custom_region_radius, self._redshift, cosmo=self._cosmo)
-            self._custom_region_radius = region_radius.copy()
-            cust_reg = CircleSkyRegion(central_coords, region_radius)
+        # 500kpc in degrees, for the current redshift and cosmology
+        search_aperture = rad_to_ang(Quantity(500, "kpc"), self._redshift, cosmo=self._cosmo)
+        # Set an absurdly high initial separation, to make sure it does an initial iteration
+        separation = Quantity(10000, "kpc")
+        # Iteration counter just to kill it if it doesn't converge
+        count = 0
 
-        # Find a suitable combined ratemap - I've decided this custom region (global region if you will)
-        #  will be based around the use of complete products.
+        # Allow 20 iterations before we kill this - alternatively loop will exit when centre converges
+        #  to within 15kpc
+        while count < 20 and separation > Quantity(15, "kpc"):
+            # Define a 500kpc radius region centered on the current central_coords
+            cust_reg = CircleSkyRegion(central_coords, search_aperture)
+            # Generate the source mask for the peak finding method
+            aperture_mask = self._generate_mask(rt, cust_reg, all_interlopers=True)
+            # Find the peak using the experimental clustering_peak method
+            peak, near_edge = rt.clustering_peak(aperture_mask, deg)
+            # Calculate the distance between new peak and old central coordinates
+            separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
+                                          abs(peak[1].value - central_coords.dec.value) ** 2), deg)
+            separation = ang_to_rad(separation, self._redshift, self._cosmo)
+            central_coords = SkyCoord(*peak.copy())
+            count += 1
+
+            if count == 20 and separation > Quantity(15, "kpc"):
+                converged = False
+                # To do the least amount of damage, if the peak doesn't converge then we just return the
+                #  user supplied coordinates
+                peak = self.ra_dec
+                near_edge = rt.near_edge(peak)
+            else:
+                converged = True
+
+        return peak, near_edge, converged
+
+    def _all_peaks(self):
+        """
+        An internal method that finds the X-ray peaks for all of the available observations and instruments,
+        as well as the combined ratemap. Peak positions for individual ratemap products are allowed to not
+        converge, and will just write None to the peak dictionary, but if the peak of the combined ratemap fails
+        to converge an error will be thrown.
+        """
         en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
         comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt]
-        
+
         if len(comb_rt) != 0:
             comb_rt = comb_rt[0]
         else:
@@ -1470,42 +1497,67 @@ class ExtendedSource(BaseSource):
             emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en)
             comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
 
+        coord, near_edge, converged = self._find_peak(comb_rt)
+        # Unfortunately if the peak convergence fails for the combined ratemap I have to raise an error
+        if converged:
+            self._peaks["combined"] = coord
+            self._peaks_near_edge["combined"] = near_edge
+        else:
+            raise PeakConvergenceFailedError("Peak finding on the combined ratemap failed to converge within "
+                                             "15kpc for {n} in the {l}-{u} energy "
+                                             "band.".format(n=self.name, l=self._peak_lo_en, u=self._peak_hi_en))
+
+        for obs in self.obs_ids:
+            for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
+                coord, near_edge, converged = self._find_peak(rt)
+                if converged:
+                    self._peaks[obs][rt.instrument] = coord
+                    self._peaks_near_edge[obs][rt.instrument] = near_edge
+                else:
+                    self._peaks[obs][rt.instrument] = None
+                    self._peaks_near_edge[obs][rt.instrument] = None
+
+    def _setup_new_region(self, radius: Quantity, reg_type: str):
+        """
+        This method is used to construct a new region (for instance 'custom' or 'r500'), using the a
+        radius passed in by the user. If the user also decided to use the X-ray peak as the centre of the
+        custom region, it will do iterative peak finding and re-centre the region. It then adds the region
+        objects and periphal information into the existing storage structures.
+        :param Quantity radius: The radius of the new region being created.
+        :param str reg_type: The type of new region to be created.
+        """
+        # Start off with the central coordinates of the custom region as the user's passed RA and DEC
+        central_coords = SkyCoord(*self.ra_dec.to("deg"))
+
+        # If a custom region radius is passed, then we define one, though we also need to convert
+        #  whatever the input units are to degrees
+        if radius.unit.is_equivalent('deg'):
+            cust_reg = CircleSkyRegion(central_coords, radius.to('deg'))
+        # As we need radius in degrees, and we need an angular diameter distance to convert to degrees from
+        #  other units, we throw an error if there is no redshift.
+        elif not radius.unit.is_equivalent('deg') and self.redshift is None:
+            raise ValueError("As you have not supplied a redshift, region_radius can only be in degrees")
+        elif not radius.unit.is_equivalent('deg') and self.redshift is not None:
+            # Use a handy function I prepared earlier to go to degrees
+            region_radius = rad_to_ang(radius, self._redshift, cosmo=self._cosmo)
+            radius = region_radius.copy()
+            cust_reg = CircleSkyRegion(central_coords, region_radius)
+
+        # Find a suitable combined ratemap - I've decided this custom region (global region if you will)
+        #  will be based around the use of complete products.
+        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
+        # This should be guaranteed to exist by now, the _all_peaks method requires this product too
+        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
+        
         # Determine if the initial coordinates are near an edge
         near_edge = comb_rt.near_edge(self.ra_dec)
 
-        # If use_peak was set to True, the code will iterate until it converges on a peak within a 500kpc region
         if self._use_peak:
-            # 500kpc in degrees, for the current redshift and cosmology
-            search_aperture = rad_to_ang(Quantity(500, "kpc"), self._redshift, cosmo=self._cosmo)
-            # Set an absurdly high initial separation, to make sure it does an initial iteration
-            separation = Quantity(10000, "kpc")
-            # Iteration counter just to kill it if it doesn't converge
-            count = 0
-
-            # Allow 20 iterations before we kill this - alternatively loop will exit when centre converges
-            #  to within 15kpc
-            while count < 20 and separation > Quantity(15, "kpc"):
-                # Define a 500kpc radius region centered on the current central_coords
-                cust_reg = CircleSkyRegion(central_coords, search_aperture)
-                # Generate the source mask for the peak finding method
-                aperture_mask = self._generate_mask(comb_rt, cust_reg)
-                # Find the peak using the experimental clustering_peak method
-                peak, near_edge = comb_rt.clustering_peak(aperture_mask, deg)
-                # Calculate the distance between new peak and old central coordinates
-                separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
-                                      abs(peak[1].value - central_coords.dec.value) ** 2), deg)
-                separation = ang_to_rad(separation, self._redshift, self._cosmo)
-                central_coords = SkyCoord(*peak.copy())
-                count += 1
-
-            # Unfortunately if the peak convergence fails I have to raise an error
-            if count == 20 and separation > Quantity(15, "kpc"):
-                raise PeakConvergenceFailedError("Peak finding failed to converge within 15kpc for {n} in the "
-                                                 "{l}-{u} energy band.".format(n=self.name, l=self._peak_lo_en,
-                                                                               u=self._peak_hi_en))
-            else:
-                # Otherwise we define the re-centred custom region, with its custom radius
-                cust_reg = CircleSkyRegion(central_coords, self._custom_region_radius)
+            # Uses the peak of the combined ratemap as the centre, guaranteed to be there and converged,
+            #  because if it hadn't converged an error would have been thrown earlier
+            peak = self._peaks["combined"]
+            central_coords = SkyCoord(*peak.to("deg"))
+            cust_reg = CircleSkyRegion(central_coords, radius)
 
         # Define a background region
         # Annoyingly I can't remember why I had to do the regions as pixel first, but I promise there was
@@ -1517,7 +1569,7 @@ class ExtendedSource(BaseSource):
         cust_back_reg = pix_bck_reg.to_sky(comb_rt.radec_wcs)
 
         # Make the final masks for source and background regions.
-        src_mask, bck_mask = self._generate_mask(comb_rt, cust_reg, cust_back_reg)
+        src_mask, bck_mask = self._generate_mask(comb_rt, cust_reg, cust_back_reg, all_interlopers=True)
 
         # Setting up useful lists for adding regions to
         reg_crossover = []
@@ -1541,21 +1593,54 @@ class ExtendedSource(BaseSource):
         reg_crossover = np.array(reg_crossover)
         bck_crossover = np.array(bck_crossover)
 
+        self._regions[reg_type] = cust_reg
+        self._back_regions[reg_type] = cust_back_reg
+        self._reg_masks[reg_type] = src_mask
+        self._back_masks[reg_type] = bck_mask
+        self._within_source_regions[reg_type] = reg_crossover
+        self._within_back_regions[reg_type] = bck_crossover
+
         return cust_reg, cust_back_reg, reg_crossover, bck_crossover, src_mask, bck_mask, near_edge
+
+    # TODO Add more information to this?
+    def info(self):
+        """
+        Very simple function that just prints a summary of the BaseSource object.
+        """
+        print("-----------------------------------------------------")
+        print("Source Name - {}".format(self._name))
+        print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
+        print("X-ray Centroid - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
+        print("nH - {}".format(self.nH))
+        print("XMM Observations - {}".format(self.__len__()))
+        print("On-Axis - {}".format(self._onaxis.sum()))
+        print("With regions - {}".format(len(self._initial_regions)))
+        print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
+        print("Obs with one match - {}".format(sum([1 for o in self._initial_region_matches if
+                                                    self._initial_region_matches[o].sum() == 1])))
+        print("Obs with >1 matches - {}".format(sum([1 for o in self._initial_region_matches if
+                                                     self._initial_region_matches[o].sum() > 1])))
+        print("Images associated - {}".format(len(self.get_products("image"))))
+        print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
+        print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
+        fits = [k + " - " + ", ".join(models) for k, models in self._fit_results.items()]
+        print("Available fits - {}".format(" | ".join(fits)))
+        if "custom" in self._regions and self._custom_region_radius.unit.is_equivalent('deg'):
+            region_radius = ang_to_rad(self._custom_region_radius, self._redshift, cosmo=self._cosmo)
+            print("Custom Region Radius - {}".format(region_radius))
+        elif "custom" in self._regions and self._custom_region_radius.unit.is_equivalent('kpc'):
+            region_radius = self._custom_region_radius.to("kpc")
+            print("Custom Region Radius - {}".format(region_radius))
+        print("-----------------------------------------------------\n")
 
 
 class GalaxyCluster(ExtendedSource):
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=False, load_fits=False):
-        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
-        # Don't know if these should be stored as astropy Quantity objects, may add that later
-        self._central_coords = {obs: {inst: {} for inst in self._products[obs]} for obs in self.obs_ids}
-        # The first coordinate will be the ra and dec that the user input to create the source instance
-        # I don't know if this will stay living here, but its as good a start as any
-        self._central_coords["user"] = self._ra_dec
-        for obs_id in self.obs_ids:
-            ra = self._regions[obs_id].center.ra.value
-            dec = self._regions[obs_id].center.dec.value
-            self._central_coords[obs_id]["region"] = np.array([ra, dec])
+    def __init__(self, ra, dec, redshift=None, name=None, region_radius=None, use_peak=True,
+                 peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
+                 back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
+                 load_products=False, load_fits=False):
+        super().__init__(ra, dec, redshift, name, region_radius, use_peak, peak_lo_en, peak_hi_en,
+                         back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits)
 
 
 class PointSource(BaseSource):
@@ -1564,9 +1649,6 @@ class PointSource(BaseSource):
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by regfiles or by users, will be stored
         self._regions, self._alt_match_regions, self._other_sources = self._source_type_match("pnt")
-        if all([val is None for val in self._regions.values()]):
-            self._detected = False
-        else:
-            self._detected = True
+
 
 
