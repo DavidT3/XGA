@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/06/2020, 19:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2020, 15:43. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -491,6 +491,8 @@ class Image(BaseProduct):
         :rtype: Quantity
         """
         allowed_units = ["deg", "xmm_sky", "xmm_det", "pix"]
+        if coord_pair.unit.is_equivalent("deg"):
+            coord_pair = coord_pair.to("deg")
         input_unit = coord_pair.unit.name
         out_name = output_unit.name
 

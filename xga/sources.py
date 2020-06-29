@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/06/2020, 15:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2020, 15:43. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -10,7 +10,7 @@ from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
-from astropy.units import Quantity, UnitBase, deg
+from astropy.units import Quantity, UnitBase, deg, UnitConversionError
 from fitsio import FITS
 from numpy import ndarray
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
@@ -97,6 +97,19 @@ class BaseSource:
         self._total_count_rate = {}
         self._total_exp = {}
         self._luminosities = {}
+
+        # Initialisation of attributes related to Extended and GalaxyCluster sources
+        self._peaks = None
+        # Initialisation of allowed overdensity radii as None
+        self._r200 = None
+        self._r500 = None
+        self._r2500 = None
+        # Initialisation of cluster observables as None
+        self._richness = None
+        self._richness_err = None
+
+        self._wl_mass = None
+        self._wl_mass_err = None
 
         # If there is an existing XGA output directory, then it makes sense to search for products that XGA
         #  may have already generated and load them in - saves us wasting time making them again.
@@ -1230,11 +1243,13 @@ class BaseSource:
 
     def info(self):
         """
-        Very simple function that just prints a summary of the BaseSource object.
+        Very simple function that just prints a summary of important information related to the source object..
         """
-        print("-----------------------------------------------------")
+        print("\n-----------------------------------------------------")
         print("Source Name - {}".format(self._name))
         print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
+        if self._peaks is not None:
+            print("X-ray Centroid - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
         print("nH - {}".format(self.nH))
         print("XMM Observations - {}".format(self.__len__()))
         print("On-Axis - {}".format(self._onaxis.sum()))
@@ -1247,6 +1262,48 @@ class BaseSource:
         print("Images associated - {}".format(len(self.get_products("image"))))
         print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
         print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
+
+        if len(self._fit_results) != 0:
+            fits = [k + " - " + ", ".join(models) for k, models in self._fit_results.items()]
+            print("Available fits - {}".format(" | ".join(fits)))
+
+        if self._regions is not None and "custom" in self._regions:
+            if self._custom_region_radius.unit.is_equivalent('deg'):
+                region_radius = ang_to_rad(self._custom_region_radius, self._redshift, cosmo=self._cosmo)
+            elif self._custom_region_radius.unit.is_equivalent('kpc'):
+                region_radius = self._custom_region_radius.to("kpc")
+            print("Custom Region Radius - {}".format(region_radius.round(2)))
+            print("Custom Region SNR - {}".format(self._snr["custom"].round(2)))
+
+        if self._r200 is not None:
+            print("R200 - {}".format(self._r200))
+            print("R200 SNR - {}".format(round(self._snr["r200"], 2)))
+        if self._r500 is not None:
+            print("R500 - {}".format(self._r500))
+            print("R500 SNR - {}".format(round(self._snr["r500"], 2)))
+        if self._r2500 is not None:
+            print("R2500 - {}".format(self._r500))
+            print("R2500 SNR - {}".format(round(self._snr["r2500"], 2)))
+
+        # There's probably a neater way of doing the observables - maybe a formatting function?
+        if self._richness is not None and self._richness_err is not None \
+                and not isinstance(self._richness_err, (list, tuple, ndarray)):
+            print("Richness - {0}±{1}".format(self._richness, self._richness_err))
+        elif self._richness is not None and self._richness_err is not None \
+                and isinstance(self._richness_err, (list, tuple, ndarray)):
+            print("Richness - {0} -{1}+{2}".format(self._richness, self._richness_err[0], self._richness_err[1]))
+        elif self._richness is not None and self._richness_err is None:
+            print("Richness - {0}".format(self._richness))
+
+        if self._wl_mass is not None and self._wl_mass_err is not None \
+                and not isinstance(self._wl_mass_err, (list, tuple, ndarray)):
+            print("Weak Lensing Mass - {0}±{1}".format(self._wl_mass, self._richness_err))
+        elif self._wl_mass is not None and self._wl_mass_err is not None \
+                and isinstance(self._wl_mass_err, (list, tuple, ndarray)):
+            print("Weak Lensing Mass - {0} -{1}+{2}".format(self._wl_mass, self._wl_mass_err[0],
+                                                            self._wl_mass_err[1]))
+        elif self._wl_mass is not None and self._wl_mass_err is None:
+            print("Weak Lensing Mass - {0}".format(self._wl_mass))
 
         print("-----------------------------------------------------\n")
 
@@ -1262,14 +1319,14 @@ class BaseSource:
 
 class ExtendedSource(BaseSource):
     # TODO Make a view method for this class that plots the measured peaks on the combined ratemap.
-    def __init__(self, ra, dec, redshift=None, name=None, region_radius=None, use_peak=True,
+    def __init__(self, ra, dec, redshift=None, name=None, custom_region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
                  back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
                  load_products=False, load_fits=False):
         # Calling the BaseSource init method
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
         # Setting up a bunch of attributes
-        self._custom_region_radius = region_radius
+        self._custom_region_radius = custom_region_radius
         self._use_peak = use_peak
         self._back_inn_factor = back_inn_rad_factor
         self._back_out_factor = back_out_rad_factor
@@ -1280,6 +1337,7 @@ class ExtendedSource(BaseSource):
         self._peaks.update({"combined": None})
         self._peaks_near_edge = {o: {} for o in self.obs_ids}
         self._peaks_near_edge.update({"combined": None})
+        self._snr = {}
 
         # This uses the added context of the type of source to find (or not find) matches in region files
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("ext")
@@ -1372,6 +1430,13 @@ class ExtendedSource(BaseSource):
         # Constructs the custom region and adds to existing storage structure, if the user wants a custom region
         if self._custom_region_radius is not None:
             self._setup_new_region(self._custom_region_radius, "custom")
+            # Doesn't really matter where this conversion happens, because setup_new_region checks the unit
+            #  and converts anyway, but I want the internal unit of the custom radii to be kpc.
+            if self._custom_region_radius.unit.is_equivalent("deg"):
+                rad = ang_to_rad(self._custom_region_radius, self._redshift, self._cosmo).to("kpc")
+                self._custom_region_radius = rad
+            else:
+                self._custom_region_radius = self._custom_region_radius.to("kpc")
 
     # TODO There really has to be a better solution to the all_interlopers thing, its so inefficient
     def _generate_mask(self, mask_image: Image, source_region: SkyRegion, back_reg: SkyRegion = None,
@@ -1483,7 +1548,8 @@ class ExtendedSource(BaseSource):
         An internal method that finds the X-ray peaks for all of the available observations and instruments,
         as well as the combined ratemap. Peak positions for individual ratemap products are allowed to not
         converge, and will just write None to the peak dictionary, but if the peak of the combined ratemap fails
-        to converge an error will be thrown.
+        to converge an error will be thrown. The combined ratemap peak will also be stored by itself in an
+        attribute, to allow a property getter easy access.
         """
         en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
         comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt]
@@ -1522,7 +1588,7 @@ class ExtendedSource(BaseSource):
         This method is used to construct a new region (for instance 'custom' or 'r500'), using the a
         radius passed in by the user. If the user also decided to use the X-ray peak as the centre of the
         custom region, it will do iterative peak finding and re-centre the region. It then adds the region
-        objects and periphal information into the existing storage structures.
+        objects and peripheral information into the existing storage structures.
         :param Quantity radius: The radius of the new region being created.
         :param str reg_type: The type of new region to be created.
         """
@@ -1535,13 +1601,16 @@ class ExtendedSource(BaseSource):
             cust_reg = CircleSkyRegion(central_coords, radius.to('deg'))
         # As we need radius in degrees, and we need an angular diameter distance to convert to degrees from
         #  other units, we throw an error if there is no redshift.
-        elif not radius.unit.is_equivalent('deg') and self.redshift is None:
-            raise ValueError("As you have not supplied a redshift, region_radius can only be in degrees")
-        elif not radius.unit.is_equivalent('deg') and self.redshift is not None:
+        elif radius.unit.is_equivalent('kpc') and self.redshift is None:
+            raise UnitConversionError("As you have not supplied a redshift, custom_region_radius can "
+                                      "only be in degrees")
+        elif radius.unit.is_equivalent('kpc') and self.redshift is not None:
             # Use a handy function I prepared earlier to go to degrees
             region_radius = rad_to_ang(radius, self._redshift, cosmo=self._cosmo)
             radius = region_radius.copy()
             cust_reg = CircleSkyRegion(central_coords, region_radius)
+        else:
+            raise UnitConversionError("Custom region radius must be in either angular or distance units.")
 
         # Find a suitable combined ratemap - I've decided this custom region (global region if you will)
         #  will be based around the use of complete products.
@@ -1593,54 +1662,215 @@ class ExtendedSource(BaseSource):
         reg_crossover = np.array(reg_crossover)
         bck_crossover = np.array(bck_crossover)
 
+        src_area = src_mask.sum()
+        bck_area = bck_mask.sum()
+        rate_ratio = ((comb_rt.data*src_mask).sum() / (comb_rt.data*bck_mask).sum()) * (bck_area / src_area)
+
         self._regions[reg_type] = cust_reg
         self._back_regions[reg_type] = cust_back_reg
         self._reg_masks[reg_type] = src_mask
         self._back_masks[reg_type] = bck_mask
         self._within_source_regions[reg_type] = reg_crossover
         self._within_back_regions[reg_type] = bck_crossover
+        self._snr[reg_type] = rate_ratio
 
-        return cust_reg, cust_back_reg, reg_crossover, bck_crossover, src_mask, bck_mask, near_edge
+    def get_peaks(self, obs_id: str = None, inst: str = None) -> Quantity:
+        """
+        :param str obs_id: The ObsID to return the X-ray peak coordinates for.
+        :param str inst: The instrument to return the X-ray peak coordinates for.
+        :return: The X-ray peak coordinates for the input parameters.
+        :rtype: Quantity
+        """
+        # Common sense checks, are the obsids/instruments associated with this source etc.
+        if obs_id is not None and obs_id not in self.obs_ids:
+            raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
+        elif obs_id is None and inst is not None:
+            raise ValueError("If obs_id is None, inst cannot be None as well.")
+        elif obs_id is not None and inst is not None and inst not in self._peaks[obs_id]:
+            raise NotAssociatedError("The instrument {i} is not associated with observation {o} of this "
+                                     "source.".format(i=inst, o=obs_id))
+        elif obs_id is None and inst is None:
+            chosen = self._peaks
+        elif obs_id is not None and inst is None:
+            chosen = self._peaks[obs_id]
+        else:
+            chosen = self._peaks[obs_id][inst]
 
-    # TODO Add more information to this?
-    def info(self):
+        return chosen
+
+    # Property SPECIFICALLY FOR THE COMBINED PEAK - as this is the peak we should be using mostly.
+    @property
+    def peak(self) -> Quantity:
         """
-        Very simple function that just prints a summary of the BaseSource object.
+        A property getter for the combined X-ray peak coordinates. Most analysis will be centered
+        on these coordinates.
+        :return: The X-ray peak coordinates for the combine ratemap.
+        :rtype: Quantity
         """
-        print("-----------------------------------------------------")
-        print("Source Name - {}".format(self._name))
-        print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
-        print("X-ray Centroid - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
-        print("nH - {}".format(self.nH))
-        print("XMM Observations - {}".format(self.__len__()))
-        print("On-Axis - {}".format(self._onaxis.sum()))
-        print("With regions - {}".format(len(self._initial_regions)))
-        print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
-        print("Obs with one match - {}".format(sum([1 for o in self._initial_region_matches if
-                                                    self._initial_region_matches[o].sum() == 1])))
-        print("Obs with >1 matches - {}".format(sum([1 for o in self._initial_region_matches if
-                                                     self._initial_region_matches[o].sum() > 1])))
-        print("Images associated - {}".format(len(self.get_products("image"))))
-        print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
-        print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
-        fits = [k + " - " + ", ".join(models) for k, models in self._fit_results.items()]
-        print("Available fits - {}".format(" | ".join(fits)))
-        if "custom" in self._regions and self._custom_region_radius.unit.is_equivalent('deg'):
-            region_radius = ang_to_rad(self._custom_region_radius, self._redshift, cosmo=self._cosmo)
-            print("Custom Region Radius - {}".format(region_radius))
-        elif "custom" in self._regions and self._custom_region_radius.unit.is_equivalent('kpc'):
-            region_radius = self._custom_region_radius.to("kpc")
-            print("Custom Region Radius - {}".format(region_radius))
-        print("-----------------------------------------------------\n")
+        return self._peaks["combined"]
+
+    @property
+    def custom_radius(self) -> Quantity:
+        """
+        A getter for the custom region that can be defined on initialisation.
+        :return: The radius (in kpc) of the user defined custom region.
+        :rtype: Quantity
+        """
+        return self._custom_region_radius
 
 
 class GalaxyCluster(ExtendedSource):
-    def __init__(self, ra, dec, redshift=None, name=None, region_radius=None, use_peak=True,
-                 peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
-                 back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
-                 load_products=False, load_fits=False):
-        super().__init__(ra, dec, redshift, name, region_radius, use_peak, peak_lo_en, peak_hi_en,
+    def __init__(self, ra, dec, redshift, r200: Quantity = None, r500: Quantity = None, r2500: Quantity = None,
+                 richness: float = None, richness_err: float = None, wl_mass: Quantity = None,
+                 wl_mass_err: Quantity = None, name=None, custom_region_radius=None, use_peak=True,
+                 peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
+                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=False, load_fits=False):
+        super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
                          back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits)
+
+        if r200 is None and r500 is None and r2500 is None:
+            raise ValueError("You must set at least one overdensity radius")
+
+        # Here we don't need to check if a non-null redshift was supplied, a redshift is required for
+        #  initialising a GalaxyCluster object. These chunks just convert the radii to kpc.
+        # I know its ugly to have the same code three times, but I want these to be in attributes.
+        if r200 is not None and r200.unit.is_equivalent("deg"):
+            self._r200 = ang_to_rad(r200, self._redshift, self._cosmo).to("kpc")
+        elif r200 is not None and r200.unit.is_equivalent("kpc"):
+            self._r200 = r200.to("kpc")
+        elif r200 is not None and not r200.unit.is_equivalent("kpc") and not r200.unit.is_equivalent("deg"):
+            raise UnitConversionError("R200 radius must be in either angular or distance units.")
+
+        if r500 is not None and r500.unit.is_equivalent("deg"):
+            self._r500 = ang_to_rad(r500, self._redshift, self._cosmo).to("kpc")
+        elif r500 is not None and r500.unit.is_equivalent("kpc"):
+            self._r500 = r500.to("kpc")
+        elif r500 is not None and not r500.unit.is_equivalent("kpc") and not r500.unit.is_equivalent("deg"):
+            raise UnitConversionError("R500 radius must be in either angular or distance units.")
+
+        if r2500 is not None and r2500.unit.is_equivalent("deg"):
+            self._r2500 = ang_to_rad(r2500, self._redshift, self._cosmo).to("kpc")
+        elif r2500 is not None and r2500.unit.is_equivalent("kpc"):
+            self._r2500 = r2500.to("kpc")
+        elif r2500 is not None and not r2500.unit.is_equivalent("kpc") and not r2500.unit.is_equivalent("deg"):
+            raise UnitConversionError("R2500 radius must be in either angular or distance units.")
+
+        if r200 is not None:
+            self._setup_new_region(self._r200, "r200")
+        if r500 is not None:
+            self._setup_new_region(self._r500, "r500")
+        if r2500 is not None:
+            self._setup_new_region(self._r2500, "r2500")
+
+        # Reading observables into their attributes, if the user doesn't pass a value for a particular observable
+        #  it will be None.
+        self._richness = richness
+        self._richness_err = richness_err
+
+        # Mass has a unit, unlike richness, so need to check that as we're reading it in
+        if wl_mass is not None and wl_mass.unit.is_equivalent("Msun"):
+            self._wl_mass = wl_mass.to("Msun")
+        elif wl_mass is not None and not wl_mass.unit.is_equivalent("Msun"):
+            raise UnitConversionError("The weak lensing mass value cannot be converted to MSun.")
+
+        if wl_mass_err is not None and wl_mass_err.unit.is_equivalent("Msun"):
+            self._wl_mass_err = wl_mass_err.to("Msun")
+        elif wl_mass_err is not None and not wl_mass_err.unit.is_equivalent("Msun"):
+            raise UnitConversionError("The weak lensing mass error value cannot be converted to MSun.")
+
+    # Property getters for the overdensity radii, they don't get setters as various things are defined on init
+    #  that I don't want to call again.
+    @property
+    def r200(self) -> Quantity:
+        """
+        Getter for the radius at which the average density is 200 times the critical density.
+        :return: The R200 in kpc.
+        :rtype: Quantity
+        """
+        return self._r200
+
+    @property
+    def r500(self) -> Quantity:
+        """
+        Getter for the radius at which the average density is 500 times the critical density.
+        :return: The R500 in kpc.
+        :rtype: Quantity
+        """
+        return self._r500
+
+    @property
+    def r2500(self) -> Quantity:
+        """
+        Getter for the radius at which the average density is 2500 times the critical density.
+        :return: The R2500 in kpc.
+        :rtype: Quantity
+        """
+        return self._r2500
+
+    # Property getters for other observables I've allowed to be passed in.
+    @property
+    def weak_lensing_mass(self) -> Tuple[Quantity, Quantity]:
+        """
+        Gets the weak lensing mass passed in at initialisation of the source.
+        :return: Two quantities, the weak lensing mass, and the weak lensing mass error in Msun. If the
+        values were not passed in at initialisation, the returned values will be None.
+        :rtype: Tuple[Quantity, Quantity]
+        """
+        return self._wl_mass, self._wl_mass_err
+
+    @property
+    def richness(self) -> Tuple[Quantity, Quantity]:
+        """
+        Gets the richness passed in at initialisation of the source.
+        :return: Two quantities, the richness, and the weak lensing mass error. If the
+        values were not passed in at initialisation, the returned values will be None.
+        :rtype: Tuple[Quantity, Quantity]
+        """
+        return self._richness, self._richness_err
+
+    # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
+    #  justified considering how often the cluster temperature is used in X-ray cluster studies.
+    def get_temperature(self, reg_type: str, model: str = None):
+        """
+        Convenience method that calls get_results to retrieve temperature measurements. All matching values
+        from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
+        column 1 is err-, and column 2 is err+).
+        :param str reg_type: The type of region that the fitted spectra were generated from.
+        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :return: The temperature value, and uncertainties.
+        """
+        allowed_rtype = ["region", "custom", "r500", "r200", "r2500"]
+
+        if reg_type not in allowed_rtype:
+            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
+        elif len(self._fit_results) == 0:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this source")
+        elif reg_type not in self._fit_results:
+            av_regs = ", ".join(self._fit_results.keys())
+            raise ModelNotAssociatedError("{0} has no associated XSPEC fit to this source; available regions are "
+                                          "{1}".format(reg_type, av_regs))
+
+        # Find which available models have kT in them
+        models_with_kt = [m for m, v in self._fit_results[reg_type].items() if "kT" in v]
+
+        if model is not None and model not in self._fit_results[reg_type]:
+            av_mods = ", ".join(self._fit_results[reg_type].keys())
+            raise ModelNotAssociatedError("{0} has not been fitted to {1} spectra of this source; available "
+                                          "models are  {2}".format(model, reg_type, av_mods))
+        elif model is not None and "kT" not in self._fit_results[reg_type][model]:
+            raise ParameterNotAssociatedError("kT was not a free parameter in the {} fit to this "
+                                              "source.".format(model))
+        elif model is not None and "kT" in self._fit_results[reg_type][model]:
+            # Just going to call the get_results method with specific parameters, to get the result formatted
+            #  the same way.
+            return self.get_results(reg_type, model, "kT")
+        elif model is None and len(models_with_kt) != 1:
+            raise ValueError("The model parameter can only be None when there is only one model available"
+                             " with a kT measurement.")
+        # For convenience sake, if there is only one model with a kT measurement, I'll allow the model parameter
+        #  to be None.
+        elif model is None and len(models_with_kt) == 1:
+            return self.get_results(reg_type, models_with_kt[0], "kT")
 
 
 class PointSource(BaseSource):
