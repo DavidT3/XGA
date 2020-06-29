@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2020, 17:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/06/2020, 15:22. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -227,7 +227,7 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events"):
+        for pack in source.get_products("events", just_obj=False):
             obs_id = pack[0]
             inst = pack[1]
 
@@ -235,7 +235,8 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
                 os.mkdir(OUTPUT + obs_id)
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("image", obs_id, inst) if en_id in match]
+            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
+                      if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
 
@@ -368,7 +369,7 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events"):
+        for pack in source.get_products("events", just_obj=False):
             obs_id = pack[0]
             inst = pack[1]
 
@@ -376,11 +377,13 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
                 os.mkdir(OUTPUT + obs_id)
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("expmap", obs_id, inst) if en_id in match]
+            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False)
+                      if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
             # Generating an exposure map requires a reference image.
-            ref_im = [match for match in source.get_products("image", obs_id, inst) if en_id in match][0][-1]
+            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
+                      if en_id in match][0][-1]
             # It also requires an attitude file
             att = source.get_att_file(obs_id)
             # Set up the paths and names of files
@@ -458,10 +461,17 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     sources_extras = []
     sources_types = []
     for source in sources:
-        # TODO Maybe check that 'master' products don't already exist
         en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+
+        # Checking if the combined product already exists
+        exists = [match for match in source.get_products("combined_{}".format(to_mosaic), just_obj=False)
+                  if en_id in match]
+        if len(exists) == 1 and exists[0][-1].usable:
+            continue
+
         # This fetches all image objects with the passed energy bounds
-        matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic) if en_id in match]
+        matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic, just_obj=False)
+                   if en_id in match]
         paths = [product[1].path for product in matches if product[1].usable]
         obs_ids = [product[0] for product in matches if product[1].usable]
         obs_ids_set = []
@@ -484,7 +494,7 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
         # This contains any other information that will be needed to instantiate the class
         # once the SAS cmd has run
         # The 'combined' values for obs and inst here are crucial, they will tell the source object that the final
-        # product is assigned to that these are 'master' products - combinations of all available data
+        # product is assigned to that these are merged products - combinations of all available data
         sources_extras.append(array([{"lo_en": lo_en, "hi_en": hi_en, "obs_id": "combined",
                                       "instrument": "combined"}]))
         sources_types.append(full(sources_cmds[-1].shape, fill_value=to_mosaic))
@@ -496,24 +506,32 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
 
 
-# TODO Have to allow this to make grouped spectra, set default of 5 counts per bin, avoids bins with 0 counts,
-#  which XSPEC does not like
+# TODO Add an option to generate core-excised spectra.
 @sas_call
-def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = True,
+def evselect_spectrum(sources: List[BaseSource], reg_type: str, group_spec: bool = True, min_counts: int = 5,
+                      min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
                       num_cores: int = NUM_CORES):
     """
     A wrapper for all of the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
-    observation, will have a spectrum generated using the specified region type as as boundary.
+    observation, will have a spectrum generated using the specified region type as as boundary. It is possible
+    to generate both grouped and ungrouped spectra using this function, with the degree of grouping set
+    by the min_counts, min_sn, and oversample parameters.
     :param List[BaseSource] sources: A single source object, or a list of source objects.
     :param str reg_type: Tells the method what region source you want to use, for instance r500 or r200.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
     ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
     slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to
     90% of available.
     """
-    allowed_bounds = ["region", "r2500", "r500", "r200"]
+    allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
@@ -537,11 +555,14 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
                "spectrumset={s} energycolumn=PI spectralbinsize=5 withspecranges=yes specchannelmin=0 " \
                "specchannelmax={u} {ex}"
 
-    rmf_cmd = "rmfgen rmfset={r} spectrumset={s} detmaptype=flat extendedsource={es}"
+    rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype=flat extendedsource={es}"
 
     # Don't need to run backscale separately, as this arfgen call will do it automatically
-    arf_cmd = "arfgen spectrumset={s} arfset={a} withrmfset=yes rmfset={r} badpixlocation={e} " \
+    arf_cmd = "arfgen spectrumset='{s}' arfset={a} withrmfset=yes rmfset='{r}' badpixlocation={e} " \
               "extendedsource={es} detmaptype=flat setbackscale=yes"
+
+    # If the user wants to group spectra, then we'll need this template command:
+    grp_cmd = "specgroup spectrumset={s} overwrite=yes backgndset={b} arfset={a} rmfset={r} addfilenames=no"
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -561,7 +582,7 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events"):
+        for pack in source.get_products("events", just_obj=False):
             obs_id = pack[0]
             inst = pack[1]
 
@@ -569,8 +590,14 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
                 os.mkdir(OUTPUT + obs_id)
 
             # Got to check if this spectrum already exists
-            exists = [match for match in source.get_products("spectrum", obs_id, inst) if reg_type in match]
+            exists = [match for match in source.get_products("spectrum", obs_id, inst, just_obj=False)
+                      if reg_type in match]
             if len(exists) == 1 and exists[0][-1].usable:
+                continue
+
+            # If there is no match to a region, the source region returned by this method will be None,
+            #  and if the user wants to generate spectra from region files, we have to ignore that observations
+            if reg_type == "region" and source.get_source_region("region", obs_id)[0] is None:
                 continue
 
             # This method returns a SAS expression for the source and background regions - excluding interlopers
@@ -589,14 +616,18 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
             else:
                 raise ValueError("You somehow have an illegal value for the instrument name...")
 
+            # Some of the SAS tasks have issues with filenames with a '+' in them for some reason, so this
+            #  replaces any + symbols that may be in the source name with another character
+            source_name = source.name.replace("+", "x")
+
             # Just grabs the event list object
             evt_list = pack[-1]
             # Sets up the file names of the output files
-            dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source.name)
-            spec = "{o}_{i}_{n}_{bt}_spec.fits".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
-            b_spec = "{o}_{i}_{n}_{bt}_backspec.fits".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
-            arf = "{o}_{i}_{n}_{bt}.arf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
-            b_arf = "{o}_{i}_{n}_{bt}_back.arf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+            dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source_name)
+            spec = "{o}_{i}_{n}_{bt}_spec.fits".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
+            b_spec = "{o}_{i}_{n}_{bt}_backspec.fits".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
+            arf = "{o}_{i}_{n}_{bt}.arf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
+            b_arf = "{o}_{i}_{n}_{bt}_back.arf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
             ccf = dest_dir + "ccf.cif"
 
             # Fills out the evselect command to make the main and background spectra
@@ -607,11 +638,11 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
             #  an individual one for each spectrum. Also adds arfgen commands on the end, as they depend on
             #  the rmf.
             if one_rmf:
-                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source.name, bt="universal")
+                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source_name, bt="universal")
                 b_rmf = rmf
             else:
-                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
-                b_rmf = "{o}_{i}_{n}_{bt}_back.rmf".format(o=obs_id, i=inst, n=source.name, bt=reg_type)
+                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
+                b_rmf = "{o}_{i}_{n}_{bt}_back.rmf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
 
             if one_rmf and not os.path.exists(dest_dir + rmf):
                 cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
@@ -627,6 +658,18 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
                                                               es=ex_src)]) + ";"
                 cmd_str += ";".join([sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path,
                                                                 es=ex_src)])
+
+            # If the user wants to produce grouped spectra, then this if statement is triggered and adds a specgroup
+            #  command at the end. The groupspec command will replace the ungrouped spectrum.
+            if group_spec:
+                new_grp = grp_cmd.format(s=spec, b=b_spec, r=rmf, a=arf)
+                if min_counts is not None:
+                    new_grp += " mincounts={mc}".format(mc=min_counts)
+                if min_sn is not None:
+                    new_grp += " minSN={msn}".format(msn=min_sn)
+                if over_sample is not None:
+                    new_grp += " oversample={os}".format(os=over_sample)
+                cmd_str += "; " + new_grp
 
             # Adds clean up commands to move all generated files and remove temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
@@ -653,8 +696,6 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, one_rmf: bool = 
         sources_types.append(full(sources_cmds[-1].shape, fill_value="spectrum"))
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
-
-# TODO Implement regioned image so I can actually test that my SAS regions are sensible
 
 
 def evselect_annular_spectrum():

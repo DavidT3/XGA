@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2020, 15:43. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -11,13 +11,13 @@ import astropy.units as u
 from astropy.units import Quantity
 from fitsio import FITS
 from tqdm import tqdm
+
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
-from xga.exceptions import NoProductAvailableError
+from xga.exceptions import NoProductAvailableError, XSPECFitError, ModelNotAssociatedError
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 
 
-# TODO It may be necessary to put query yes in the XSPEC scripts so they keep running whatever questions
-#  pop up while they're going.
+# TODO Make xga_extract deal with no redshift better
 
 
 def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool, list, list]:
@@ -32,12 +32,10 @@ def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool
     :rtype: Tuple[FITS, str, bool, list, list]
     """
     cmd = "xspec - {}".format(x_script)
-    # TODO Perhaps introduce a timeout here if its necessary
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8").split("\n")
     err = err.decode("UTF-8").split("\n")
 
-    # TODO Change the ***Error part if it doesn't actually work
     err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line]
     warn_out_lines = [line.split("***Warning: ")[-1] for line in out if "***Warning" in line]
     err_err_lines = [line.split("***Error: ")[-1] for line in err if "***Error" in line]
@@ -51,9 +49,13 @@ def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool
     error = err_out_lines + err_err_lines
     warn = warn_out_lines + warn_err_lines
 
-    res_tables = FITS(out_file)
-    tab_names = [tab.get_extname() for tab in res_tables]
-    if "results" not in tab_names or "spec_info" not in tab_names:
+    if os.path.exists(out_file):
+        res_tables = FITS(out_file)
+        tab_names = [tab.get_extname() for tab in res_tables]
+        if "results" not in tab_names or "spec_info" not in tab_names:
+            usable = False
+    else:
+        res_tables = None
         usable = False
 
     return res_tables, src, usable, error, warn
@@ -135,11 +137,11 @@ def xspec_call(sas_func):
                 global_results = res_set[0]["RESULTS"][0]
                 model = global_results["MODEL"].strip(" ")
 
-                av_lums = {}
+                inst_lums = {}
                 for line_ind, line in enumerate(res_set[0]["SPEC_INFO"]):
                     sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                     # Finds the appropriate matching spectrum object for the current table line
-                    spec = [match for match in s.get_products("spectrum", sp_info[0], sp_info[1])
+                    spec = [match for match in s.get_products("spectrum", sp_info[0], sp_info[1], just_obj=False)
                             if reg_type in match and match[-1].usable][0][-1]
 
                     # Adds information from this fit to the spectrum object.
@@ -147,22 +149,28 @@ def xspec_call(sas_func):
                     s.update_products(spec)  # Adds the updated spectrum object back into the source
 
                     # The add_fit_data method formats the luminosities nicely, so we grab them back out
-                    #  to help construct the combined luminosity needed to pass to the source object 'add_fit_data'
-                    #  method
+                    #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
                     processed_lums = spec.get_luminosities(model)
-                    for en_band in processed_lums:
-                        if en_band not in av_lums:
-                            av_lums[en_band] = processed_lums[en_band]
-                        else:
-                            av_lums[en_band] = [av_lums[en_band][i] + processed_lums[en_band][i]
-                                                for i in range(0, 3)]
+                    if spec.instrument not in inst_lums:
+                        inst_lums[spec.instrument] = processed_lums
 
-                for en_band in av_lums:
-                    # TODO THIS IS A GARBAGE METHOD OF COMBINING THE LUMINOSITY VALUES
-                    av_lums[en_band] = [val / (line_ind+1) for val in av_lums[en_band]]
+                # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                #  consistent
+                if "pn" in inst_lums:
+                    chosen_lums = inst_lums["pn"]
+                # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                elif "mos2" in inst_lums:
+                    chosen_lums = inst_lums["mos2"]
+                else:
+                    chosen_lums = inst_lums["mos1"]
 
                 # Push global fit results, luminosities etc. into the corresponding source object.
-                s.add_fit_data(model, reg_type, global_results, av_lums)
+                s.add_fit_data(model, reg_type, global_results, chosen_lums)
+
+            elif len(res_set) != 0 and not res_set[1]:
+                for err in res_set[2]:
+                    raise XSPECFitError(err)
 
             if len(res_set) != 0:
                 res_set[0].close()
@@ -178,7 +186,7 @@ def xspec_call(sas_func):
 def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quantity = Quantity(3.0, "keV"),
                      start_met: float = 0.3, lum_en: List[Quantity] = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
                      freeze_nh: bool = True, freeze_met: bool = True,
-                     link_norm: bool = False, lo_en: Quantity = Quantity(0.5, "keV"),
+                     link_norm: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                      abund_table: str = "angr", fit_method: str = "leven", num_cores: int = NUM_CORES):
     """
@@ -201,7 +209,7 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
     :param str fit_method: The XSPEC fit method to use.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     """
-    allowed_bounds = ["region", "r2500", "r500", "r200"]
+    allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
@@ -244,7 +252,8 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for source in sources:
         # Find matching spectrum objects associated with the current source, and checking if they are valid
-        spec_objs = [match for match in source.get_products("spectrum") if reg_type in match and match[-1].usable]
+        spec_objs = [match for match in source.get_products("spectrum", just_obj=False)
+                     if reg_type in match and match[-1].usable]
         # Obviously we can't do a fit if there are no spectra, so throw an error if thats the case
         if len(spec_objs) == 0:
             raise NoProductAvailableError("There are no matching spectra for this source object, you "
@@ -305,7 +314,9 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
             xcm.write(script)
 
         # If the fit has already been performed we do not wish to perform it again
-        if not os.path.exists(script_file) or not os.path.exists(out_file):
+        try:
+            res = source.get_results(reg_type, model)
+        except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
     return script_paths, outfile_paths, num_cores, reg_type

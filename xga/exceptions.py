@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2020, 19:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 10:52. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -274,6 +274,85 @@ class ModelNotAssociatedError(Exception):
             return '{}'.format(self.message)
         else:
             return 'ModelNotAssociatedError has been raised'
+
+
+class ParameterNotAssociatedError(Exception):
+    def __init__(self, *args):
+        """
+        Error raised when a parameter is not associated with a particular model.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'ParameterNotAssociatedError has been raised'
+
+
+class XSPECFitError(Exception):
+    def __init__(self, *args):
+        """
+        This error is raised when there is a problem during an XSPEC fit instigated by XGA.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'XSPECFitError has been raised'
+
+
+class RateMapPairError(Exception):
+    def __init__(self, *args):
+        """
+        This error is raised when there is a problem with the pair of Image and Exposure map objects that
+        are passed into the RateMap init.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'RateMapPairError has been raised'
+
+
+class PeakConvergenceFailedError(Exception):
+    def __init__(self, *args):
+        """
+        This error is raised when iterating peak finding fails to converge within the allowed number
+        of iterations.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'PeakConvergenceFailedError has been raised'
+
 
 
 
