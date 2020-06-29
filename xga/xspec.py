@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 16:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2020, 15:43. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -186,7 +186,7 @@ def xspec_call(sas_func):
 def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quantity = Quantity(3.0, "keV"),
                      start_met: float = 0.3, lum_en: List[Quantity] = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
                      freeze_nh: bool = True, freeze_met: bool = True,
-                     link_norm: bool = False, lo_en: Quantity = Quantity(0.5, "keV"),
+                     link_norm: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                      abund_table: str = "angr", fit_method: str = "leven", num_cores: int = NUM_CORES):
     """
