@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2020, 15:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2020, 14:34. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -10,7 +10,7 @@ from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
-from astropy.units import Quantity, UnitBase, deg, UnitConversionError
+from astropy.units import Quantity, UnitBase, deg, UnitConversionError, pix
 from fitsio import FITS
 from numpy import ndarray
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
@@ -20,6 +20,7 @@ from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, \
     ParameterNotAssociatedError, PeakConvergenceFailedError, NoRegionsError
+from xga.imagetools import annular_mask
 from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap, RateMap
 from xga.sourcetools import simple_xmm_match, nhlookup, rad_to_ang, ang_to_rad
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
@@ -1778,7 +1779,9 @@ class GalaxyCluster(ExtendedSource):
         elif wl_mass_err is not None and not wl_mass_err.unit.is_equivalent("Msun"):
             raise UnitConversionError("The weak lensing mass error value cannot be converted to MSun.")
 
-    # Property getters for the overdensity radii, they don't get setters as various things are defined on init
+        self._radial_brightness()
+
+    # Property getters for the over density radii, they don't get setters as various things are defined on init
     #  that I don't want to call again.
     @property
     def r200(self) -> Quantity:
@@ -1871,6 +1874,41 @@ class GalaxyCluster(ExtendedSource):
         #  to be None.
         elif model is None and len(models_with_kt) == 1:
             return self.get_results(reg_type, models_with_kt[0], "kT")
+
+    def _radial_brightness(self, reg_type: str):
+        """
+
+        :param str reg_type:
+        """
+        allowed_rtype = ["region", "custom", "r500", "r200", "r2500"]
+        if reg_type not in allowed_rtype:
+            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
+
+        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
+        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
+        # Get combined peak - basically the only peak internal methods will use
+        pix_peak = comb_rt.coord_conv(self.peak, pix)
+
+        rad = self.get_source_region(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius
+        rads = np.arange(0, rad).astype(int)
+        inn_rads = rads[:len(rads)-1]
+        out_rads = rads[1:len(rads)]
+        cen_rads = (out_rads + inn_rads) / 2
+
+        # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
+        #  dimension. Helps with broadcasting the annular masks with the region mask that gets rid of interlopers
+        masks = annular_mask(pix_peak, inn_rads, out_rads, comb_rt.shape) * self.get_mask("r500")[0][..., None]
+
+        # Creates a 3D array of the masked data
+        masked_data = masks * comb_rt.data[..., None]
+        # Calculates the average for each radius, use the masks array as weights to only include unmasked
+        #  areas in the average for each radius.
+        br = np.average(masked_data, axis=(0, 1), weights=masks)
+
+        # TODO Test all these and make sure the background calculation is correct
+        bg = np.average(comb_rt.data * self.get_mask("r500")[1], axis=(0, 1), weights=self.get_mask("r500")[1])
+
+        # TODO Finish this method
 
 
 class PointSource(BaseSource):
