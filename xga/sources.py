@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2020, 14:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2020, 16:56. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1779,7 +1779,7 @@ class GalaxyCluster(ExtendedSource):
         elif wl_mass_err is not None and not wl_mass_err.unit.is_equivalent("Msun"):
             raise UnitConversionError("The weak lensing mass error value cannot be converted to MSun.")
 
-        self._radial_brightness()
+        self._radial_brightness("r500")
 
     # Property getters for the over density radii, they don't get setters as various things are defined on init
     #  that I don't want to call again.
