@@ -14,9 +14,12 @@ This is a slightly more complex installation than many Python modules, but shoul
 having issues feel free to contact me.
 
 ## The Module
-As XGA is still in a very early stage of development it hasn't been submitted to PyPi yet, as such you should clone 
-this GitHub repository, and run the setup.py file.
+XGA has been uploaded to PyPi, so you can simply run:
+```shell script
+pip install xga
+```
 
+Alternatively, to get the current working version from the git repository run:
 ```shell script
 git clone https://github.com/DavidT3/XGA
 python setup.py install
