@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2020, 15:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/07/2020, 10:45. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,9 +8,13 @@ from subprocess import Popen, PIPE
 from typing import List, Tuple
 
 import astropy.units as u
+import fitsio
+import pandas as pd
 from astropy.units import Quantity
 from fitsio import FITS
 from tqdm import tqdm
+
+pd.set_option('display.max_columns', 500)
 
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
 from xga.exceptions import NoProductAvailableError, XSPECFitError, ModelNotAssociatedError
@@ -48,9 +52,35 @@ def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool
 
     error = err_out_lines + err_err_lines
     warn = warn_out_lines + warn_err_lines
+    if os.path.exists(out_file + "_info.csv"):
+        # The original version of the xga_output.tcl script output everything as one nice neat fits file
+        #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
+        #  a Jupyter Notebook. So now I'm going to smoosh all the csv outputs into one fits.
+        results = pd.read_csv(out_file + "_results.csv", header="infer")
+        # This is the csv with the fit results in, creates new fits file and adds in
+        fitsio.write(out_file + ".fits", results.to_records(index=False), extname="results", clobber=True)
+        del results
 
-    if os.path.exists(out_file):
-        res_tables = FITS(out_file)
+        # The information about individual spectra, exposure times, luminosities etc.
+        spec_info = pd.read_csv(out_file + "_info.csv", header="infer")
+        # Gets added into the existing file
+        fitsio.write(out_file + ".fits", spec_info.to_records(index=False), extname="spec_info")
+        del spec_info
+
+        # This finds all of the matching spectrum plot csvs were generated
+        rel_path = "/".join(out_file.split('/')[0:-1])
+        # This is mostly just used to find how many files there are
+        spec_tabs = [rel_path + "/" + sp for sp in os.listdir(rel_path)
+                     if "{}_spec".format(out_file) in rel_path + "/" + sp]
+        for spec_i in range(1, len(spec_tabs)+1):
+            # Loop through and redefine names like this to ensure they're in the right order
+            spec_plot = pd.read_csv(out_file + "_spec{}.csv".format(spec_i), header="infer")
+            # Adds all the plot tables into the existing fits file in the right order
+            fitsio.write(out_file + ".fits", spec_plot.to_records(index=False), extname="plot{}".format(spec_i))
+            del spec_plot
+
+        # This reads in the fits we just made
+        res_tables = FITS(out_file + ".fits")
         tab_names = [tab.get_extname() for tab in res_tables]
         if "results" not in tab_names or "spec_info" not in tab_names:
             usable = False
@@ -298,7 +328,7 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
         # Defining where the output summary file of the fit is written
-        out_file = dest_dir + source.name + "_" + reg_type + "_" + model + ".fits"
+        out_file = dest_dir + source.name + "_" + reg_type + "_" + model
         script_file = dest_dir + source.name + "_" + reg_type + "_" + model + ".xcm"
 
         # The template is filled out here, taking everything we have generated and everything the user

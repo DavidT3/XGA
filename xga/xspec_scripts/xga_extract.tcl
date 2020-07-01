@@ -10,10 +10,10 @@ proc xga_extract { args } {
     set prompt "XSPEC12>"
 
 # parse the arguments and find the name of the out file
-# The first argument should be the name of the output file, the second is a list of energy limit
+# The first argument should be the prefix for the names of the output files, the second is a list of energy limit
 #  pairs to calculate luminosity in, the third is the relevant redshift, the fourth is
 #  the confidence level for Lx errors, and the last is the name of the model used to fit
-   set FITSfile [lindex $args 0]
+   set fileprefix [lindex $args 0]
 
 # Parse the arguments related to luminosity calculations
    set energy_lims [lindex $args 1]
@@ -69,21 +69,10 @@ proc xga_extract { args } {
     set test_stat [tcloutr stat test]
     set dof [lindex [tcloutr dof] 0]
 
-# create a temporary file for the column descriptors of the fit results table
-    set cdfile $FITSfile
-    append cdfile "-fitcd"
-    rm -f $cdfile
-    set fileid [open $cdfile w]
-
+# I used to do this like writefits and make a fits file with command line tools from text files,
+#  but thanks to an absolutely bizarre error when running from Jupyter Notebooks I can't do that
 # Name all the columns I am adding manually to the fit result table
-    puts $fileid "MODEL 100A"
-    puts $fileid "TOTAL_EXPOSURE E"
-    puts $fileid "TOTAL_COUNT_RATE E"
-    puts $fileid "TOTAL_COUNT_RATE_ERR E"
-    puts $fileid "NUM_UNLINKED_THAWED_VARS K"
-    puts $fileid "FIT_STATISTIC E"
-    puts $fileid "TEST_STATISTIC E"
-    puts $fileid "DOF K"
+set col_list "MODEL,TOTAL_EXPOSURE,TOTAL_COUNT_RATE,TOTAL_COUNT_RATE_ERR,NUM_UNLINKED_THAWED_VARS,FIT_STATISTIC,TEST_STATISTIC,DOF"
 
 # Now all the relevant parameter columns get named (those that are allowed to vary and are unlinked)
 # Also record where-ever there is a parameter called nH, so we know which parameters to 0 later for unabsorbed
@@ -100,65 +89,52 @@ proc xga_extract { args } {
         if { $spardel($ipar) > 0 } {
 # Each parameter gets three columns; the value, the -error, and the +error
             set divid "|"
-            puts $fileid [concat $pname$divid$ipar " E " $punit]
-            puts $fileid [concat $pname$divid$ipar- " E " $punit]
-            puts $fileid [concat $pname$divid$ipar+ " E " $punit]
+            append col_list "," $pname$divid$ipar
+            append col_list "," $pname$divid$ipar-
+            append col_list "," $pname$divid$ipar+
             incr count
 	    }
     }
-    close $fileid
 
 # open a text version of the output file - for the actual values to be written to.
-    set txtfile $FITSfile
-    append txtfile "-fittxt"
+    set txtfile $fileprefix
+    append txtfile "_results.csv"
     rm -f $txtfile
     set fileid [open $txtfile w]
 
 # Write the text output
 # These are the values that will always go in this table, the next chunk is more dynamic and depends how many pars
 #  there are.
-    set outstr "$mod_name $total_time $total_rate $total_rate_err $count $fit_stat $test_stat $dof "
-    puts $outstr
+    set comma ,
+    set outstr "$mod_name$comma$total_time$comma$total_rate$comma$total_rate_err$comma$count$comma$fit_stat$comma$test_stat$comma$dof"
     for {set ipar 1} {$ipar <= $numpar} {incr ipar} {
 	if { $spardel($ipar) > 0 } {
 # Write the parameter value and errors to the outstring here, the errors ARE NOT written as confidence levels, but
 #  have been converted to +- values already
-	    append outstr "$sparval($ipar) [expr {$sparval($ipar)-$sparerrlow($ipar)}] [expr {$sparerrhi($ipar)-$sparval($ipar)}] "
+	    append outstr "$comma$sparval($ipar)$comma[expr {$sparval($ipar)-$sparerrlow($ipar)}]$comma[expr {$sparerrhi($ipar)-$sparval($ipar)}]"
 	    }
     }
+    puts $fileid $col_list
     puts $fileid $outstr
 
 # close the output text file
     close $fileid
 
-# Turn those text files into the first fits file, with global values
-    ftcreate extname="results" cdfile=$cdfile datafile=$txtfile outfile=$FITSfile clobber="yes"
-# Clean up temporary files
-    rm -f $cdfile $txtfile
 
 
 
 
-# This chunk will write plotting data for the spectra to separate fits files and add them to the main
+# This chunk will write plotting data for the spectra to separate csv files
 #  IT HAS TO GO BEFORE LUM CALC OTHERWISE THE MODEL DATA READ OUT WILL BE THE MODEL WITH NH=0
-    for {set spec_i 1} {$spec_i < $num_spec+1} {incr spec_i} {
-        set plotcd $FITSfile
-        append plotcd "-plotcd" $spec_i
-        rm -f $plotcd
-        set fileid [open $plotcd w]
 
 # Column names for the plot tables, Y will be from data, YMODEL will be from the fitted model
-        puts $fileid "X E"
-        puts $fileid "Y E"
-        puts $fileid "XERR E"
-        puts $fileid "YERR E"
-        puts $fileid "YMODEL E"
-        close $fileid
+        set col_list "X,Y,XERR,YERR,YMODEL"
 
-        set plottxt $FITSfile
-        append plottxt "-plottxt" $spec_i
-        rm -f $plottxt
-        set fileid [open $plottxt w]
+    for {set spec_i 1} {$spec_i < $num_spec+1} {incr spec_i} {
+        set plot_data $fileprefix
+        append plot_data "_spec" $spec_i ".csv"
+        rm -f $plot_data
+        set fileid [open $plot_data w]
 
 # Reading out the plotting data I'm going to store for a particular loaded spectrum
         set xarr [tcloutr plot data x $spec_i]
@@ -170,24 +146,15 @@ proc xga_extract { args } {
 # write the text output
         set outstr ""
         for {set k 0} {$k < [llength $xarr]} {incr k} {
-            append outstr "[lindex $xarr $k] [lindex $yarr $k] [lindex $xerrarr $k] [lindex $yerrarr $k] [lindex $modelarr $k] \n "
+            append outstr "[lindex $xarr $k]$comma[lindex $yarr $k]$comma[lindex $xerrarr $k]$comma[lindex $yerrarr $k]$comma[lindex $modelarr $k]\n"
             }
 # Write to the actual file
+        puts $fileid $col_list
         puts $fileid $outstr
 # close the output text file
         close $fileid
-
-# Turn those text files into the first fits file, with global values
-        set specout $FITSfile
-        append specout "-plot" $spec_i
-        set tab_name "plot"
-        append tab_name $spec_i
-        ftcreate extname=$tab_name cdfile=$plotcd datafile=$plottxt outfile=$specout clobber="yes"
-# Append spec fits file to results
-        ftappend infile=$specout outfile=$FITSfile
-# Clean up temporary files
-        rm -f $plotcd $plottxt $specout
     }
+
 
 
 
@@ -235,57 +202,40 @@ proc xga_extract { args } {
         lappend lums $interim_lum
         }
 
-# This chunk will write some information about the separate spectra to another fits file
-# create a temporary file for the column descriptors of the spectrum information table
-    set speccdfile $FITSfile
-    append speccdfile "-speccd"
-    rm -f $speccdfile
-    set fileid [open $speccdfile w]
+# This chunk will write some information about the separate spectra to another csv
+    set col_list "SPEC_PATH,EXPOSURE,COUNT_RATE,COUNT_RATE_ERR"
 
-    puts $fileid "SPEC_PATH 1000A"
-    puts $fileid "EXPOSURE E"
-    puts $fileid "COUNT_RATE E"
-    puts $fileid "COUNT_RATE_ERR E"
     foreach p $energy_lims {
         set lum_name "Lx"
         set lum_min "Lx"
         set lum_max "Lx"
-        append lum_name "_" [lindex $p 0] "_" [lindex $p 1] " E 10^44erg/s"
-        append lum_min "_" [lindex $p 0] "_" [lindex $p 1] "- E 10^44erg/s"
-        append lum_max "_" [lindex $p 0] "_" [lindex $p 1] "+ E 10^44erg/s"
-        puts $fileid $lum_name
-        puts $fileid $lum_min
-        puts $fileid $lum_max
+        append lum_name "_" [lindex $p 0] "_" [lindex $p 1]
+        append lum_min "_" [lindex $p 0] "_" [lindex $p 1] "-"
+        append lum_max "_" [lindex $p 0] "_" [lindex $p 1] "+"
+        append col_list "," $lum_name
+        append col_list "," $lum_min
+        append col_list "," $lum_max
     }
-    close $fileid
 
 # open a text version of the output file
-    set spectxtfile $FITSfile
-    append spectxtfile "-spectxt"
-    rm -f $spectxtfile
-    set fileid [open $spectxtfile w]
+    set spec_info_file $fileprefix
+    append spec_info_file "_info.csv"
+    rm -f $spec_info_file
+    set fileid [open $spec_info_file w]
 
 # write the text output
     set outstr ""
     for {set spec_i 1} {$spec_i < $num_spec+1} {incr spec_i} {
-        append outstr "[tcloutr filename $spec_i] [lindex $times $spec_i-1] [lindex $rates $spec_i-1] [lindex $rates_errs $spec_i-1] "
+        append outstr "[tcloutr filename $spec_i]$comma[lindex $times $spec_i-1]$comma[lindex $rates $spec_i-1]$comma[lindex $rates_errs $spec_i-1]"
         for {set li 0} {$li < [llength $lums]} {incr li} {
-            append outstr "[lindex [lindex $lums $li] $spec_i-1] [lindex [lindex $lum_min_err $li] $spec_i-1] [lindex [lindex $lum_max_err $li] $spec_i-1] "
+            append outstr "$comma[lindex [lindex $lums $li] $spec_i-1]$comma[lindex [lindex $lum_min_err $li] $spec_i-1]$comma[lindex [lindex $lum_max_err $li] $spec_i-1]"
             }
         append outstr "\n"
         }
 # Write to the actual file
+    puts $fileid $col_list
     puts $fileid $outstr
 # close the output text file
     close $fileid
-
-# Turn those text files into the first fits file, with global values
-    set specout $FITSfile
-    append specout "-spec"
-    ftcreate extname="spec_info" cdfile=$speccdfile datafile=$spectxtfile outfile=$specout clobber="yes"
-# Append spec fits file to results
-    ftappend infile=$specout outfile=$FITSfile
-# Clean up temporary files
-    rm -f $speccdfile $spectxtfile $specout
 
 }

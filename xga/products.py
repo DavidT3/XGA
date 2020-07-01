@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2020, 15:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/07/2020, 10:45. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1371,7 +1371,7 @@ class Spectrum(BaseProduct):
             plt.close("all")
 
         else:
-            warnings.warn("There are no XSPEC fits associated with this Spectrum")
+            warnings.warn("There are no XSPEC fits associated with this Spectrum, you can't view it.")
 
 
 class AnnularSpectra(BaseProduct):
