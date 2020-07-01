@@ -45,6 +45,20 @@ module will not function.
 4. Set the directory where you wish XGA to save the products and files it generates. I just set it to xga_output,
 so wherever I run a script that imports XGA it will create a folder called xga_output there. You could choose to use
 an absolute path and have a global XGA folder however, it would make a lot of sense.
+5. The root_xmm_dir entry is the path of the parent folder containing all of your observation data.
+6. Most of the other entries tell XGA how different files are named. clean_pn_evts, for instance, gives the naming
+convention for the cleaned PN events files that XGA generates products from. 
+7. Bear in mind when filling in the file fields that XGA uses the Python string formatting convention, so anywhere
+you see {obs_id} will be filled formatted with the ObsID of interest when XGA is actually running.
+8. The lo_en and hi_en entries can be used to tell XGA what images and exposure maps you may already have. For instance,
+ if you already had 0.50-2.00keV and 2.00-10.00keV images and exposure maps, you could set lo_en = ['0.50', '2.00'] and 
+ hi_en = ['2.00', '10.00'].
+9. Finally, the region_file entry tells XGA where region files for each observation are stored (if they exist). 
+**Disclaimer: If region files are supplied, XGA also expects at least one image per instrument per observation.**
+
+I have tried to make this part as general as possible, but I am biased by how XCS generates and stores their data 
+products. If you are an X-ray astronomer who wishes to use this module, but it seems to be incompatible with your setup,
+ please get in touch or raise an issue.
 
 ## XGA's First Run After Configuration
 The first time you import any part of XGA, it will create an 'observation census', where it will search through
