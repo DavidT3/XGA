@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/07/2020, 16:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/07/2020, 19:32. Copyright (c) David J Turner
 
 from setuptools import setup, find_packages
 
 import versioneer
 
-setup(name='XGA',
+setup(name='xga',
       packages=find_packages(),
       version=versioneer.get_version(),
       description='Python package to easily generate and analyse XMM data products',
