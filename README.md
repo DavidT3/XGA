@@ -38,7 +38,7 @@ XGA will not run without detecting these pieces of software installed on your sy
 
 ## Configuring XGA - **THIS SECTION IS VERY IMPORTANT**
 Before XGA can be used you must fill out a configuration file (a completed example can be found 
-[here](https://github.com/DavidT3/XGA/blob/docs/master/docs/example_config/xga.cfg)). 
+[here](https://github.com/DavidT3/XGA/blob/master/docs/example_config/xga.cfg)). 
 
 Follow these steps to fill out the configuration file:
 1. Import XGA to generate the initial, incomplete, configuration file.
@@ -75,7 +75,7 @@ every run.
 # How to use the module
 As it is in such an early stage of development, XGA doesn't have proper documentation yet. All the functions should
 have at least vaguely helpful docstrings, and there is an example Jupyter Notebook 
-[here](https://github.com/DavidT3/XGA/blob/docs/master/docs/example_notebooks/general_demo.ipynb) that 
+[here](https://github.com/DavidT3/XGA/blob/master/docs/example_notebooks/general_demo.ipynb) that 
 demonstrates the basic functionality.
 
 
