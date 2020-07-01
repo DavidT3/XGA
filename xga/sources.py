@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2020, 16:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/07/2020, 13:16. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -31,7 +31,7 @@ warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class BaseSource:
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=False, load_fits=False):
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=True, load_fits=False):
         self._ra_dec = np.array([ra, dec])
         if name is not None:
             self._name = name
@@ -1323,7 +1323,7 @@ class ExtendedSource(BaseSource):
     def __init__(self, ra, dec, redshift=None, name=None, custom_region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
                  back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
-                 load_products=False, load_fits=False):
+                 load_products=True, load_fits=False):
         # Calling the BaseSource init method
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
         # Setting up a bunch of attributes
@@ -1663,6 +1663,7 @@ class ExtendedSource(BaseSource):
         reg_crossover = np.array(reg_crossover)
         bck_crossover = np.array(bck_crossover)
 
+        # TODO Check that this isn't bollocks
         src_area = src_mask.sum()
         bck_area = bck_mask.sum()
         rate_ratio = ((comb_rt.data*src_mask).sum() / (comb_rt.data*bck_mask).sum()) * (bck_area / src_area)
@@ -1725,7 +1726,7 @@ class GalaxyCluster(ExtendedSource):
                  richness: float = None, richness_err: float = None, wl_mass: Quantity = None,
                  wl_mass_err: Quantity = None, name=None, custom_region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
-                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=False, load_fits=False):
+                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False):
         super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
                          back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits)
 
@@ -1912,7 +1913,7 @@ class GalaxyCluster(ExtendedSource):
 
 
 class PointSource(BaseSource):
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=False, load_fits=False):
+    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=True, load_fits=False):
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by regfiles or by users, will be stored

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2020, 15:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/07/2020, 13:16. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -90,7 +90,7 @@ def xspec_call(sas_func):
         results = {s: [] for s in src_lookup}
         if COMPUTE_MODE == "local" and len(script_list) > 0:
             # This mode runs the XSPEC locally in a multiprocessing pool.
-            with tqdm(total=len(script_list), desc="Running XSPEC Models Fits") as fit, Pool(cores) as pool:
+            with tqdm(total=len(script_list), desc="Running XSPEC Model Fits") as fit, Pool(cores) as pool:
                 def callback(results_in):
                     """
                     Callback function for the apply_async pool method, gets called when a task finishes
