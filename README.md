@@ -10,6 +10,8 @@ simple to create an XSPEC script for whatever source you are analysing, run that
 back into Python. The XSPEC interface will also run multiple fits in parallel.
 
 # Installing XGA
+This is a slightly more complex installation than many Python modules, but shouldn't be too difficult. If you're
+having issues feel free to contact me.
 
 ## The Module
 As XGA is still in a very early stage of development it hasn't been submitted to PyPi yet, as such you should clone 
@@ -22,18 +24,29 @@ python setup.py install
 
 ## External Dependencies
 XGA depends on two non-Python pieces of software:
-* XMM's Science Analysis System (SAS) - XGA has been developed using SAS 17.0.0, but other versions should be fine
-* HEASOFT's XSPEC - XGA has been developed using XSPEC 12.10.1, **I can't guarantee later versions will work**
+* XMM's Science Analysis System (SAS) - Version 17.0.0, but other versions should be fine.
+* HEASoft's XSPEC - Version 12.10.1, **I can't guarantee later versions will work.**
 
 Excellent installation guides for [SAS](https://www.cosmos.esa.int/web/xmm-newton/sas-installation) and 
-[HEASOFT](https://heasarc.gsfc.nasa.gov/lheasoft/install.html) already exist, so I won't go into that in this readme. 
+[HEASoft](https://heasarc.gsfc.nasa.gov/lheasoft/install.html) already exist, so I won't go into that in this readme. 
 XGA will not run without detecting these pieces of software installed on your system.
 
 
 ## Configuring XGA - **THIS SECTION IS VERY IMPORTANT**
+Before XGA can be used you must fill out a configuration file (a completed example can be found 
+[here](https://github.com/DavidT3/XGA/blob/docs/master/docs/example_config/xga.cfg)). 
 
+Follow these steps to fill out the configuration file:
+1. Import XGA to generate the initial, incomplete, configuration file.
+2. Navigate to ~/.config/xga and open xga.cfg in a text editor. The .config directory is usually hidden, so it is 
+probably easier to navigate via the terminal.
+3. Take note of the entries that currently have /this/is/required at the beginning, without these entries the 
+module will not function.
+4. Set the directory where you wish XGA to save the products and files it generates. I just set it to xga_output,
+so wherever I run a script that imports XGA it will create a folder called xga_output there. You could choose to use
+an absolute path and have a global XGA folder however, it would make a lot of sense.
 
-## XGA's First Run
+## XGA's First Run After Configuration
 The first time you import any part of XGA, it will create an 'observation census', where it will search through
 all the observations it can find (based on your entries in the configuration file), check that there are events
 lists present, and record the pointing RA and DEC. *This can take a while*, but will only take that long on the first
@@ -43,8 +56,9 @@ every run.
 
 # How to use the module
 As it is in such an early stage of development, XGA doesn't have proper documentation yet. All the functions should
-have at least vaguely helpful docstrings, and there is an example Jupyter Notebook in the docs/example_notebooks 
-folder that demonstrates the basic functionality.
+have at least vaguely helpful docstrings, and there is an example Jupyter Notebook 
+[here](https://github.com/DavidT3/XGA/blob/docs/master/docs/example_notebooks/general_demo.ipynb) that 
+demonstrates the basic functionality.
 
 
 # Problems and Questions
