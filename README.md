@@ -22,6 +22,7 @@ pip install xga
 Alternatively, to get the current working version from the git repository run:
 ```shell script
 git clone https://github.com/DavidT3/XGA
+cd XGA
 python setup.py install
 ```
 
