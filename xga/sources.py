@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 16:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 17:28. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -12,6 +12,7 @@ from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase, deg, UnitConversionError, pix
 from fitsio import FITS
+from matplotlib import pyplot as plt
 from numpy import ndarray
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
     EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
@@ -1780,8 +1781,6 @@ class GalaxyCluster(ExtendedSource):
         elif wl_mass_err is not None and not wl_mass_err.unit.is_equivalent("Msun"):
             raise UnitConversionError("The weak lensing mass error value cannot be converted to MSun.")
 
-        self._pizza_brightness("r500")
-
     # Property getters for the over density radii, they don't get setters as various things are defined on init
     #  that I don't want to call again.
     @property
@@ -1912,7 +1911,7 @@ class GalaxyCluster(ExtendedSource):
 
         return inn_rads, out_rads, cen_rads
 
-    def _radial_brightness(self, reg_type: str) -> Tuple[ndarray, Quantity, np.float64]:
+    def radial_brightness(self, reg_type: str) -> Tuple[ndarray, Quantity, np.float64]:
         """
         A simple method to calculate the average brightness in circular annuli upto the radius of
         the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
@@ -1951,9 +1950,12 @@ class GalaxyCluster(ExtendedSource):
 
         return br, cen_rads, bg
 
-    def _pizza_brightness(self, reg_type: str, num_slices: int = 4) \
+    def pizza_brightness(self, reg_type: str, num_slices: int = 4) \
             -> Tuple[ndarray, Quantity, Quantity, np.float64]:
         """
+        A different type of brightness profile that allows you to divide the cluster up azimuthally as
+        well as radially. It performs the same calculation as radial_brightness, but for N angular bins,
+        and as such returns N separate profiles.
         :param str reg_type: The region in which to calculate the radial brightness profile.
         :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
         slice will be 360 / num_slices degrees.
@@ -2000,6 +2002,81 @@ class GalaxyCluster(ExtendedSource):
         return_angs = Quantity(np.stack([start_angs.value, stop_angs.value]).T, deg)
 
         return br, cen_rads, return_angs, bg
+
+    def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4):
+        """
+        A method that generates and displays brightness profiles for the current cluster. Brightness profiles
+        exclude point sources and either measure the average counts per second within a circular annulus (radial),
+        or an angular region of a circular annulus (pizza). All points correspond to an annulus of width 1 pixel,
+        and this method does NOT do any rebinning to maximise signal to noise.
+        :param str reg_type: The region in which to view the radial brightness profile.
+        :param str profile_type: The type of brightness profile you wish to view, radial or pizza.
+        :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
+        slice will be 360 / num_slices degrees.
+        """
+        # TODO Maybe I should store profiles somewhere more permanent rather than just getting them on demand
+        allowed_rtype = ["custom", "r500", "r200", "r2500"]
+        if reg_type not in allowed_rtype:
+            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
+
+        # Check that the passed profile type is valid
+        allowed_ptype = ["radial", "pizza"]
+        if profile_type not in allowed_ptype:
+            raise ValueError("The only allowed profile types are {}".format(", ".join(allowed_ptype)))
+
+        # Check that the valid region choice actually has an entry that is not None
+        if reg_type == "custom" and self._custom_region_radius is None:
+            raise NoRegionsError("No custom region has been setup for this cluster")
+        elif reg_type == "r200" and self._r200 is None:
+            raise NoRegionsError("No R200 region has been setup for this cluster")
+        elif reg_type == "r500" and self._r500 is None:
+            raise NoRegionsError("No R500 region has been setup for this cluster")
+        elif reg_type == "r2500" and self._r2500 is None:
+            raise NoRegionsError("No R2500 region has been setup for this cluster")
+
+        # Setup the figure
+        plt.figure(figsize=(7, 6))
+        ax = plt.gca()
+
+        # The plotting will be slightly different based on the profile type, also have to call the methods
+        #  to generate the profiles as I don't currently store the data.
+        if profile_type == "radial":
+            ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
+                                                                             u=self._peak_hi_en.value))
+            brightness, radii, background = self.radial_brightness(reg_type)
+            plt.plot(radii, brightness, label="Total Emission")
+
+        elif profile_type == "pizza":
+            ax.set_title("{n} - {l}-{u}keV Pizza Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
+                                                                            u=self._peak_hi_en.value))
+            brightness, radii, angles, background = self.pizza_brightness(reg_type, num_slices)
+            for ang_ind in range(angles.shape[0]):
+                # Setup labels with the angles covered by the profile
+                lab_str = "{0}$^{{\circ}}$-{1}$^{{\circ}}$ Slice Emission".format(*angles[ang_ind, :].value)
+                plt.plot(radii, brightness[:, ang_ind], label=lab_str)
+
+        # Plot the background level
+        plt.axhline(background, color="black", linestyle="dashed", label="Background Level")
+
+        # This adds small ticks to the axis
+        ax.minorticks_on()
+        # Set the lower limit of the x-axis to 0
+        ax.set_xlim(0,)
+        # Adjusts how the ticks look
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        # This would add a grid but I think it might look better without
+        # ax.grid(linestyle='dotted', linewidth=1)
+        # Choose y-axis log scaling because otherwise you can't really make out the profiles very well
+        ax.set_yscale("log")
+        # Labels and legends
+        ax.set_ylabel("S$_{b}$ [count s$^{-1}$ pix$^{-2}$]")
+        ax.set_xlabel("Radius [kpc]")
+        plt.legend(loc="best")
+        # Removes white space around the plot
+        plt.tight_layout()
+        # Plots the plot
+        plt.show()
+        plt.close('all')
 
 
 class PointSource(BaseSource):
