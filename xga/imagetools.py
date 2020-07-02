@@ -1,8 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2020, 14:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 16:16. Copyright (c) David J Turner
 
 from astropy.units import Quantity
-from numpy import ogrid, ndarray, arctan2, pi, repeat, newaxis, array, greater
+from numpy import ogrid, ndarray, arctan2, pi, repeat, newaxis, array, greater, where
 
 
 def annular_mask(centre: Quantity, inn_rad: ndarray, out_rad: ndarray, shape: tuple,
@@ -86,6 +86,11 @@ def annular_mask(centre: Quantity, inn_rad: ndarray, out_rad: ndarray, shape: tu
     ang_mask = arr_theta <= (stop_ang - start_ang)
     ann_mask = rad_mask * ang_mask
 
+    # Should ensure that the central pixel will be 0 for annular masks that are bounded by zero.
+    #  Sometimes they aren't because of custom angle choices
+    if 0 in inn_rad:
+        where_zeros = where(inn_rad == 0)[0]
+        ann_mask[cen_y, cen_x, where_zeros] = 1
     # Returns the annular mask(s), in the form of a len_y, len_x, N dimension np array
     return ann_mask
 
