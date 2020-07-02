@@ -64,6 +64,10 @@ I have tried to make this part as general as possible, but I am biased by how XC
 products. If you are an X-ray astronomer who wishes to use this module, but it seems to be incompatible with your setup,
  please get in touch or raise an issue.
 
+**Remote Data Access:** If your data lives on a remote server, and you want to use XGA on a local machine, I recommend 
+setting up an SFTP connection and mounting the server as an external volume. Then you can fill out the configuration 
+file with paths going through the mount folder - its how I use it a lot of the time.
+
 ## XGA's First Run After Configuration
 The first time you import any part of XGA, it will create an 'observation census', where it will search through
 all the observations it can find (based on your entries in the configuration file), check that there are events

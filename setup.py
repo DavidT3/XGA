@@ -1,16 +1,25 @@
 #!/usr/bin/env python
 
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 18:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 18:17. Copyright (c) David J Turner
+
+from os import path
 
 from setuptools import setup, find_packages
 
 import versioneer
 
+# Uses the README as the long description
+this_directory = path.abspath(path.dirname(__file__))
+with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
+
 setup(name='xga',
       packages=find_packages(),
       version=versioneer.get_version(),
       description='Python package to easily generate and analyse XMM data products',
+      long_description=long_description,
+      long_description_content_type='text/markdown',
       author='David Turner',
       author_email='david.turner@sussex.ac.uk',
       url='http://github.com/DavidT3/XGA',
