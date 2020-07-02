@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/07/2020, 13:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 13:59. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1876,12 +1876,17 @@ class GalaxyCluster(ExtendedSource):
         elif model is None and len(models_with_kt) == 1:
             return self.get_results(reg_type, models_with_kt[0], "kT")
 
-    def _radial_brightness(self, reg_type: str):
+    def _radial_brightness(self, reg_type: str) -> Tuple[ndarray, Quantity, np.float64]:
         """
-
-        :param str reg_type:
+        A simple method to calculate the average brightness in circular annuli upto the radius of
+        the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
+        earlier, interloper sources should be removed.
+        :param str reg_type: The region in which to calculate the radial brightness profile.
+        :return: The brightness is returned in a flat numpy array, then the radii at the centre of the bins are
+        returned in units of kpc, and finally the average brightness in the background region is returned.
+        :rtype: Tuple[ndarray, Quantity, np.float64]
         """
-        allowed_rtype = ["region", "custom", "r500", "r200", "r2500"]
+        allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
 
@@ -1894,7 +1899,25 @@ class GalaxyCluster(ExtendedSource):
         rads = np.arange(0, rad).astype(int)
         inn_rads = rads[:len(rads)-1]
         out_rads = rads[1:len(rads)]
-        cen_rads = (out_rads + inn_rads) / 2
+
+        # TODO Consider replacing this with just scaling by pixel radius compared to known pixel
+        #  radius in kpc
+        # Go through a bit of a process to get the centres of the radius bins in kpc
+        # Make an N x 2 array full of the y pixel coordinate, I will replace the first column with the various
+        #  x coordinates of the radial bins
+        rads_coords = np.full((len(out_rads), 2), pix_peak[1].value)
+        rads_coords[:, 0] = pix_peak[0].value + out_rads
+        # I keep the ys the same because I'm going to convert to degrees, then find the difference between
+        #  the resulting x coordinate array and the peak x coordinate in degrees - thus have radii.
+        rads_coords = Quantity(rads_coords, pix)
+        rads_coords = comb_rt.coord_conv(rads_coords, deg)
+        # Now have the coordinates in degrees, so find the absolute difference between the x coordinates of the bins
+        #  in degrees and the peak x coordinate in degrees
+        deg_rads = abs(rads_coords[:, 0] - self.peak[0])
+        # Quick convert to kpc with my handy function and add a zero at the beginning
+        kpc_rads = ang_to_rad(deg_rads, self._redshift, self._cosmo).insert(0, Quantity(0, "kpc"))
+        # Wham-bam now have the centres of the bins in kilo-parsecs
+        cen_rads = (kpc_rads[1:] + kpc_rads[:-1]) / 2
 
         # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
         #  dimension. Helps with broadcasting the annular masks with the region mask that gets rid of interlopers
@@ -1906,10 +1929,10 @@ class GalaxyCluster(ExtendedSource):
         #  areas in the average for each radius.
         br = np.average(masked_data, axis=(0, 1), weights=masks)
 
-        # TODO Test all these and make sure the background calculation is correct
+        # Finds the average of the background region
         bg = np.average(comb_rt.data * self.get_mask("r500")[1], axis=(0, 1), weights=self.get_mask("r500")[1])
 
-        # TODO Finish this method
+        return br, cen_rads, bg
 
 
 class PointSource(BaseSource):
