@@ -1,6 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 13:59. Copyright (c) David J Turner
 
+
 import os
 import warnings
 from typing import Tuple, List, Dict
@@ -588,10 +589,10 @@ class Image(BaseProduct):
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
         data if they so choose.
         """
-        if mask is not None and mask.shape != self._data.shape:
+        if mask is not None and mask.shape != self.data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
-                             "({1}).".format(mask.shape, self._data.shape))
-        elif mask is not None and mask.shape == self._data.shape:
+                             "({1}).".format(mask.shape, self.data.shape))
+        elif mask is not None and mask.shape == self.data.shape:
             plot_data = self.data * mask
         else:
             plot_data = self.data
@@ -1386,7 +1387,7 @@ class Spectrum(BaseProduct):
             plt.close("all")
 
         else:
-            warnings.warn("There are no XSPEC fits associated with this Spectrum")
+            warnings.warn("There are no XSPEC fits associated with this Spectrum, you can't view it.")
 
 
 class AnnularSpectra(BaseProduct):

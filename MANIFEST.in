@@ -1,2 +1,4 @@
 include versioneer.py
 include xga/_version.py
+recursive-include xga/files *
+recursive-include xga/xspec_scripts *
