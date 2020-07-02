@@ -1,5 +1,6 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/07/2020, 14:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 13:59. Copyright (c) David J Turner
+
 
 import os
 import warnings
@@ -479,11 +480,11 @@ class Image(BaseProduct):
         """
         return self._header
 
-    def coord_conv(self, coord_pair: Quantity, output_unit: UnitBase) -> Quantity:
+    def coord_conv(self, coords: Quantity, output_unit: UnitBase) -> Quantity:
         """
         This will use the loaded WCSes, and astropy coordinates (including custom ones defined for this module),
         to perform common coordinate conversions for this product object.
-        :param coord_pair: The input coordinate quantity to convert, in units of either deg,
+        :param coords: The input coordinates quantity to convert, in units of either deg,
         pix, xmm_sky, or xmm_det (xmm_sky and xmm_det are defined for this module).
         :param output_unit: The astropy unit to convert to, can be either deg, pix, xmm_sky, or
         xmm_det (xmm_sky and xmm_det are defined for this module).
@@ -491,18 +492,26 @@ class Image(BaseProduct):
         :rtype: Quantity
         """
         allowed_units = ["deg", "xmm_sky", "xmm_det", "pix"]
-        if coord_pair.unit.is_equivalent("deg"):
-            coord_pair = coord_pair.to("deg")
-        input_unit = coord_pair.unit.name
+        if coords.unit.is_equivalent("deg"):
+            coords = coords.to("deg")
+        input_unit = coords.unit.name
         out_name = output_unit.name
 
         if input_unit != out_name:
             # First off do some type checking
-            if not isinstance(coord_pair, Quantity):
-                raise TypeError("Please pass an astropy Quantity for the coord_pair.")
-            # The coordinate pair must have two elements, no more no less
-            elif coord_pair.shape != (2,):
-                raise ValueError("Please supply x and y coordinates in one object.")
+            if not isinstance(coords, Quantity):
+                raise TypeError("Please pass an astropy Quantity for the coords.")
+            # The coordinate pair must have two elements per row, no more no less
+            elif len(coords.shape) == 1 and coords.shape != (2,):
+                raise ValueError("You have supplied an array with {} values, coordinate pairs "
+                                 "should have two.".format(coords.shape[0]))
+            # This changes individual coordinate pairs into the form that this function expects
+            elif len(coords.shape) == 1:
+                coords = coords[:, None].T
+            # Checks that multiple pairs of coordinates are in the right format
+            elif len(coords.shape) != 1 and coords.shape[1] != 2:
+                raise ValueError("You have supplied an array with {} columns, there can only be "
+                                 "two.".format(coords.shape[1]))
             # I know the proper way with astropy units is to do .to() but its easier with WCS this way
             elif input_unit not in allowed_units:
                 raise UnitsError("Those coordinate units are not supported by this method, "
@@ -521,46 +530,53 @@ class Image(BaseProduct):
             # These go between degrees and pixels
             if input_unit == "deg" and out_name == "pix":
                 # The second argument all_world2pix defines the origin, for numpy coords it should be 0
-                out_coord = Quantity(self.radec_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
+                out_coord = Quantity(self.radec_wcs.all_world2pix(coords, 0), output_unit).astype(int)
+
             elif input_unit == "pix" and out_name == "deg":
-                out_coord = Quantity(self.radec_wcs.all_pix2world(*coord_pair, 0), output_unit)
+                out_coord = Quantity(self.radec_wcs.all_pix2world(coords, 0), output_unit)
 
             # These go between degrees and XMM sky XY coordinates
             elif input_unit == "deg" and out_name == "xmm_sky":
-                interim = self.radec_wcs.all_world2pix(*coord_pair, 0)
-                out_coord = Quantity(self.skyxy_wcs.all_pix2world(*interim, 0), xmm_sky)
+                interim = self.radec_wcs.all_world2pix(coords, 0)
+                out_coord = Quantity(self.skyxy_wcs.all_pix2world(interim, 0), xmm_sky)
             elif input_unit == "xmm_sky" and out_name == "deg":
-                interim = self.skyxy_wcs.all_world2pix(*coord_pair, 0)
-                out_coord = Quantity(self.radec_wcs.all_pix2world(*interim, 0), deg)
+                interim = self.skyxy_wcs.all_world2pix(coords, 0)
+                out_coord = Quantity(self.radec_wcs.all_pix2world(interim, 0), deg)
 
             # These go between XMM sky XY and pixel coordinates
             elif input_unit == "xmm_sky" and out_name == "pix":
-                out_coord = Quantity(self.skyxy_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
+                out_coord = Quantity(self.skyxy_wcs.all_world2pix(coords, 0), output_unit).astype(int)
             elif input_unit == "pix" and out_name == "xmm_sky":
-                out_coord = Quantity(self.skyxy_wcs.all_pix2world(*coord_pair, 0), output_unit)
+                out_coord = Quantity(self.skyxy_wcs.all_pix2world(coords, 0), output_unit)
 
             # These go between degrees and XMM Det XY coordinates
             elif input_unit == "deg" and out_name == "xmm_det":
-                interim = self.radec_wcs.all_world2pix(*coord_pair, 0)
-                out_coord = Quantity(self.detxy_wcs.all_pix2world(*interim, 0), xmm_sky)
+                interim = self.radec_wcs.all_world2pix(coords, 0)
+                out_coord = Quantity(self.detxy_wcs.all_pix2world(interim, 0), xmm_sky)
             elif input_unit == "xmm_det" and out_name == "deg":
-                interim = self.detxy_wcs.all_world2pix(*coord_pair, 0)
-                out_coord = Quantity(self.radec_wcs.all_pix2world(*interim, 0), deg)
+                interim = self.detxy_wcs.all_world2pix(coords, 0)
+                out_coord = Quantity(self.radec_wcs.all_pix2world(interim, 0), deg)
 
             # These go between XMM det XY and pixel coordinates
             elif input_unit == "xmm_det" and out_name == "pix":
-                out_coord = Quantity(self.detxy_wcs.all_world2pix(*coord_pair, 0), output_unit).astype(int)
+                out_coord = Quantity(self.detxy_wcs.all_world2pix(coords, 0), output_unit).astype(int)
             elif input_unit == "pix" and out_name == "xmm_det":
-                out_coord = Quantity(self.detxy_wcs.all_pix2world(*coord_pair, 0), output_unit)
+                out_coord = Quantity(self.detxy_wcs.all_pix2world(coords, 0), output_unit)
 
             # It is possible to convert between XMM coordinates and pixel and supply coordinates
             # outside the range covered by an image, but we can at least catch the error
-            if out_name == "pix" and any(coord < 0 for coord in out_coord):
-                raise ValueError("Pixel coordinates cannot be less than 0.")
+            if out_name == "pix" and np.any(out_coord < 0):
+                raise ValueError("You've converted to pixel coordinates, and some elements are less than zero.")
+
+            # If there was only pair passed in, we'll return a flat numpy array
+            if out_coord.shape == (1, 2):
+                out_coord = out_coord[0, :]
+
+            # if out_coord.shape ==
         elif input_unit == out_name and out_name == 'pix':
-            out_coord = coord_pair.astype(int)
+            out_coord = coords.astype(int)
         else:
-            out_coord = coord_pair
+            out_coord = coords
 
         return out_coord
 

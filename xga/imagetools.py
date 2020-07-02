@@ -1,11 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2020, 13:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 16:16. Copyright (c) David J Turner
 
 from astropy.units import Quantity
-from numpy import ogrid, ndarray, arctan2, pi, repeat, newaxis, array, greater
+from numpy import ogrid, ndarray, arctan2, pi, repeat, newaxis, array, greater, where
 
 
-def annular_mask(cen_x: int, cen_y: int, inn_rad: ndarray, out_rad: ndarray, len_x: int, len_y: int,
+def annular_mask(centre: Quantity, inn_rad: ndarray, out_rad: ndarray, shape: tuple,
                  start_ang: Quantity = Quantity(0, 'deg'), stop_ang: Quantity = Quantity(360, 'deg')) -> ndarray:
     """
     A handy little function to generate annular (or circular) masks in the form of numpy arrays.
@@ -14,17 +14,19 @@ def annular_mask(cen_x: int, cen_y: int, inn_rad: ndarray, out_rad: ndarray, len
     dependence. This function should be properly vectorised, and accepts inner and outer radii in
     the form of arrays.
     The result will be an len_y, len_x, N dimensional array, where N is equal to the length of inn_rad.
-    :param int cen_x: Numpy array x-coordinate of the center for this mask.
-    :param int cen_y: Numpy array y-coordinate of the center for this mask.
+    :param Quantity centre: Astropy pix quantity of the form Quantity([x, y], pix).
     :param ndarray inn_rad: Pixel radius for the inner part of the annular mask.
     :param ndarray out_rad: Pixel radius for the outer part of the annular mask.
     :param Quantity start_ang: Lower angular limit for the mask.
     :param Quantity stop_ang: Upper angular limit for the mask.
-    :param int len_x: Length in the x direction of the array/image this mask is for.
-    :param int len_y: Length in the y direction of the array/image this mask is for.
+    :param tuple shape: The output from the shape property of the numpy array you are generating masks for.
     :return: The generated mask array.
     :rtype: ndarray
     """
+    # Split out the centre coordinates
+    cen_x = centre[0].value
+    cen_y = centre[1].value
+
     # Making use of the astropy units module, check that we are being pass actual angle values
     if start_ang.unit not in ['deg', 'rad']:
         raise ValueError("start_angle unit type {} is not an accepted angle unit, "
@@ -53,7 +55,7 @@ def annular_mask(cen_x: int, cen_y: int, inn_rad: ndarray, out_rad: ndarray, len
         out_rad = array(out_rad)
 
     # This sets up the cartesian coordinate grid of x and y values
-    arr_y, arr_x = ogrid[:len_y, :len_x]
+    arr_y, arr_x = ogrid[:shape[0], :shape[1]]
 
     # Go to polar coordinates
     rec_x = arr_x - cen_x
@@ -84,6 +86,11 @@ def annular_mask(cen_x: int, cen_y: int, inn_rad: ndarray, out_rad: ndarray, len
     ang_mask = arr_theta <= (stop_ang - start_ang)
     ann_mask = rad_mask * ang_mask
 
+    # Should ensure that the central pixel will be 0 for annular masks that are bounded by zero.
+    #  Sometimes they aren't because of custom angle choices
+    if 0 in inn_rad:
+        where_zeros = where(inn_rad == 0)[0]
+        ann_mask[cen_y, cen_x, where_zeros] = 1
     # Returns the annular mask(s), in the form of a len_y, len_x, N dimension np array
     return ann_mask
 
