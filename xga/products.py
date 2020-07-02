@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 13:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 19:43. Copyright (c) David J Turner
 
 
 import os
@@ -789,7 +789,7 @@ class RateMap(Image):
         return peak_conv, edge_flag
 
     def clustering_peak(self, mask: np.ndarray, out_unit: UnitBase = deg, top_frac: float = 0.05) \
-            -> Tuple[Quantity, bool]:
+            -> Tuple[Quantity, bool, np.ndarray, List[np.ndarray]]:
         """
         An experimental peak finding function that cuts out the top 5% (by default) of array elements
         (by value), and runs a hierarchical clustering algorithm on their positions. The motivation
@@ -803,7 +803,8 @@ class RateMap(Image):
         :param float top_frac: The fraction of the elements (ordered in descending value) that should be used
         to generate clusters, and thus be considered for the cluster centre.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
-        the user's mask), in units of out_unit, as specified by the user.
+        the user's mask), in units of out_unit, as specified by the user. Finally, the coordinates of the points
+        in the chosen cluster are returned, as is a list of all the coordinates of all the other clusters.
         :rtype: Tuple[Quantity, bool]
         """
         if mask.shape != self.data.shape:
@@ -834,6 +835,14 @@ class RateMap(Image):
         chosen_clust = uniq_vals[np.argmax(uniq_cnts)]
         # Retrieves the inds for the main merged_data in the chosen cluster
         chosen_inds = np.where(cluster_inds == chosen_clust)[0]
+        # X column, then Y column - these are pixel coordinates
+        chosen_coord_pairs = np.stack([inds[1][chosen_inds], inds[0][chosen_inds]]).T
+
+        # Grabbing the none chosen point cluster indexes
+        other_clusts = [np.where(cluster_inds == cl)[0] for cl in uniq_vals if cl != chosen_clust]
+        # And more importantly the coordinates of the none chosen point clusters
+        other_coord_pairs = [np.stack([inds[1][cl_ind], inds[0][cl_ind]]).T for cl_ind in other_clusts]
+
         cutout = np.zeros(masked_data.shape)
         # Make a masking array to select only the points in the cluster
         cutout[inds[0][chosen_inds], inds[1][chosen_inds]] = 1
@@ -855,7 +864,7 @@ class RateMap(Image):
         # Find if the peak coordinates sit near an edge/chip gap
         edge_flag = self.near_edge(peak_pix)
 
-        return peak_conv, edge_flag
+        return peak_conv, edge_flag, chosen_coord_pairs, other_coord_pairs
 
     def convolved_peak(self, mask: np.ndarray, redshift: float, cosmology, out_unit: UnitBase = deg) \
             -> Tuple[Quantity, bool]:
