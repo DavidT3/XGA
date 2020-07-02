@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 17:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 19:43. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1339,6 +1339,8 @@ class ExtendedSource(BaseSource):
         self._peaks.update({"combined": None})
         self._peaks_near_edge = {o: {} for o in self.obs_ids}
         self._peaks_near_edge.update({"combined": None})
+        self._chosen_peak_cluster = None
+        self._other_peak_clusters = None
         self._snr = {}
 
         # This uses the added context of the type of source to find (or not find) matches in region files
@@ -1526,7 +1528,7 @@ class ExtendedSource(BaseSource):
             # Generate the source mask for the peak finding method
             aperture_mask = self._generate_mask(rt, cust_reg, all_interlopers=True)
             # Find the peak using the experimental clustering_peak method
-            peak, near_edge = rt.clustering_peak(aperture_mask, deg)
+            peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, deg)
             # Calculate the distance between new peak and old central coordinates
             separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
                                           abs(peak[1].value - central_coords.dec.value) ** 2), deg)
@@ -1543,7 +1545,7 @@ class ExtendedSource(BaseSource):
             else:
                 converged = True
 
-        return peak, near_edge, converged
+        return peak, near_edge, converged, chosen_coords, other_coords
 
     def _all_peaks(self):
         """
@@ -1565,11 +1567,15 @@ class ExtendedSource(BaseSource):
             emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en)
             comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
 
-        coord, near_edge, converged = self._find_peak(comb_rt)
+        coord, near_edge, converged, cluster_coords, other_coords = self._find_peak(comb_rt)
+
         # Unfortunately if the peak convergence fails for the combined ratemap I have to raise an error
         if converged:
             self._peaks["combined"] = coord
             self._peaks_near_edge["combined"] = near_edge
+            # I'm only going to save the point cluster positions for the combined ratemap
+            self._chosen_peak_cluster = cluster_coords
+            self._other_peak_clusters = other_coords
         else:
             raise PeakConvergenceFailedError("Peak finding on the combined ratemap failed to converge within "
                                              "15kpc for {n} in the {l}-{u} energy "
@@ -1577,7 +1583,7 @@ class ExtendedSource(BaseSource):
 
         for obs in self.obs_ids:
             for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
-                coord, near_edge, converged = self._find_peak(rt)
+                coord, near_edge, converged, cluster_coords, other_coords = self._find_peak(rt)
                 if converged:
                     self._peaks[obs][rt.instrument] = coord
                     self._peaks_near_edge[obs][rt.instrument] = near_edge
@@ -1720,6 +1726,19 @@ class ExtendedSource(BaseSource):
         :rtype: Quantity
         """
         return self._custom_region_radius
+
+    @property
+    def point_clusters(self) -> Tuple[ndarray, List[ndarray]]:
+        """
+        This allows you to retrieve the point cluster positions from the hierarchical clustering
+        peak finding method run on the combined ratemap. This includes both the chosen cluster and
+        all others that were found.
+        :return: A numpy array of the positions of points of the chosen cluster (not galaxy cluster,
+        a cluster of points). A list of numpy arrays with the same information for all the other clusters
+        that were found
+        :rtype: Tuple[ndarray, List[ndarray]]
+        """
+        return self._chosen_peak_cluster, self._other_peak_clusters
 
 
 class GalaxyCluster(ExtendedSource):
