@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 19:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2020, 00:03. Copyright (c) David J Turner
 
 
 import os
@@ -617,9 +617,9 @@ class Image(BaseProduct):
                                                                       t=self.type))
         else:
             plt.title("Log Scaled {n} - Combined {l}-{u}keV {t}".format(n=self.obj_name,
-                                                                   l=self._energy_bounds[0].to("keV").value,
-                                                                   u=self._energy_bounds[1].to("keV").value,
-                                                                   t=self.type))
+                                                                        l=self._energy_bounds[0].to("keV").value,
+                                                                        u=self._energy_bounds[1].to("keV").value,
+                                                                        t=self.type))
 
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in depth way of viewing cluster data eventually
