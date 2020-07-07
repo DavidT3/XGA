@@ -1,11 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2020, 13:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2020, 09:48. Copyright (c) David J Turner
 
 import json
 import os
-import shutil
 from configparser import ConfigParser
-from subprocess import Popen, PIPE
 from typing import List
 
 import pandas as pd
@@ -17,22 +15,7 @@ from fitsio.header import FITSHDR
 from numpy import nan, floor
 from tqdm import tqdm
 
-from xga.exceptions import XGAConfigError, HeasoftError, SASNotFoundError
-
-# Got to make sure we can access command line XSPEC.
-# Currently raises an error, but perhaps later on I'll relax this to a warning.
-if shutil.which("xspec") is None:
-    raise HeasoftError("Unable to import PyXspec, you have to make sure to set a PYTHON environment "
-                       "variable before installing HEASOFT/XSPEC.")
-
-# This one I'm less likely to relax to a warnings
-if "SAS_DIR" not in os.environ:
-    raise SASNotFoundError("SAS_DIR environment variable is not set, "
-                           "unable to verify SAS is present on system")
-else:
-    # This way, the user can just import the SAS_VERSION from this utils code
-    out, err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
-    SAS_VERSION = out.decode("UTF-8").strip("]\n").split('-')[-1]
+from xga.exceptions import XGAConfigError
 
 # If XDG_CONFIG_HOME is set, then use that, otherwise use this default config path
 CONFIG_PATH = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))
@@ -63,8 +46,7 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "mos2_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_expmap.fits",
              "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
 # List of XMM products supported by XGA that are allowed to be energy bound
-ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap",
-                         "psfmap"]
+ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap", "psf"]
 # List of all XMM products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events"] + ENERGY_BOUND_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]

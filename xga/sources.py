@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 19:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2020, 09:48. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -112,6 +112,11 @@ class BaseSource:
 
         self._wl_mass = None
         self._wl_mass_err = None
+
+        # Initialisation of the coordinates at which a PSF is generated. The PSFs are special, they get their
+        #  own position attribute. Initially set to the user supplied coordinates, but can be updated by a peak
+        #  finding method for instance
+        self.psf_centre = self.ra_dec.copy()
 
         # If there is an existing XGA output directory, then it makes sense to search for products that XGA
         #  may have already generated and load them in - saves us wasting time making them again.

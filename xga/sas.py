@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/06/2020, 15:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2020, 09:48. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -13,9 +13,18 @@ from numpy import array, full
 from tqdm import tqdm
 
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES
+from xga.exceptions import SASNotFoundError
 from xga.products import BaseProduct, Image, ExpMap, Spectrum
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
 from xga.utils import energy_to_channel, xmm_sky
+
+if "SAS_DIR" not in os.environ:
+    raise SASNotFoundError("SAS_DIR environment variable is not set, "
+                           "unable to verify SAS is present on system")
+else:
+    # This way, the user can just import the SAS_VERSION from this utils code
+    out, err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+    SAS_VERSION = out.decode("UTF-8").strip("]\n").split('-')[-1]
 
 
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
@@ -501,6 +510,92 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
+    # I only return num_cores here so it has a reason to be passed to this function, really
+    # it could just be picked up in the decorator.
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
+
+
+def psfgen(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cores: int = NUM_CORES):
+    """
+    A wrapper for the psfgen SAS task. Used to generate XGA PSF objects, which in turn can be used to correct
+    XGA images/ratemaps for optical effects. Uses the ELLBETA model reported in Read et al. 2011
+    (doi:10.1051/0004-6361/201117525), and is generated at the position of the source object's psf_centre
+    attribute. The energy at which the PSF is generated is the average of the lo_en and hi_en parameters, and the
+    resultant PSF object will be paired up with an image that matches it's ObsID, instrument, and energy band.
+    :param List[BaseSource] sources: A single source object, or a list of source objects.
+    :param Quantity lo_en: The lower energy limit for the PSF, in astropy energy units.
+    :param Quantity hi_en: The upper energy limit for the PSF, in astropy energy units.
+    :param int num_cores: The number of cores to use (if running locally), default is set to
+    90% of available.
+    """
+    raise NotImplementedError("I haven't finished this yet")
+    stack = False  # This tells the sas_call routine that this command won't be part of a stack
+    execute = True  # This should be executed immediately
+
+    # Don't do much value checking in this module, but this one is so fundamental that I will do it
+    if lo_en > hi_en:
+        raise ValueError("lo_en cannot be greater than hi_en")
+    else:
+        # Calls a useful little function that takes an astropy energy quantity to the XMM channels
+        # required by SAS commands
+        lo_chan = energy_to_channel(lo_en)
+        hi_chan = energy_to_channel(hi_en)
+
+    sources = evselect_image(sources, lo_en, hi_en)
+    # This is necessary because the decorator will reduce a one element list of source objects to a single
+    # source object. Useful for the user, not so much here where the code expects an iterable.
+    if not isinstance(sources, list):
+        sources = [sources]
+
+    # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
+    # to this function
+    sources_cmds = []
+    sources_paths = []
+    sources_extras = []
+    sources_types = []
+    for source in sources:
+        cmds = []
+        final_paths = []
+        extra_info = []
+        # Check which event lists are associated with each individual source
+        for pack in source.get_products("events", just_obj=False):
+            obs_id = pack[0]
+            inst = pack[1]
+
+            if not os.path.exists(OUTPUT + obs_id):
+                os.mkdir(OUTPUT + obs_id)
+
+            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
+                      if en_id in match]
+            if len(exists) == 1 and exists[0][-1].usable:
+                continue
+
+            evt_list = pack[-1]
+            dest_dir = OUTPUT + "{o}/{i}_{l}-{u}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
+            im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
+
+            # If something got interrupted and the temp directory still exists, this will remove it
+            if os.path.exists(dest_dir):
+                rmtree(dest_dir)
+
+            os.makedirs(dest_dir)
+            cmds.append("cd {d};evselect table={e} imageset={i} xcolumn=X ycolumn=Y ximagebinsize=87 "
+                        "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize "
+                        "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 "
+                        "withyranges=yes {ex}; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
+                                                                                  i=im, ex=expr))
+
+            # This is the products final resting place, if it exists at the end of this command
+            final_paths.append(os.path.join(OUTPUT, obs_id, im))
+            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
+        sources_cmds.append(array(cmds))
+        sources_paths.append(array(final_paths))
+        # This contains any other information that will be needed to instantiate the class
+        # once the SAS cmd has run
+        sources_extras.append(array(extra_info))
+        sources_types.append(full(sources_cmds[-1].shape, fill_value="image"))
+
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras

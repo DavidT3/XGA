@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 19:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2020, 09:48. Copyright (c) David J Turner
 
 
 import os
@@ -565,7 +565,7 @@ class Image(BaseProduct):
 
             # It is possible to convert between XMM coordinates and pixel and supply coordinates
             # outside the range covered by an image, but we can at least catch the error
-            if out_name == "pix" and np.any(out_coord < 0):
+            if out_name == "pix" and np.any(out_coord < 0) and self._prod_type != "psf":
                 raise ValueError("You've converted to pixel coordinates, and some elements are less than zero.")
 
             # If there was only pair passed in, we'll return a flat numpy array
@@ -964,6 +964,36 @@ class RateMap(Image):
             edge_flag = False
 
         return edge_flag
+
+
+class PSF(Image):
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, raise_properly)
+        self._prod_type = "psf"
+
+    def get_val(self, at_coord: Quantity) -> float:
+        """
+        A simple method that converts the given coordinates to pixels, then finds the exposure time
+        at those coordinates.
+        :param Quantity at_coord: A pair of coordinates to find the exposure time for.
+        :return: The exposure time at the supplied coordinates.
+        :rtype: Quantity
+        """
+        pix_coord = self.coord_conv(at_coord, pix).value
+        neg_ind = np.where(pix_coord < 0)
+        # TODO This wouldn't deal with PSF images that weren't the same size in x and y - fix!
+        too_big_ind = np.where(pix_coord >= self.shape[0])
+
+        pix_coord[too_big_ind[0], :] = [0, 0]
+        pix_coord[neg_ind[0], :] = [0, 0]
+
+        val = self.data[pix_coord[:, 1], pix_coord[:, 0]]
+        # This is a difficult decision, what to do about requested coordinates that are outside the PSF range.
+        #  I think I'm going to set those coordinates to the minimum PSF value
+        val[too_big_ind[0]] = self.data.min()
+        val[neg_ind[0]] = self.data.min()
+        return val
 
 
 class EventList(BaseProduct):
