@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 19:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2020, 01:09. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1253,7 +1253,10 @@ class BaseSource:
         if self._peaks is not None:
             print("X-ray Centroid - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
         print("nH - {}".format(self.nH))
-        print("XMM Observations - {}".format(self.__len__()))
+        print("XMM ObsIDs - {}".format(self.__len__()))
+        print("PN Observations - {}".format(len([o for o in self.obs_ids if 'pn' in self._products[o]])))
+        print("MOS1 Observations - {}".format(len([o for o in self.obs_ids if 'mos1' in self._products[o]])))
+        print("MOS2 Observations - {}".format(len([o for o in self.obs_ids if 'mos2' in self._products[o]])))
         print("On-Axis - {}".format(self._onaxis.sum()))
         print("With regions - {}".format(len(self._initial_regions)))
         print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
@@ -1270,10 +1273,10 @@ class BaseSource:
             print("Available fits - {}".format(" | ".join(fits)))
 
         if self._regions is not None and "custom" in self._regions:
-            if self._custom_region_radius.unit.is_equivalent('deg'):
+            if self._redshift is not None:
                 region_radius = ang_to_rad(self._custom_region_radius, self._redshift, cosmo=self._cosmo)
-            elif self._custom_region_radius.unit.is_equivalent('kpc'):
-                region_radius = self._custom_region_radius.to("kpc")
+            else:
+                region_radius = self._custom_region_radius.to("deg")
             print("Custom Region Radius - {}".format(region_radius.round(2)))
             print("Custom Region SNR - {}".format(self._snr["custom"].round(2)))
 
@@ -1435,12 +1438,14 @@ class ExtendedSource(BaseSource):
         if self._custom_region_radius is not None:
             self._setup_new_region(self._custom_region_radius, "custom")
             # Doesn't really matter where this conversion happens, because setup_new_region checks the unit
-            #  and converts anyway, but I want the internal unit of the custom radii to be kpc.
-            if self._custom_region_radius.unit.is_equivalent("deg"):
-                rad = ang_to_rad(self._custom_region_radius, self._redshift, self._cosmo).to("kpc")
+            #  and converts anyway, but I want the internal unit of the custom radii to be degrees.
+            # Originally was meant to be kpc, but then I realised that ExtendedSources are allowed to not have
+            #  redshift information
+            if self._custom_region_radius.unit.is_equivalent("kpc"):
+                rad = rad_to_ang(self._custom_region_radius, self._redshift, self._cosmo).to("deg")
                 self._custom_region_radius = rad
             else:
-                self._custom_region_radius = self._custom_region_radius.to("kpc")
+                self._custom_region_radius = self._custom_region_radius.to("deg")
 
     # TODO There really has to be a better solution to the all_interlopers thing, its so inefficient
     def _generate_mask(self, mask_image: Image, source_region: SkyRegion, back_reg: SkyRegion = None,
@@ -1500,7 +1505,7 @@ class ExtendedSource(BaseSource):
             return mask, back_mask
         return mask
 
-    def _find_peak(self, rt: RateMap) -> Tuple[Quantity, bool, bool]:
+    def _find_peak(self, rt: RateMap) -> Tuple[Quantity, bool, bool, ndarray, List]:
         """
         An internal method that will find the X-ray centroid for the RateMap that has been passed in. It takes
         the user supplied coordinates from source initialisation as a starting point, finds the peak within a 500kpc
@@ -1508,21 +1513,24 @@ class ExtendedSource(BaseSource):
         20 iterations has been reached.
         :param rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
         :return: The peak coordinate, a boolean flag as to whether the returned coordinates are near
-         a chip gap/edge, and a boolean flag as to whether the peak converged.
-        :rtype: Tuple[Quantity, bool, bool]
+         a chip gap/edge, and a boolean flag as to whether the peak converged. It also returns the coordinates
+         of the points within the chosen point cluster, and a list of all point clusters that were not chosen.
+        :rtype: Tuple[Quantity, bool, bool, ndarray, List]
         """
         central_coords = SkyCoord(*self.ra_dec.to("deg"))
 
         # 500kpc in degrees, for the current redshift and cosmology
-        search_aperture = rad_to_ang(Quantity(500, "kpc"), self._redshift, cosmo=self._cosmo)
-        # Set an absurdly high initial separation, to make sure it does an initial iteration
-        separation = Quantity(10000, "kpc")
+        #  Or 5 arcminutes if no redshift information is present (that is allowed for the ExtendedSource class)
+        if self._redshift is not None:
+            search_aperture = rad_to_ang(Quantity(500, "kpc"), self._redshift, cosmo=self._cosmo)
+        else:
+            search_aperture = Quantity(5, 'arcmin').to('deg')
+
         # Iteration counter just to kill it if it doesn't converge
         count = 0
-
         # Allow 20 iterations before we kill this - alternatively loop will exit when centre converges
-        #  to within 15kpc
-        while count < 20 and separation > Quantity(15, "kpc"):
+        #  to within 15kpc (or 0.15arcmin).
+        while count < 20:
             # Define a 500kpc radius region centered on the current central_coords
             cust_reg = CircleSkyRegion(central_coords, search_aperture)
             # Generate the source mask for the peak finding method
@@ -1532,18 +1540,26 @@ class ExtendedSource(BaseSource):
             # Calculate the distance between new peak and old central coordinates
             separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
                                           abs(peak[1].value - central_coords.dec.value) ** 2), deg)
-            separation = ang_to_rad(separation, self._redshift, self._cosmo)
+
             central_coords = SkyCoord(*peak.copy())
+            if self._redshift is not None:
+                separation = ang_to_rad(separation, self._redshift, self._cosmo)
+
+            if count != 0 and self._redshift is not None and separation <= Quantity(15, "kpc"):
+                break
+            elif count != 0 and self._redshift is None and separation <= Quantity(0.15, 'arcmin'):
+                break
+
             count += 1
 
-            if count == 20 and separation > Quantity(15, "kpc"):
-                converged = False
-                # To do the least amount of damage, if the peak doesn't converge then we just return the
-                #  user supplied coordinates
-                peak = self.ra_dec
-                near_edge = rt.near_edge(peak)
-            else:
-                converged = True
+        if count == 20:
+            converged = False
+            # To do the least amount of damage, if the peak doesn't converge then we just return the
+            #  user supplied coordinates
+            peak = self.ra_dec
+            near_edge = rt.near_edge(peak)
+        else:
+            converged = True
 
         return peak, near_edge, converged, chosen_coords, other_coords
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2020, 00:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2020, 01:09. Copyright (c) David J Turner
 
 
 import os
@@ -759,7 +759,8 @@ class RateMap(Image):
         aren't to be searched, and 1 for those that are.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
-        the user's mask), in units of out_unit, as specified by the user.
+        the user's mask), in units of out_unit, as specified by the user. Also returned is a boolean flag
+        that tells the caller if the peak is near a chip edge.
         :rtype: Tuple[Quantity, bool]
         """
         if mask.shape != self.data.shape:
