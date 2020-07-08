@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2020, 09:48. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2020, 14:11. Copyright (c) David J Turner
 
 
 import os
@@ -735,7 +735,7 @@ class RateMap(Image):
         comb[comb != -1] = False
         comb[comb == -1] = 1
 
-        # Store that mask as an attribute.
+        # Store that edge mask as an attribute.
         self._edge_mask = comb
 
     def get_rate(self, at_coord: Quantity) -> float:

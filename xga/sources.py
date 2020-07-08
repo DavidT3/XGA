@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2020, 09:48. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2020, 14:11. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -10,7 +10,7 @@ from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
-from astropy.units import Quantity, UnitBase, deg, UnitConversionError, pix
+from astropy.units import Quantity, UnitBase, deg, UnitConversionError, pix, kpc
 from fitsio import FITS
 from matplotlib import pyplot as plt
 from numpy import ndarray
@@ -21,7 +21,7 @@ from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, \
     ParameterNotAssociatedError, PeakConvergenceFailedError, NoRegionsError
-from xga.imagetools import annular_mask
+from xga.imagetools import radial_brightness, pizza_brightness
 from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap, RateMap
 from xga.sourcetools import simple_xmm_match, nhlookup, rad_to_ang, ang_to_rad
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
@@ -608,7 +608,7 @@ class BaseSource:
             # Make sure to re-order the region list to match the sorted within array
             reg_dict[obs_id] = reg_dict[obs_id][diff_sort]
 
-            # Expands it so it can be used as a mask on the whole set of regions for this observation
+            # Expands it so it can be used as a src_mask on the whole set of regions for this observation
             within = np.pad(within, [0, len(diff_sort) - len(within)])
             match_dict[obs_id] = within
             # Use the deleter for the hdulist to unload the astropy hdulist for this image
@@ -858,7 +858,7 @@ class BaseSource:
 
     def get_mask(self, reg_type: str, obs_id: str = None, inst: str = None) -> Tuple[np.ndarray, np.ndarray]:
         """
-        A method to retrieve the mask generated for a particular observation-image combination. The mask
+        A method to retrieve the src_mask generated for a particular observation-image combination. The src_mask
         can be used on an image in pixel coordinates.
         :param str reg_type: The type of region which we wish to get from the source.
         :param obs_id: The ObsID for which you wish to retrieve image masks.
@@ -1451,23 +1451,23 @@ class ExtendedSource(BaseSource):
     def _generate_mask(self, mask_image: Image, source_region: SkyRegion, back_reg: SkyRegion = None,
                        all_interlopers: bool = False) -> Tuple[ndarray, ndarray]:
         """
-        This uses available region files to generate a mask for the source region in the form of a
+        This uses available region files to generate a src_mask for the source region in the form of a
         numpy array. It takes into account any sources that were detected within the target source,
         by drilling them out.
         :param Image mask_image: An XGA image object that donates its WCS to convert SkyRegions to pixels.
-        :param SkyRegion source_region: The SkyRegion containing the source to generate a mask for.
+        :param SkyRegion source_region: The SkyRegion containing the source to generate a src_mask for.
         :param SkyRegion back_reg: The SkyRegion containing the background emission to
-        generate a mask for.
+        generate a src_mask for.
         :param bool all_interlopers: If this is true, all non source objects from all observations
-        will be iterated through and removed from the mask - its not very efficient...
-        :return: A boolean numpy array that can be used to mask images loaded in as numpy arrays.
+        will be iterated through and removed from the src_mask - its not very efficient...
+        :return: A boolean numpy array that can be used to src_mask images loaded in as numpy arrays.
         :rtype: Tuple[np.ndarray, np.ndarray]
         """
         obs_id = mask_image.obs_id
         mask = source_region.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
 
         if not all_interlopers:
-            # Now need to drill out any interloping sources, make a mask for that
+            # Now need to drill out any interloping sources, make a src_mask for that
             interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                for reg in self._within_source_regions[obs_id]])
         else:
@@ -1479,14 +1479,14 @@ class ExtendedSource(BaseSource):
 
             interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                for reg in all_within])
-        # Wherever the interloper mask is not 0, the global mask must become 0 because there is an
+        # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
         # interloper source there - circular sentences ftw
         mask[interlopers != 0] = 0
 
         if back_reg is not None:
             back_mask = back_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
             if not all_interlopers:
-                # Now need to drill out any interloping sources, make a mask for that
+                # Now need to drill out any interloping sources, make a src_mask for that
                 interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                    for reg in self._within_back_regions[obs_id]])
             else:
@@ -1498,7 +1498,7 @@ class ExtendedSource(BaseSource):
                 interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                    for reg in all_within])
 
-            # Wherever the interloper mask is not 0, the global mask must become 0 because there is an
+            # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
             # interloper source there - circular sentences ftw
             back_mask[interlopers != 0] = 0
 
@@ -1530,7 +1530,7 @@ class ExtendedSource(BaseSource):
         while count < 20 and separation > Quantity(15, "kpc"):
             # Define a 500kpc radius region centered on the current central_coords
             cust_reg = CircleSkyRegion(central_coords, search_aperture)
-            # Generate the source mask for the peak finding method
+            # Generate the source src_mask for the peak finding method
             aperture_mask = self._generate_mask(rt, cust_reg, all_interlopers=True)
             # Find the peak using the experimental clustering_peak method
             peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, deg)
@@ -1899,134 +1899,6 @@ class GalaxyCluster(ExtendedSource):
         elif model is None and len(models_with_kt) == 1:
             return self.get_results(reg_type, models_with_kt[0], "kT")
 
-    def _annuli_radii(self, im_prod: Image, rad: float, pix_peak: Quantity) -> Tuple[ndarray, ndarray, Quantity]:
-        """
-        Will probably only ever be called by an internal brightness calculation, but two different methods
-        need it so it gets its own method.
-        :param Image im_prod: An Image or RateMap product object that you wish to calculate annuli for.
-        :param float rad: The outer radius of the set of annuli.
-        :param Quantity pix_peak: The coordinates of the centre of the annuli.
-        :return: Returns the inner and outer radii of the annuli (in pixels), and the centres of the annuli
-        in kilo-parsecs.
-        :rtype: Tuple[ndarray, ndarray, Quantity]
-        """
-        rads = np.arange(0, rad).astype(int)
-        inn_rads = rads[:len(rads) - 1]
-        out_rads = rads[1:len(rads)]
-
-        # TODO Consider replacing this with just scaling by pixel radius compared to known pixel
-        #  radius in kpc
-        # Go through a bit of a process to get the centres of the radius bins in kpc
-        # Make an N x 2 array full of the y pixel coordinate, I will replace the first column with the various
-        #  x coordinates of the radial bins
-        rads_coords = np.full((len(out_rads), 2), pix_peak[1].value)
-        rads_coords[:, 0] = pix_peak[0].value + out_rads
-        # I keep the ys the same because I'm going to convert to degrees, then find the difference between
-        #  the resulting x coordinate array and the peak x coordinate in degrees - thus have radii.
-        rads_coords = Quantity(rads_coords, pix)
-        rads_coords = im_prod.coord_conv(rads_coords, deg)
-        # Now have the coordinates in degrees, so find the absolute difference between the x coordinates of the bins
-        #  in degrees and the peak x coordinate in degrees
-        deg_rads = abs(rads_coords[:, 0] - self.peak[0])
-        # Quick convert to kpc with my handy function and add a zero at the beginning
-        kpc_rads = ang_to_rad(deg_rads, self._redshift, self._cosmo).insert(0, Quantity(0, "kpc"))
-        # Wham-bam now have the centres of the bins in kilo-parsecs
-        cen_rads = (kpc_rads[1:] + kpc_rads[:-1]) / 2
-
-        return inn_rads, out_rads, cen_rads
-
-    def radial_brightness(self, reg_type: str) -> Tuple[ndarray, Quantity, np.float64]:
-        """
-        A simple method to calculate the average brightness in circular annuli upto the radius of
-        the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
-        earlier, interloper sources should be removed.
-        :param str reg_type: The region in which to calculate the radial brightness profile.
-        :return: The brightness is returned in a flat numpy array, then the radii at the centre of the bins are
-        returned in units of kpc, and finally the average brightness in the background region is returned.
-        :rtype: Tuple[ndarray, Quantity, np.float64]
-        """
-        allowed_rtype = ["custom", "r500", "r200", "r2500"]
-        if reg_type not in allowed_rtype:
-            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
-        # Get combined peak - basically the only peak internal methods will use
-        pix_peak = comb_rt.coord_conv(self.peak, pix)
-        rad = self.get_source_region(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius
-
-        # This functionality used to be in this method, but its useful for another procedure so it
-        # got moved to its own methods
-        inn_rads, out_rads, cen_rads = self._annuli_radii(comb_rt, rad, pix_peak)
-
-        # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
-        #  dimension. Helps with broadcasting the annular masks with the region mask that gets rid of interlopers
-        masks = annular_mask(pix_peak, inn_rads, out_rads, comb_rt.shape) * self.get_mask("r500")[0][..., None]
-
-        # Creates a 3D array of the masked data
-        masked_data = masks * comb_rt.data[..., None]
-        # Calculates the average for each radius, use the masks array as weights to only include unmasked
-        #  areas in the average for each radius.
-        br = np.average(masked_data, axis=(0, 1), weights=masks)
-
-        # Finds the average of the background region
-        bg = np.average(comb_rt.data * self.get_mask("r500")[1], axis=(0, 1), weights=self.get_mask("r500")[1])
-
-        return br, cen_rads, bg
-
-    def pizza_brightness(self, reg_type: str, num_slices: int = 4) \
-            -> Tuple[ndarray, Quantity, Quantity, np.float64]:
-        """
-        A different type of brightness profile that allows you to divide the cluster up azimuthally as
-        well as radially. It performs the same calculation as radial_brightness, but for N angular bins,
-        and as such returns N separate profiles.
-        :param str reg_type: The region in which to calculate the radial brightness profile.
-        :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
-        slice will be 360 / num_slices degrees.
-        :return: The brightness is returned in a numpy array with a column per pizza slice, then the
-        radii at the centre of the bins are returned in units of kpc, then the angle boundaries of each slice,
-        and finally the average brightness in the background region is returned.
-        :rtype: Tuple[ndarray, Quantity, Quantity, np.float64]
-        """
-        allowed_rtype = ["custom", "r500", "r200", "r2500"]
-        if reg_type not in allowed_rtype:
-            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
-        # Get combined peak - basically the only peak internal methods will use
-        pix_peak = comb_rt.coord_conv(self.peak, pix)
-        rad = self.get_source_region(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius
-
-        # This functionality used to be in this method, but its useful for another procedure so it
-        # got moved to its own methods
-        inn_rads, out_rads, cen_rads = self._annuli_radii(comb_rt, rad, pix_peak)
-
-        # Setup the angular limits for the slices
-        angs = Quantity(np.linspace(0, 360, int(num_slices)+1), deg)
-        start_angs = angs[:-1]
-        stop_angs = angs[1:]
-
-        br = np.zeros((len(inn_rads), len(start_angs)))
-        # TODO Find a way to fail gracefully if weights are all zeros maybe - hopefully shouldn't
-        #  happen anymore but can't promise
-        for ang_ind in range(len(start_angs)):
-            masks = annular_mask(pix_peak, inn_rads, out_rads, comb_rt.shape, start_angs[ang_ind],
-                                 stop_angs[ang_ind]) * self.get_mask("r500")[0][..., None]
-            masked_data = masks * comb_rt.data[..., None]
-
-            # Calculates the average for each radius, use the masks array as weights to only include unmasked
-            #  areas in the average for each radius.
-            br[:, ang_ind] = np.average(masked_data, axis=(0, 1), weights=masks)
-
-        # Finds the average of the background region
-        bg = np.average(comb_rt.data * self.get_mask("r500")[1], axis=(0, 1), weights=self.get_mask("r500")[1])
-
-        # Just packaging the angles nicely
-        return_angs = Quantity(np.stack([start_angs.value, stop_angs.value]).T, deg)
-
-        return br, cen_rads, return_angs, bg
-
     def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4):
         """
         A method that generates and displays brightness profiles for the current cluster. Brightness profiles
@@ -2038,7 +1910,6 @@ class GalaxyCluster(ExtendedSource):
         :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
         slice will be 360 / num_slices degrees.
         """
-        # TODO Maybe I should store profiles somewhere more permanent rather than just getting them on demand
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
@@ -2058,6 +1929,13 @@ class GalaxyCluster(ExtendedSource):
         elif reg_type == "r2500" and self._r2500 is None:
             raise NoRegionsError("No R2500 region has been setup for this cluster")
 
+        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
+        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
+        source_mask, background_mask = self.get_mask(reg_type)
+        # Get combined peak - basically the only peak internal methods will use
+        pix_peak = comb_rt.coord_conv(self.peak, pix)
+        rad = Quantity(self.get_source_region(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
+
         # Setup the figure
         plt.figure(figsize=(7, 6))
         ax = plt.gca()
@@ -2067,13 +1945,16 @@ class GalaxyCluster(ExtendedSource):
         if profile_type == "radial":
             ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                              u=self._peak_hi_en.value))
-            brightness, radii, background = self.radial_brightness(reg_type)
+            brightness, radii, background = radial_brightness(comb_rt, source_mask, background_mask, pix_peak,
+                                                              rad, self._redshift, kpc, self.cosmo)
             plt.plot(radii, brightness, label="Total Emission")
 
         elif profile_type == "pizza":
             ax.set_title("{n} - {l}-{u}keV Pizza Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                             u=self._peak_hi_en.value))
-            brightness, radii, angles, background = self.pizza_brightness(reg_type, num_slices)
+            brightness, radii, angles, background = pizza_brightness(comb_rt, source_mask, background_mask,
+                                                                     pix_peak, rad, num_slices, self._redshift,
+                                                                     kpc, self.cosmo)
             for ang_ind in range(angles.shape[0]):
                 # Setup labels with the angles covered by the profile
                 lab_str = "{0}$^{{\circ}}$-{1}$^{{\circ}}$ Slice Emission".format(*angles[ang_ind, :].value)
