@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/06/2020, 10:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/07/2020, 15:40. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
@@ -54,22 +54,22 @@ def nhlookup(src_ra: float, src_dec: float) -> ndarray:
     return nh_vals
 
 
-def simple_xmm_match(src_ra: float, src_dec: float, half_width: float = 15.0) -> DataFrame:
+def simple_xmm_match(src_ra: float, src_dec: float, half_width: Quantity = Quantity(20.0, 'arcmin')) -> DataFrame:
     """
     Returns ObsIDs within a square of +-half width from the input ra and dec. The default half_width is
     15 arcminutes, which approximately corresponds to the size of the XMM FOV.
     :param float src_ra: RA coordinate of the source, in degrees.
     :param float src_dec: DEC coordinate of the source, in degrees.
-    :param float half_width: Half width of square to search in, in arc minutes.
+    :param Quantity half_width: Half width of square to search in..
     :return: The ObsID, RA_PNT, and DEC_PNT of matching XMM observations.
     :rtype: DataFrame
     """
-    half_width = half_width / 60
-    matches = CENSUS[(CENSUS["RA_PNT"] <= src_ra+half_width) & (CENSUS["RA_PNT"] >= src_ra-half_width) &
-                     (CENSUS["DEC_PNT"] <= src_dec+half_width) & (CENSUS["DEC_PNT"] >= src_dec-half_width)]
+    hw = half_width.to('deg').value
+    matches = CENSUS[(CENSUS["RA_PNT"] <= src_ra+hw) & (CENSUS["RA_PNT"] >= src_ra-hw) &
+                     (CENSUS["DEC_PNT"] <= src_dec+hw) & (CENSUS["DEC_PNT"] >= src_dec-hw)]
     if len(matches) == 0:
-        raise NoMatchFoundError("No XMM observation found within {a}arcminutes of ra={r} "
-                                "dec={d}".format(r=src_ra, d=src_dec, a=half_width))
+        raise NoMatchFoundError("No XMM observation found within {a} of ra={r} "
+                                "dec={d}".format(r=round(src_ra, 4), d=round(src_dec, 4), a=half_width))
     return matches
 
 

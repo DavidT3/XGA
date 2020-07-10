@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2020, 14:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/07/2020, 15:40. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -50,7 +50,7 @@ class BaseSource:
         self._obs = simple_xmm_match(ra, dec)["ObsID"].values
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
-            on_axis_match = simple_xmm_match(ra, dec, 5)["ObsID"].values
+            on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))["ObsID"].values
         except NoMatchFoundError:
             on_axis_match = np.array([])
         self._onaxis = np.isin(self._obs, on_axis_match)
@@ -1477,8 +1477,10 @@ class ExtendedSource(BaseSource):
             for o in self._other_regions:
                 all_within += list(self._other_regions[o])
 
-            interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                               for reg in all_within])
+            interlopers_pix = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                               for reg in all_within]
+            interlopers = sum([reg for reg in interlopers_pix if reg is not None])
+
         # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
         # interloper source there - circular sentences ftw
         mask[interlopers != 0] = 0
@@ -1495,8 +1497,10 @@ class ExtendedSource(BaseSource):
                     all_within += list(self._within_back_regions[o])
                 for o in self._other_regions:
                     all_within += list(self._other_regions[o])
-                interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                                   for reg in all_within])
+
+                interlopers_pix = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                                   for reg in all_within]
+                interlopers = sum([reg for reg in interlopers_pix if reg is not None])
 
             # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
             # interloper source there - circular sentences ftw
