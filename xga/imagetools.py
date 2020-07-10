@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2020, 14:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/07/2020, 09:46. Copyright (c) David J Turner
 from typing import Tuple
 
 import numpy as np
@@ -159,7 +159,8 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
         # Wham-bam now have the centres of the bins in kilo-parsecs
         cen_rads = (kpc_rads[1:].to(cen_rad_units) + kpc_rads[:-1].to(cen_rad_units)) / 2
     elif cen_rad_units.is_equivalent("deg"):
-        cen_rads = (deg_rads[1:].to(cen_rad_units) + deg_rads[:-1].to(cen_rad_units)) / 2
+        cen_rads = ((deg_rads[1:].to(cen_rad_units) +
+                     deg_rads[:-1].to(cen_rad_units)) / 2).insert(0, Quantity(0, cen_rad_units))
     else:
         cen_rads = None
         raise UnitConversionError("cen_rad_units doesn't appear to be a distance or angular unit.")
