@@ -617,9 +617,9 @@ class Image(BaseProduct):
                                                                       t=self.type))
         else:
             plt.title("Log Scaled {n} - Combined {l}-{u}keV {t}".format(n=self.obj_name,
-                                                                   l=self._energy_bounds[0].to("keV").value,
-                                                                   u=self._energy_bounds[1].to("keV").value,
-                                                                   t=self.type))
+                                                                        l=self._energy_bounds[0].to("keV").value,
+                                                                        u=self._energy_bounds[1].to("keV").value,
+                                                                        t=self.type))
 
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in depth way of viewing cluster data eventually
@@ -759,7 +759,8 @@ class RateMap(Image):
         aren't to be searched, and 1 for those that are.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
-        the user's mask), in units of out_unit, as specified by the user.
+        the user's mask), in units of out_unit, as specified by the user. Also returned is a boolean flag
+        that tells the caller if the peak is near a chip edge.
         :rtype: Tuple[Quantity, bool]
         """
         if mask.shape != self.data.shape:
