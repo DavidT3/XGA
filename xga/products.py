@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2020, 14:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/07/2020, 16:51. Copyright (c) David J Turner
 
 
 import os
@@ -8,7 +8,7 @@ from typing import Tuple, List, Dict
 
 import numpy as np
 from astropy import wcs
-from astropy.units import Quantity, UnitBase, UnitsError, deg, pix
+from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError
 from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize
 from fitsio import read, read_header, FITSHDR, FITS, hdu
 from matplotlib import pyplot as plt
@@ -478,6 +478,8 @@ class Image(BaseProduct):
         :return: The header of the primary data table of the image that was read in.
         :rtype: FITSHDR
         """
+        if self._header is None:
+            self._read_on_demand()
         return self._header
 
     def coord_conv(self, coords: Quantity, output_unit: UnitBase) -> Quantity:
@@ -534,6 +536,7 @@ class Image(BaseProduct):
 
             elif input_unit == "pix" and out_name == "deg":
                 out_coord = Quantity(self.radec_wcs.all_pix2world(coords, 0), output_unit)
+                # print(out_coord - Quantity(self.radec_wcs.wcs_pix2world(coords, 0), output_unit))
 
             # These go between degrees and XMM sky XY coordinates
             elif input_unit == "deg" and out_name == "xmm_sky":
@@ -737,6 +740,10 @@ class RateMap(Image):
 
         # Store that edge mask as an attribute.
         self._edge_mask = comb
+
+        # And another mask for whether on or off the sensor, useful when doing radial profiles on
+        #  objects close to the edge of the detector - otherwise the values get dragged down by all the zeros
+        self._on_sensor_mask = det_map
 
     def get_rate(self, at_coord: Quantity) -> float:
         """
@@ -966,12 +973,32 @@ class RateMap(Image):
 
         return edge_flag
 
+    @property
+    def edge_mask(self) -> np.ndarray:
+        """
+        Returns the edge mask calculated for this RateMap in the form of a numpy array
+        :return: A boolean numpy array in the same shape as the RateMap.
+        :rtype: ndarray
+        """
+        return self._edge_mask
+
+    @property
+    def sensor_mask(self) -> np.ndarray:
+        """
+        Returns the detector map calculated for this RateMap. Values of 1 mean on chip,
+        values of 0 mean off chip.
+        :return: A boolean numpy array in the same shape as the RateMap.
+        :rtype: ndarray
+        """
+        return self._on_sensor_mask
+
 
 class PSF(Image):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, raise_properly)
         self._prod_type = "psf"
+        self._psf_centre = Quantity([self.header.get("CRVAL1"), self.header.get("CRVAL2")], deg)
 
     def get_val(self, at_coord: Quantity) -> float:
         """
@@ -992,9 +1019,46 @@ class PSF(Image):
         val = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         # This is a difficult decision, what to do about requested coordinates that are outside the PSF range.
         #  I think I'm going to set those coordinates to the minimum PSF value
-        val[too_big_ind[0]] = self.data.min()
-        val[neg_ind[0]] = self.data.min()
+        val[too_big_ind[0]] = 0 #self.data.min()
+        val[neg_ind[0]] = 0 #self.data.min()
         return val
+
+    def resample(self, im_prod: Image, half_side_length: Quantity):
+        # TODO Add checks that im_prod is compatible with this PSF
+        # TODO Maybe this should be a factor to multiply the image size by?
+        if half_side_length.unit != pix:
+            raise UnitConversionError("side_length must be in pixels")
+
+        # Location at which the PSF was generated, but in image pixel coordinates
+        im_pix_psf_gen = im_prod.coord_conv(self.ra_dec, pix).value
+
+        hs = half_side_length.value.astype(int)
+        grid = np.meshgrid(np.arange(im_pix_psf_gen[0] - hs, im_pix_psf_gen[0] + hs),
+                           np.arange(im_pix_psf_gen[1] - hs, im_pix_psf_gen[1] + hs))
+        pix_coords = Quantity(np.stack([grid[0].ravel(), grid[1].ravel()]).T, 'pix')
+        # Just tell the conversion method that I want degrees out, and the image's WCS is used to convert
+        deg_coords = im_prod.coord_conv(pix_coords, deg)
+
+        # Now that we're in degrees, it should be possible to look up the PSF values at these positions
+        # using the PSF wcs headers
+        psf_vals = self.get_val(deg_coords)
+
+        # Now need to reshape the values into a 2D array
+        new_psf = np.reshape(psf_vals, (hs*2, hs*2))
+
+        # Renormalising this resampled PSF
+        new_psf /= new_psf.sum()
+
+        return new_psf
+
+    @property
+    def ra_dec(self) -> Quantity:
+        """
+        A property that fetches the RA-DEC that the PSF was generated at.
+        :return: An astropy quantity of the ra and dec that the PSF was generated at.
+        :rtype: Quantity
+        """
+        return self._psf_centre
 
 
 class EventList(BaseProduct):

@@ -1,10 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/07/2020, 09:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/07/2020, 16:51. Copyright (c) David J Turner
 from typing import Tuple
 
 import numpy as np
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitBase, pix, deg, arcsec, UnitConversionError
+from astropy.wcs import WCS
 
 from xga.products import Image
 from xga.sourcetools import ang_to_rad, rad_to_ang
@@ -133,25 +134,16 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     if rad.unit.is_equivalent('deg'):
         to_add = Quantity([rad.to('deg').value, 0], 'deg')
         rad_coord = im_prod.coord_conv(deg_cen+to_add, pix)
-        rad = Quantity(abs((rad_coord - pix_cen).value[0]), 'pix').astype(int)
+        rad = Quantity(abs((rad_coord - pix_cen).value[0]), 'pix')
+
+    rad = np.ceil(rad)
 
     # By this point, the rad should be in pixels
-    rads = np.arange(0, rad.value).astype(int)
+    rads = np.arange(0, rad.value + 1).astype(int)
     inn_rads = rads[:len(rads) - 1]
     out_rads = rads[1:len(rads)]
 
-    # Go through a bit of a process to get the centres of the radius bins in kpc
-    # Make an N x 2 array full of the y pixel coordinate, I will replace the first column with the various
-    #  x coordinates of the radial bins
-    rads_coords = np.full((len(out_rads), 2), pix_cen[1].value)
-    rads_coords[:, 0] = pix_cen[0].value + out_rads
-    # I keep the ys the same because I'm going to convert to degrees, then find the difference between
-    #  the resulting x coordinate array and the peak x coordinate in degrees - thus have radii.
-    rads_coords = Quantity(rads_coords, pix)
-    rads_coords = im_prod.coord_conv(rads_coords, deg)
-    # Now have the coordinates in degrees, so find the absolute difference between the x coordinates of the bins
-    #  in degrees and the peak x coordinate in degrees
-    deg_rads = abs(rads_coords[:, 0] - deg_cen[0])
+    deg_rads = Quantity(pix_deg_scale(deg_cen, im_prod.radec_wcs) * out_rads, 'deg')
 
     if cen_rad_units.is_equivalent("kpc"):
         # Quick convert to kpc with my handy function and add a zero at the beginning
@@ -159,12 +151,12 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
         # Wham-bam now have the centres of the bins in kilo-parsecs
         cen_rads = (kpc_rads[1:].to(cen_rad_units) + kpc_rads[:-1].to(cen_rad_units)) / 2
     elif cen_rad_units.is_equivalent("deg"):
-        cen_rads = ((deg_rads[1:].to(cen_rad_units) +
-                     deg_rads[:-1].to(cen_rad_units)) / 2).insert(0, Quantity(0, cen_rad_units))
+        deg_rads.insert(0, Quantity(0, cen_rad_units))
+        cen_rads = (deg_rads[1:].to(cen_rad_units) +
+                    deg_rads[:-1].to(cen_rad_units)) / 2
     else:
         cen_rads = None
         raise UnitConversionError("cen_rad_units doesn't appear to be a distance or angular unit.")
-
     return inn_rads, out_rads, cen_rads
 
 
@@ -200,7 +192,11 @@ def radial_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarra
 
     # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
     #  dimension. Helps with broadcasting the annular masks with the region src_mask that gets rid of interlopers
-    masks = annular_mask(pix_cen, inn_rads, out_rads, im_prod.shape) * src_mask[..., None]
+    if im_prod.type == 'image':
+        masks = annular_mask(pix_cen, inn_rads, out_rads, im_prod.shape) * src_mask[..., None]
+    elif im_prod.type == 'ratemap':
+        masks = annular_mask(pix_cen, inn_rads, out_rads, im_prod.shape) * src_mask[..., None] \
+                * im_prod.sensor_mask[..., None]
 
     # Creates a 3D array of the masked data
     masked_data = masks * im_prod.data[..., None]
@@ -257,8 +253,13 @@ def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray
     # TODO Find a way to fail gracefully if weights are all zeros maybe - hopefully shouldn't
     #  happen anymore but can't promise
     for ang_ind in range(len(start_angs)):
-        masks = annular_mask(pix_cen, inn_rads, out_rads, im_prod.shape, start_angs[ang_ind],
-                             stop_angs[ang_ind]) * src_mask[..., None]
+        if im_prod.type == 'image':
+            masks = annular_mask(pix_cen, inn_rads, out_rads, im_prod.shape, start_angs[ang_ind],
+                                 stop_angs[ang_ind]) * src_mask[..., None]
+        elif im_prod.type == 'ratemap':
+            masks = annular_mask(pix_cen, inn_rads, out_rads, im_prod.shape, start_angs[ang_ind],
+                                 stop_angs[ang_ind]) * src_mask[..., None] * im_prod.sensor_mask[..., None]
+
         masked_data = masks * im_prod.data[..., None]
 
         # Calculates the average for each radius, use the masks array as weights to only include unmasked
@@ -272,4 +273,42 @@ def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray
     return_angs = Quantity(np.stack([start_angs.value, stop_angs.value]).T, deg)
 
     return br, cen_rads, return_angs, bg
+
+
+def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quantity(1, 'arcmin')) -> float:
+    """
+    Very heavily inspired by the regions version of this function, just tweaked to work better for
+    my use case. Perturbs the given coordinates with the small_offset value, converts the changed ra-dec
+    coordinates to pixel, then calculates the difference between the new and original coordinates in pixel.
+    Then small_offset is converted to degrees and  divided by the pixel distance to calculate a pixel to degree
+    factor.
+    :param Quantity coord: The starting coordinates.
+    :param WCS input_wcs: The to calculate the pixel to degree scale
+    :param Quantity small_offset: The amount you wish to peturb the original coordinates
+    :return: Factor that can be used to convert pixel distances to degree distances.
+    :rtype: float
+    """
+    if coord.unit != pix and coord.unit != deg:
+        raise UnitConversionError("This function can only be used with radec or pixel coordinates as input")
+    elif coord.shape != (2,):
+        raise ValueError("coord input must only contain 1 pair.")
+    elif not small_offset.unit.is_equivalent("deg"):
+        raise UnitConversionError("small_offset must be convertable to degrees")
+
+    if coord.unit == deg:
+        pix_coord = Quantity(input_wcs.all_world2pix(*coord.value, 0), pix)
+        deg_coord = coord
+    else:
+        deg_coord = Quantity(input_wcs.radec_wcs.all_pix2world(*coord.value, 0), deg)
+        pix_coord = coord
+
+    perturbed_coord = deg_coord + Quantity([0, small_offset.to("deg").value], 'deg')
+    perturbed_pix_coord = Quantity(input_wcs.all_world2pix(*perturbed_coord.value, 0), pix)
+
+    diff = abs(perturbed_pix_coord - pix_coord)
+    pix_dist = np.hypot(*diff)
+
+    scale = small_offset.to('deg').value / pix_dist.value
+
+    return scale
 

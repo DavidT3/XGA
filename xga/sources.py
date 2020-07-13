@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/07/2020, 15:40. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/07/2020, 16:51. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -13,6 +13,7 @@ from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase, deg, UnitConversionError, pix, kpc
 from fitsio import FITS
 from matplotlib import pyplot as plt
+from matplotlib.ticker import ScalarFormatter
 from numpy import ndarray
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
     EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
@@ -1258,6 +1259,8 @@ class BaseSource:
         if self._peaks is not None:
             print("X-ray Centroid - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
         print("nH - {}".format(self.nH))
+        if self._redshift is not None:
+            print("Redshift - {}".format(round(self._redshift, 3)))
         print("XMM ObsIDs - {}".format(self.__len__()))
         print("PN Observations - {}".format(len([o for o in self.obs_ids if 'pn' in self._products[o]])))
         print("MOS1 Observations - {}".format(len([o for o in self.obs_ids if 'mos1' in self._products[o]])))
@@ -1957,7 +1960,7 @@ class GalaxyCluster(ExtendedSource):
         rad = Quantity(self.get_source_region(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
 
         # Setup the figure
-        plt.figure(figsize=(7, 6))
+        plt.figure(figsize=(8, 5))
         ax = plt.gca()
 
         # The plotting will be slightly different based on the profile type, also have to call the methods
@@ -1967,6 +1970,7 @@ class GalaxyCluster(ExtendedSource):
                                                                              u=self._peak_hi_en.value))
             brightness, radii, background = radial_brightness(comb_rt, source_mask, background_mask, pix_peak,
                                                               rad, self._redshift, kpc, self.cosmo)
+            # print(radii)
             plt.plot(radii, brightness, label="Total Emission")
 
         elif profile_type == "pizza":
@@ -1989,10 +1993,12 @@ class GalaxyCluster(ExtendedSource):
         ax.set_xlim(0,)
         # Adjusts how the ticks look
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
-        # This would add a grid but I think it might look better without
-        # ax.grid(linestyle='dotted', linewidth=1)
         # Choose y-axis log scaling because otherwise you can't really make out the profiles very well
         ax.set_yscale("log")
+        ax.set_xscale("log")
+        ax.set_xlim(radii.min().value, )
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+
         # Labels and legends
         ax.set_ylabel("S$_{b}$ [count s$^{-1}$ pix$^{-2}$]")
         ax.set_xlabel("Radius [kpc]")
