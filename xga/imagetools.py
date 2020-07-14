@@ -1,6 +1,6 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/07/2020, 16:51. Copyright (c) David J Turner
-from typing import Tuple
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
+from typing import Tuple, List
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -311,4 +311,25 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
     scale = small_offset.to('deg').value / pix_dist.value
 
     return scale
+
+
+def data_limits(im_prod: Image):# -> Tuple[List[int, int], List[int, int]]:
+    """
+    A function that finds the pixel coordinates that bound where data is present in
+    Image or RateMap object.
+    :param Image im_prod: The Image or RateMap that you wish to find bounding coordinates for
+    :return: Two lists, the first with the x lower and upper bounding coordinates, and the second with
+    the y lower and upper bounding coordinates.
+    :rtype: Tuple[List[int, int], List[int, int]]
+    """
+    locations = np.where(im_prod.data != 0)
+    x_min = locations[1].min() - 1  # Subtract/add 1 to give a little border around the edges
+    x_max = locations[1].max() + 1
+
+    y_min = locations[0].min() - 1
+    y_max = locations[0].max() + 1
+
+    return [x_min, x_max], [y_min, y_max]
+
+
 

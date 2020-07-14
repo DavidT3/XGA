@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/07/2020, 16:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -23,7 +23,8 @@ from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObser
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, \
     ParameterNotAssociatedError, PeakConvergenceFailedError, NoRegionsError
 from xga.imagetools import radial_brightness, pizza_brightness
-from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap, RateMap
+from xga.products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, \
+    ExpMap, RateMap, PSFGrid
 from xga.sourcetools import simple_xmm_match, nhlookup, rad_to_ang, ang_to_rad
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
 
@@ -113,11 +114,6 @@ class BaseSource:
 
         self._wl_mass = None
         self._wl_mass_err = None
-
-        # Initialisation of the coordinates at which a PSF is generated. The PSFs are special, they get their
-        #  own position attribute. Initially set to the user supplied coordinates, but can be updated by a peak
-        #  finding method for instance
-        self.psf_centre = self.ra_dec.copy()
 
         # If there is an existing XGA output directory, then it makes sense to search for products that XGA
         #  may have already generated and load them in - saves us wasting time making them again.
@@ -241,7 +237,8 @@ class BaseSource:
         with this source or the instrument is not associated with the ObsID.
         :param BaseProduct prod_obj: The new product object to be added to the source object.
         """
-        if not isinstance(prod_obj, BaseProduct):
+        # Aggregate products are things like PSF grids and sets of annular spectra.
+        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct)):
             raise TypeError("Only product objects can be assigned to sources.")
 
         en_bnds = prod_obj.energy_bounds
@@ -249,6 +246,8 @@ class BaseSource:
             extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
         elif type(prod_obj) == Spectrum:
             extra_key = prod_obj.reg_type
+        elif type(prod_obj) == PSFGrid:
+            extra_key = "bins" + "_" + str(prod_obj.num_bins)
         else:
             extra_key = None
 

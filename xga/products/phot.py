@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2020, 17:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
 
 
 import warnings
@@ -18,7 +18,7 @@ from xga.exceptions import FailedProductError, \
     RateMapPairError
 from xga.sourcetools import ang_to_rad
 from xga.utils import xmm_sky, find_all_wcs
-from . import BaseProduct
+from . import BaseProduct, BaseAggregateProduct
 
 
 class Image(BaseProduct):
@@ -751,7 +751,9 @@ class RateMap(Image):
 
 class PSF(Image):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
+                 gen_cmd: str, raise_properly: bool = True):
+        lo_en = Quantity(0, 'keV')
+        hi_en = Quantity(100, 'keV')
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, raise_properly)
         self._prod_type = "psf"
         self._psf_centre = Quantity([self.header.get("CRVAL1"), self.header.get("CRVAL2")], deg)
@@ -815,3 +817,35 @@ class PSF(Image):
         :rtype: Quantity
         """
         return self._psf_centre
+
+
+class PSFGrid(BaseAggregateProduct):
+    def __init__(self, file_paths: list, bins: int, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+                 gen_cmd: str, raise_properly: bool = True):
+        super().__init__(file_paths, 'psf', obs_id, instrument)
+        self._grid_loc = Quantity(np.zeros((bins, bins, 2)), 'deg')
+        self._nbins = bins
+
+        for f_ind, f in enumerate(file_paths):
+            # I pass the whole stdout and stderr for each PSF, even though they will include ALL the PSFs in this
+            #  grid, its a bit of a bodge but life goes on eh?
+            interim = PSF(f, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+            # The dictionary key the PSF will be stored under - the key corresponds to the numpy y-x
+            #  index from which it was generated
+            pos = np.unravel_index(f_ind, (bins, bins))
+            self._grid_loc[pos[0], pos[1], :] = interim.ra_dec
+            pos_key = "_".join([str(p) for p in pos])
+            self._component_products[pos_key] = interim
+
+    @property
+    def num_bins(self) -> int:
+        """
+        Getter for the number of bins in X and Y that this PSFGrid has PSF objects for.
+        :return: The number of bins per side used to generate this PSFGrid
+        :rtype: int
+        """
+        return self._nbins
+
+
+
+

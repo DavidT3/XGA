@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2020, 17:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
 
 
 import os
@@ -254,8 +254,123 @@ class BaseProduct:
         self._obj_name = name
 
 
+# TODO Obviously finish this, but also comment and docstring
 class BaseAggregateProduct:
-    def __init__(self):
-        pass
+    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str):
+        files_exist = [os.path.exists(f) for f in file_paths]
+        self._all_usable = True
+        self._obs_id = obs_id
+        self._inst = instrument
+        self._prod_type = prod_type
+        self._obj_name = None
+
+        # This was originally going to create the individual products here, but realised it was
+        # easier to do in subclasses
+        self._component_products = {}
+
+        # Setting up energy limits, if they're ever required
+        self._energy_bounds = (None, None)
+
+    @property
+    def obj_name(self) -> str:
+        """
+        Method to return the name of the object a product is associated with. The product becomes
+        aware of this once it is added to a source object.
+        :return: The name of the source object this product is associated with.
+        :rtype: str
+        """
+        return self._obj_name
+
+    # This needs a setter, as this property only becomes not-None when the product is added to a source object.
+    @obj_name.setter
+    def obj_name(self, name: str):
+        """
+        Property setter for the obj_name attribute of a product, should only really be called by a source object,
+        not by a user.
+        :param str name: The name of the source object associated with this product.
+        """
+        self._obj_name = name
+
+    @property
+    def obs_id(self) -> str:
+        """
+        Property getter for the ObsID of this image. Admittedly this information is implicit in the location
+        this object is stored in a source object, but I think it worth storing directly as a property as well.
+        :return: The XMM ObsID of this image.
+        :rtype: str
+        """
+        return self._obs_id
+
+    @property
+    def instrument(self) -> str:
+        """
+        Property getter for the instrument used to take this image. Admittedly this information is implicit
+        in the location this object is stored in a source object, but I think it worth storing
+        directly as a property as well.
+        :return: The XMM instrument used to take this image.
+        :rtype: str
+        """
+        return self._inst
+
+    @property
+    def type(self) -> str:
+        """
+        Property getter for the string identifier for the type of product this object is, mostly useful for
+        internal methods of source objects.
+        :return: The string identifier for this type of object.
+        :rtype: str
+        """
+        return self._prod_type
+
+    @property
+    def all_usable(self) -> bool:
+        """
+        Property getter for the boolean variable that tells you whether all component products have been
+        found to be usable.
+        :return: Boolean variable, are all component products usable?
+        :rtype: bool
+        """
+        return self._all_usable
+
+    # This is a fundamental property of the generated product, so I won't allow it be changed.
+    @property
+    def energy_bounds(self) -> Tuple[Quantity, Quantity]:
+        """
+        Getter method for the energy_bounds property, which returns the rest frame energy band that this
+        product was generated in, if relevant.
+        :return: Tuple containing the lower and upper energy limits as Astropy quantities.
+        :rtype: Tuple[Quantity, Quantity]
+        """
+        return self._energy_bounds
+
+    def __len__(self) -> int:
+        """
+        The length of an AggregateProduct is the number of component products that makes it up.
+        :return:
+        :rtype: int
+        """
+        return len(self._component_products)
+
+    def __iter__(self):
+        """
+        Called when initiating iterating through an AggregateProduct based object. Resets the counter _n.
+        """
+        self._n = 0
+        return self
+
+    def __next__(self):
+        """
+        Iterates the counter _n and returns the next entry in the the component_products dictionary.
+        """
+        if self._n < self.__len__():
+            result = list(self._component_products.values())[self._n]
+            self._n += 1
+            return result
+        else:
+            raise StopIteration
+
+
+
+
 
 

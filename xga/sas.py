@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2020, 09:48. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,13 +8,14 @@ from shutil import rmtree
 from subprocess import Popen, PIPE
 from typing import List, Tuple
 
-from astropy.units import Quantity
-from numpy import array, full
+import numpy as np
+from astropy.units import Quantity, deg
 from tqdm import tqdm
 
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES
-from xga.exceptions import SASNotFoundError
-from xga.products import BaseProduct, Image, ExpMap, Spectrum
+from xga.exceptions import SASNotFoundError, SASInputInvalid, NoProductAvailableError
+from xga.imagetools import data_limits
+from xga.products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
 from xga.utils import energy_to_channel, xmm_sky
 
@@ -23,8 +24,8 @@ if "SAS_DIR" not in os.environ:
                            "unable to verify SAS is present on system")
 else:
     # This way, the user can just import the SAS_VERSION from this utils code
-    out, err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
-    SAS_VERSION = out.decode("UTF-8").strip("]\n").split('-')[-1]
+    sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+    SAS_VERSION = sas_out.decode("UTF-8").strip("]\n").split('-')[-1]
 
 
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
@@ -60,7 +61,9 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
                         extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info["reg_type"],
                         extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
-
+    elif p_type == "psf":
+        prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["obs_id"],
+                       extra_info["instrument"], out, err, cmd)
     else:
         raise NotImplementedError("Not implemented yet")
 
@@ -267,12 +270,12 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
             # This is the products final resting place, if it exists at the end of this command
             final_paths.append(os.path.join(OUTPUT, obs_id, im))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
-        sources_cmds.append(array(cmds))
-        sources_paths.append(array(final_paths))
+        sources_cmds.append(np.array(cmds))
+        sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
         # once the SAS cmd has run
-        sources_extras.append(array(extra_info))
-        sources_types.append(full(sources_cmds[-1].shape, fill_value="image"))
+        sources_extras.append(np.array(extra_info))
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="image"))
 
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
@@ -318,10 +321,10 @@ def cifbuild(sources: List[BaseSource], num_cores: int = NUM_CORES):
                 final_paths.append(final_path)
                 extra_info.append({})  # This doesn't need any extra information
 
-        sources_cmds.append(array(cmds))
-        sources_paths.append(array(final_paths))
-        sources_extras.append(array(extra_info))
-        sources_types.append(full(sources_cmds[-1].shape, fill_value="ccf"))
+        sources_cmds.append(np.array(cmds))
+        sources_paths.append(np.array(final_paths))
+        sources_extras.append(np.array(extra_info))
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="ccf"))
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -415,12 +418,12 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
             # This is the products final resting place, if it exists at the end of this command
             final_paths.append(os.path.join(OUTPUT, obs_id, exp_map))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
-        sources_cmds.append(array(cmds))
-        sources_paths.append(array(final_paths))
+        sources_cmds.append(np.array(cmds))
+        sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
         # once the SAS cmd has run
-        sources_extras.append(array(extra_info))
-        sources_types.append(full(sources_cmds[-1].shape, fill_value="expmap"))
+        sources_extras.append(np.array(extra_info))
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="expmap"))
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -498,15 +501,15 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
         mosaic = "{os}_{l}-{u}keVmerged_{t}.fits".format(os="_".join(obs_ids_set), l=lo_en.value, u=hi_en.value,
                                                          t=to_mosaic)
 
-        sources_cmds.append(array([mosaic_cmd.format(ims=" ".join(paths), mim=mosaic, d=dest_dir)]))
-        sources_paths.append(array([dest_dir + mosaic]))
+        sources_cmds.append(np.array([mosaic_cmd.format(ims=" ".join(paths), mim=mosaic, d=dest_dir)]))
+        sources_paths.append(np.array([dest_dir + mosaic]))
         # This contains any other information that will be needed to instantiate the class
         # once the SAS cmd has run
         # The 'combined' values for obs and inst here are crucial, they will tell the source object that the final
         # product is assigned to that these are merged products - combinations of all available data
-        sources_extras.append(array([{"lo_en": lo_en, "hi_en": hi_en, "obs_id": "combined",
+        sources_extras.append(np.array([{"lo_en": lo_en, "hi_en": hi_en, "obs_id": "combined",
                                       "instrument": "combined"}]))
-        sources_types.append(full(sources_cmds[-1].shape, fill_value=to_mosaic))
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value=to_mosaic))
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -515,33 +518,36 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
 
 
-def psfgen(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cores: int = NUM_CORES):
+@sas_call
+def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA", num_cores: int = NUM_CORES):
     """
     A wrapper for the psfgen SAS task. Used to generate XGA PSF objects, which in turn can be used to correct
-    XGA images/ratemaps for optical effects. Uses the ELLBETA model reported in Read et al. 2011
-    (doi:10.1051/0004-6361/201117525), and is generated at the position of the source object's psf_centre
-    attribute. The energy at which the PSF is generated is the average of the lo_en and hi_en parameters, and the
-    resultant PSF object will be paired up with an image that matches it's ObsID, instrument, and energy band.
+    XGA images/ratemaps for optical effects. By default we use the ELLBETA model reported in Read et al. 2011
+    (doi:10.1051/0004-6361/201117525), and generate a grid of binsxbins PSFs that can be used
+    to correct for the PSF over an entire image. The energy dependence of the PSF is assumed to be minimal, and the
+    resultant PSF object will be paired up with an image that matches it's ObsID and instrument.
     :param List[BaseSource] sources: A single source object, or a list of source objects.
-    :param Quantity lo_en: The lower energy limit for the PSF, in astropy energy units.
-    :param Quantity hi_en: The upper energy limit for the PSF, in astropy energy units.
+    :param int bins: The image coordinate space will be divided into a grid of size binsxbins, PSFs will be
+    generated at the central coordinates of the grid chunks.
+    :param str psf_model: Which model to use when generating the PSF, default is ELLBETA, the best available.
     :param int num_cores: The number of cores to use (if running locally), default is set to
     90% of available.
     """
-    raise NotImplementedError("I haven't finished this yet")
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
 
-    # Don't do much value checking in this module, but this one is so fundamental that I will do it
-    if lo_en > hi_en:
-        raise ValueError("lo_en cannot be greater than hi_en")
-    else:
-        # Calls a useful little function that takes an astropy energy quantity to the XMM channels
-        # required by SAS commands
-        lo_chan = energy_to_channel(lo_en)
-        hi_chan = energy_to_channel(hi_en)
+    psf_model = psf_model.upper()
+    allowed_models = ["ELLBETA", "LOW", "MEDIUM", "EXTENDED", "HIGH"]
+    if psf_model not in allowed_models:
+        raise SASInputInvalid("{0} is not a valid PSF model. Allowed models are "
+                              "{1}".format(psf_model, ", ".join(allowed_models)))
+    elif bins > 10:
+        raise ValueError("While I appreciate your desire for fine binning, I think {0}x{0} bins would"
+                         " probably take too long...".format(bins))
 
-    sources = evselect_image(sources, lo_en, hi_en)
+    # Need a valid CIF for this task, so run cifbuild first.from
+    cifbuild(sources)
+
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
     if not isinstance(sources, list):
@@ -565,36 +571,73 @@ def psfgen(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_core
             if not os.path.exists(OUTPUT + obs_id):
                 os.mkdir(OUTPUT + obs_id)
 
-            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
-                      if en_id in match]
-            if len(exists) == 1 and exists[0][-1].usable:
-                continue
+            # This looks for any image for this ObsID, instrument combo - it does assume that whatever
+            #  it finds will be the same resolution as any images in other energy bands that XGA will
+            #  create in the future.
+            images = source.get_products("image", obs_id, inst, just_obj=True)
 
-            evt_list = pack[-1]
-            dest_dir = OUTPUT + "{o}/{i}_{l}-{u}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
-            im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
+            if len(images) == 0:
+                raise NoProductAvailableError("There is no image available for {o} {i}, please generate "
+                                              "images before PSFs".format(o=obs_id, i=inst))
+
+            # Checking if the Image products are the same shape that XGA makes
+            res_match = [im for im in images if im.shape == (512, 512)]
+            if len(res_match) == 0:
+                raise NoProductAvailableError("There is an image associated with {o} {i}, but it doesn't"
+                                              " appear to be at the resolution XGA uses - this is not "
+                                              "supported yet.")
+            else:
+                image = res_match[0]
+
+            x_lims, y_lims = data_limits(image)
+            x_step = (x_lims[1] - x_lims[0]) / bins
+            y_step = (y_lims[1] - y_lims[0]) / bins
+
+            x_step_coords = np.arange(*x_lims, x_step) + (x_step / 2)
+            y_step_coords = np.arange(*y_lims, y_step) + (y_step / 2)
+            pix_mesh = np.meshgrid(x_step_coords, y_step_coords)
+            pix_coords = Quantity(np.stack([pix_mesh[0].ravel(), pix_mesh[1].ravel()]).T, 'pix')
+            ra_dec_coords = image.coord_conv(pix_coords, deg)
+
+            dest_dir = OUTPUT + "{o}/{i}_temp/".format(o=obs_id, i=inst)
+            psf = "{o}_{i}_{b}bin_{ra}_{dec}_psf.fits"
+
+            # The change directory and SAS setup commands
+            init_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; ".format(d=dest_dir, ccf=dest_dir + "ccf.cif")
 
             # If something got interrupted and the temp directory still exists, this will remove it
             if os.path.exists(dest_dir):
                 rmtree(dest_dir)
 
             os.makedirs(dest_dir)
-            cmds.append("cd {d};evselect table={e} imageset={i} xcolumn=X ycolumn=Y ximagebinsize=87 "
-                        "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize "
-                        "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 "
-                        "withyranges=yes {ex}; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
-                                                                                  i=im, ex=expr))
 
+            psf_files = []
+            total_cmd = init_cmd
+            for pair_ind in range(ra_dec_coords.shape[0]):
+                # The coordinates at which this PSF will be generated
+                ra, dec = ra_dec_coords[pair_ind, :].value
+
+                psf_file = psf.format(o=obs_id, i=inst, b=bins, ra=ra, dec=dec)
+                psf_files.append(os.path.join(OUTPUT, obs_id, psf_file))
+                # Going with xsize and ysize as 400 pixels, I think its enough and quite a bit faster than 1000
+                total_cmd += "psfgen image={i} coordtype=EQPOS level={m} energy=1000 xsize=400 ysize=400 x={ra} " \
+                             "y={dec} output={p}; ".format(i=image.path, m=psf_model, ra=ra, dec=dec, p=psf_file)
+
+            total_cmd += "mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+            cmds.append(total_cmd)
             # This is the products final resting place, if it exists at the end of this command
-            final_paths.append(os.path.join(OUTPUT, obs_id, im))
-            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
-        sources_cmds.append(array(cmds))
-        sources_paths.append(array(final_paths))
+            # In this case it just checks for the final PSF in the grid, all other files in the grid
+            # get stored in extra info.
+            final_paths.append(os.path.join(OUTPUT, obs_id, psf_file))
+            extra_info.append({"obs_id": obs_id, "instrument": inst, "model": psf_model, "chunks_per_side": bins,
+                               "files": psf_files})
+
+        sources_cmds.append(np.array(cmds))
+        sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
         # once the SAS cmd has run
-        sources_extras.append(array(extra_info))
-        sources_types.append(full(sources_cmds[-1].shape, fill_value="image"))
+        sources_extras.append(np.array(extra_info))
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="psf"))
 
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
@@ -783,12 +826,12 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, group_spec: bool
                                "b_arf_path": os.path.join(OUTPUT, obs_id, b_arf),
                                "obs_id": obs_id, "instrument": inst})
 
-        sources_cmds.append(array(cmds))
-        sources_paths.append(array(final_paths))
+        sources_cmds.append(np.array(cmds))
+        sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
         #  once the SAS cmd has run
-        sources_extras.append(array(extra_info))
-        sources_types.append(full(sources_cmds[-1].shape, fill_value="spectrum"))
+        sources_extras.append(np.array(extra_info))
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
 
