@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 10:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 11:37. Copyright (c) David J Turner
 
 
 import warnings
@@ -750,13 +750,14 @@ class RateMap(Image):
 
 
 class PSF(Image):
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+    def __init__(self, path: str, psf_model: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, raise_properly: bool = True):
         lo_en = Quantity(0, 'keV')
         hi_en = Quantity(100, 'keV')
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, raise_properly)
         self._prod_type = "psf"
         self._psf_centre = Quantity([self.header.get("CRVAL1"), self.header.get("CRVAL2")], deg)
+        self._psf_model = psf_model
 
     def get_val(self, at_coord: Quantity) -> float:
         """
@@ -818,18 +819,28 @@ class PSF(Image):
         """
         return self._psf_centre
 
+    @property
+    def model(self) -> str:
+        """
+        This is the model that was used to generate this PSF.
+        :return: XMM SAS psfgen model name.
+        :rtype: str
+        """
+        return self._psf_model
+
 
 class PSFGrid(BaseAggregateProduct):
-    def __init__(self, file_paths: list, bins: int, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, raise_properly: bool = True):
+    def __init__(self, file_paths: list, bins: int, psf_model: str, obs_id: str, instrument: str,
+                 stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
         super().__init__(file_paths, 'psf', obs_id, instrument)
+        self._psf_model = psf_model
         self._grid_loc = Quantity(np.zeros((bins, bins, 2)), 'deg')
         self._nbins = bins
 
         for f_ind, f in enumerate(file_paths):
             # I pass the whole stdout and stderr for each PSF, even though they will include ALL the PSFs in this
             #  grid, its a bit of a bodge but life goes on eh?
-            interim = PSF(f, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+            interim = PSF(f, psf_model, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
             # The dictionary key the PSF will be stored under - the key corresponds to the numpy y-x
             #  index from which it was generated
             pos = np.unravel_index(f_ind, (bins, bins))
@@ -842,6 +853,8 @@ class PSFGrid(BaseAggregateProduct):
         # This tells the world whether every single product associated with this AggregateProduct is usable.
         self._all_usable = all(p.usable for p in self)
 
+    # These next two are fundamental properties of the psf files generation process, and
+    # can't be changed after the fact.
     @property
     def num_bins(self) -> int:
         """
@@ -850,6 +863,15 @@ class PSFGrid(BaseAggregateProduct):
         :rtype: int
         """
         return self._nbins
+
+    @property
+    def model(self) -> str:
+        """
+        This is the model that was used to generate the component PSFs in this PSFGrid.
+        :return: XMM SAS psfgen model name.
+        :rtype: str
+        """
+        return self._psf_model
 
 
 

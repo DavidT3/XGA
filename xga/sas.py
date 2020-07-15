@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 11:37. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -62,8 +62,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
                         extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info["reg_type"],
                         extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
     elif p_type == "psf":
-        prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["obs_id"],
-                       extra_info["instrument"], out, err, cmd)
+        prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
+                       extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
     else:
         raise NotImplementedError("Not implemented yet")
 
@@ -588,6 +588,12 @@ def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA",
                                               "supported yet.")
             else:
                 image = res_match[0]
+
+            # Here we try and find if this PSF configuration has already been run and has been
+            #  associated with the source. If so then don't do it again.
+            psfs = source.get_products("psf", obs_id, inst, extra_key=psf_model + "_" + str(bins))
+            if len(psfs) != 0:
+                continue
 
             x_lims, y_lims = data_limits(image)
             x_step = (x_lims[1] - x_lims[0]) / bins

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 11:37. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -247,7 +247,9 @@ class BaseSource:
         elif type(prod_obj) == Spectrum:
             extra_key = prod_obj.reg_type
         elif type(prod_obj) == PSFGrid:
-            extra_key = "bins" + "_" + str(prod_obj.num_bins)
+            # The first part of the key is the model used (by default its ELLBETA for example), and
+            #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
+            extra_key = prod_obj.model + "_" + str(prod_obj.num_bins)
         else:
             extra_key = None
 
