@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 10:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 00:22. Copyright (c) David J Turner
 
 
 import os
@@ -362,11 +362,14 @@ class BaseAggregateProduct:
         Iterates the counter _n and returns the next entry in the the component_products dictionary.
         """
         if self._n < self.__len__():
-            result = list(self._component_products.values())[self._n]
+            result = self.__getitem__(self._n)
             self._n += 1
             return result
         else:
             raise StopIteration
+
+    def __getitem__(self, ind):
+        return list(self._component_products.values())[ind]
 
 
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 11:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 00:22. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -63,7 +63,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
                         extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
     elif p_type == "psf":
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
-                       extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
+                       extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
+                       extra_info["instrument"], out, err, cmd)
     else:
         raise NotImplementedError("Not implemented yet")
 
@@ -595,14 +596,38 @@ def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA",
             if len(psfs) != 0:
                 continue
 
+            # This part is where we decide on the RA DEC coordinates for the centres of each
+            #  PSF in our grid
+            # This function gives us x and y limits for where there is data in an image, they are used as start
+            #  and end coordinates for our bins so the PSFs are more focused on where there is actually data.
             x_lims, y_lims = data_limits(image)
+            # Simple calculation to calculate step size in pixels, so how long each chunk will be in
+            #  x and y directions
             x_step = (x_lims[1] - x_lims[0]) / bins
             y_step = (y_lims[1] - y_lims[0]) / bins
 
-            x_step_coords = np.arange(*x_lims, x_step) + (x_step / 2)
-            y_step_coords = np.arange(*y_lims, y_step) + (y_step / 2)
-            pix_mesh = np.meshgrid(x_step_coords, y_step_coords)
+            # These are the x and y bin centre coordinates - when converted to RA and DEC this is where the
+            #  PSF is generated at.
+            x_cen_coords = np.arange(*x_lims, x_step) + (x_step / 2)
+            y_cen_coords = np.arange(*y_lims, y_step) + (y_step / 2)
+
+            # Get all combinations of the central coordinates using meshgrid, then turn them into
+            #  an N row, 2 column numpy array of pixel coordinates for easy conversion to RA-DEC.
+            pix_mesh = np.meshgrid(x_cen_coords, y_cen_coords)
             pix_coords = Quantity(np.stack([pix_mesh[0].ravel(), pix_mesh[1].ravel()]).T, 'pix')
+
+            # But I also want to know the boundaries of the bins so I can easily select which parts of
+            #  the image belong with each PSF in the grid
+            x_boundaries = np.linspace(*x_lims, bins+1)
+            y_boundaries = np.linspace(*y_lims, bins+1)
+
+            # These two arrays give the x and y boundaries of the bins in the same order as the pix_coords array
+            x_bound_coords = np.tile(np.stack([x_boundaries[0: -1].ravel(), x_boundaries[1:].ravel()]).T, (bins, 1))
+            x_bound_coords = x_bound_coords.round(0).astype(int)
+
+            y_bound_coords = np.repeat(np.stack([y_boundaries[0: -1].ravel(), y_boundaries[1:].ravel()]).T, bins, 0)
+            y_bound_coords = y_bound_coords.round(0).astype(int)
+
             ra_dec_coords = image.coord_conv(pix_coords, deg)
 
             dest_dir = OUTPUT + "{o}/{i}_temp/".format(o=obs_id, i=inst)
@@ -636,7 +661,7 @@ def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA",
             # get stored in extra info.
             final_paths.append(os.path.join(OUTPUT, obs_id, psf_file))
             extra_info.append({"obs_id": obs_id, "instrument": inst, "model": psf_model, "chunks_per_side": bins,
-                               "files": psf_files})
+                               "files": psf_files, "x_bounds": x_bound_coords, "y_bounds": y_bound_coords})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))

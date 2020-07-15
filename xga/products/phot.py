@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 11:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 00:22. Copyright (c) David J Turner
 
 
 import warnings
@@ -830,12 +830,15 @@ class PSF(Image):
 
 
 class PSFGrid(BaseAggregateProduct):
-    def __init__(self, file_paths: list, bins: int, psf_model: str, obs_id: str, instrument: str,
-                 stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
+    def __init__(self, file_paths: list, bins: int, psf_model: str, x_bounds: np.ndarray, y_bounds: np.ndarray,
+                 obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 raise_properly: bool = True):
         super().__init__(file_paths, 'psf', obs_id, instrument)
         self._psf_model = psf_model
         self._grid_loc = Quantity(np.zeros((bins, bins, 2)), 'deg')
         self._nbins = bins
+        self._x_bounds = x_bounds
+        self._y_bounds = y_bounds
 
         for f_ind, f in enumerate(file_paths):
             # I pass the whole stdout and stderr for each PSF, even though they will include ALL the PSFs in this
@@ -873,6 +876,22 @@ class PSFGrid(BaseAggregateProduct):
         """
         return self._psf_model
 
+    @property
+    def x_bounds(self) -> np.ndarray:
+        """
+        The x lower (column 0) and x upper (column 1) bounds of the PSFGrid bins.
+        :return: N x 2 numpy array, where N is the total number of PSFGrid bins.
+        :rtype: np.ndarray
+        """
+        return self._x_bounds
 
+    @property
+    def y_bounds(self) -> np.ndarray:
+        """
+        The y lower (column 0) and y upper (column 1) bounds of the PSFGrid bins.
+        :return: N x 2 numpy array, where N is the total number of PSFGrid bins.
+        :rtype: np.ndarray
+        """
+        return self._y_bounds
 
 
