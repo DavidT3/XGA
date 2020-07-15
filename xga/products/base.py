@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 10:42. Copyright (c) David J Turner
 
 
 import os
@@ -257,7 +257,6 @@ class BaseProduct:
 # TODO Obviously finish this, but also comment and docstring
 class BaseAggregateProduct:
     def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str):
-        files_exist = [os.path.exists(f) for f in file_paths]
         self._all_usable = True
         self._obs_id = obs_id
         self._inst = instrument

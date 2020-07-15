@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 10:42. Copyright (c) David J Turner
 
 
 import warnings
@@ -836,6 +836,11 @@ class PSFGrid(BaseAggregateProduct):
             self._grid_loc[pos[0], pos[1], :] = interim.ra_dec
             pos_key = "_".join([str(p) for p in pos])
             self._component_products[pos_key] = interim
+
+        # I set up the BaseAggregateProduct class to iterate across its dictionary of products,
+        #  so thats why I can do for p in self
+        # This tells the world whether every single product associated with this AggregateProduct is usable.
+        self._all_usable = all(p.usable for p in self)
 
     @property
     def num_bins(self) -> int:
