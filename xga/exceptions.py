@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 11:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 23:42. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -391,3 +391,27 @@ class NotPSFCorrectedError(Exception):
             return '{}'.format(self.message)
         else:
             return 'NotPSFCorrectedError has been raised'
+
+
+class IncompatibleProductError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when products are used together that do not have matching ObsID and instrument
+        values. For instance when you try to re-sample a PSF with an Image object from a different
+        observation and instrument.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'IncompatibleProductError has been raised'
+
+
+
