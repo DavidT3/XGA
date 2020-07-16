@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:28. Copyright (c) David J Turner
 
 
 import warnings
@@ -922,7 +922,7 @@ class PSF(Image):
             raise IncompatibleProductError("Image ObsID ({o1}) is not the same as PSF ObsID "
                                            "({o2})".format(o1=im_prod.obs_id, o2=self.obs_id))
         elif im_prod.instrument != self.instrument:
-            raise IncompatibleProductError("Image instruemtn ({i1}) is not the same as PSF instrument "
+            raise IncompatibleProductError("Image instrument ({i1}) is not the same as PSF instrument "
                                            "({i2})".format(i1=im_prod.instrument, i2=self.instrument))
         if half_side_length.unit != pix:
             raise UnitConversionError("side_length must be in pixels")
