@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 00:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:03. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -49,6 +49,12 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         # Maybe let the user decide not to raise errors detected in stderr
         prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                      extra_info["lo_en"], extra_info["hi_en"])
+        if "psf_corr" in extra_info and extra_info["psf_corr"]:
+            prod.psf_corrected = True
+            prod.psf_bins = extra_info["psf_bins"]
+            prod.psf_model = extra_info["psf_model"]
+            prod.psf_iterations = extra_info["psf_iter"]
+            prod.psf_algorithm = extra_info["psf_algo"]
     elif p_type == "expmap":
         prod = ExpMap(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                       extra_info["lo_en"], extra_info["hi_en"])
@@ -434,7 +440,8 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
 
 
 @sas_call
-def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Quantity,
+def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Quantity, psf_corr: bool = False,
+            psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
             num_cores: int = NUM_CORES):
     """
     A convenient Python wrapper for the SAS emosaic command. Every image associated with the source,
@@ -443,6 +450,11 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     :param str to_mosaic: The data type to produce a mosaic for, can be either image or expmap.
     :param Quantity lo_en: The lower energy limit for the combined image, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the combined image, in astropy energy units.
+    :param bool psf_corr: If True, PSF corrected images will be mosaiced.
+    :param str psf_model: If PSF corrected, the PSF model used.
+    :param int psf_bins: If PSF corrected, the number of bins per side.
+    :param str psf_algo: If PSF corrected, the algorithm used.
+    :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use (if running locally), default is set to
     90% of available.
     """
@@ -459,8 +471,10 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     # To make a mosaic we need to have the individual products in the first place
     if to_mosaic == "image":
         sources = evselect_image(sources, lo_en, hi_en)
+        for_name = "img"
     elif to_mosaic == "expmap":
         sources = eexpmap(sources, lo_en, hi_en)
+        for_name = "expmap"
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
@@ -475,6 +489,11 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     sources_types = []
     for source in sources:
         en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+        # If we're mosaicing PSF corrected images, we need to
+        if psf_corr and to_mosaic == "expmap":
+            raise ValueError("There can be no PSF corrected expmaps to mosaic, it doesn't make sense.")
+        elif psf_corr:
+            en_id += "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
 
         # Checking if the combined product already exists
         exists = [match for match in source.get_products("combined_{}".format(to_mosaic), just_obj=False)
@@ -499,8 +518,13 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
         # go in the xga_output folder? I've arbitrarily decided to save it in the folder of the first ObsID
         # associated with a given source.
         dest_dir = OUTPUT + "{o}/".format(o=obs_ids_set[0])
-        mosaic = "{os}_{l}-{u}keVmerged_{t}.fits".format(os="_".join(obs_ids_set), l=lo_en.value, u=hi_en.value,
-                                                         t=to_mosaic)
+        if not psf_corr:
+            mosaic = "{os}_{l}-{u}keVmerged_{t}.fits".format(os="_".join(obs_ids_set), l=lo_en.value, u=hi_en.value,
+                                                             t=for_name)
+        else:
+            mosaic = "{os}_{b}bin_{it}iter_{m}mod_{a}algo_{l}-{u}keVpsfcorr_merged_img." \
+                     "fits".format(os="_".join(obs_ids_set), l=lo_en.value, u=hi_en.value, b=psf_bins, it=psf_iter,
+                                   a=psf_algo, m=psf_model)
 
         sources_cmds.append(np.array([mosaic_cmd.format(ims=" ".join(paths), mim=mosaic, d=dest_dir)]))
         sources_paths.append(np.array([dest_dir + mosaic]))
@@ -509,7 +533,8 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
         # The 'combined' values for obs and inst here are crucial, they will tell the source object that the final
         # product is assigned to that these are merged products - combinations of all available data
         sources_extras.append(np.array([{"lo_en": lo_en, "hi_en": hi_en, "obs_id": "combined",
-                                      "instrument": "combined"}]))
+                                         "instrument": "combined", "psf_corr": psf_corr, "psf_algo": psf_algo,
+                                         "psf_model": psf_model, "psf_iter": psf_iter, "psf_bins": psf_bins}]))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value=to_mosaic))
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
@@ -622,19 +647,22 @@ def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA",
             y_boundaries = np.linspace(*y_lims, bins+1)
 
             # These two arrays give the x and y boundaries of the bins in the same order as the pix_coords array
-            x_bound_coords = np.tile(np.stack([x_boundaries[0: -1].ravel(), x_boundaries[1:].ravel()]).T, (bins, 1))
+            x_bound_coords = np.tile(np.stack([x_boundaries[0: -1].ravel(), x_boundaries[1:].ravel()]).T,
+                                     (bins, 1))
             x_bound_coords = x_bound_coords.round(0).astype(int)
 
-            y_bound_coords = np.repeat(np.stack([y_boundaries[0: -1].ravel(), y_boundaries[1:].ravel()]).T, bins, 0)
+            y_bound_coords = np.repeat(np.stack([y_boundaries[0: -1].ravel(), y_boundaries[1:].ravel()]).T,
+                                       bins, 0)
             y_bound_coords = y_bound_coords.round(0).astype(int)
 
             ra_dec_coords = image.coord_conv(pix_coords, deg)
 
             dest_dir = OUTPUT + "{o}/{i}_temp/".format(o=obs_id, i=inst)
-            psf = "{o}_{i}_{b}bin_{ra}_{dec}_psf.fits"
+            psf = "{o}_{i}_{b}bin_{m}mod_{ra}_{dec}_psf.fits"
 
             # The change directory and SAS setup commands
-            init_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; ".format(d=dest_dir, ccf=dest_dir + "ccf.cif")
+            init_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; ".format(d=dest_dir,
+                                                                                ccf=dest_dir + "ccf.cif")
 
             # If something got interrupted and the temp directory still exists, this will remove it
             if os.path.exists(dest_dir):
@@ -648,7 +676,7 @@ def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA",
                 # The coordinates at which this PSF will be generated
                 ra, dec = ra_dec_coords[pair_ind, :].value
 
-                psf_file = psf.format(o=obs_id, i=inst, b=bins, ra=ra, dec=dec)
+                psf_file = psf.format(o=obs_id, i=inst, b=bins, ra=ra, dec=dec, m=psf_model)
                 psf_files.append(os.path.join(OUTPUT, obs_id, psf_file))
                 # Going with xsize and ysize as 400 pixels, I think its enough and quite a bit faster than 1000
                 total_cmd += "psfgen image={i} coordtype=EQPOS level={m} energy=1000 xsize=400 ysize=400 x={ra} " \

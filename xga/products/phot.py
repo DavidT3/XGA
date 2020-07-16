@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 11:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:03. Copyright (c) David J Turner
 
 
 import warnings
@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
-from xga.exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError
+from xga.exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
 from xga.sourcetools import ang_to_rad
 from xga.utils import xmm_sky, find_all_wcs
 from . import BaseProduct, BaseAggregateProduct
@@ -50,6 +50,7 @@ class Image(BaseProduct):
         self._psf_correction_algorithm = None
         self._psf_num_bins = None
         self._psf_num_iterations = None
+        self._psf_model = None
 
     def _read_on_demand(self):
         """
@@ -432,6 +433,28 @@ class Image(BaseProduct):
             raise NotPSFCorrectedError("You are trying to set the number of algorithm iterations for an Image"
                                        " that hasn't been PSF corrected.")
 
+    @property
+    def psf_model(self) -> Union[str, None]:
+        """
+        If this object has been PSF corrected, this property gives the name of the PSF model used.
+        :return: The name of the PSF model used to correct for PSF effects, or None if the object
+        hasn't been PSF corrected.
+        :rtype: Union[str, None]
+        """
+        return self._psf_model
+
+    @psf_model.setter
+    def psf_model(self, new_val: str):
+        """
+        If this object has been PSF corrected, this property setter allows you to add the
+        name of the PSF model used. If it hasn't been PSF corrected then an error will be triggered.
+        """
+        if self._psf_corrected:
+            self._psf_model = new_val
+        else:
+            raise NotPSFCorrectedError("You are trying to set the PSF model for an Image that hasn't "
+                                       "been PSF corrected.")
+
     def view(self, cross_hair: Quantity = None, mask: np.ndarray = None):
         """
         Quick and dirty method to view this image. Absolutely no user configuration is allowed, that feature
@@ -530,6 +553,13 @@ class RateMap(Image):
         super().__init__(xga_image.path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
                          xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1])
         self._prod_type = "ratemap"
+
+        # Reading in the PSF status from the Image passed in
+        self._psf_corrected = xga_image.psf_corrected
+        self._psf_model = xga_image.psf_model
+        self._psf_num_bins = xga_image.psf_bins
+        self._psf_num_iterations = xga_image.psf_iterations
+        self._psf_correction_algorithm = xga_image.psf_algorithm
 
         # Runs read on demand to grab the data for the image, as this was the input path to the super init call
         self._read_on_demand()
@@ -862,7 +892,8 @@ class PSF(Image):
         """
         pix_coord = self.coord_conv(at_coord, pix).value
         neg_ind = np.where(pix_coord < 0)
-        # TODO This wouldn't deal with PSF images that weren't the same size in x and y - fix!
+        # This wouldn't deal with PSF images that weren't the same size in x and y, but XGA
+        #  doesn't generate PSFs like that so its fine.
         too_big_ind = np.where(pix_coord >= self.shape[0])
 
         pix_coord[too_big_ind[0], :] = [0, 0]
@@ -871,13 +902,28 @@ class PSF(Image):
         val = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         # This is a difficult decision, what to do about requested coordinates that are outside the PSF range.
         #  I think I'm going to set those coordinates to the minimum PSF value
-        val[too_big_ind[0]] = 0 #self.data.min()
-        val[neg_ind[0]] = 0 #self.data.min()
+        val[too_big_ind[0]] = 0
+        val[neg_ind[0]] = 0
         return val
 
-    def resample(self, im_prod: Image, half_side_length: Quantity):
-        # TODO Add checks that im_prod is compatible with this PSF
-        # TODO Maybe this should be a factor to multiply the image size by?
+    def resample(self, im_prod: Image, half_side_length: Quantity) -> np.ndarray:
+        """
+        This method resamples a psfgen created PSF image to the same scale as the passed Image object. This
+        is very important because psfgen makes these PSF images with a standard pixel size of 1 arcsec x 1 arcsec,
+        and it can't be changed when calling the routine. Thankfully, due to the wonders of WCS, it is possible
+        to construct a new array with the same pixel size as a given image. Very important for when we want
+        to deconvolve with an image and correct for the PSF.
+        :param Image im_prod:
+        :param Quantity half_side_length:
+        :return: The resampled PSF.
+        :rtype: np.ndarray
+        """
+        if im_prod.obs_id != self.obs_id:
+            raise IncompatibleProductError("Image ObsID ({o1}) is not the same as PSF ObsID "
+                                           "({o2})".format(o1=im_prod.obs_id, o2=self.obs_id))
+        elif im_prod.instrument != self.instrument:
+            raise IncompatibleProductError("Image instruemtn ({i1}) is not the same as PSF instrument "
+                                           "({i2})".format(i1=im_prod.instrument, i2=self.instrument))
         if half_side_length.unit != pix:
             raise UnitConversionError("side_length must be in pixels")
 

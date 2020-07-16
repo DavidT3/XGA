@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 11:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:03. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -244,6 +244,9 @@ class BaseSource:
         en_bnds = prod_obj.energy_bounds
         if en_bnds[0] is not None and en_bnds[1] is not None:
             extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+            # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
+            #  this variable with just the energy key
+            en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
         elif type(prod_obj) == Spectrum:
             extra_key = prod_obj.reg_type
         elif type(prod_obj) == PSFGrid:
@@ -252,6 +255,11 @@ class BaseSource:
             extra_key = prod_obj.model + "_" + str(prod_obj.num_bins)
         else:
             extra_key = None
+        
+        # Secondary checking step now I've added PSF correction
+        if type(prod_obj) == Image and prod_obj.psf_corrected:
+            extra_key += "_" + prod_obj.psf_model + "_" + str(prod_obj.psf_bins) + "_" + \
+                         prod_obj.psf_algorithm + str(prod_obj.psf_iterations)
 
         # All information about where to place it in our storage hierarchy can be pulled from the product
         # object itself
@@ -293,31 +301,48 @@ class BaseSource:
         elif extra_key is None and obs_id == "combined":
             self._products[obs_id][p_type] = prod_obj
 
-        # Finally, we do a quick check for matching pairs of images and exposure maps, because if they
-        #  exist then we can generate a RateMap product object.
-        if p_type == "image" or p_type == "expmap":
-            # Check for existing images, exposure maps, and rate maps that match the product that has just
-            #  been added (if that product is an image or exposure map).
-            ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False) if extra_key in prod]
-            exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False) if extra_key in prod]
-            rts = [prod for prod in self.get_products("ratemap", obs_id, inst, just_obj=False) if extra_key in prod]
-            # If we find that there is one match each for image and exposure map,
-            #  and no ratemap, then we make one
-            if len(ims) == 1 and len(exs) == 1 and ims[0][-1].usable and exs[0][-1].usable and len(rts) == 0:
-                new_rt = RateMap(ims[0][-1], exs[0][-1])
+        # This is for an image being added, so we look for a matching exposure map. If it exists we can
+        #  make a ratemap
+        if p_type == "image":
+            # No chance of an expmap being PSF corrected, so we just use the energy key to
+            #  look for one that matches our new image
+            exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False) if en_key in prod]
+            if len(exs) == 1:
+                new_rt = RateMap(prod_obj, exs[0][-1])
                 new_rt.obj_name = self.name
                 self._products[obs_id][inst][extra_key]["ratemap"] = new_rt
 
-        # The combined images and exposure maps do much the same thing but they're in a separate part
-        #  of the if statement because they get named and stored in slightly different ways
-        elif p_type == "combined_image" or p_type == "combined_expmap":
-            ims = [prod for prod in self.get_products("combined_image", just_obj=False) if extra_key in prod]
-            exs = [prod for prod in self.get_products("combined_expmap", just_obj=False) if extra_key in prod]
-            rts = [prod for prod in self.get_products("combined_ratemap", just_obj=False) if extra_key in prod]
-            if len(ims) == 1 and len(exs) == 1 and ims[0][-1].usable and exs[0][-1].usable and len(rts) == 0:
-                new_rt = RateMap(ims[0][-1], exs[0][-1])
+        # However, if its an exposure map that's been added, we have to look for matching image(s). There
+        #  could be multiple, because there could be a normal image, and a PSF corrected image
+        elif p_type == "expmap":
+            # PSF corrected extra keys are built on top of energy keys, so if the en_key is within the extra
+            #  key string it counts as a match
+            ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False)
+                   if en_key in prod[-2]]
+            # If there is at least one match, we can go to work
+            if len(ims) != 0:
+                for im in ims:
+                    new_rt = RateMap(im[-1], prod_obj)
+                    new_rt.obj_name = self.name
+                    self._products[obs_id][inst][im[-2]]["ratemap"] = new_rt
+
+        # The same behaviours hold for combined_image and combined_expmap, but they get
+        #  stored in slightly different places
+        elif p_type == "combined_image":
+            exs = [prod for prod in self.get_products("combined_expmap", just_obj=False) if en_key in prod]
+            if len(exs) == 1:
+                new_rt = RateMap(prod_obj, exs[0][-1])
                 new_rt.obj_name = self.name
+                # Remember obs_id for combined products is just 'combined'
                 self._products[obs_id][extra_key]["combined_ratemap"] = new_rt
+
+        elif p_type == "combined_expmap":
+            ims = [prod for prod in self.get_products("combined_image", just_obj=False) if en_key in prod[-2]]
+            if len(ims) != 0:
+                for im in ims:
+                    new_rt = RateMap(im[-1], prod_obj)
+                    new_rt.obj_name = self.name
+                    self._products[obs_id][im[-2]]["combined_ratemap"] = new_rt
 
     def _existing_xga_products(self, read_fits: bool):
         """
@@ -339,25 +364,34 @@ class BaseSource:
             """
             # Get rid of the absolute part of the path, then split by _ to get the information from the file name
             im_info = file_path.split("/")[-1].split("_")
+
             if not merged:
                 # I know its hard coded but this will always be the case, these are files I generate with XGA.
-                ins = im_info[1]
                 obs_id = im_info[0]
-                en_str = im_info[-1]
+                ins = im_info[1]
             else:
                 ins = "combined"
                 obs_id = "combined"
-                en_str = im_info[-2]
 
+            en_str = [entry for entry in im_info if "keV" in entry][0]
             lo_en, hi_en = en_str.split("keV")[0].split("-")
+
             # Have to be astropy quantities before passing them into the Product declaration
             lo_en = Quantity(float(lo_en), "keV")
             hi_en = Quantity(float(hi_en), "keV")
 
             # Different types of Product objects, the empty strings are because I don't have the stdout, stderr,
             #  or original commands for these objects.
-            if exact_type == "image":
+            if exact_type == "image" and "psfcorr" not in file_path:
                 final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
+            elif exact_type == "image" and "psfcorr" in file_path:
+                final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
+                final_obj.psf_corrected = True
+                final_obj.psf_bins = int([entry for entry in im_info if "bin" in entry][0].split('bin')[0])
+                final_obj.psf_iterations = int([entry for entry in im_info if "iter" in
+                                                entry][0].split('iter')[0])
+                final_obj.psf_model = [entry for entry in im_info if "mod" in entry][0].split("mod")[0]
+                final_obj.psf_algorithm = [entry for entry in im_info if "algo" in entry][0].split("algo")[0]
             elif exact_type == "expmap":
                 final_obj = ExpMap(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
             else:
@@ -426,6 +460,10 @@ class BaseSource:
                         obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], reg_type, obs, inst,
                                        "", "", "")
                         self.update_products(obj)
+
+
+
+
         os.chdir(og_dir)
 
         # Merged products have all the ObsIDs that they are made up of in their name
@@ -439,7 +477,7 @@ class BaseSource:
             # Search for files that match the pattern of a merged image/exposure map
             # TODO Make this an exact match to the obs_str, otherwise its possible we might read
             #  in an old merged image if new observations are added to the obs census
-            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_image" in f
+            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_img" in f
                           and f[0] != "."]
             for im in merged_ims:
                 self.update_products(parse_image_like(im, "image", merged=True))
@@ -1955,6 +1993,10 @@ class GalaxyCluster(ExtendedSource):
 
         en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
         comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
+        # If there have been PSF deconvolutions of the above data, then we can grab them too
+        psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", just_obj=False)
+                        if en_key + "_" in rt[-2]]
+
         source_mask, background_mask = self.get_mask(reg_type)
         # Get combined peak - basically the only peak internal methods will use
         pix_peak = comb_rt.coord_conv(self.peak, pix)
@@ -1969,10 +2011,17 @@ class GalaxyCluster(ExtendedSource):
         if profile_type == "radial":
             ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                              u=self._peak_hi_en.value))
-            brightness, radii, background = radial_brightness(comb_rt, source_mask, background_mask, pix_peak,
-                                                              rad, self._redshift, kpc, self.cosmo)
-            # print(radii)
-            plt.plot(radii, brightness, label="Total Emission")
+            brightness, radii, og_background = radial_brightness(comb_rt, source_mask, background_mask, pix_peak,
+                                                                 rad, self._redshift, kpc, self.cosmo)
+            plt.plot(radii, brightness, label="Emission")
+
+            for psf_comb_rt in psf_comb_rts:
+                p_rt = psf_comb_rt[-1]
+                brightness, radii, background = radial_brightness(psf_comb_rt[-1], source_mask, background_mask,
+                                                                  pix_peak, rad, self._redshift, kpc, self.cosmo)
+                prof = plt.plot(radii, brightness, label="{m} PSF Corrected".format(m=p_rt.psf_model))
+                plt.axhline(background, color=prof[0].get_color(), linestyle="dashed",
+                            label="{m} PSF Corrected Background".format(m=p_rt.psf_model))
 
         elif profile_type == "pizza":
             ax.set_title("{n} - {l}-{u}keV Pizza Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
@@ -1986,7 +2035,7 @@ class GalaxyCluster(ExtendedSource):
                 plt.plot(radii, brightness[:, ang_ind], label=lab_str)
 
         # Plot the background level
-        plt.axhline(background, color="black", linestyle="dashed", label="Background Level")
+        plt.axhline(og_background, color="black", linestyle="dashed", label="Background")
 
         # This adds small ticks to the axis
         ax.minorticks_on()
