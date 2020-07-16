@@ -1,8 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/07/2020, 13:16. Copyright (c) David J Turner
-
-
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2020, 09:48. Copyright (c) David J Turner
 import os
+import shutil
 import warnings
 from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
@@ -15,12 +14,14 @@ from astropy.units import Quantity
 from fitsio import FITS
 from tqdm import tqdm
 
-pd.set_option('display.max_columns', 500)
-
 from xga import OUTPUT, COMPUTE_MODE, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
-from xga.exceptions import NoProductAvailableError, XSPECFitError, ModelNotAssociatedError
+from xga.exceptions import NoProductAvailableError, XSPECFitError, ModelNotAssociatedError, HeasoftError
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 
+# Got to make sure we can access command line XSPEC.
+# Currently raises an error, but perhaps later on I'll relax this to a warning.
+if shutil.which("xspec") is None:
+    raise HeasoftError("Unable to locate an XSPEC installation.")
 
 # TODO Make xga_extract deal with no redshift better
 

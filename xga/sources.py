@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2020, 01:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:03. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -10,9 +10,10 @@ from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
-from astropy.units import Quantity, UnitBase, deg, UnitConversionError, pix
+from astropy.units import Quantity, UnitBase, deg, UnitConversionError, pix, kpc
 from fitsio import FITS
 from matplotlib import pyplot as plt
+from matplotlib.ticker import ScalarFormatter
 from numpy import ndarray
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
     EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
@@ -21,8 +22,9 @@ from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, \
     ParameterNotAssociatedError, PeakConvergenceFailedError, NoRegionsError
-from xga.imagetools import annular_mask
-from xga.products import PROD_MAP, EventList, BaseProduct, Image, Spectrum, ExpMap, RateMap
+from xga.imagetools import radial_brightness, pizza_brightness
+from xga.products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, \
+    ExpMap, RateMap, PSFGrid
 from xga.sourcetools import simple_xmm_match, nhlookup, rad_to_ang, ang_to_rad
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
 
@@ -50,7 +52,7 @@ class BaseSource:
         self._obs = simple_xmm_match(ra, dec)["ObsID"].values
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
-            on_axis_match = simple_xmm_match(ra, dec, 5)["ObsID"].values
+            on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))["ObsID"].values
         except NoMatchFoundError:
             on_axis_match = np.array([])
         self._onaxis = np.isin(self._obs, on_axis_match)
@@ -235,16 +237,29 @@ class BaseSource:
         with this source or the instrument is not associated with the ObsID.
         :param BaseProduct prod_obj: The new product object to be added to the source object.
         """
-        if not isinstance(prod_obj, BaseProduct):
+        # Aggregate products are things like PSF grids and sets of annular spectra.
+        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct)):
             raise TypeError("Only product objects can be assigned to sources.")
 
         en_bnds = prod_obj.energy_bounds
         if en_bnds[0] is not None and en_bnds[1] is not None:
             extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+            # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
+            #  this variable with just the energy key
+            en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
         elif type(prod_obj) == Spectrum:
             extra_key = prod_obj.reg_type
+        elif type(prod_obj) == PSFGrid:
+            # The first part of the key is the model used (by default its ELLBETA for example), and
+            #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
+            extra_key = prod_obj.model + "_" + str(prod_obj.num_bins)
         else:
             extra_key = None
+        
+        # Secondary checking step now I've added PSF correction
+        if type(prod_obj) == Image and prod_obj.psf_corrected:
+            extra_key += "_" + prod_obj.psf_model + "_" + str(prod_obj.psf_bins) + "_" + \
+                         prod_obj.psf_algorithm + str(prod_obj.psf_iterations)
 
         # All information about where to place it in our storage hierarchy can be pulled from the product
         # object itself
@@ -286,31 +301,48 @@ class BaseSource:
         elif extra_key is None and obs_id == "combined":
             self._products[obs_id][p_type] = prod_obj
 
-        # Finally, we do a quick check for matching pairs of images and exposure maps, because if they
-        #  exist then we can generate a RateMap product object.
-        if p_type == "image" or p_type == "expmap":
-            # Check for existing images, exposure maps, and rate maps that match the product that has just
-            #  been added (if that product is an image or exposure map).
-            ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False) if extra_key in prod]
-            exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False) if extra_key in prod]
-            rts = [prod for prod in self.get_products("ratemap", obs_id, inst, just_obj=False) if extra_key in prod]
-            # If we find that there is one match each for image and exposure map,
-            #  and no ratemap, then we make one
-            if len(ims) == 1 and len(exs) == 1 and ims[0][-1].usable and exs[0][-1].usable and len(rts) == 0:
-                new_rt = RateMap(ims[0][-1], exs[0][-1])
+        # This is for an image being added, so we look for a matching exposure map. If it exists we can
+        #  make a ratemap
+        if p_type == "image":
+            # No chance of an expmap being PSF corrected, so we just use the energy key to
+            #  look for one that matches our new image
+            exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False) if en_key in prod]
+            if len(exs) == 1:
+                new_rt = RateMap(prod_obj, exs[0][-1])
                 new_rt.obj_name = self.name
                 self._products[obs_id][inst][extra_key]["ratemap"] = new_rt
 
-        # The combined images and exposure maps do much the same thing but they're in a separate part
-        #  of the if statement because they get named and stored in slightly different ways
-        elif p_type == "combined_image" or p_type == "combined_expmap":
-            ims = [prod for prod in self.get_products("combined_image", just_obj=False) if extra_key in prod]
-            exs = [prod for prod in self.get_products("combined_expmap", just_obj=False) if extra_key in prod]
-            rts = [prod for prod in self.get_products("combined_ratemap", just_obj=False) if extra_key in prod]
-            if len(ims) == 1 and len(exs) == 1 and ims[0][-1].usable and exs[0][-1].usable and len(rts) == 0:
-                new_rt = RateMap(ims[0][-1], exs[0][-1])
+        # However, if its an exposure map that's been added, we have to look for matching image(s). There
+        #  could be multiple, because there could be a normal image, and a PSF corrected image
+        elif p_type == "expmap":
+            # PSF corrected extra keys are built on top of energy keys, so if the en_key is within the extra
+            #  key string it counts as a match
+            ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False)
+                   if en_key in prod[-2]]
+            # If there is at least one match, we can go to work
+            if len(ims) != 0:
+                for im in ims:
+                    new_rt = RateMap(im[-1], prod_obj)
+                    new_rt.obj_name = self.name
+                    self._products[obs_id][inst][im[-2]]["ratemap"] = new_rt
+
+        # The same behaviours hold for combined_image and combined_expmap, but they get
+        #  stored in slightly different places
+        elif p_type == "combined_image":
+            exs = [prod for prod in self.get_products("combined_expmap", just_obj=False) if en_key in prod]
+            if len(exs) == 1:
+                new_rt = RateMap(prod_obj, exs[0][-1])
                 new_rt.obj_name = self.name
+                # Remember obs_id for combined products is just 'combined'
                 self._products[obs_id][extra_key]["combined_ratemap"] = new_rt
+
+        elif p_type == "combined_expmap":
+            ims = [prod for prod in self.get_products("combined_image", just_obj=False) if en_key in prod[-2]]
+            if len(ims) != 0:
+                for im in ims:
+                    new_rt = RateMap(im[-1], prod_obj)
+                    new_rt.obj_name = self.name
+                    self._products[obs_id][im[-2]]["combined_ratemap"] = new_rt
 
     def _existing_xga_products(self, read_fits: bool):
         """
@@ -332,25 +364,34 @@ class BaseSource:
             """
             # Get rid of the absolute part of the path, then split by _ to get the information from the file name
             im_info = file_path.split("/")[-1].split("_")
+
             if not merged:
                 # I know its hard coded but this will always be the case, these are files I generate with XGA.
-                ins = im_info[1]
                 obs_id = im_info[0]
-                en_str = im_info[-1]
+                ins = im_info[1]
             else:
                 ins = "combined"
                 obs_id = "combined"
-                en_str = im_info[-2]
 
+            en_str = [entry for entry in im_info if "keV" in entry][0]
             lo_en, hi_en = en_str.split("keV")[0].split("-")
+
             # Have to be astropy quantities before passing them into the Product declaration
             lo_en = Quantity(float(lo_en), "keV")
             hi_en = Quantity(float(hi_en), "keV")
 
             # Different types of Product objects, the empty strings are because I don't have the stdout, stderr,
             #  or original commands for these objects.
-            if exact_type == "image":
+            if exact_type == "image" and "psfcorr" not in file_path:
                 final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
+            elif exact_type == "image" and "psfcorr" in file_path:
+                final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
+                final_obj.psf_corrected = True
+                final_obj.psf_bins = int([entry for entry in im_info if "bin" in entry][0].split('bin')[0])
+                final_obj.psf_iterations = int([entry for entry in im_info if "iter" in
+                                                entry][0].split('iter')[0])
+                final_obj.psf_model = [entry for entry in im_info if "mod" in entry][0].split("mod")[0]
+                final_obj.psf_algorithm = [entry for entry in im_info if "algo" in entry][0].split("algo")[0]
             elif exact_type == "expmap":
                 final_obj = ExpMap(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
             else:
@@ -419,6 +460,10 @@ class BaseSource:
                         obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], reg_type, obs, inst,
                                        "", "", "")
                         self.update_products(obj)
+
+
+
+
         os.chdir(og_dir)
 
         # Merged products have all the ObsIDs that they are made up of in their name
@@ -432,7 +477,7 @@ class BaseSource:
             # Search for files that match the pattern of a merged image/exposure map
             # TODO Make this an exact match to the obs_str, otherwise its possible we might read
             #  in an old merged image if new observations are added to the obs census
-            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_image" in f
+            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_img" in f
                           and f[0] != "."]
             for im in merged_ims:
                 self.update_products(parse_image_like(im, "image", merged=True))
@@ -1253,6 +1298,8 @@ class BaseSource:
         if self._peaks is not None:
             print("X-ray Centroid - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
         print("nH - {}".format(self.nH))
+        if self._redshift is not None:
+            print("Redshift - {}".format(round(self._redshift, 3)))
         print("XMM ObsIDs - {}".format(self.__len__()))
         print("PN Observations - {}".format(len([o for o in self.obs_ids if 'pn' in self._products[o]])))
         print("MOS1 Observations - {}".format(len([o for o in self.obs_ids if 'mos1' in self._products[o]])))
@@ -1477,9 +1524,11 @@ class ExtendedSource(BaseSource):
             for o in self._other_regions:
                 all_within += list(self._other_regions[o])
 
-            interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                               for reg in all_within])
-        # Wherever the interloper mask is not 0, the global mask must become 0 because there is an
+            interlopers_pix = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                               for reg in all_within]
+            interlopers = sum([reg for reg in interlopers_pix if reg is not None])
+
+        # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
         # interloper source there - circular sentences ftw
         mask[interlopers != 0] = 0
 
@@ -1495,10 +1544,12 @@ class ExtendedSource(BaseSource):
                     all_within += list(self._within_back_regions[o])
                 for o in self._other_regions:
                     all_within += list(self._other_regions[o])
-                interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                                   for reg in all_within])
 
-            # Wherever the interloper mask is not 0, the global mask must become 0 because there is an
+                interlopers_pix = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                                   for reg in all_within]
+                interlopers = sum([reg for reg in interlopers_pix if reg is not None])
+
+            # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
             # interloper source there - circular sentences ftw
             back_mask[interlopers != 0] = 0
 
@@ -1910,134 +1961,6 @@ class GalaxyCluster(ExtendedSource):
         elif model is None and len(models_with_kt) == 1:
             return self.get_results(reg_type, models_with_kt[0], "kT")
 
-    def _annuli_radii(self, im_prod: Image, rad: float, pix_peak: Quantity) -> Tuple[ndarray, ndarray, Quantity]:
-        """
-        Will probably only ever be called by an internal brightness calculation, but two different methods
-        need it so it gets its own method.
-        :param Image im_prod: An Image or RateMap product object that you wish to calculate annuli for.
-        :param float rad: The outer radius of the set of annuli.
-        :param Quantity pix_peak: The coordinates of the centre of the annuli.
-        :return: Returns the inner and outer radii of the annuli (in pixels), and the centres of the annuli
-        in kilo-parsecs.
-        :rtype: Tuple[ndarray, ndarray, Quantity]
-        """
-        rads = np.arange(0, rad).astype(int)
-        inn_rads = rads[:len(rads) - 1]
-        out_rads = rads[1:len(rads)]
-
-        # TODO Consider replacing this with just scaling by pixel radius compared to known pixel
-        #  radius in kpc
-        # Go through a bit of a process to get the centres of the radius bins in kpc
-        # Make an N x 2 array full of the y pixel coordinate, I will replace the first column with the various
-        #  x coordinates of the radial bins
-        rads_coords = np.full((len(out_rads), 2), pix_peak[1].value)
-        rads_coords[:, 0] = pix_peak[0].value + out_rads
-        # I keep the ys the same because I'm going to convert to degrees, then find the difference between
-        #  the resulting x coordinate array and the peak x coordinate in degrees - thus have radii.
-        rads_coords = Quantity(rads_coords, pix)
-        rads_coords = im_prod.coord_conv(rads_coords, deg)
-        # Now have the coordinates in degrees, so find the absolute difference between the x coordinates of the bins
-        #  in degrees and the peak x coordinate in degrees
-        deg_rads = abs(rads_coords[:, 0] - self.peak[0])
-        # Quick convert to kpc with my handy function and add a zero at the beginning
-        kpc_rads = ang_to_rad(deg_rads, self._redshift, self._cosmo).insert(0, Quantity(0, "kpc"))
-        # Wham-bam now have the centres of the bins in kilo-parsecs
-        cen_rads = (kpc_rads[1:] + kpc_rads[:-1]) / 2
-
-        return inn_rads, out_rads, cen_rads
-
-    def radial_brightness(self, reg_type: str) -> Tuple[ndarray, Quantity, np.float64]:
-        """
-        A simple method to calculate the average brightness in circular annuli upto the radius of
-        the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
-        earlier, interloper sources should be removed.
-        :param str reg_type: The region in which to calculate the radial brightness profile.
-        :return: The brightness is returned in a flat numpy array, then the radii at the centre of the bins are
-        returned in units of kpc, and finally the average brightness in the background region is returned.
-        :rtype: Tuple[ndarray, Quantity, np.float64]
-        """
-        allowed_rtype = ["custom", "r500", "r200", "r2500"]
-        if reg_type not in allowed_rtype:
-            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
-        # Get combined peak - basically the only peak internal methods will use
-        pix_peak = comb_rt.coord_conv(self.peak, pix)
-        rad = self.get_source_region(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius
-
-        # This functionality used to be in this method, but its useful for another procedure so it
-        # got moved to its own methods
-        inn_rads, out_rads, cen_rads = self._annuli_radii(comb_rt, rad, pix_peak)
-
-        # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
-        #  dimension. Helps with broadcasting the annular masks with the region mask that gets rid of interlopers
-        masks = annular_mask(pix_peak, inn_rads, out_rads, comb_rt.shape) * self.get_mask("r500")[0][..., None]
-
-        # Creates a 3D array of the masked data
-        masked_data = masks * comb_rt.data[..., None]
-        # Calculates the average for each radius, use the masks array as weights to only include unmasked
-        #  areas in the average for each radius.
-        br = np.average(masked_data, axis=(0, 1), weights=masks)
-
-        # Finds the average of the background region
-        bg = np.average(comb_rt.data * self.get_mask("r500")[1], axis=(0, 1), weights=self.get_mask("r500")[1])
-
-        return br, cen_rads, bg
-
-    def pizza_brightness(self, reg_type: str, num_slices: int = 4) \
-            -> Tuple[ndarray, Quantity, Quantity, np.float64]:
-        """
-        A different type of brightness profile that allows you to divide the cluster up azimuthally as
-        well as radially. It performs the same calculation as radial_brightness, but for N angular bins,
-        and as such returns N separate profiles.
-        :param str reg_type: The region in which to calculate the radial brightness profile.
-        :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
-        slice will be 360 / num_slices degrees.
-        :return: The brightness is returned in a numpy array with a column per pizza slice, then the
-        radii at the centre of the bins are returned in units of kpc, then the angle boundaries of each slice,
-        and finally the average brightness in the background region is returned.
-        :rtype: Tuple[ndarray, Quantity, Quantity, np.float64]
-        """
-        allowed_rtype = ["custom", "r500", "r200", "r2500"]
-        if reg_type not in allowed_rtype:
-            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
-        # Get combined peak - basically the only peak internal methods will use
-        pix_peak = comb_rt.coord_conv(self.peak, pix)
-        rad = self.get_source_region(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius
-
-        # This functionality used to be in this method, but its useful for another procedure so it
-        # got moved to its own methods
-        inn_rads, out_rads, cen_rads = self._annuli_radii(comb_rt, rad, pix_peak)
-
-        # Setup the angular limits for the slices
-        angs = Quantity(np.linspace(0, 360, int(num_slices)+1), deg)
-        start_angs = angs[:-1]
-        stop_angs = angs[1:]
-
-        br = np.zeros((len(inn_rads), len(start_angs)))
-        # TODO Find a way to fail gracefully if weights are all zeros maybe - hopefully shouldn't
-        #  happen anymore but can't promise
-        for ang_ind in range(len(start_angs)):
-            masks = annular_mask(pix_peak, inn_rads, out_rads, comb_rt.shape, start_angs[ang_ind],
-                                 stop_angs[ang_ind]) * self.get_mask("r500")[0][..., None]
-            masked_data = masks * comb_rt.data[..., None]
-
-            # Calculates the average for each radius, use the masks array as weights to only include unmasked
-            #  areas in the average for each radius.
-            br[:, ang_ind] = np.average(masked_data, axis=(0, 1), weights=masks)
-
-        # Finds the average of the background region
-        bg = np.average(comb_rt.data * self.get_mask("r500")[1], axis=(0, 1), weights=self.get_mask("r500")[1])
-
-        # Just packaging the angles nicely
-        return_angs = Quantity(np.stack([start_angs.value, stop_angs.value]).T, deg)
-
-        return br, cen_rads, return_angs, bg
-
     def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4):
         """
         A method that generates and displays brightness profiles for the current cluster. Brightness profiles
@@ -2049,7 +1972,6 @@ class GalaxyCluster(ExtendedSource):
         :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
         slice will be 360 / num_slices degrees.
         """
-        # TODO Maybe I should store profiles somewhere more permanent rather than just getting them on demand
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
@@ -2069,8 +1991,19 @@ class GalaxyCluster(ExtendedSource):
         elif reg_type == "r2500" and self._r2500 is None:
             raise NoRegionsError("No R2500 region has been setup for this cluster")
 
+        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
+        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
+        # If there have been PSF deconvolutions of the above data, then we can grab them too
+        psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", just_obj=False)
+                        if en_key + "_" in rt[-2]]
+
+        source_mask, background_mask = self.get_mask(reg_type)
+        # Get combined peak - basically the only peak internal methods will use
+        pix_peak = comb_rt.coord_conv(self.peak, pix)
+        rad = Quantity(self.get_source_region(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
+
         # Setup the figure
-        plt.figure(figsize=(7, 6))
+        plt.figure(figsize=(8, 5))
         ax = plt.gca()
 
         # The plotting will be slightly different based on the profile type, also have to call the methods
@@ -2078,20 +2011,31 @@ class GalaxyCluster(ExtendedSource):
         if profile_type == "radial":
             ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                              u=self._peak_hi_en.value))
-            brightness, radii, background = self.radial_brightness(reg_type)
-            plt.plot(radii, brightness, label="Total Emission")
+            brightness, radii, og_background = radial_brightness(comb_rt, source_mask, background_mask, pix_peak,
+                                                                 rad, self._redshift, kpc, self.cosmo)
+            plt.plot(radii, brightness, label="Emission")
+
+            for psf_comb_rt in psf_comb_rts:
+                p_rt = psf_comb_rt[-1]
+                brightness, radii, background = radial_brightness(psf_comb_rt[-1], source_mask, background_mask,
+                                                                  pix_peak, rad, self._redshift, kpc, self.cosmo)
+                prof = plt.plot(radii, brightness, label="{m} PSF Corrected".format(m=p_rt.psf_model))
+                plt.axhline(background, color=prof[0].get_color(), linestyle="dashed",
+                            label="{m} PSF Corrected Background".format(m=p_rt.psf_model))
 
         elif profile_type == "pizza":
             ax.set_title("{n} - {l}-{u}keV Pizza Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                             u=self._peak_hi_en.value))
-            brightness, radii, angles, background = self.pizza_brightness(reg_type, num_slices)
+            brightness, radii, angles, background = pizza_brightness(comb_rt, source_mask, background_mask,
+                                                                     pix_peak, rad, num_slices, self._redshift,
+                                                                     kpc, self.cosmo)
             for ang_ind in range(angles.shape[0]):
                 # Setup labels with the angles covered by the profile
                 lab_str = "{0}$^{{\circ}}$-{1}$^{{\circ}}$ Slice Emission".format(*angles[ang_ind, :].value)
                 plt.plot(radii, brightness[:, ang_ind], label=lab_str)
 
         # Plot the background level
-        plt.axhline(background, color="black", linestyle="dashed", label="Background Level")
+        plt.axhline(og_background, color="black", linestyle="dashed", label="Background")
 
         # This adds small ticks to the axis
         ax.minorticks_on()
@@ -2099,10 +2043,12 @@ class GalaxyCluster(ExtendedSource):
         ax.set_xlim(0,)
         # Adjusts how the ticks look
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
-        # This would add a grid but I think it might look better without
-        # ax.grid(linestyle='dotted', linewidth=1)
         # Choose y-axis log scaling because otherwise you can't really make out the profiles very well
         ax.set_yscale("log")
+        ax.set_xscale("log")
+        ax.set_xlim(radii.min().value, )
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+
         # Labels and legends
         ax.set_ylabel("S$_{b}$ [count s$^{-1}$ pix$^{-2}$]")
         ax.set_xlabel("Radius [kpc]")
