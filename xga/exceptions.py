@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 11:09. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -372,3 +372,22 @@ class SASInputInvalid(Exception):
         else:
             return 'SASInputInvalid has been raised'
 
+
+class NotPSFCorrectedError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when the user tries to set PSF deconvolution properties of an Image product, but the
+        psf correction flag indicates that the product is not deconvolved.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'NotPSFCorrectedError has been raised'

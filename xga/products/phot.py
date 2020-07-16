@@ -1,9 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 00:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 11:09. Copyright (c) David J Turner
 
 
 import warnings
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 import numpy as np
 from astropy import wcs
@@ -14,8 +14,7 @@ from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
-from xga.exceptions import FailedProductError, \
-    RateMapPairError
+from xga.exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError
 from xga.sourcetools import ang_to_rad
 from xga.utils import xmm_sky, find_all_wcs
 from . import BaseProduct, BaseAggregateProduct
@@ -43,6 +42,14 @@ class Image(BaseProduct):
         self._prod_type = "image"
         self._data = None
         self._header = None
+
+        # This is a flag to let XGA know that the Image object has been PSF corrected
+        self._psf_corrected = False
+        # These give extra information about the PSF correction, but can't be set unless PSF
+        #  corrected is true
+        self._psf_correction_algorithm = None
+        self._psf_num_bins = None
+        self._psf_num_iterations = None
 
     def _read_on_demand(self):
         """
@@ -338,6 +345,92 @@ class Image(BaseProduct):
             out_coord = coords
 
         return out_coord
+
+    @property
+    def psf_corrected(self) -> bool:
+        """
+        Tells the user (and XGA), whether an Image based object has been PSF corrected or not.
+        :return: Boolean flag, True means this object has been PSF corrected, False means it hasn't
+        :rtype: bool
+        """
+        return self._psf_corrected
+
+    @psf_corrected.setter
+    def psf_corrected(self, new_val):
+        """
+        Allows the psf_corrected flag to be altered.
+        """
+        self._psf_corrected = new_val
+
+    @property
+    def psf_algorithm(self) -> Union[str, None]:
+        """
+        If this object has been PSF corrected, this property gives the name of the algorithm used.
+        :return: The name of the algorithm used to correct for PSF effects, or None if the object
+        hasn't been PSF corrected.
+        :rtype: Union[str, None]
+        """
+        return self._psf_correction_algorithm
+
+    @psf_algorithm.setter
+    def psf_algorithm(self, new_val: str):
+        """
+        If this object has been PSF corrected, this property setter allows you to set the
+        name of the algorithm used. If it hasn't been PSF corrected then an error will be triggered.
+        """
+        if self._psf_corrected:
+            self._psf_correction_algorithm = new_val
+        else:
+            raise NotPSFCorrectedError("You are trying to set the PSF Correction algorithm for an Image"
+                                       " that hasn't been PSF corrected.")
+
+    @property
+    def psf_bins(self) -> Union[int, None]:
+        """
+        If this object has been PSF corrected, this property gives number of bins that the X and Y axes
+        was divided into to generate the PSFGrid.
+        :return: The number of bins in X and Y for which PSFs were generated, or None if the object
+        hasn't been PSF corrected.
+        :rtype: Union[int, None]
+        """
+        return self._psf_num_bins
+
+    @psf_bins.setter
+    def psf_bins(self, new_val: int):
+        """
+        If this object has been PSF corrected, this property setter allows you to store the
+        number of bins in X and Y for which PSFs were generated. If it hasn't been PSF corrected
+        then an error will be triggered.
+        """
+        if self._psf_corrected:
+            self._psf_num_bins = new_val
+        else:
+            raise NotPSFCorrectedError("You are trying to set the number of PSF bins for an Image"
+                                       " that hasn't been PSF corrected.")
+
+    @property
+    def psf_iterations(self) -> Union[int, None]:
+        """
+        If this object has been PSF corrected, this property gives the number of iterations that the
+        algorithm went through to create this image.
+        :return: The number of iterations the PSF correction algorithm went through, or None if the
+        object hasn't been PSF corrected.
+        :rtype: Union[int, None]
+        """
+        return self._psf_num_iterations
+
+    @psf_iterations.setter
+    def psf_iterations(self, new_val: int):
+        """
+        If this object has been PSF corrected, this property setter allows you to store the
+        number of iterations that the algorithm went through to create this image. If it hasn't
+        been PSF corrected then an error will be triggered.
+        """
+        if self._psf_corrected:
+            self._psf_num_iterations = new_val
+        else:
+            raise NotPSFCorrectedError("You are trying to set the number of algorithm iterations for an Image"
+                                       " that hasn't been PSF corrected.")
 
     def view(self, cross_hair: Quantity = None, mask: np.ndarray = None):
         """
