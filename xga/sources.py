@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/07/2020, 16:38. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -399,6 +399,21 @@ class BaseSource:
 
             return final_obj
 
+        def merged_file_check(file_path: str, obs_ids):
+            # First filter to only look at merged files
+            if obs_str in file_path and "merged" in file_path and file_path[0] != ".":
+                # Stripped back to only the ObsIDs, and in the original order
+                split_out = [e for e in file_path.split("_") if "keV" not in e and ".fits" not in e]
+                # If the ObsID list from parsing the file name is exactly the same as the ObsID list associated
+                #  with this source, then we accept it. Otherwise it is rejected.
+                if split_out != obs_ids:
+                    right_merged = False
+                else:
+                    right_merged = True
+            else:
+                right_merged = False
+            return right_merged
+
         og_dir = os.getcwd()
         for obs in self._obs:
             if os.path.exists(OUTPUT + obs):
@@ -460,10 +475,6 @@ class BaseSource:
                         obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], reg_type, obs, inst,
                                        "", "", "")
                         self.update_products(obj)
-
-
-
-
         os.chdir(og_dir)
 
         # Merged products have all the ObsIDs that they are made up of in their name
@@ -475,15 +486,11 @@ class BaseSource:
 
             os.chdir(OUTPUT + self._obs[0])
             # Search for files that match the pattern of a merged image/exposure map
-            # TODO Make this an exact match to the obs_str, otherwise its possible we might read
-            #  in an old merged image if new observations are added to the obs census
-            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_img" in f
-                          and f[0] != "."]
+            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if merged_file_check(f, self._obs)]
             for im in merged_ims:
                 self.update_products(parse_image_like(im, "image", merged=True))
 
-            merged_exs = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_expmap" in f
-                          and f[0] != "."]
+            merged_exs = [os.path.abspath(f) for f in os.listdir(".") if merged_file_check(f, self._obs)]
             for ex in merged_exs:
                 self.update_products(parse_image_like(ex, "expmap", merged=True))
 
@@ -531,6 +538,8 @@ class BaseSource:
 
                 # Push global fit results, luminosities etc. into the corresponding source object.
                 self.add_fit_data(model, reg_type, global_results, chosen_lums)
+
+        os.chdir(og_dir)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
