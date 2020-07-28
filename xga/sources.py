@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/07/2020, 16:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/07/2020, 15:14. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -399,14 +399,23 @@ class BaseSource:
 
             return final_obj
 
-        def merged_file_check(file_path: str, obs_ids):
+        def merged_file_check(file_path: str, obs_ids: Tuple, prod_type: str):
+            """
+            Checks that a passed file name is a merged image or exposure map, and matches the current source.
+            :param str file_path: The name of the file in consideration
+            :param Tuple obs_ids: The ObsIDs associated with this source.
+            :param str prod_type: img or expmap, what type of merged product are we looking for?
+            :return: A boolean flag as to whether the filename is a file that matches the source.
+            :rtype: Bool
+            """
             # First filter to only look at merged files
-            if obs_str in file_path and "merged" in file_path and file_path[0] != ".":
+            if obs_str in file_path and "merged" in file_path and file_path[0] != "." and prod_type in file_path:
                 # Stripped back to only the ObsIDs, and in the original order
                 split_out = [e for e in file_path.split("_") if "keV" not in e and ".fits" not in e]
+
                 # If the ObsID list from parsing the file name is exactly the same as the ObsID list associated
                 #  with this source, then we accept it. Otherwise it is rejected.
-                if split_out != obs_ids:
+                if split_out[:len(obs_ids)] != obs_ids:
                     right_merged = False
                 else:
                     right_merged = True
@@ -486,11 +495,11 @@ class BaseSource:
 
             os.chdir(OUTPUT + self._obs[0])
             # Search for files that match the pattern of a merged image/exposure map
-            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if merged_file_check(f, self._obs)]
+            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if merged_file_check(f, self._obs, "img")]
             for im in merged_ims:
                 self.update_products(parse_image_like(im, "image", merged=True))
 
-            merged_exs = [os.path.abspath(f) for f in os.listdir(".") if merged_file_check(f, self._obs)]
+            merged_exs = [os.path.abspath(f) for f in os.listdir(".") if merged_file_check(f, self._obs, "expmap")]
             for ex in merged_exs:
                 self.update_products(parse_image_like(ex, "expmap", merged=True))
 

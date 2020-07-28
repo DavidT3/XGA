@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/07/2020, 15:14. Copyright (c) David J Turner
 
 
 import warnings
@@ -624,6 +624,10 @@ class RateMap(Image):
         #  objects close to the edge of the detector - otherwise the values get dragged down by all the zeros
         self._on_sensor_mask = det_map
 
+        # Re-setting some paths to make more sense
+        self._path = xga_image.path
+        self._expmap_path = xga_expmap.path
+
     def get_rate(self, at_coord: Quantity) -> float:
         """
         A simple method that converts the given coordinates to pixels, then finds the rate (in photons
@@ -870,6 +874,15 @@ class RateMap(Image):
         :rtype: ndarray
         """
         return self._on_sensor_mask
+
+    @property
+    def expmap_path(self) -> str:
+        """
+        Similar to the path property, but for the exposure map that went into this ratemap.
+        :return: The exposure map path.
+        :rtype: str
+        """
+        return self._expmap_path
 
 
 class PSF(Image):
