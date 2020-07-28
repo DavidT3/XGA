@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/07/2020, 15:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/07/2020, 00:35. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1512,9 +1512,8 @@ class ExtendedSource(BaseSource):
             else:
                 self._custom_region_radius = self._custom_region_radius.to("deg")
 
-    # TODO There really has to be a better solution to the all_interlopers thing, its so inefficient
     def _generate_mask(self, mask_image: Image, source_region: SkyRegion, back_reg: SkyRegion = None,
-                       all_interlopers: bool = False) -> Tuple[ndarray, ndarray]:
+                       reg_type: str = None) -> Tuple[ndarray, ndarray]:
         """
         This uses available region files to generate a mask for the source region in the form of a
         numpy array. It takes into account any sources that were detected within the target source,
@@ -1523,28 +1522,21 @@ class ExtendedSource(BaseSource):
         :param SkyRegion source_region: The SkyRegion containing the source to generate a mask for.
         :param SkyRegion back_reg: The SkyRegion containing the background emission to
         generate a mask for.
-        :param bool all_interlopers: If this is true, all non source objects from all observations
-        will be iterated through and removed from the mask - its not very efficient...
+        :param bool reg_type: By default this is None, but if supplied by the user then this method
+        will look for interloper regions under reg_type key rather than the ObsID key.
         :return: A boolean numpy array that can be used to mask images loaded in as numpy arrays.
         :rtype: Tuple[np.ndarray, np.ndarray]
         """
         obs_id = mask_image.obs_id
         mask = source_region.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
 
-        if not all_interlopers:
+        if reg_type is None:
             # Now need to drill out any interloping sources, make a mask for that
             interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                for reg in self._within_source_regions[obs_id]])
         else:
-            all_within = []
-            for o in self._within_source_regions:
-                all_within += list(self._within_source_regions[o])
-            for o in self._other_regions:
-                all_within += list(self._other_regions[o])
-
-            interlopers_pix = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                               for reg in all_within]
-            interlopers = sum([reg for reg in interlopers_pix if reg is not None])
+            interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                               for reg in self._within_source_regions[reg_type]])
 
         # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
         # interloper source there - circular sentences ftw
@@ -1552,20 +1544,13 @@ class ExtendedSource(BaseSource):
 
         if back_reg is not None:
             back_mask = back_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-            if not all_interlopers:
+            if reg_type is None:
                 # Now need to drill out any interloping sources, make a mask for that
                 interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                    for reg in self._within_back_regions[obs_id]])
             else:
-                all_within = []
-                for o in self._within_back_regions:
-                    all_within += list(self._within_back_regions[o])
-                for o in self._other_regions:
-                    all_within += list(self._other_regions[o])
-
-                interlopers_pix = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                                   for reg in all_within]
-                interlopers = sum([reg for reg in interlopers_pix if reg is not None])
+                interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                                   for reg in self._within_back_regions[reg_type]])
 
             # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
             # interloper source there - circular sentences ftw
@@ -1602,10 +1587,41 @@ class ExtendedSource(BaseSource):
         while count < 20:
             # Define a 500kpc radius region centered on the current central_coords
             cust_reg = CircleSkyRegion(central_coords, search_aperture)
+            # Define a background region
+            # Annoyingly I can't remember why I had to do the regions as pixel first, but I promise there was
+            #  a good reason at the time.
+            # TODO THIS IS BASICALLY COPIED FROM ANOTHER PLACE, MAYBE IT SHOULD BE ITS OWN FUNCTION?
+            pix_cust_reg = cust_reg.to_pixel(rt.radec_wcs)
+            in_reg = CirclePixelRegion(pix_cust_reg.center, pix_cust_reg.radius * self._back_inn_factor)
+            pix_bck_reg = CirclePixelRegion(pix_cust_reg.center, pix_cust_reg.radius
+                                            * self._back_out_factor).symmetric_difference(in_reg)
+
+            # Setting up useful lists for adding regions to
+            reg_crossover = []
+            # I check through all available region lists to find regions that are within the custom region
+            for obs_id in self._other_regions:
+                other_regs = self._other_regions[obs_id]
+
+                cross = np.array([cust_reg.intersection(r).to_pixel(rt.radec_wcs).to_mask().data.sum()
+                                  != 0 and r.height == r.width for r in other_regs])
+
+                if len(cross) != 0:
+                    reg_crossover += list(np.array(other_regs)[cross])
+
+            reg_crossover = np.array(reg_crossover)
+            self._within_source_regions["search_aperture"] = reg_crossover
             # Generate the source mask for the peak finding method
-            aperture_mask = self._generate_mask(rt, cust_reg, all_interlopers=True)
+            aperture_mask = self._generate_mask(rt, cust_reg, reg_type="search_aperture")
             # Find the peak using the experimental clustering_peak method
+
+
+            # TODO Figure out a solution to memory issues here
             peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, deg)
+            # peak, near_edge = rt.simple_peak(aperture_mask, deg)
+            # chosen_coords = []
+            # other_coords = []
+
+
             # Calculate the distance between new peak and old central coordinates
             separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
                                           abs(peak[1].value - central_coords.dec.value) ** 2), deg)
@@ -1630,6 +1646,7 @@ class ExtendedSource(BaseSource):
         else:
             converged = True
 
+        del self._within_source_regions["search_aperture"]
         return peak, near_edge, converged, chosen_coords, other_coords
 
     def _all_peaks(self):
@@ -1652,7 +1669,15 @@ class ExtendedSource(BaseSource):
             emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en)
             comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
 
-        coord, near_edge, converged, cluster_coords, other_coords = self._find_peak(comb_rt)
+        if self._use_peak:
+            coord, near_edge, converged, cluster_coords, other_coords = self._find_peak(comb_rt)
+        else:
+            # If we don't care about peak finding then this is the boi to go for
+            coord = self.ra_dec
+            near_edge = comb_rt.near_edge(coord)
+            converged = True
+            cluster_coords = np.ndarray([])
+            other_coords = []
 
         # Unfortunately if the peak convergence fails for the combined ratemap I have to raise an error
         if converged:
@@ -1668,13 +1693,17 @@ class ExtendedSource(BaseSource):
 
         for obs in self.obs_ids:
             for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
-                coord, near_edge, converged, cluster_coords, other_coords = self._find_peak(rt)
-                if converged:
-                    self._peaks[obs][rt.instrument] = coord
-                    self._peaks_near_edge[obs][rt.instrument] = near_edge
+                if self._use_peak:
+                    coord, near_edge, converged, cluster_coords, other_coords = self._find_peak(rt)
+                    if converged:
+                        self._peaks[obs][rt.instrument] = coord
+                        self._peaks_near_edge[obs][rt.instrument] = near_edge
+                    else:
+                        self._peaks[obs][rt.instrument] = None
+                        self._peaks_near_edge[obs][rt.instrument] = None
                 else:
-                    self._peaks[obs][rt.instrument] = None
-                    self._peaks_near_edge[obs][rt.instrument] = None
+                    self._peaks[obs][rt.instrument] = self.ra_dec
+                    self._peaks_near_edge[obs][rt.instrument] = rt.near_edge(self.ra_dec)
 
     def _setup_new_region(self, radius: Quantity, reg_type: str):
         """
@@ -1730,18 +1759,20 @@ class ExtendedSource(BaseSource):
                                         * self._back_out_factor).symmetric_difference(in_reg)
         cust_back_reg = pix_bck_reg.to_sky(comb_rt.radec_wcs)
 
-        # Make the final masks for source and background regions.
-        src_mask, bck_mask = self._generate_mask(comb_rt, cust_reg, cust_back_reg, all_interlopers=True)
-
         # Setting up useful lists for adding regions to
         reg_crossover = []
         bck_crossover = []
         # I check through all available region lists to find regions that are within the custom region
         for obs_id in self._other_regions:
             other_regs = self._other_regions[obs_id]
+
             # Which regions are within the custom source region
+            # Also are any regions that intersect with the custom region (could be an overdensity region) extended?
+            #  If so they should be removed - far more likely that the cluster has been
+            #  fragmented by the source finder.
             cross = np.array([cust_reg.intersection(r).to_pixel(comb_rt.radec_wcs).to_mask().data.sum()
-                              != 0 for r in other_regs])
+                              != 0 and r.height == r.width for r in other_regs])
+
             if len(cross) != 0:
                 reg_crossover += list(np.array(other_regs)[cross])
 
@@ -1754,6 +1785,12 @@ class ExtendedSource(BaseSource):
         # Just quickly convert the lists to numpy arrays
         reg_crossover = np.array(reg_crossover)
         bck_crossover = np.array(bck_crossover)
+        # And save them
+        self._within_source_regions[reg_type] = reg_crossover
+        self._within_back_regions[reg_type] = bck_crossover
+
+        # Make the final masks for source and background regions.
+        src_mask, bck_mask = self._generate_mask(comb_rt, cust_reg, cust_back_reg, reg_type=reg_type)
 
         # TODO Check that this isn't bollocks
         src_area = src_mask.sum()
@@ -1764,8 +1801,6 @@ class ExtendedSource(BaseSource):
         self._back_regions[reg_type] = cust_back_reg
         self._reg_masks[reg_type] = src_mask
         self._back_masks[reg_type] = bck_mask
-        self._within_source_regions[reg_type] = reg_crossover
-        self._within_back_regions[reg_type] = bck_crossover
         self._snr[reg_type] = rate_ratio
 
     def get_peaks(self, obs_id: str = None, inst: str = None) -> Quantity:
