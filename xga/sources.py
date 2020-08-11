@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/07/2020, 00:35. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/08/2020, 13:33. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -2079,9 +2079,9 @@ class GalaxyCluster(ExtendedSource):
         elif profile_type == "pizza":
             ax.set_title("{n} - {l}-{u}keV Pizza Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                             u=self._peak_hi_en.value))
-            brightness, radii, angles, background = pizza_brightness(comb_rt, source_mask, background_mask,
-                                                                     pix_peak, rad, num_slices, self._redshift,
-                                                                     kpc, self.cosmo)
+            brightness, radii, angles, og_background = pizza_brightness(comb_rt, source_mask, background_mask,
+                                                                        pix_peak, rad, num_slices, self._redshift,
+                                                                        kpc, self.cosmo)
             for ang_ind in range(angles.shape[0]):
                 # Setup labels with the angles covered by the profile
                 lab_str = "{0}$^{{\circ}}$-{1}$^{{\circ}}$ Slice Emission".format(*angles[ang_ind, :].value)
