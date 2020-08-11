@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/08/2020, 13:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/08/2020, 16:45. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1559,18 +1559,25 @@ class ExtendedSource(BaseSource):
             return mask, back_mask
         return mask
 
-    def _find_peak(self, rt: RateMap) -> Tuple[Quantity, bool, bool, ndarray, List]:
+    def find_peak(self, rt: RateMap, method: str = "hierarchical", num_iter: int = 20) \
+            -> Tuple[Quantity, bool, bool, ndarray, List]:
         """
-        An internal method that will find the X-ray centroid for the RateMap that has been passed in. It takes
+        A method that will find the X-ray centroid for the RateMap that has been passed in. It takes
         the user supplied coordinates from source initialisation as a starting point, finds the peak within a 500kpc
         radius, re-centres the region, and iterates until the centroid converges to within 15kpc, or until 20
         20 iterations has been reached.
-        :param rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
+        :param RateMap rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
+        :param str method: Which peak finding method to use. Currently either hierarchical or simple can be chosen.
+        :param int num_iter: How many iterations should be allowed before the peak is declared as not converged.
         :return: The peak coordinate, a boolean flag as to whether the returned coordinates are near
          a chip gap/edge, and a boolean flag as to whether the peak converged. It also returns the coordinates
          of the points within the chosen point cluster, and a list of all point clusters that were not chosen.
         :rtype: Tuple[Quantity, bool, bool, ndarray, List]
         """
+        all_meth = ["hierarchical", "simple"]
+        if method not in all_meth:
+            raise ValueError("{0} is not a recognised, use one of the following methods: "
+                             "{1}".format(method, ", ".join(all_meth)))
         central_coords = SkyCoord(*self.ra_dec.to("deg"))
 
         # 500kpc in degrees, for the current redshift and cosmology
@@ -1582,19 +1589,12 @@ class ExtendedSource(BaseSource):
 
         # Iteration counter just to kill it if it doesn't converge
         count = 0
-        # Allow 20 iterations before we kill this - alternatively loop will exit when centre converges
+        # Allow 20 iterations by default before we kill this - alternatively loop will exit when centre converges
         #  to within 15kpc (or 0.15arcmin).
-        while count < 20:
+        while count < num_iter:
             # Define a 500kpc radius region centered on the current central_coords
             cust_reg = CircleSkyRegion(central_coords, search_aperture)
-            # Define a background region
-            # Annoyingly I can't remember why I had to do the regions as pixel first, but I promise there was
-            #  a good reason at the time.
-            # TODO THIS IS BASICALLY COPIED FROM ANOTHER PLACE, MAYBE IT SHOULD BE ITS OWN FUNCTION?
             pix_cust_reg = cust_reg.to_pixel(rt.radec_wcs)
-            in_reg = CirclePixelRegion(pix_cust_reg.center, pix_cust_reg.radius * self._back_inn_factor)
-            pix_bck_reg = CirclePixelRegion(pix_cust_reg.center, pix_cust_reg.radius
-                                            * self._back_out_factor).symmetric_difference(in_reg)
 
             # Setting up useful lists for adding regions to
             reg_crossover = []
@@ -1614,13 +1614,12 @@ class ExtendedSource(BaseSource):
             aperture_mask = self._generate_mask(rt, cust_reg, reg_type="search_aperture")
             # Find the peak using the experimental clustering_peak method
 
-
-            # TODO Figure out a solution to memory issues here
-            peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, deg)
-            # peak, near_edge = rt.simple_peak(aperture_mask, deg)
-            # chosen_coords = []
-            # other_coords = []
-
+            if method == "hierarchical":
+                peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, deg)
+            elif method == "simple":
+                peak, near_edge = rt.simple_peak(aperture_mask, deg)
+                chosen_coords = []
+                other_coords = []
 
             # Calculate the distance between new peak and old central coordinates
             separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
@@ -1637,7 +1636,7 @@ class ExtendedSource(BaseSource):
 
             count += 1
 
-        if count == 20:
+        if count == num_iter:
             converged = False
             # To do the least amount of damage, if the peak doesn't converge then we just return the
             #  user supplied coordinates
@@ -1670,7 +1669,7 @@ class ExtendedSource(BaseSource):
             comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
 
         if self._use_peak:
-            coord, near_edge, converged, cluster_coords, other_coords = self._find_peak(comb_rt)
+            coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(comb_rt)
         else:
             # If we don't care about peak finding then this is the boi to go for
             coord = self.ra_dec
@@ -1694,7 +1693,7 @@ class ExtendedSource(BaseSource):
         for obs in self.obs_ids:
             for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
                 if self._use_peak:
-                    coord, near_edge, converged, cluster_coords, other_coords = self._find_peak(rt)
+                    coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(rt)
                     if converged:
                         self._peaks[obs][rt.instrument] = coord
                         self._peaks_near_edge[obs][rt.instrument] = near_edge
