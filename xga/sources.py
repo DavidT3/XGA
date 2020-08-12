@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/08/2020, 16:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2020, 08:20. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1690,19 +1690,21 @@ class ExtendedSource(BaseSource):
                                              "15kpc for {n} in the {l}-{u} energy "
                                              "band.".format(n=self.name, l=self._peak_lo_en, u=self._peak_hi_en))
 
-        for obs in self.obs_ids:
-            for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
-                if self._use_peak:
-                    coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(rt)
-                    if converged:
-                        self._peaks[obs][rt.instrument] = coord
-                        self._peaks_near_edge[obs][rt.instrument] = near_edge
-                    else:
-                        self._peaks[obs][rt.instrument] = None
-                        self._peaks_near_edge[obs][rt.instrument] = None
-                else:
-                    self._peaks[obs][rt.instrument] = self.ra_dec
-                    self._peaks_near_edge[obs][rt.instrument] = rt.near_edge(self.ra_dec)
+        # TODO Decide what to do with this - see issue #85 for a description of why I'm not currently measuring
+        #  the individual peaks.
+        # for obs in self.obs_ids:
+        #     for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
+        #         if self._use_peak:
+        #             coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(rt)
+        #             if converged:
+        #                 self._peaks[obs][rt.instrument] = coord
+        #                 self._peaks_near_edge[obs][rt.instrument] = near_edge
+        #             else:
+        #                 self._peaks[obs][rt.instrument] = None
+        #                 self._peaks_near_edge[obs][rt.instrument] = None
+        #         else:
+        #             self._peaks[obs][rt.instrument] = self.ra_dec
+        #             self._peaks_near_edge[obs][rt.instrument] = rt.near_edge(self.ra_dec)
 
     def _setup_new_region(self, radius: Quantity, reg_type: str):
         """
