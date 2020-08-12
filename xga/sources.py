@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2020, 08:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2020, 11:45. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1612,8 +1612,8 @@ class ExtendedSource(BaseSource):
             self._within_source_regions["search_aperture"] = reg_crossover
             # Generate the source mask for the peak finding method
             aperture_mask = self._generate_mask(rt, cust_reg, reg_type="search_aperture")
-            # Find the peak using the experimental clustering_peak method
 
+            # Find the peak using the experimental clustering_peak method
             if method == "hierarchical":
                 peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, deg)
             elif method == "simple":
@@ -2015,7 +2015,8 @@ class GalaxyCluster(ExtendedSource):
         elif model is None and len(models_with_kt) == 1:
             return self.get_results(reg_type, models_with_kt[0], "kT")
 
-    def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4):
+    def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
+                                same_peak: bool = True):
         """
         A method that generates and displays brightness profiles for the current cluster. Brightness profiles
         exclude point sources and either measure the average counts per second within a circular annulus (radial),
@@ -2025,6 +2026,10 @@ class GalaxyCluster(ExtendedSource):
         :param str profile_type: The type of brightness profile you wish to view, radial or pizza.
         :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
         slice will be 360 / num_slices degrees.
+        :param bool same_peak: If True then the radial profiles (including for PSF corrected ratemaps)
+         will all be constructed centered on the peak found for the 'normal' combined ratemap. If False,
+         peaks will be found for each individual combined ratemap and profiles will be constructed
+         centered on them.
         """
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
@@ -2071,6 +2076,9 @@ class GalaxyCluster(ExtendedSource):
 
             for psf_comb_rt in psf_comb_rts:
                 p_rt = psf_comb_rt[-1]
+                # If the user wants to use individual peaks, we have to find them here.
+                if not same_peak:
+                    pix_peak = self.find_peak(p_rt)[0]
                 brightness, radii, background = radial_brightness(psf_comb_rt[-1], source_mask, background_mask,
                                                                   pix_peak, rad, self._redshift, kpc, self.cosmo)
                 prof = plt.plot(radii, brightness, label="{m} PSF Corrected".format(m=p_rt.psf_model))
