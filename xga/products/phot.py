@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/07/2020, 15:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2020, 09:51. Copyright (c) David J Turner
 
 
 import warnings
@@ -455,7 +455,8 @@ class Image(BaseProduct):
             raise NotPSFCorrectedError("You are trying to set the PSF model for an Image that hasn't "
                                        "been PSF corrected.")
 
-    def view(self, cross_hair: Quantity = None, mask: np.ndarray = None):
+    def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
+             other_points: List[np.ndarray] = None):
         """
         Quick and dirty method to view this image. Absolutely no user configuration is allowed, that feature
         is for other parts of XGA. Produces an image with log-scaling, and using the colour map gnuplot2.
@@ -463,6 +464,9 @@ class Image(BaseProduct):
         the coordinates.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
         data if they so choose.
+        :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
+        :param list other_points: A list of numpy arrays of point clusters that weren't chosen by the
+        hierarchical peak finder.
         """
         if mask is not None and mask.shape != self.data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
@@ -504,6 +508,14 @@ class Image(BaseProduct):
             pix_coord = self.coord_conv(cross_hair, pix).value
             plt.axvline(pix_coord[0], color="white", linewidth=0.5)
             plt.axhline(pix_coord[1], color="white", linewidth=0.5)
+
+        if chosen_points is not None:
+            plt.plot(chosen_points[:, 0], chosen_points[:, 1], 'x', color='green', label="Chosen Point Cluster")
+            plt.legend(loc="best")
+
+        if other_points is not None:
+            for cl in other_points:
+                plt.plot(cl[:, 0], cl[:, 1], 'x')
 
         plt.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
         plt.colorbar()
@@ -687,7 +699,7 @@ class RateMap(Image):
         for this is that the cluster peak will likely be contained in that top 5%, and the only other
         pixels that might be involved are remnants of poorly removed point sources. So when clusters have
         been formed, we can take the one with the most entries, and find the maximal pixel of that cluster.
-        Will be consistent with simple_peak under ideal circumstances.
+        Should be consistent with simple_peak under ideal circumstances.
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
         aren't to be searched, and 1 for those that are.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
