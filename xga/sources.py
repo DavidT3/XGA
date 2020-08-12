@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2020, 11:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2020, 17:08. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -415,7 +415,7 @@ class BaseSource:
 
                 # If the ObsID list from parsing the file name is exactly the same as the ObsID list associated
                 #  with this source, then we accept it. Otherwise it is rejected.
-                if split_out[:len(obs_ids)] != obs_ids:
+                if split_out != obs_ids:
                     right_merged = False
                 else:
                     right_merged = True
@@ -646,8 +646,9 @@ class BaseSource:
                 im = [i for i in self.get_products("image", obs_id, inst, just_obj=False) if en in i]
 
                 if len(im) != 1:
-                    raise NoProductAvailableError("There is no image available to translate pixel regions "
-                                                  "to RA-DEC.")
+                    raise NoProductAvailableError("There is no image available for observation {o}, associated "
+                                                  "with {n}. An image is require to translate pixel regions "
+                                                  "to RA-DEC.".format(o=obs_id, n=self.name))
                 w = im[0][-1].radec_wcs
                 sky_regs = [reg.to_sky(w) for reg in ds9_regs]
                 reg_dict[obs_id] = np.array(sky_regs)
@@ -1331,6 +1332,7 @@ class BaseSource:
                                                      self._initial_region_matches[o].sum() > 1])))
         print("Images associated - {}".format(len(self.get_products("image"))))
         print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
+        print("Combined Ratemaps associated - {}".format(len(self.get_products("combined_ratemap"))))
         print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
 
         if len(self._fit_results) != 0:
