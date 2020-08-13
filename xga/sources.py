@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2020, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/08/2020, 11:24. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -411,7 +411,11 @@ class BaseSource:
             # First filter to only look at merged files
             if obs_str in file_path and "merged" in file_path and file_path[0] != "." and prod_type in file_path:
                 # Stripped back to only the ObsIDs, and in the original order
-                split_out = [e for e in file_path.split("_") if "keV" not in e and ".fits" not in e]
+                #  Got to strip away quite a few possible entries in the file name - all the PSF information for
+                #  instance.
+                split_out = [e for e in file_path.split("_") if "keV" not in e and ".fits" not in e and
+                             "bin" not in e and "mod" not in e and "algo" not in e and "merged" not in e
+                             and "iter" not in e]
 
                 # If the ObsID list from parsing the file name is exactly the same as the ObsID list associated
                 #  with this source, then we accept it. Otherwise it is rejected.
