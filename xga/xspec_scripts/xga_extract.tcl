@@ -1,7 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2020, 15:37. Copyright (c) David J Turner
 
-# This script writes a LOT of information about loaded spectra and current fit results to a fits file
+# This script writes a LOT of information about loaded spectra and current fit results to various csv files
 # Inspired by the writefits script packaged with XSPEC, it will also calculate and write the current UNABSORBED
 #  luminosities to the file for input energy ranges.
 
