@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 10:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 13:08. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -25,7 +25,7 @@ from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObser
 from xga.imagetools import radial_brightness, pizza_brightness
 from xga.products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, \
     ExpMap, RateMap, PSFGrid
-from xga.sourcetools import simple_xmm_match, nhlookup, rad_to_ang, ang_to_rad
+from xga.sourcetools import simple_xmm_match, nh_lookup, rad_to_ang, ang_to_rad
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -57,7 +57,7 @@ class BaseSource:
             on_axis_match = np.array([])
         self._onaxis = np.isin(self._obs, on_axis_match)
         # nhlookup returns average and weighted average values, so just take the first
-        self._nH = nhlookup(ra, dec)[0]
+        self._nH = nh_lookup(ra, dec)[0]
         self._redshift = redshift
         self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
 

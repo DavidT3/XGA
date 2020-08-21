@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/07/2020, 15:40. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 13:08. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
@@ -12,7 +12,7 @@ from xga import CENSUS
 from xga.exceptions import HeasoftError, NoMatchFoundError
 
 
-def nhlookup(src_ra: float, src_dec: float) -> ndarray:
+def nh_lookup(src_ra: float, src_dec: float) -> ndarray:
     """
     Uses HEASOFT to lookup hydrogen column density for given coordinates.
     :param float src_ra: Right Ascension of object
