@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 10:44. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -399,6 +399,34 @@ class BaseSource:
 
             return final_obj
 
+        def merged_file_check(file_path: str, obs_ids: Tuple, prod_type: str):
+            """
+            Checks that a passed file name is a merged image or exposure map, and matches the current source.
+            :param str file_path: The name of the file in consideration
+            :param Tuple obs_ids: The ObsIDs associated with this source.
+            :param str prod_type: img or expmap, what type of merged product are we looking for?
+            :return: A boolean flag as to whether the filename is a file that matches the source.
+            :rtype: Bool
+            """
+            # First filter to only look at merged files
+            if obs_str in file_path and "merged" in file_path and file_path[0] != "." and prod_type in file_path:
+                # Stripped back to only the ObsIDs, and in the original order
+                #  Got to strip away quite a few possible entries in the file name - all the PSF information for
+                #  instance.
+                split_out = [e for e in file_path.split("_") if "keV" not in e and ".fits" not in e and
+                             "bin" not in e and "mod" not in e and "algo" not in e and "merged" not in e
+                             and "iter" not in e]
+
+                # If the ObsID list from parsing the file name is exactly the same as the ObsID list associated
+                #  with this source, then we accept it. Otherwise it is rejected.
+                if split_out != obs_ids:
+                    right_merged = False
+                else:
+                    right_merged = True
+            else:
+                right_merged = False
+            return right_merged
+
         og_dir = os.getcwd()
         for obs in self._obs:
             if os.path.exists(OUTPUT + obs):
@@ -460,10 +488,6 @@ class BaseSource:
                         obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], reg_type, obs, inst,
                                        "", "", "")
                         self.update_products(obj)
-
-
-
-
         os.chdir(og_dir)
 
         # Merged products have all the ObsIDs that they are made up of in their name
@@ -475,15 +499,11 @@ class BaseSource:
 
             os.chdir(OUTPUT + self._obs[0])
             # Search for files that match the pattern of a merged image/exposure map
-            # TODO Make this an exact match to the obs_str, otherwise its possible we might read
-            #  in an old merged image if new observations are added to the obs census
-            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_img" in f
-                          and f[0] != "."]
+            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if merged_file_check(f, self._obs, "img")]
             for im in merged_ims:
                 self.update_products(parse_image_like(im, "image", merged=True))
 
-            merged_exs = [os.path.abspath(f) for f in os.listdir(".") if obs_str in f and "merged_expmap" in f
-                          and f[0] != "."]
+            merged_exs = [os.path.abspath(f) for f in os.listdir(".") if merged_file_check(f, self._obs, "expmap")]
             for ex in merged_exs:
                 self.update_products(parse_image_like(ex, "expmap", merged=True))
 
@@ -531,6 +551,8 @@ class BaseSource:
 
                 # Push global fit results, luminosities etc. into the corresponding source object.
                 self.add_fit_data(model, reg_type, global_results, chosen_lums)
+
+        os.chdir(og_dir)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
@@ -628,8 +650,9 @@ class BaseSource:
                 im = [i for i in self.get_products("image", obs_id, inst, just_obj=False) if en in i]
 
                 if len(im) != 1:
-                    raise NoProductAvailableError("There is no image available to translate pixel regions "
-                                                  "to RA-DEC.")
+                    raise NoProductAvailableError("There is no image available for observation {o}, associated "
+                                                  "with {n}. An image is require to translate pixel regions "
+                                                  "to RA-DEC.".format(o=obs_id, n=self.name))
                 w = im[0][-1].radec_wcs
                 sky_regs = [reg.to_sky(w) for reg in ds9_regs]
                 reg_dict[obs_id] = np.array(sky_regs)
@@ -1313,6 +1336,7 @@ class BaseSource:
                                                      self._initial_region_matches[o].sum() > 1])))
         print("Images associated - {}".format(len(self.get_products("image"))))
         print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
+        print("Combined Ratemaps associated - {}".format(len(self.get_products("combined_ratemap"))))
         print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
 
         if len(self._fit_results) != 0:
@@ -1494,9 +1518,8 @@ class ExtendedSource(BaseSource):
             else:
                 self._custom_region_radius = self._custom_region_radius.to("deg")
 
-    # TODO There really has to be a better solution to the all_interlopers thing, its so inefficient
     def _generate_mask(self, mask_image: Image, source_region: SkyRegion, back_reg: SkyRegion = None,
-                       all_interlopers: bool = False) -> Tuple[ndarray, ndarray]:
+                       reg_type: str = None) -> Tuple[ndarray, ndarray]:
         """
         This uses available region files to generate a mask for the source region in the form of a
         numpy array. It takes into account any sources that were detected within the target source,
@@ -1505,28 +1528,21 @@ class ExtendedSource(BaseSource):
         :param SkyRegion source_region: The SkyRegion containing the source to generate a mask for.
         :param SkyRegion back_reg: The SkyRegion containing the background emission to
         generate a mask for.
-        :param bool all_interlopers: If this is true, all non source objects from all observations
-        will be iterated through and removed from the mask - its not very efficient...
+        :param bool reg_type: By default this is None, but if supplied by the user then this method
+        will look for interloper regions under reg_type key rather than the ObsID key.
         :return: A boolean numpy array that can be used to mask images loaded in as numpy arrays.
         :rtype: Tuple[np.ndarray, np.ndarray]
         """
         obs_id = mask_image.obs_id
         mask = source_region.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
 
-        if not all_interlopers:
+        if reg_type is None:
             # Now need to drill out any interloping sources, make a mask for that
             interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                for reg in self._within_source_regions[obs_id]])
         else:
-            all_within = []
-            for o in self._within_source_regions:
-                all_within += list(self._within_source_regions[o])
-            for o in self._other_regions:
-                all_within += list(self._other_regions[o])
-
-            interlopers_pix = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                               for reg in all_within]
-            interlopers = sum([reg for reg in interlopers_pix if reg is not None])
+            interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                               for reg in self._within_source_regions[reg_type]])
 
         # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
         # interloper source there - circular sentences ftw
@@ -1534,20 +1550,13 @@ class ExtendedSource(BaseSource):
 
         if back_reg is not None:
             back_mask = back_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-            if not all_interlopers:
+            if reg_type is None:
                 # Now need to drill out any interloping sources, make a mask for that
                 interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                                    for reg in self._within_back_regions[obs_id]])
             else:
-                all_within = []
-                for o in self._within_back_regions:
-                    all_within += list(self._within_back_regions[o])
-                for o in self._other_regions:
-                    all_within += list(self._other_regions[o])
-
-                interlopers_pix = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                                   for reg in all_within]
-                interlopers = sum([reg for reg in interlopers_pix if reg is not None])
+                interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                                   for reg in self._within_back_regions[reg_type]])
 
             # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
             # interloper source there - circular sentences ftw
@@ -1556,18 +1565,26 @@ class ExtendedSource(BaseSource):
             return mask, back_mask
         return mask
 
-    def _find_peak(self, rt: RateMap) -> Tuple[Quantity, bool, bool, ndarray, List]:
+    def find_peak(self, rt: RateMap, method: str = "hierarchical", num_iter: int = 20, peak_unit: UnitBase = deg) \
+            -> Tuple[Quantity, bool, bool, ndarray, List]:
         """
-        An internal method that will find the X-ray centroid for the RateMap that has been passed in. It takes
+        A method that will find the X-ray centroid for the RateMap that has been passed in. It takes
         the user supplied coordinates from source initialisation as a starting point, finds the peak within a 500kpc
         radius, re-centres the region, and iterates until the centroid converges to within 15kpc, or until 20
         20 iterations has been reached.
-        :param rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
+        :param RateMap rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
+        :param str method: Which peak finding method to use. Currently either hierarchical or simple can be chosen.
+        :param int num_iter: How many iterations should be allowed before the peak is declared as not converged.
+        :param UnitBase peak_unit: The unit the peak coordinate is returned in.
         :return: The peak coordinate, a boolean flag as to whether the returned coordinates are near
          a chip gap/edge, and a boolean flag as to whether the peak converged. It also returns the coordinates
          of the points within the chosen point cluster, and a list of all point clusters that were not chosen.
         :rtype: Tuple[Quantity, bool, bool, ndarray, List]
         """
+        all_meth = ["hierarchical", "simple"]
+        if method not in all_meth:
+            raise ValueError("{0} is not a recognised, use one of the following methods: "
+                             "{1}".format(method, ", ".join(all_meth)))
         central_coords = SkyCoord(*self.ra_dec.to("deg"))
 
         # 500kpc in degrees, for the current redshift and cosmology
@@ -1579,20 +1596,44 @@ class ExtendedSource(BaseSource):
 
         # Iteration counter just to kill it if it doesn't converge
         count = 0
-        # Allow 20 iterations before we kill this - alternatively loop will exit when centre converges
+        # Allow 20 iterations by default before we kill this - alternatively loop will exit when centre converges
         #  to within 15kpc (or 0.15arcmin).
-        while count < 20:
+        while count < num_iter:
             # Define a 500kpc radius region centered on the current central_coords
             cust_reg = CircleSkyRegion(central_coords, search_aperture)
-            # Generate the source mask for the peak finding method
-            aperture_mask = self._generate_mask(rt, cust_reg, all_interlopers=True)
-            # Find the peak using the experimental clustering_peak method
-            peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, deg)
-            # Calculate the distance between new peak and old central coordinates
-            separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
-                                          abs(peak[1].value - central_coords.dec.value) ** 2), deg)
+            pix_cust_reg = cust_reg.to_pixel(rt.radec_wcs)
 
-            central_coords = SkyCoord(*peak.copy())
+            # Setting up useful lists for adding regions to
+            reg_crossover = []
+            # I check through all available region lists to find regions that are within the custom region
+            for obs_id in self._other_regions:
+                other_regs = self._other_regions[obs_id]
+
+                cross = np.array([cust_reg.intersection(r).to_pixel(rt.radec_wcs).to_mask().data.sum()
+                                  != 0 and r.height == r.width for r in other_regs])
+
+                if len(cross) != 0:
+                    reg_crossover += list(np.array(other_regs)[cross])
+
+            reg_crossover = np.array(reg_crossover)
+            self._within_source_regions["search_aperture"] = reg_crossover
+            # Generate the source mask for the peak finding method
+            aperture_mask = self._generate_mask(rt, cust_reg, reg_type="search_aperture")
+
+            # Find the peak using the experimental clustering_peak method
+            if method == "hierarchical":
+                peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, peak_unit)
+            elif method == "simple":
+                peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
+                chosen_coords = []
+                other_coords = []
+
+            peak_deg = rt.coord_conv(peak, deg)
+            # Calculate the distance between new peak and old central coordinates
+            separation = Quantity(np.sqrt(abs(peak_deg[0].value - central_coords.ra.value) ** 2 +
+                                          abs(peak_deg[1].value - central_coords.dec.value) ** 2), deg)
+
+            central_coords = SkyCoord(*peak_deg.copy())
             if self._redshift is not None:
                 separation = ang_to_rad(separation, self._redshift, self._cosmo)
 
@@ -1603,7 +1644,7 @@ class ExtendedSource(BaseSource):
 
             count += 1
 
-        if count == 20:
+        if count == num_iter:
             converged = False
             # To do the least amount of damage, if the peak doesn't converge then we just return the
             #  user supplied coordinates
@@ -1612,6 +1653,7 @@ class ExtendedSource(BaseSource):
         else:
             converged = True
 
+        del self._within_source_regions["search_aperture"]
         return peak, near_edge, converged, chosen_coords, other_coords
 
     def _all_peaks(self):
@@ -1634,7 +1676,15 @@ class ExtendedSource(BaseSource):
             emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en)
             comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
 
-        coord, near_edge, converged, cluster_coords, other_coords = self._find_peak(comb_rt)
+        if self._use_peak:
+            coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(comb_rt)
+        else:
+            # If we don't care about peak finding then this is the boi to go for
+            coord = self.ra_dec
+            near_edge = comb_rt.near_edge(coord)
+            converged = True
+            cluster_coords = np.ndarray([])
+            other_coords = []
 
         # Unfortunately if the peak convergence fails for the combined ratemap I have to raise an error
         if converged:
@@ -1648,15 +1698,21 @@ class ExtendedSource(BaseSource):
                                              "15kpc for {n} in the {l}-{u} energy "
                                              "band.".format(n=self.name, l=self._peak_lo_en, u=self._peak_hi_en))
 
-        for obs in self.obs_ids:
-            for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
-                coord, near_edge, converged, cluster_coords, other_coords = self._find_peak(rt)
-                if converged:
-                    self._peaks[obs][rt.instrument] = coord
-                    self._peaks_near_edge[obs][rt.instrument] = near_edge
-                else:
-                    self._peaks[obs][rt.instrument] = None
-                    self._peaks_near_edge[obs][rt.instrument] = None
+        # TODO Decide what to do with this - see issue #85 for a description of why I'm not currently measuring
+        #  the individual peaks.
+        # for obs in self.obs_ids:
+        #     for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
+        #         if self._use_peak:
+        #             coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(rt)
+        #             if converged:
+        #                 self._peaks[obs][rt.instrument] = coord
+        #                 self._peaks_near_edge[obs][rt.instrument] = near_edge
+        #             else:
+        #                 self._peaks[obs][rt.instrument] = None
+        #                 self._peaks_near_edge[obs][rt.instrument] = None
+        #         else:
+        #             self._peaks[obs][rt.instrument] = self.ra_dec
+        #             self._peaks_near_edge[obs][rt.instrument] = rt.near_edge(self.ra_dec)
 
     def _setup_new_region(self, radius: Quantity, reg_type: str):
         """
@@ -1712,18 +1768,20 @@ class ExtendedSource(BaseSource):
                                         * self._back_out_factor).symmetric_difference(in_reg)
         cust_back_reg = pix_bck_reg.to_sky(comb_rt.radec_wcs)
 
-        # Make the final masks for source and background regions.
-        src_mask, bck_mask = self._generate_mask(comb_rt, cust_reg, cust_back_reg, all_interlopers=True)
-
         # Setting up useful lists for adding regions to
         reg_crossover = []
         bck_crossover = []
         # I check through all available region lists to find regions that are within the custom region
         for obs_id in self._other_regions:
             other_regs = self._other_regions[obs_id]
+
             # Which regions are within the custom source region
+            # Also are any regions that intersect with the custom region (could be an overdensity region) extended?
+            #  If so they should be removed - far more likely that the cluster has been
+            #  fragmented by the source finder.
             cross = np.array([cust_reg.intersection(r).to_pixel(comb_rt.radec_wcs).to_mask().data.sum()
-                              != 0 for r in other_regs])
+                              != 0 and r.height == r.width for r in other_regs])
+
             if len(cross) != 0:
                 reg_crossover += list(np.array(other_regs)[cross])
 
@@ -1736,6 +1794,12 @@ class ExtendedSource(BaseSource):
         # Just quickly convert the lists to numpy arrays
         reg_crossover = np.array(reg_crossover)
         bck_crossover = np.array(bck_crossover)
+        # And save them
+        self._within_source_regions[reg_type] = reg_crossover
+        self._within_back_regions[reg_type] = bck_crossover
+
+        # Make the final masks for source and background regions.
+        src_mask, bck_mask = self._generate_mask(comb_rt, cust_reg, cust_back_reg, reg_type=reg_type)
 
         # TODO Check that this isn't bollocks
         src_area = src_mask.sum()
@@ -1746,8 +1810,6 @@ class ExtendedSource(BaseSource):
         self._back_regions[reg_type] = cust_back_reg
         self._reg_masks[reg_type] = src_mask
         self._back_masks[reg_type] = bck_mask
-        self._within_source_regions[reg_type] = reg_crossover
-        self._within_back_regions[reg_type] = bck_crossover
         self._snr[reg_type] = rate_ratio
 
     def get_peaks(self, obs_id: str = None, inst: str = None) -> Quantity:
@@ -1961,7 +2023,8 @@ class GalaxyCluster(ExtendedSource):
         elif model is None and len(models_with_kt) == 1:
             return self.get_results(reg_type, models_with_kt[0], "kT")
 
-    def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4):
+    def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
+                                same_peak: bool = True):
         """
         A method that generates and displays brightness profiles for the current cluster. Brightness profiles
         exclude point sources and either measure the average counts per second within a circular annulus (radial),
@@ -1971,6 +2034,10 @@ class GalaxyCluster(ExtendedSource):
         :param str profile_type: The type of brightness profile you wish to view, radial or pizza.
         :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
         slice will be 360 / num_slices degrees.
+        :param bool same_peak: If True then the radial profiles (including for PSF corrected ratemaps)
+         will all be constructed centered on the peak found for the 'normal' combined ratemap. If False,
+         peaks will be found for each individual combined ratemap and profiles will be constructed
+         centered on them.
         """
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
@@ -2017,6 +2084,9 @@ class GalaxyCluster(ExtendedSource):
 
             for psf_comb_rt in psf_comb_rts:
                 p_rt = psf_comb_rt[-1]
+                # If the user wants to use individual peaks, we have to find them here.
+                if not same_peak:
+                    pix_peak = self.find_peak(p_rt)[0]
                 brightness, radii, background = radial_brightness(psf_comb_rt[-1], source_mask, background_mask,
                                                                   pix_peak, rad, self._redshift, kpc, self.cosmo)
                 prof = plt.plot(radii, brightness, label="{m} PSF Corrected".format(m=p_rt.psf_model))
@@ -2026,9 +2096,9 @@ class GalaxyCluster(ExtendedSource):
         elif profile_type == "pizza":
             ax.set_title("{n} - {l}-{u}keV Pizza Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                             u=self._peak_hi_en.value))
-            brightness, radii, angles, background = pizza_brightness(comb_rt, source_mask, background_mask,
-                                                                     pix_peak, rad, num_slices, self._redshift,
-                                                                     kpc, self.cosmo)
+            brightness, radii, angles, og_background = pizza_brightness(comb_rt, source_mask, background_mask,
+                                                                        pix_peak, rad, num_slices, self._redshift,
+                                                                        kpc, self.cosmo)
             for ang_ind in range(angles.shape[0]):
                 # Setup labels with the angles covered by the profile
                 lab_str = "{0}$^{{\circ}}$-{1}$^{{\circ}}$ Slice Emission".format(*angles[ang_ind, :].value)

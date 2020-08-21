@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 10:44. Copyright (c) David J Turner
 
 
 import warnings
@@ -455,7 +455,8 @@ class Image(BaseProduct):
             raise NotPSFCorrectedError("You are trying to set the PSF model for an Image that hasn't "
                                        "been PSF corrected.")
 
-    def view(self, cross_hair: Quantity = None, mask: np.ndarray = None):
+    def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
+             other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False):
         """
         Quick and dirty method to view this image. Absolutely no user configuration is allowed, that feature
         is for other parts of XGA. Produces an image with log-scaling, and using the colour map gnuplot2.
@@ -463,6 +464,12 @@ class Image(BaseProduct):
         the coordinates.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
         data if they so choose.
+        :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
+        :param list other_points: A list of numpy arrays of point clusters that weren't chosen by the
+        hierarchical peak finder.
+        :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this method.
+        :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
+        data are reduced.
         """
         if mask is not None and mask.shape != self.data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
@@ -473,7 +480,7 @@ class Image(BaseProduct):
             plot_data = self.data
 
         # Create figure object
-        plt.figure(figsize=(7, 6))
+        plt.figure(figsize=figsize)
 
         # Turns off any ticks and tick labels, we don't want them in an image
         ax = plt.gca()
@@ -500,12 +507,29 @@ class Image(BaseProduct):
         #  There will be a more in depth way of viewing cluster data eventually
         norm = ImageNormalize(data=plot_data, interval=MinMaxInterval(), stretch=LogStretch())
         # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
+
+        if chosen_points is not None:
+            plt.plot(chosen_points[:, 0], chosen_points[:, 1], '+', color='black', label="Chosen Point Cluster")
+            plt.legend(loc="best")
+
+        if other_points is not None:
+            for cl in other_points:
+                plt.plot(cl[:, 0], cl[:, 1], 'D')
+
         if cross_hair is not None:
             pix_coord = self.coord_conv(cross_hair, pix).value
             plt.axvline(pix_coord[0], color="white", linewidth=0.5)
             plt.axhline(pix_coord[1], color="white", linewidth=0.5)
 
         plt.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
+
+        if zoom_in:
+            # I don't like doing local imports, but this is the easiest way
+            from xga.imagetools import data_limits
+            x_lims, y_lims = data_limits(plot_data)
+            plt.xlim(x_lims)
+            plt.ylim(y_lims)
+
         plt.colorbar()
         plt.tight_layout()
         # Display the image
@@ -624,6 +648,13 @@ class RateMap(Image):
         #  objects close to the edge of the detector - otherwise the values get dragged down by all the zeros
         self._on_sensor_mask = det_map
 
+        # Re-setting some paths to make more sense
+        self._path = xga_image.path
+        self._expmap_path = xga_expmap.path
+
+        del self._im_data
+        del self._ex_data
+
     def get_rate(self, at_coord: Quantity) -> float:
         """
         A simple method that converts the given coordinates to pixels, then finds the rate (in photons
@@ -675,20 +706,21 @@ class RateMap(Image):
 
         return peak_conv, edge_flag
 
-    def clustering_peak(self, mask: np.ndarray, out_unit: UnitBase = deg, top_frac: float = 0.05) \
-            -> Tuple[Quantity, bool, np.ndarray, List[np.ndarray]]:
+    def clustering_peak(self, mask: np.ndarray, out_unit: UnitBase = deg, top_frac: float = 0.05,
+                        max_dist: float = 5) -> Tuple[Quantity, bool, np.ndarray, List[np.ndarray]]:
         """
         An experimental peak finding function that cuts out the top 5% (by default) of array elements
         (by value), and runs a hierarchical clustering algorithm on their positions. The motivation
         for this is that the cluster peak will likely be contained in that top 5%, and the only other
         pixels that might be involved are remnants of poorly removed point sources. So when clusters have
         been formed, we can take the one with the most entries, and find the maximal pixel of that cluster.
-        Will be consistent with simple_peak under ideal circumstances.
+        Should be consistent with simple_peak under ideal circumstances.
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
         aren't to be searched, and 1 for those that are.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :param float top_frac: The fraction of the elements (ordered in descending value) that should be used
         to generate clusters, and thus be considered for the cluster centre.
+        :param float max_dist: The maximum distance criterion for the hierarchical clustering algorithm, in pixels.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
         the user's mask), in units of out_unit, as specified by the user. Finally, the coordinates of the points
         in the chosen cluster are returned, as is a list of all the coordinates of all the other clusters.
@@ -710,11 +742,16 @@ class RateMap(Image):
         inds = np.unravel_index(np.argpartition(masked_data.flatten(), -to_select)[-to_select:], masked_data.shape)
         # Just formatting quickly for input into the clustering algorithm
         pairs = [[inds[0][i], inds[1][i]] for i in range(len(inds[0]))]
-        # Hierarchical clustering using the inconsistent criterion with threshold 1. 'If a cluster node and all its
-        # descendants have an inconsistent value less than or equal to 1, then all its leaf descendants belong to
-        # the same flat cluster. When no non-singleton cluster meets this criterion, every node is assigned to its
-        # own cluster.'
-        cluster_inds = fclusterdata(pairs, 1)
+
+        # USED TO USE Hierarchical clustering using the inconsistent criterion with threshold 1. 'If a
+        # cluster node and all its descendants have an inconsistent value less than or equal to 1, then all its
+        # leaf descendants belong to the same flat cluster. When no non-singleton cluster meets this criterion,
+        # every node is assigned to its own cluster.'
+
+        # Now use a default distance criterion of 5 pixels (maximum intra point cluster distance of 5 pixels),
+        #  which works better for low surface brightness clusters. This may still change in the future as I refine
+        #  it, but its working well for now!
+        cluster_inds = fclusterdata(pairs, max_dist, criterion="distance")
 
         # Finds how many clusters there are, and how many points belong to each cluster
         uniq_vals, uniq_cnts = np.unique(cluster_inds, return_counts=True)
@@ -870,6 +907,15 @@ class RateMap(Image):
         :rtype: ndarray
         """
         return self._on_sensor_mask
+
+    @property
+    def expmap_path(self) -> str:
+        """
+        Similar to the path property, but for the exposure map that went into this ratemap.
+        :return: The exposure map path.
+        :rtype: str
+        """
+        return self._expmap_path
 
 
 class PSF(Image):
