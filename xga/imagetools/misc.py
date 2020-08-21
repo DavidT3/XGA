@@ -1,14 +1,14 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 10:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 10:44. Copyright (c) David J Turner
 
 
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 import numpy as np
 from astropy.units import Quantity, pix, deg, UnitConversionError
 from astropy.wcs import WCS
 
-from xga.products import Image
+from xga.products import Image, RateMap
 
 
 def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quantity(1, 'arcmin')) -> float:
@@ -49,23 +49,37 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
     return scale
 
 
-def data_limits(im_prod: Image) -> Tuple[List[int], List[int]]:
+def data_limits(im_prod: Union[Image, RateMap, np.ndarray]) -> Tuple[List[int], List[int]]:
     """
     A function that finds the pixel coordinates that bound where data is present in
     Image or RateMap object.
-    :param Image im_prod: The Image or RateMap that you wish to find bounding coordinates for
+    :param Union[Image, RateMap, ndarray] im_prod: An Image, RateMap, or numpy array that you wish to find
+    boundary coordinates for.
     :return: Two lists, the first with the x lower and upper bounding coordinates, and the second with
     the y lower and upper bounding coordinates.
     :rtype: Tuple[List[int, int], List[int, int]]
     """
-    locations = np.where(im_prod.data != 0)
-    x_min = locations[1].min() - 1  # Subtract/add 1 to give a little border around the edges
+    if isinstance(im_prod, Image):
+        # For the XGA Image products
+        # This just finds out where the zeros in the data are
+        locations = np.where(im_prod.data != 0)
+    else:
+        # For numpy arrays
+        locations = np.where(im_prod != 0)
+
+    # Finds the maximum and minimum locations of zeros in both x and y spaces - these are the boundary coordinates
+    # Adds and subtracts 1 to give a very small border.
+    x_min = locations[1].min() - 1
     x_max = locations[1].max() + 1
 
     y_min = locations[0].min() - 1
     y_max = locations[0].max() + 1
 
+    # Returns the boundary coordinates in pairs of min, max.
     return [x_min, x_max], [y_min, y_max]
+
+
+
 
 
 

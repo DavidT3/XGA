@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/08/2020, 11:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 10:44. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1565,7 +1565,7 @@ class ExtendedSource(BaseSource):
             return mask, back_mask
         return mask
 
-    def find_peak(self, rt: RateMap, method: str = "hierarchical", num_iter: int = 20) \
+    def find_peak(self, rt: RateMap, method: str = "hierarchical", num_iter: int = 20, peak_unit: UnitBase = deg) \
             -> Tuple[Quantity, bool, bool, ndarray, List]:
         """
         A method that will find the X-ray centroid for the RateMap that has been passed in. It takes
@@ -1575,6 +1575,7 @@ class ExtendedSource(BaseSource):
         :param RateMap rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
         :param str method: Which peak finding method to use. Currently either hierarchical or simple can be chosen.
         :param int num_iter: How many iterations should be allowed before the peak is declared as not converged.
+        :param UnitBase peak_unit: The unit the peak coordinate is returned in.
         :return: The peak coordinate, a boolean flag as to whether the returned coordinates are near
          a chip gap/edge, and a boolean flag as to whether the peak converged. It also returns the coordinates
          of the points within the chosen point cluster, and a list of all point clusters that were not chosen.
@@ -1621,17 +1622,18 @@ class ExtendedSource(BaseSource):
 
             # Find the peak using the experimental clustering_peak method
             if method == "hierarchical":
-                peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, deg)
+                peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, peak_unit)
             elif method == "simple":
-                peak, near_edge = rt.simple_peak(aperture_mask, deg)
+                peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
                 chosen_coords = []
                 other_coords = []
 
+            peak_deg = rt.coord_conv(peak, deg)
             # Calculate the distance between new peak and old central coordinates
-            separation = Quantity(np.sqrt(abs(peak[0].value - central_coords.ra.value) ** 2 +
-                                          abs(peak[1].value - central_coords.dec.value) ** 2), deg)
+            separation = Quantity(np.sqrt(abs(peak_deg[0].value - central_coords.ra.value) ** 2 +
+                                          abs(peak_deg[1].value - central_coords.dec.value) ** 2), deg)
 
-            central_coords = SkyCoord(*peak.copy())
+            central_coords = SkyCoord(*peak_deg.copy())
             if self._redshift is not None:
                 separation = ang_to_rad(separation, self._redshift, self._cosmo)
 
