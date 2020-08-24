@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 13:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/08/2020, 11:36. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
@@ -19,7 +19,7 @@ def nh_lookup(src_ra: float, src_dec: float) -> ndarray:
     :rtype: ndarray
     """
     # Apparently minimal type-checking is the Python way, but for some reason this heasoft command fails if
-    # integers are passed, so I'll convert them, let them ValueError if people pass weird types.
+    # integers are passed, so I'll convert them, let them TypeError if people pass weird types.
     src_ra = float(src_ra)
     src_dec = float(src_dec)
 
