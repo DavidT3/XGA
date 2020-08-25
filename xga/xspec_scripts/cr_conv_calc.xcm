@@ -1,0 +1,189 @@
+#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/08/2020, 14:53. Copyright (c) David J Turner
+
+# This XSPEC script requires parameter's to be filled in by XGA before running.
+
+# The purpose of this script is to calculate count-rate to flux and count-rate to luminosity conversion constants
+# These have several uses, upper limit luminosities for instance, as well as making scaling brightness profiles
+#  for stacking (see xga.sourcetools.stack).
+
+# This loads the XGA fakeit readout script.
+# source
+
+# Allow the user to select the abundance table to use
+abund {ab}
+
+# The source object cosmology is used to setup XSPEC cosmo
+cosmo {H0} {q0} {lamb0}
+
+# Set up a list of paths to the RMFs we'll be using for fakeit
+set rmf_paths {rmf}
+# Do the same thing for the corresponding ARFs
+set arf_paths {arf}
+# Purely for my own convenience, I'm going to add corresponding lists for ObsID and Instrument
+set obs_ids {obs}
+set instruments {inst}
+
+# This next part is largely from the general_xspec_fit.xcm script I wrote, its almost too general for this,
+#  but it saved time over writing a slightly simpler approach
+# Now we must define the model, but without setting any parameters (thats what /* does)
+model {m}
+/*
+
+# Get the number of parameters in a variable, for iterating through later
+set num_pars [tcloutr modpar]
+# This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
+set num_uniq_par [expr {{$num_pars / 1}}]
+
+
+# Need the user's parameter choices, initially in the form of a name list and a value list, then an array
+set par_names {pn}
+set par_values {pv}
+
+# Just combines them into an array, so we can pass a parameter name and get a value
+array set par_arr {{}}
+for {{set i 0}} {{$i < [llength $par_names]}} {{incr i}} {{
+    set temp_key [lindex $par_names $i]
+    set temp_contents [array get par_arr]
+
+    # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+    set key_count 1
+    while {{$temp_key in $temp_contents}} {{
+        set temp_key [concat [lindex $par_names $i]_$key_count]
+        incr key_count
+        }}
+
+    set par_arr($temp_key) [lindex $par_values $i]
+    }}
+
+# Set up the parameters for the model, again too general for this but I'm feeling lazy
+set sep_cnt 1
+set sep_par_lst {{}}
+for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
+    set cur_par [lindex [tcloutr pinfo $i] 0]
+
+    if {{$sep_cnt <= $num_uniq_par}} {{
+        # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+        set key_count 1
+        while {{$cur_par in $sep_par_lst}} {{
+            set cur_par [concat [lindex [tcloutr pinfo $i] 0]_$key_count]
+            incr key_count
+            }}
+        lappend sep_par_lst $cur_par
+    }} else {{
+        puts $sep_par_lst
+        set sep_cnt 1
+        set sep_par_lst {{$cur_par}}
+    }}
+
+    if {{$i <= $num_uniq_par}} {{
+        newpar $i $par_arr($cur_par)
+    }}
+
+    freeze $i
+
+    incr sep_cnt
+    }}
+
+# This is where the lower and upper energy limits for the luminosity/flux calculations go
+set lum_low_lims {lll}
+set lum_upp_lims {lul}
+
+set lum_lim_pairs {{}}
+for {{set i 0}} {{$i < [llength $lum_low_lims]}} {{incr i}} {{
+    set interim {{}}
+    lappend interim [lindex $lum_low_lims $i]
+    lappend interim [lindex $lum_upp_lims $i]
+    lappend lum_lim_pairs $interim
+    }}
+
+# Quickly grab the positions of any nH parameters - largely from xga_extract.tcl
+set nh_pars {{}}
+set count 0
+for {{set ipar 1}} {{$ipar <= $num_pars}} {{incr ipar}} {{
+    set punit " "
+    scan [tcloutr pinfo $ipar] "%s %s" pname punit
+    if {{$pname == "nH"}} {{
+        lappend nh_pars $ipar
+        }}
+}}
+
+# The columns denoting lower and upper energy limits
+set col_list "lo_en,hi_en"
+# Sets up the list of lines for the luminosities and countrates for the different energy limits
+set line_list {{}}
+# Ugly and probably inefficient but oh well, I don't know this language well
+for {{set j 0}} {{$j <= [llength $lum_lim_pairs]-1}} {{incr j}} {{
+    set p [lindex $lum_lim_pairs $j]
+    # Adds the energy limits as the first entries to each line, to match the column list
+    lappend line_list [lindex $p 0],[lindex $p 1]
+    }}
+
+# Iterate through the combinations of responses for the different observations/instruments
+for {{set i 0}} {{$i <= [llength $rmf_paths]-1}} {{incr i}} {{
+    set cur_rmf [lindex $rmf_paths $i]
+    set cur_arf [lindex $arf_paths $i]
+    set cur_obs [lindex $obs_ids $i]
+    set cur_ins [lindex $instruments $i]
+
+    # Column names have instrument and ObsID in for my convenience
+    append col_list ,rate_$cur_obs$cur_ins,Lx_$cur_obs$cur_ins
+    puts $col_list
+
+    fakeit none
+    $cur_rmf
+    $cur_arf
+    y
+
+    temp_fakeit_spec.fits
+    10000
+
+    for {{set j 0}} {{$j <= [llength $lum_lim_pairs]-1}} {{incr j}} {{
+        set p [lindex $lum_lim_pairs $j]
+        set lv [expr [lindex $p 0]/(1+{redshift})]
+        set uv [expr [lindex $p 1]/(1+{redshift})]
+        ignore **-$lv $uv-**
+
+        # This specifically gets the model predicted rate, which I think is what I want
+        set rate [lindex [tcloutr rate 1] 2]
+        set cur_line [lindex $line_list $j]
+        append cur_line ,$rate
+        lset line_list $j $cur_line
+        notice all
+    }}
+
+    # We do the trick to measure unabsorbed luminosities, zero the nh
+    foreach nhi $nh_pars {{
+        newpar $nhi 0.0
+    }}
+
+    for {{set j 0}} {{$j <= [llength $lum_lim_pairs]-1}} {{incr j}} {{
+        set p [lindex $lum_lim_pairs $j]
+        set lv [lindex $p 0]
+        set uv [lindex $p 1]
+        lumin $lv $uv {redshift}
+        # Index 0 is the model luminosity in 10^44 erg/s, index 3 seems to be in photons/s??
+        set lum [lindex [tcloutr lumin 1] 0]
+        set cur_line [lindex $line_list $j]
+        append cur_line ,$lum
+        lset line_list $j $cur_line
+    }}
+
+    # We only set the model once so we need to unzero the nH
+    foreach nhi $nh_pars {{
+        newpar $nhi $par_arr(nH)
+    }}
+
+    data none
+    rm temp_fakeit_spec.fits
+}}
+
+set fileid [open {of} w]
+puts $fileid $col_list
+
+foreach l $line_list {{
+    puts $fileid $l
+}}
+close $fileid
+
+exit

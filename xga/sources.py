@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 13:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -1311,6 +1311,33 @@ class BaseSource:
         else:
             return self._luminosities[reg_type][model][en_key]
 
+    @property
+    def num_pn_obs(self) -> int:
+        """
+        Getter method that gives the number of PN observations.
+        :return: Integer number of PN observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'pn' in self._products[o]])
+
+    @property
+    def num_mos1_obs(self) -> int:
+        """
+        Getter method that gives the number of MOS1 observations.
+        :return: Integer number of MOS1 observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'mos1' in self._products[o]])
+
+    @property
+    def num_mos2_obs(self) -> int:
+        """
+        Getter method that gives the number of MOS2 observations.
+        :return: Integer number of MOS2 observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
+
     def info(self):
         """
         Very simple function that just prints a summary of important information related to the source object..
@@ -1324,9 +1351,9 @@ class BaseSource:
         if self._redshift is not None:
             print("Redshift - {}".format(round(self._redshift, 3)))
         print("XMM ObsIDs - {}".format(self.__len__()))
-        print("PN Observations - {}".format(len([o for o in self.obs_ids if 'pn' in self._products[o]])))
-        print("MOS1 Observations - {}".format(len([o for o in self.obs_ids if 'mos1' in self._products[o]])))
-        print("MOS2 Observations - {}".format(len([o for o in self.obs_ids if 'mos2' in self._products[o]])))
+        print("PN Observations - {}".format(self.num_pn_obs))
+        print("MOS1 Observations - {}".format(self.num_mos1_obs))
+        print("MOS2 Observations - {}".format(self.num_mos2_obs))
         print("On-Axis - {}".format(self._onaxis.sum()))
         print("With regions - {}".format(len(self._initial_regions)))
         print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))

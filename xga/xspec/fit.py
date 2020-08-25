@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/08/2020, 14:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -151,7 +151,8 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
         except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
-    return script_paths, outfile_paths, num_cores, reg_type
+    run_type = "fit"
+    return script_paths, outfile_paths, num_cores, reg_type, run_type
 
 
 def double_temp_apec():

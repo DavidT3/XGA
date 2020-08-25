@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 10:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
 
 
 import warnings
@@ -665,7 +665,7 @@ class RateMap(Image):
         """
         pix_coord = self.coord_conv(at_coord, pix).value
         rate = self.data[pix_coord[1], pix_coord[0]]
-        return Quantity(rate, "s^-1")
+        return Quantity(rate, "ct/s^-1")
 
     def simple_peak(self, mask: np.ndarray, out_unit: UnitBase = deg) -> Tuple[Quantity, bool]:
         """

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/07/2020, 00:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
 
 import json
 import os
@@ -61,6 +61,7 @@ SASWARNING_LIST = warnings["WarnName"].values
 # XSPEC file extraction (and base fit) scripts
 XGA_EXTRACT = pkg_resources.resource_filename(__name__, "xspec_scripts/xga_extract.tcl")
 BASE_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/general_xspec_fit.xcm")
+COUNTRATE_CONV_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/cr_conv_calc.xcm")
 # Useful jsons of all XSPEC models, their required parameters, and those parameter's units
 with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json5"), 'r') as filey:
     MODEL_PARS = json.load(filey)

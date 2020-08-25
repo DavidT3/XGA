@@ -1,12 +1,12 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/08/2020, 14:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
 
 import os
 import shutil
 import warnings
 from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
-from typing import Tuple
+from typing import Tuple, Union
 
 import fitsio
 import pandas as pd
@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from xga import COMPUTE_MODE
 from xga.exceptions import XSPECFitError, HeasoftError
+from xga.products import Spectrum
 from xga.sources import BaseSource
 
 # Got to make sure we can access command line XSPEC.
@@ -25,16 +26,18 @@ if shutil.which("xspec") is None:
 # TODO Make xga_extract deal with no redshift better
 
 
-def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool, list, list]:
+def execute_cmd(x_script: str, out_file: str, src: str, run_type: str) \
+        -> Tuple[Union[FITS, str], str, bool, list, list]:
     """
     This function is called for the local compute option. It will run the supplied XSPEC script, then check
     parse the output for errors and check that the expected output file has been created
     :param str x_script: The path to an XSPEC script to be run.
     :param str out_file: The expected path for the output file of that XSPEC script.
     :param str src: A string representation of the source object that this fit is associated with.
+    :param str run_type: A flag that tells this function what type of run this is; e.g. fit or conv_factors.
     :return: FITS object of the results, string repr of the source associated with this fit, boolean variable
     describing if this fit can be used, list of any errors found, list of any warnings found.
-    :rtype: Tuple[FITS, str, bool, list, list]
+    :rtype: Tuple[Union[FITS, str], str, bool, list, list]
     """
     cmd = "xspec - {}".format(x_script)
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
@@ -53,7 +56,7 @@ def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool
 
     error = err_out_lines + err_err_lines
     warn = warn_out_lines + warn_err_lines
-    if os.path.exists(out_file + "_info.csv"):
+    if os.path.exists(out_file + "_info.csv") and run_type == "fit":
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
         #  a Jupyter Notebook. So now I'm going to smoosh all the csv outputs into one fits.
@@ -85,6 +88,9 @@ def execute_cmd(x_script: str, out_file: str, src: str) -> Tuple[FITS, str, bool
         tab_names = [tab.get_extname() for tab in res_tables]
         if "results" not in tab_names or "spec_info" not in tab_names:
             usable = False
+    elif os.path.exists(out_file) and run_type == "conv_factors":
+        res_tables = out_file
+        usable = True
     else:
         res_tables = None
         usable = False
@@ -114,14 +120,16 @@ def xspec_call(sas_func):
         # This is the output from whatever function this is a decorator for
         # First return is a list of paths of XSPEC scripts to execute, second is the expected output paths,
         #  and 3rd is the number of cores to use.
-        script_list, paths, cores, reg_type = sas_func(*args, **kwargs)
+        # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
+        #  countrate to luminosity conversion constants
+        script_list, paths, cores, reg_type, run_type = sas_func(*args, **kwargs)
 
         # This is what the returned information from the execute command gets stored in before being parceled out
         #  to source and spectrum objects
         results = {s: [] for s in src_lookup}
         if COMPUTE_MODE == "local" and len(script_list) > 0:
             # This mode runs the XSPEC locally in a multiprocessing pool.
-            with tqdm(total=len(script_list), desc="Running XSPEC Model Fits") as fit, Pool(cores) as pool:
+            with tqdm(total=len(script_list), desc="Running XSPEC Scripts") as fit, Pool(cores) as pool:
                 def callback(results_in):
                     """
                     Callback function for the apply_async pool method, gets called when a task finishes
@@ -140,7 +148,7 @@ def xspec_call(sas_func):
                 for s_ind, s in enumerate(script_list):
                     pth = paths[s_ind]
                     src = src_lookup[s_ind]
-                    pool.apply_async(execute_cmd, args=(s, pth, src), callback=callback)
+                    pool.apply_async(execute_cmd, args=(s, pth, src, run_type), callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
@@ -164,7 +172,7 @@ def xspec_call(sas_func):
             # Is this fit usable?
             res_set = results[entry]
 
-            if len(res_set) != 0 and res_set[1]:
+            if len(res_set) != 0 and res_set[1] and run_type == "fit":
                 global_results = res_set[0]["RESULTS"][0]
                 model = global_results["MODEL"].strip(" ")
 
@@ -199,11 +207,26 @@ def xspec_call(sas_func):
                 # Push global fit results, luminosities etc. into the corresponding source object.
                 s.add_fit_data(model, reg_type, global_results, chosen_lums)
 
+            elif len(res_set) != 0 and res_set[1] and run_type == "conv_factors":
+                res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})
+                # Gets the model name from the file name of the output results table
+                model = res_set[0].split("_")[-3]
+                # Grabs the ObsID+instrument combinations from the headers of the csv. Makes sure they are unique
+                #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
+                # First two columns are skipped because they are energy limits
+                combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
+                # Getting the spectra for each column, then assigning rates and lums
+                for comb in combos:
+                    spec: Spectrum = s.get_products("spectrum", comb[:10], comb[10:], extra_key=reg_type)[0]
+                    spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
+                                          res_table["rate_{}".format(comb)].values,
+                                          res_table["Lx_{}".format(comb)].values, model)
+
             elif len(res_set) != 0 and not res_set[1]:
                 for err in res_set[2]:
                     raise XSPECFitError(err)
 
-            if len(res_set) != 0:
+            if len(res_set) != 0 and run_type == "fit":
                 res_set[0].close()
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.

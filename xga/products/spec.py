@@ -1,9 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2020, 17:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
 
 
 import os
 import warnings
+from typing import Tuple
 
 import numpy as np
 from astropy.units import Quantity
@@ -69,6 +70,10 @@ class Spectrum(BaseProduct):
         self._plot_data = {}
         self._luminosities = {}
         self._count_rate = {}
+
+        # This is specifically for fakeit runs (for cntrate - lum conversions) on the ARF/RMF
+        #  associated with this Spectrum
+        self._conv_factors = {}
 
     def _update_spec_headers(self, which_spec: str):
         """
@@ -358,9 +363,66 @@ class Spectrum(BaseProduct):
         if model not in self._count_rate:
             raise ModelNotAssociatedError("There are no XSPEC fits associated with this Spectrum")
         else:
-            rate = Quantity(self._count_rate[model], 's^-1')
+            rate = Quantity(self._count_rate[model], 'ct/s')
 
         return rate
+
+    # TODO Should this take parameter values as arguments too? - It definitely should
+    def add_conv_factors(self, lo_ens: np.ndarray, hi_ens: np.ndarray, rates: np.ndarray,
+                         lums: np.ndarray, model: str):
+        """
+        Method used to store countrate to luminosity conversion factors derived from fakeit spectra, as well as
+        the actual countrate and luminosity measured in case the user wants to create a combined factor for multiple
+        observations
+        :param np.ndarray lo_ens: A numpy array of string representations of the lower energy bounds for the cntrate
+        and luminosity measurements.
+        :param np.ndarray hi_ens: A numpy array of string representations of the upper energy bounds for the cntrate
+        and luminosity measurements.
+        :param np.ndarray rates: A numpy array of the rates measured for this arf/rmf combination for the energy
+        ranges specified in lo_ens and hi_end.
+        :param np.ndarray lums: A numpy array of the luminosities measured for this arf/rmf combination
+        for the energy ranges specified in lo_ens and hi_end.
+        :param str model: The name of the model used to calculate this factor.
+        """
+        for row_ind, lo_en in enumerate(lo_ens):
+            # Define the key with energy information under which to store this information
+            hi_en = hi_ens[row_ind]
+            en_key = "bound_{l}-{u}".format(l=lo_en, u=hi_en)
+
+            # Split out the rate and lum for this particular set of energy limits
+            rate = Quantity(rates[row_ind], "ct/s")
+            lum = Quantity(lums[row_ind], "10^44 erg/s")
+
+            # Will be storing the individual components, but will also store the factor for this spectrum
+            factor = lum / rate
+
+            if model not in self._conv_factors:
+                self._conv_factors[model] = {}
+
+            self._conv_factors[model][en_key] = {"rate": rate, "lum": lum, "factor": factor}
+
+    def get_conv_factor(self, lo_en: Quantity, hi_en: Quantity, model: str) -> Tuple[Quantity, Quantity, Quantity]:
+        """
+        Retrieves a conversion factor between count rate and luminosity for a given energy range, if one
+        has been calculated.
+        :param Quantity lo_en: The lower energy bound for the desired conversion factor.
+        :param Quantity hi_en: The upper energy bound for the desired conversion factor.
+        :param str model: The model used to generate the desired conversion factor.
+        :return: The conversion factor, luminosity, and rate for the supplied model-energy combination.
+        :rtype: Tuple[Quantity, Quantity, Quantity]
+        """
+        en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
+        if model not in self._conv_factors:
+            mods = ", ".join(list(self._conv_factors.keys()))
+            raise ModelNotAssociatedError("{0} is not associated with this spectrum, only {1} "
+                                          "are available.".format(model, mods))
+        elif en_key not in self._conv_factors[model]:
+            raise ParameterNotAssociatedError("The conversion factor for {m} in {l}-{u}keV has not been "
+                                              "calculated".format(m=model, l=lo_en.to("keV").value,
+                                                                  u=hi_en.to("keV").value))
+
+        rel_vals = self._conv_factors[model][en_key]
+        return rel_vals["factor"], rel_vals["lum"], rel_vals["rate"]
 
     def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV")):
         """
