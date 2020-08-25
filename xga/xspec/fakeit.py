@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 12:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 13:04. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -47,7 +47,7 @@ def cluster_cr_conv(sources: Union[List[BaseSource], BaseSource], reg_type: str,
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for s_ind, source in enumerate(sources):
         # This function can take a single temperature to simulate at, or a list of them (one for each source).
-        if len(sim_temp) == 1:
+        if sim_temp.isscalar:
             the_temp = sim_temp
         else:
             the_temp = sim_temp[s_ind]
