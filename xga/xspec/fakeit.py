@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 13:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 16:37. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -8,15 +8,27 @@ import astropy.units as u
 from astropy.units import Quantity
 
 from xga import OUTPUT, NUM_CORES, COUNTRATE_CONV_SCRIPT
-from xga.exceptions import NoProductAvailableError
+from xga.exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from xga.sources import BaseSource, GalaxyCluster
 from .run import xspec_call
 
 
 @xspec_call
-def cluster_cr_conv(sources: Union[List[BaseSource], BaseSource], reg_type: str, sim_temp: Quantity,
-                    sim_met: float = 0.3, conv_en: List[Quantity] = Quantity([[0.5, 2.0]], "keV"),
+def cluster_cr_conv(sources: Union[List[GalaxyCluster], GalaxyCluster], reg_type: str, sim_temp: Quantity,
+                    sim_met: Union[float, List] = 0.3, conv_en: Quantity = Quantity([[0.5, 2.0]], "keV"),
                     abund_table: str = "angr", num_cores: int = NUM_CORES):
+    """
+    This function uses the xspec fakeit tool to calculate conversion factors between count rate and
+    luminosity for ARFs and RMFs associated with spectra in the given sources. Once complete the conversion
+    factors are stored within the relevant XGA spectrum object.
+    :param GalaxyCluster sources: The GalaxyCluster objects to calculate conversion factors for.
+    :param str reg_type: The region type of the spectra to base the conversion factors on.
+    :param Quantity sim_temp: The temperature(s) to use for the apec model.
+    :param Union[float, List] sim_met: The metallicity(s) (in solar met) to use for the apec model.
+    :param Quantity conv_en: The energy limit pairs to calculate conversion factors for.
+    :param str abund_table: The name of the XSPEC abundance table to use.
+    :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    """
     # Again these checking stages are basically copied from another function, I'm feeling lazy
     allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
     # This function supports passing both individual sources and sets of sources
@@ -37,7 +49,17 @@ def cluster_cr_conv(sources: Union[List[BaseSource], BaseSource], reg_type: str,
     elif not all([conv_en[pair_ind, 0] < conv_en[pair_ind, 1] for pair_ind in range(0, conv_en.shape[0])]):
         raise ValueError("Luminosity energy band first entries must be smaller than second entries.")
 
+    # Check that the correct number of temperatures are supplied
+    if not sim_temp.isscalar and len(sim_temp) != len(sources):
+        raise ValueError("The sim_temp variable must either be scalar or have the "
+                         "same number of entries as there are sources.")
+    elif not isinstance(sim_met, float) and len(sim_met) != len(sources):
+        raise ValueError("The sim_met variable must either be a float or have the "
+                         "same number of entries as there are sources.")
+
+    # Hard coding the model currently, tbabs*apec is a good simple descriptor of a cluster
     model = "tbabs*apec"
+    # These are the parameter names for this model
     par_names = "{nH kT Abundanc Redshift norm}"
     convert_low_lims = "{" + " ".join(conv_en[:, 0].to("keV").value.astype(str)) + "}"
     convert_upp_lims = "{" + " ".join(conv_en[:, 1].to("keV").value.astype(str)) + "}"
@@ -51,6 +73,11 @@ def cluster_cr_conv(sources: Union[List[BaseSource], BaseSource], reg_type: str,
             the_temp = sim_temp
         else:
             the_temp = sim_temp[s_ind]
+        # Equivalent of above but for metallicities
+        if isinstance(sim_met, float):
+            the_met = sim_met
+        else:
+            the_met = sim_met[s_ind]
 
         total_obs_inst = source.num_pn_obs + source.num_mos1_obs + source.num_mos2_obs
         # Find matching spectrum objects associated with the current source, and checking if they are valid
@@ -89,6 +116,7 @@ def cluster_cr_conv(sources: Union[List[BaseSource], BaseSource], reg_type: str,
         out_file = dest_dir + source.name + "_" + reg_type + "_" + model + "_conv_factors.csv"
         script_file = dest_dir + source.name + "_" + reg_type + "_" + model + "_conv_factors" + ".xcm"
 
+        # Populates the fakeit conversion factor template script
         script = script.format(ab=abund_table, H0=source.cosmo.H0.value, q0=0., lamb0=source.cosmo.Ode0,
                                rmf=rmf_paths, arf=arf_paths, obs=obs, inst=inst, m=model, pn=par_names,
                                pv=par_values, lll=convert_low_lims, lul=convert_upp_lims,
@@ -98,9 +126,18 @@ def cluster_cr_conv(sources: Union[List[BaseSource], BaseSource], reg_type: str,
         with open(script_file, 'w') as xcm:
             xcm.write(script)
 
-        script_paths.append(script_file)
-        outfile_paths.append(out_file)
+        try:
+            # Checks through the spectrum objects we retrieved earlier, and the energy limits,
+            #  to look for conversion factor results, if they exist they aren't run again, otherwise an error
+            #  is triggered and the scripts get added to the pile to run.
+            res = [s[-1].get_conv_factor(e_pair[0], e_pair[1], "tbabs*apec") for e_pair in conv_en
+                   for s in spec_objs]
+        except (ModelNotAssociatedError, ParameterNotAssociatedError):
+            script_paths.append(script_file)
+            outfile_paths.append(out_file)
 
+    # New feature of XSPEC interface, tells the xspec_call decorator what type of output from the script
+    #  to expect
     run_type = "conv_factors"
     return script_paths, outfile_paths, num_cores, reg_type, run_type
 
