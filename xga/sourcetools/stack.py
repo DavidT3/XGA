@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 17:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 17:45. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple
@@ -159,18 +159,7 @@ def radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r200", 
     combined_factors = []
     # Now to generate a combined conversion factor
     for source in sources:
-        spec = source.get_products("spectrum", extra_key=scale_radius)
-        # Setting up variables to be added into
-        av_lum = Quantity(0, "erg/s")
-        total_rate = Quantity(0, "ct/s")
-        for s in spec:
-            av_lum += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[1]
-            total_rate += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2]
-
-        # Making av_lum actually an average
-        av_lum /= len(spec)
-        # Don't want it in an astropy quantity anymore
-        combined_factors.append((av_lum/total_rate).value)
+        combined_factors.append(source.combined_conv_factor(scale_radius, lo_en, hi_en).value)
 
     combined_factors = np.array(combined_factors)
     # Multiplies each cluster profile by the matching conversion factor to go from countrate to luminosity

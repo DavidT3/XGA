@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 17:45. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -2155,6 +2155,36 @@ class GalaxyCluster(ExtendedSource):
         # Plots the plot
         plt.show()
         plt.close('all')
+
+    def combined_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
+        """
+        Combines conversion factors calculated for this source with individual instrument-observation
+        spectra, into one overall conversion factor.
+        :param str reg_type: The region type the conversion factor is associated with.
+        :param Quantity lo_en: The lower energy limit of the conversion factors.
+        :param Quantity hi_en: The upper energy limit of the conversion factors.
+        :return: A combined conversion factor that can be applied to a combined ratemap to
+        calculate luminosity.
+        :rtype: Quantity
+        """
+        # Grabbing the relevant spectra
+        spec = self.get_products("spectrum", extra_key=reg_type)
+        # Setting up variables to be added into
+        av_lum = Quantity(0, "erg/s")
+        total_rate = Quantity(0, "ct/s")
+        # Cycling through the relevant spectra
+        for s in spec:
+            # The luminosity is added to the average luminosity variable, will be divided by N
+            #  spectra at the end.
+            av_lum += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[1]
+            # The count rate is just added into a total count rate
+            total_rate += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2]
+
+        # Making av_lum actually an average
+        av_lum /= len(spec)
+
+        # Calculating and returning the combined factor.
+        return av_lum / total_rate
 
 
 class PointSource(BaseSource):

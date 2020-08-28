@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 10:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 17:45. Copyright (c) David J Turner
 
 
 from typing import Tuple, List, Union
@@ -77,9 +77,4 @@ def data_limits(im_prod: Union[Image, RateMap, np.ndarray]) -> Tuple[List[int], 
 
     # Returns the boundary coordinates in pairs of min, max.
     return [x_min, x_max], [y_min, y_max]
-
-
-
-
-
 
