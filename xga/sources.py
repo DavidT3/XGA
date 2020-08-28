@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 10:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 17:45. Copyright (c) David J Turner
 import os
 import warnings
 from itertools import product
@@ -25,7 +25,7 @@ from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObser
 from xga.imagetools import radial_brightness, pizza_brightness
 from xga.products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, \
     ExpMap, RateMap, PSFGrid
-from xga.sourcetools import simple_xmm_match, nhlookup, rad_to_ang, ang_to_rad
+from xga.sourcetools import simple_xmm_match, nh_lookup, rad_to_ang, ang_to_rad
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -57,7 +57,7 @@ class BaseSource:
             on_axis_match = np.array([])
         self._onaxis = np.isin(self._obs, on_axis_match)
         # nhlookup returns average and weighted average values, so just take the first
-        self._nH = nhlookup(ra, dec)[0]
+        self._nH = nh_lookup(ra, dec)[0]
         self._redshift = redshift
         self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
 
@@ -1311,6 +1311,33 @@ class BaseSource:
         else:
             return self._luminosities[reg_type][model][en_key]
 
+    @property
+    def num_pn_obs(self) -> int:
+        """
+        Getter method that gives the number of PN observations.
+        :return: Integer number of PN observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'pn' in self._products[o]])
+
+    @property
+    def num_mos1_obs(self) -> int:
+        """
+        Getter method that gives the number of MOS1 observations.
+        :return: Integer number of MOS1 observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'mos1' in self._products[o]])
+
+    @property
+    def num_mos2_obs(self) -> int:
+        """
+        Getter method that gives the number of MOS2 observations.
+        :return: Integer number of MOS2 observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
+
     def info(self):
         """
         Very simple function that just prints a summary of important information related to the source object..
@@ -1324,9 +1351,9 @@ class BaseSource:
         if self._redshift is not None:
             print("Redshift - {}".format(round(self._redshift, 3)))
         print("XMM ObsIDs - {}".format(self.__len__()))
-        print("PN Observations - {}".format(len([o for o in self.obs_ids if 'pn' in self._products[o]])))
-        print("MOS1 Observations - {}".format(len([o for o in self.obs_ids if 'mos1' in self._products[o]])))
-        print("MOS2 Observations - {}".format(len([o for o in self.obs_ids if 'mos2' in self._products[o]])))
+        print("PN Observations - {}".format(self.num_pn_obs))
+        print("MOS1 Observations - {}".format(self.num_mos1_obs))
+        print("MOS2 Observations - {}".format(self.num_mos2_obs))
         print("On-Axis - {}".format(self._onaxis.sum()))
         print("With regions - {}".format(len(self._initial_regions)))
         print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
@@ -2128,6 +2155,36 @@ class GalaxyCluster(ExtendedSource):
         # Plots the plot
         plt.show()
         plt.close('all')
+
+    def combined_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
+        """
+        Combines conversion factors calculated for this source with individual instrument-observation
+        spectra, into one overall conversion factor.
+        :param str reg_type: The region type the conversion factor is associated with.
+        :param Quantity lo_en: The lower energy limit of the conversion factors.
+        :param Quantity hi_en: The upper energy limit of the conversion factors.
+        :return: A combined conversion factor that can be applied to a combined ratemap to
+        calculate luminosity.
+        :rtype: Quantity
+        """
+        # Grabbing the relevant spectra
+        spec = self.get_products("spectrum", extra_key=reg_type)
+        # Setting up variables to be added into
+        av_lum = Quantity(0, "erg/s")
+        total_rate = Quantity(0, "ct/s")
+        # Cycling through the relevant spectra
+        for s in spec:
+            # The luminosity is added to the average luminosity variable, will be divided by N
+            #  spectra at the end.
+            av_lum += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[1]
+            # The count rate is just added into a total count rate
+            total_rate += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2]
+
+        # Making av_lum actually an average
+        av_lum /= len(spec)
+
+        # Calculating and returning the combined factor.
+        return av_lum / total_rate
 
 
 class PointSource(BaseSource):

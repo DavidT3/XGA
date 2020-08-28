@@ -25,9 +25,6 @@ cosmo {H0} {q0} {lamb0}
 setplot energy
 
 # Set up a list of paths to the spectra we want to fit, done like this to make it more dynamic
-# Double curly brackets because Python format will replace the inner ones, then the outer ones will create a
-#  TCL list of paths.
-
 set spec_paths {sp}
 
 # Now put the number of spectra in a variable
@@ -50,7 +47,6 @@ ignore bad
 # Now we must define the model, but without setting any parameters (thats what /* does)
 model {m}
 /*
-
 
 # Get the number of parameters in a variable, for iterating through later
 set num_pars [tcloutr modpar]

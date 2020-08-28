@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/07/2020, 00:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/08/2020, 11:36. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -15,7 +15,7 @@ from tqdm import tqdm
 from xga.products import PSFGrid, Image
 from xga.sas import evselect_image, psfgen, emosaic
 from xga.sources import BaseSource
-from xga.utils import NUM_CORES, OUTPUT
+from xga.utils import NUM_CORES, OUTPUT, COMPUTE_MODE
 
 
 def rl_psf(sources: List[BaseSource], iterations: int = 15, psf_model: str = "ELLBETA",
@@ -99,6 +99,11 @@ def rl_psf(sources: List[BaseSource], iterations: int = 15, psf_model: str = "EL
     # Making sure that the necessary images and PSFs are generated
     evselect_image(sources, lo_en, hi_en, num_cores=num_cores)
     psfgen(sources, bins, psf_model, num_cores=num_cores)
+
+    # This function isn't split out to be submitted to HPC jobs, unlike SAS tasks, so I make sure the num
+    #  of cores is set to 1 to minimise resource usage.
+    if COMPUTE_MODE != "local":
+        num_cores = 1
 
     # If just one source is passed in, make it a list of one, makes behaviour more consistent
     #  throughout this function.
