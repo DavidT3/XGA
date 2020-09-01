@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 16:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 22:36. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -47,13 +47,28 @@ class BaseSource:
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
-        self._obs = simple_xmm_match(ra, dec)["ObsID"].values
+        matches = simple_xmm_match(ra, dec)
+        obs = matches["ObsID"].values
+        instruments = {o: [] for o in obs}
+        for o in obs:
+            if matches[matches["ObsID"] == o]["USE_PN"].values[0]:
+                instruments[o].append("pn")
+            if matches[matches["ObsID"] == o]["USE_MOS1"].values[0]:
+                instruments[o].append("mos1")
+            if matches[matches["ObsID"] == o]["USE_MOS2"].values[0]:
+                instruments[o].append("mos2")
+
+        # This checks that the observations have at least one usable instrument
+        self._obs = [o for o in obs if len(instruments[o]) > 0]
+        self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
             on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))["ObsID"].values
         except NoMatchFoundError:
             on_axis_match = np.array([])
         self._onaxis = np.isin(self._obs, on_axis_match)
+
         # nhlookup returns average and weighted average values, so just take the first
         self._nH = nh_lookup(ra, dec)[0]
         self._redshift = redshift
@@ -137,7 +152,6 @@ class BaseSource:
         dictionary containing paths to region files, and another dictionary containing paths to attitude files.
         :rtype: Tuple[dict, dict, dict]
         """
-
         def read_default_products(en_lims: tuple) -> Tuple[str, dict]:
             """
             This nested function takes pairs of energy limits defined in the config file and runs
@@ -188,7 +202,6 @@ class BaseSource:
         att_dict = {}
         # ODF paths also also get their own dict, they will just be used to point cifbuild to the right place
         odf_dict = {}
-
         # Use itertools to create iterable and avoid messy nested for loop
         # product makes iterable of tuples, with all combinations of the events files and ObsIDs
         for oi in product(obs_dict, XMM_INST):
@@ -198,6 +211,8 @@ class BaseSource:
             # This is purely to make the code easier to read
             obs_id = oi[0]
             inst = oi[1]
+            if inst not in self._instruments[obs_id]:
+                continue
             evt_key = "clean_{}_evts".format(inst)
             evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=obs_id)
             reg_file = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
