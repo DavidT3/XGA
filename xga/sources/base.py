@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:24. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -964,6 +964,9 @@ class BaseSource:
             chosen_back = self._back_masks[obs_id][inst]
         elif reg_type == "region" and obs_id is not None and inst is None:
             raise ValueError("Inst cannot be None when getting region file regions.")
+        elif reg_type in ["r2500", "r500", "r200"] and (obs_id is not None or inst is not None):
+            raise TypeError("XGA does not currently generate overdensity masks for individual "
+                            "images, only combined.")
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._reg_masks:
             raise TypeError("There are no over-density radii masks associated with this source")
         elif reg_type != "region" and reg_type in self._reg_masks:
