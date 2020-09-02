@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:16. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -70,7 +70,7 @@ class BaseSource:
         self._onaxis = list(np.array(self._obs)[np.isin(self._obs, on_axis_match)])
 
         # nhlookup returns average and weighted average values, so just take the first
-        self._nH = nh_lookup(ra, dec)[0]
+        self._nH = nh_lookup(self.ra_dec)[0]
         self._redshift = redshift
         self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
 

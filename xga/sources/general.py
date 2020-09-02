@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:16. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Dict
@@ -15,7 +15,7 @@ from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
 
 from xga.exceptions import NotAssociatedError, PeakConvergenceFailedError, NoRegionsError, NoMatchFoundError
 from xga.products import Image, RateMap
-from xga.sourcetools import rad_to_ang, ang_to_rad
+from xga.sourcetools import rad_to_ang, ang_to_rad, nh_lookup
 from .base import BaseSource
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -309,6 +309,8 @@ class ExtendedSource(BaseSource):
 
         if self._use_peak:
             coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(comb_rt)
+            # Updating nH for new coord, probably won't make a difference most of the time
+            self._nH = nh_lookup(coord)[0]
         else:
             # If we don't care about peak finding then this is the boi to go for
             coord = self.ra_dec
