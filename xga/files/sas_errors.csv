@@ -862,3 +862,4 @@ ZeroExposure,rgsspectrum
 zeroNormConvolver,asmooth
 zerosInConvolver,colsmooth
 InvalidSummaryFile,cifbuild
+UnexpectedEOF,cifbuild
