@@ -1,5 +1,6 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 17:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:37. Copyright (c) David J Turner
+
 import os
 import warnings
 from itertools import product
@@ -10,22 +11,19 @@ from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
-from astropy.units import Quantity, UnitBase, deg, UnitConversionError, pix, kpc
+from astropy.units import Quantity, UnitBase
 from fitsio import FITS
-from matplotlib import pyplot as plt
-from matplotlib.ticker import ScalarFormatter
 from numpy import ndarray
 from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
-    EllipsePixelRegion, CirclePixelRegion, CompoundSkyRegion
+    CompoundSkyRegion
 
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
     MultipleMatchError, NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, \
-    ParameterNotAssociatedError, PeakConvergenceFailedError, NoRegionsError
-from xga.imagetools import radial_brightness, pizza_brightness
+    ParameterNotAssociatedError
 from xga.products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, \
     ExpMap, RateMap, PSFGrid
-from xga.sourcetools import simple_xmm_match, nh_lookup, rad_to_ang, ang_to_rad
+from xga.sourcetools import simple_xmm_match, nh_lookup, ang_to_rad
 from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -45,19 +43,34 @@ class BaseSource:
             ra_str, dec_str = crd_str.split(" ")
             # Use the standard naming convention if one wasn't passed on initialisation of the source
             # Need it because its used for naming files later on.
-            self._name = "J" + ra_str[:ra_str.index(".")+2] + dec_str[:dec_str.index(".")+2]
+            self._name = "J" + ra_str[:ra_str.index(".") + 2] + dec_str[:dec_str.index(".") + 2]
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
-        self._obs = simple_xmm_match(ra, dec)["ObsID"].values
+        matches = simple_xmm_match(ra, dec)
+        obs = matches["ObsID"].values
+        instruments = {o: [] for o in obs}
+        for o in obs:
+            if matches[matches["ObsID"] == o]["USE_PN"].values[0]:
+                instruments[o].append("pn")
+            if matches[matches["ObsID"] == o]["USE_MOS1"].values[0]:
+                instruments[o].append("mos1")
+            if matches[matches["ObsID"] == o]["USE_MOS2"].values[0]:
+                instruments[o].append("mos2")
+
+        # This checks that the observations have at least one usable instrument
+        self._obs = [o for o in obs if len(instruments[o]) > 0]
+        self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
             on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))["ObsID"].values
         except NoMatchFoundError:
             on_axis_match = np.array([])
-        self._onaxis = np.isin(self._obs, on_axis_match)
+        self._onaxis = list(np.array(self._obs)[np.isin(self._obs, on_axis_match)])
+
         # nhlookup returns average and weighted average values, so just take the first
-        self._nH = nh_lookup(ra, dec)[0]
+        self._nH = nh_lookup(self.ra_dec)[0]
         self._redshift = redshift
         self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
 
@@ -139,7 +152,6 @@ class BaseSource:
         dictionary containing paths to region files, and another dictionary containing paths to attitude files.
         :rtype: Tuple[dict, dict, dict]
         """
-
         def read_default_products(en_lims: tuple) -> Tuple[str, dict]:
             """
             This nested function takes pairs of energy limits defined in the config file and runs
@@ -190,7 +202,6 @@ class BaseSource:
         att_dict = {}
         # ODF paths also also get their own dict, they will just be used to point cifbuild to the right place
         odf_dict = {}
-
         # Use itertools to create iterable and avoid messy nested for loop
         # product makes iterable of tuples, with all combinations of the events files and ObsIDs
         for oi in product(obs_dict, XMM_INST):
@@ -200,6 +211,8 @@ class BaseSource:
             # This is purely to make the code easier to read
             obs_id = oi[0]
             inst = oi[1]
+            if inst not in self._instruments[obs_id]:
+                continue
             evt_key = "clean_{}_evts".format(inst)
             evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=obs_id)
             reg_file = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
@@ -255,7 +268,7 @@ class BaseSource:
             extra_key = prod_obj.model + "_" + str(prod_obj.num_bins)
         else:
             extra_key = None
-        
+
         # Secondary checking step now I've added PSF correction
         if type(prod_obj) == Image and prod_obj.psf_corrected:
             extra_key += "_" + prod_obj.psf_model + "_" + str(prod_obj.psf_bins) + "_" + \
@@ -351,6 +364,7 @@ class BaseSource:
         structure is updated. The method also finds previous fit results and loads them in.
         :param bool read_fits: Boolean flag that controls whether past fits are read back in or not.
         """
+
         def parse_image_like(file_path: str, exact_type: str, merged: bool = False) -> BaseProduct:
             """
             Very simple little function that takes the path to an XGA generated image-like product (so either an
@@ -606,10 +620,10 @@ class BaseSource:
             # Only appends if this particular match is for the obs_id and instrument passed to this method
             # Though all matches will be returned if no obs_id/inst is passed
             if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                    and (extra_key == out[2] or extra_key is None) and not just_obj:
+                    and (extra_key in out or extra_key is None) and not just_obj:
                 matches.append(out)
             elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                    and (extra_key == out[2] or extra_key is None) and just_obj:
+                    and (extra_key in out or extra_key is None) and just_obj:
                 matches.append(out[-1])
         return matches
 
@@ -620,6 +634,7 @@ class BaseSource:
         to be related to the source.
         :return: Tuple[dict, dict]
         """
+
         def dist_from_source(reg):
             """
             Calculates the euclidean distance between the centre of a supplied region, and the
@@ -889,8 +904,8 @@ class BaseSource:
         elif reg_type == "region" and obs_id is not None:
             chosen = self._regions[obs_id]
             chosen_back = self._back_regions[obs_id]
-        elif reg_type in ["r2500", "r500", "r200"] and not type(self) == GalaxyCluster:
-            raise TypeError("Only GalaxyCluster source objects support over-density radii.")
+        elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._regions:
+            raise TypeError("There are no over-density radii associated with this source")
         elif reg_type != "region" and reg_type in self._regions:
             chosen = self._regions[reg_type]
             chosen_back = self._back_regions[reg_type]
@@ -948,8 +963,11 @@ class BaseSource:
             chosen_back = self._back_masks[obs_id][inst]
         elif reg_type == "region" and obs_id is not None and inst is None:
             raise ValueError("Inst cannot be None when getting region file regions.")
-        elif reg_type in ["r2500", "r500", "r200"] and not type(self) == GalaxyCluster:
-            raise TypeError("Only GalaxyCluster source objects support over-density radii.")
+        elif reg_type in ["r2500", "r500", "r200"] and (obs_id is not None or inst is not None):
+            raise TypeError("XGA does not currently generate overdensity masks for individual "
+                            "images, only combined.")
+        elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._reg_masks:
+            raise TypeError("There are no over-density radii masks associated with this source")
         elif reg_type != "region" and reg_type in self._reg_masks:
             chosen = self._reg_masks[reg_type]
             chosen_back = self._back_masks[reg_type]
@@ -975,6 +993,7 @@ class BaseSource:
         another SAS region which will include background emission and exclude nuisance sources.
         :rtype: Tuple[str, str]
         """
+
         def sas_shape(reg: SkyRegion, im: Image) -> str:
             """
             This will convert the input SkyRegion into an appropriate SAS compatible region string, for use
@@ -991,10 +1010,10 @@ class BaseSource:
                 cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
                 conv_cen = im.coord_conv(cen, output_unit)
                 # Have to divide the width by two, I need to know the half-width for SAS regions
-                w = Quantity([reg.center.ra.value + (reg.width.value/2), reg.center.dec.value], 'deg')
+                w = Quantity([reg.center.ra.value + (reg.width.value / 2), reg.center.dec.value], 'deg')
                 conv_w = abs((im.coord_conv(w, output_unit) - conv_cen)[0])
                 # Have to divide the height by two, I need to know the half-height for SAS regions
-                h = Quantity([reg.center.ra.value, reg.center.dec.value + (reg.height.value/2)], 'deg')
+                h = Quantity([reg.center.ra.value, reg.center.dec.value + (reg.height.value / 2)], 'deg')
                 conv_h = abs((im.coord_conv(h, output_unit) - conv_cen)[1])
                 shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
                                                                                  cy=conv_cen[1].value,
@@ -1047,6 +1066,7 @@ class BaseSource:
                                 "I don't even know how you got here".format(type(reg)))
 
             return shape_str
+
         allowed_rtype = ["r2500", "r500", "r200", "region", "custom"]
 
         if output_unit == xmm_det:
@@ -1069,8 +1089,8 @@ class BaseSource:
             source_interlopers = self._within_source_regions[obs_id]
             back = self._back_regions[obs_id]
             background_interlopers = self._within_back_regions[obs_id]
-        elif reg_type in ["r2500", "r500", "r200"] and not type(self) == GalaxyCluster:
-            raise TypeError("Only GalaxyCluster source objects support over-density radii.")
+        elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._regions:
+            raise TypeError("There are no over-density radii associated with this source")
         elif reg_type != "region" and reg_type in self._regions:
             source = self._regions[reg_type]
             source_interlopers = self._within_source_regions[reg_type]
@@ -1299,7 +1319,7 @@ class BaseSource:
             raise ModelNotAssociatedError("{0} has not been fitted to {1} spectra of this source; "
                                           "available models are {2}".format(model, reg_type, av_mods))
         elif en_key is not None and en_key not in self._luminosities[reg_type][model]:
-            av_bands = ", ".join([en.split("_")[-1]+"keV" for en in self._luminosities[reg_type][model].keys()])
+            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[reg_type][model].keys()])
             raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
                                               "energy bands are {b}".format(l=lo_en.to("keV").value,
                                                                             u=hi_en.to("keV").value,
@@ -1338,6 +1358,59 @@ class BaseSource:
         """
         return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
 
+    # As this is an intrinsic property of which matched observations are valid, there will be no setter
+    @property
+    def instruments(self) -> Dict:
+        """
+        A property of a source that details which instruments have valid data for which observations.
+        :return: A dictionary of ObsIDs and their associated valid instruments.
+        :rtype: Dict
+        """
+        return self._instruments
+
+    def disassociate_obs(self, to_remove):
+        """
+
+        :param dict to_remove: A dictionary of observations to remove, in the style of the source.instruments
+        dictionary, with the top level keys being ObsIDs, and the lower levels being instrument names.
+        """
+        # If we're un-associating certain observations, odds on the combined products are no longer valid
+        if "combined" in self._products:
+            del self._products["combined"]
+            self._fit_results = {}
+            self._test_stat = {}
+            self._dof = {}
+            self._total_count_rate = {}
+            self._total_exp = {}
+            self._luminosities = {}
+            for reg in [k for k in self._regions.keys() if k not in self._obs]:
+                del self._reg_masks[reg]
+                del self._back_masks[reg]
+
+        for o in to_remove:
+            for i in to_remove[o]:
+                del self._products[o][i]
+                del self._reg_masks[o][i]
+                del self._back_masks[o][i]
+                del self._instruments[o][self._instruments[o].index(i)]
+
+            if len(self._instruments[o]) == 0:
+                del self._detected[o]
+                del self._initial_regions[o]
+                del self._initial_region_matches[o]
+                del self._regions[o]
+                del self._back_regions[o]
+                del self._other_regions[o]
+                del self._alt_match_regions[o]
+                del self._within_source_regions[o]
+                del self._within_back_regions[o]
+                del self._peaks[o]
+
+                del self._obs[self._obs.index(o)]
+                if o in self._onaxis:
+                    del self._onaxis[self._onaxis.index(o)]
+                del self._instruments[o]
+
     def info(self):
         """
         Very simple function that just prints a summary of important information related to the source object..
@@ -1354,7 +1427,7 @@ class BaseSource:
         print("PN Observations - {}".format(self.num_pn_obs))
         print("MOS1 Observations - {}".format(self.num_mos1_obs))
         print("MOS2 Observations - {}".format(self.num_mos2_obs))
-        print("On-Axis - {}".format(self._onaxis.sum()))
+        print("On-Axis - {}".format(len(self._onaxis)))
         print("With regions - {}".format(len(self._initial_regions)))
         print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
         print("Obs with one match - {}".format(sum([1 for o in self._initial_region_matches if
@@ -1419,780 +1492,6 @@ class BaseSource:
         """
         return len(self.obs_ids)
 
-
-class ExtendedSource(BaseSource):
-    # TODO Make a view method for this class that plots the measured peaks on the combined ratemap.
-    def __init__(self, ra, dec, redshift=None, name=None, custom_region_radius=None, use_peak=True,
-                 peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
-                 back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
-                 load_products=True, load_fits=False):
-        # Calling the BaseSource init method
-        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
-        # Setting up a bunch of attributes
-        self._custom_region_radius = custom_region_radius
-        self._use_peak = use_peak
-        self._back_inn_factor = back_inn_rad_factor
-        self._back_out_factor = back_out_rad_factor
-        # Make sure the peak energy boundaries are in keV
-        self._peak_lo_en = peak_lo_en.to('keV')
-        self._peak_hi_en = peak_hi_en.to('keV')
-        self._peaks = {o: {} for o in self.obs_ids}
-        self._peaks.update({"combined": None})
-        self._peaks_near_edge = {o: {} for o in self.obs_ids}
-        self._peaks_near_edge.update({"combined": None})
-        self._chosen_peak_cluster = None
-        self._other_peak_clusters = None
-        self._snr = {}
-
-        # This uses the added context of the type of source to find (or not find) matches in region files
-        self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("ext")
-
-        # Run through any alternative matches and raise warnings if there are alternative matches
-        for o in self._alt_match_regions:
-            if len(self._alt_match_regions[o]) > 0:
-                warnings.warn("There are {0} alternative matches for observation "
-                              "{1}".format(len(self._alt_match_regions[o]), o))
-
-        # Here we figure out what other sources are within the chosen extended source region
-        self._within_source_regions = {}
-        self._back_regions = {}
-        self._within_back_regions = {}
-        self._reg_masks = {obs: {inst: {} for inst in self._products[obs]} for obs in self.obs_ids}
-        self._back_masks = {obs: {inst: {} for inst in self._products[obs]} for obs in self.obs_ids}
-        # Iterating through obs_ids rather than _region keys because the _region dictionary will contain
-        #  a combined region that cannot be used yet - the user cannot have generated any merged images yet.
-        for obs_id in self.obs_ids:
-            match_reg = self._regions[obs_id]
-            # If the entry here is None, it means the source wasn't detected in the region files
-            if match_reg is not None:
-                other_regs = self._other_regions[obs_id]
-                im = list(self.get_products("image", obs_id, just_obj=True))[0]
-
-                m = match_reg.to_pixel(im.radec_wcs)
-                crossover = np.array([match_reg.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
-                                      for r in other_regs])
-                self._within_source_regions[obs_id] = np.array(other_regs)[crossover]
-
-                # Here is where we initialise the background regions, first in pixel coords, then converting
-                #  to ra-dec and adding to a dictionary of regions.
-                if isinstance(match_reg, EllipseSkyRegion):
-                    # Here we multiply the inner width/height by 1.05 (to just slightly clear the source region),
-                    #  and the outer width/height by 1.5 (standard for XCS) - default values
-                    # Ideally this would be an annulus region, but they are bugged in regions v0.4, so we must bodge
-                    in_reg = EllipsePixelRegion(m.center, m.width*self._back_inn_factor,
-                                                m.height*self._back_inn_factor, m.angle)
-                    b_reg = EllipsePixelRegion(m.center, m.width*self._back_out_factor,
-                                               m.height*self._back_out_factor,
-                                               m.angle).symmetric_difference(in_reg)
-                elif isinstance(match_reg, CircleSkyRegion):
-                    in_reg = CirclePixelRegion(m.center, m.radius * self._back_inn_factor)
-                    b_reg = CirclePixelRegion(m.center, m.radius *
-                                              self._back_out_factor).symmetric_difference(in_reg)
-
-                self._back_regions[obs_id] = b_reg.to_sky(im.radec_wcs)
-                # This part is dealing with the region in sky coordinates,
-                b_reg = self._back_regions[obs_id]
-                crossover = np.array([b_reg.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
-                                      for r in other_regs])
-                self._within_back_regions[obs_id] = np.array(other_regs)[crossover]
-                # Ensures we only do regions for instruments that do have at least an events list.
-                for inst in self._products[obs_id]:
-                    cur_im = self.get_products("image", obs_id, inst)[0]
-                    src_reg, bck_reg = self.get_source_region("region", obs_id)
-                    self._reg_masks[obs_id][inst], self._back_masks[obs_id][inst] \
-                        = self._generate_mask(cur_im, src_reg, bck_reg)
-
-            else:
-                # Fill out all the various region dictionaries with Nones for when a source isn't detected
-                self._within_source_regions[obs_id] = np.array([])
-                self._back_regions[obs_id] = None
-                self._within_back_regions[obs_id] = np.array([])
-                for inst in self._products[obs_id]:
-                    self._reg_masks[obs_id][inst] = None
-                    self._back_masks[obs_id][inst] = None
-
-        # Constructs the detected dictionary, detailing whether the source has been detected IN REGION FILES
-        #  in each observation.
-        self._detected = {o: self._regions[o] is not None for o in self._regions}
-
-        # If in some of the observations the source has not been detected, a warning will be raised
-        if True in self._detected.values() and False in self._detected.values():
-            warnings.warn("{n} has not been detected in all region files, so generating and fitting products"
-                          " with the 'region' reg_type will not use all available data".format(n=self.name))
-        # If the source wasn't detected in ALL of the observations, then we have to rely on a custom region,
-        #  and if no custom region options are passed by the user then an error is raised.
-        elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is not None:
-            warnings.warn("{n} has not been detected in ANY region files, so generating and fitting products"
-                          " with the 'region' reg_type will not work".format(n=self.name))
-        elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is None:
-            raise NoRegionsError("{n} has not been detected in ANY region files, and no custom region radius"
-                                 "has been passed. No analysis is possible.".format(n=self.name))
-
-        # Call to a method that goes through all the observations and finds the X-ray centroid. Also at the same
-        #  time finds the X-ray centroid of the combined ratemap (an essential piece of information).
-        self._all_peaks()
-        
-        # Constructs the custom region and adds to existing storage structure, if the user wants a custom region
-        if self._custom_region_radius is not None:
-            self._setup_new_region(self._custom_region_radius, "custom")
-            # Doesn't really matter where this conversion happens, because setup_new_region checks the unit
-            #  and converts anyway, but I want the internal unit of the custom radii to be degrees.
-            # Originally was meant to be kpc, but then I realised that ExtendedSources are allowed to not have
-            #  redshift information
-            if self._custom_region_radius.unit.is_equivalent("kpc"):
-                rad = rad_to_ang(self._custom_region_radius, self._redshift, self._cosmo).to("deg")
-                self._custom_region_radius = rad
-            else:
-                self._custom_region_radius = self._custom_region_radius.to("deg")
-
-    def _generate_mask(self, mask_image: Image, source_region: SkyRegion, back_reg: SkyRegion = None,
-                       reg_type: str = None) -> Tuple[ndarray, ndarray]:
-        """
-        This uses available region files to generate a mask for the source region in the form of a
-        numpy array. It takes into account any sources that were detected within the target source,
-        by drilling them out.
-        :param Image mask_image: An XGA image object that donates its WCS to convert SkyRegions to pixels.
-        :param SkyRegion source_region: The SkyRegion containing the source to generate a mask for.
-        :param SkyRegion back_reg: The SkyRegion containing the background emission to
-        generate a mask for.
-        :param bool reg_type: By default this is None, but if supplied by the user then this method
-        will look for interloper regions under reg_type key rather than the ObsID key.
-        :return: A boolean numpy array that can be used to mask images loaded in as numpy arrays.
-        :rtype: Tuple[np.ndarray, np.ndarray]
-        """
-        obs_id = mask_image.obs_id
-        mask = source_region.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-
-        if reg_type is None:
-            # Now need to drill out any interloping sources, make a mask for that
-            interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                               for reg in self._within_source_regions[obs_id]])
-        else:
-            interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                               for reg in self._within_source_regions[reg_type]])
-
-        # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
-        # interloper source there - circular sentences ftw
-        mask[interlopers != 0] = 0
-
-        if back_reg is not None:
-            back_mask = back_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-            if reg_type is None:
-                # Now need to drill out any interloping sources, make a mask for that
-                interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                                   for reg in self._within_back_regions[obs_id]])
-            else:
-                interlopers = sum([reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                                   for reg in self._within_back_regions[reg_type]])
-
-            # Wherever the interloper src_mask is not 0, the global src_mask must become 0 because there is an
-            # interloper source there - circular sentences ftw
-            back_mask[interlopers != 0] = 0
-
-            return mask, back_mask
-        return mask
-
-    def find_peak(self, rt: RateMap, method: str = "hierarchical", num_iter: int = 20, peak_unit: UnitBase = deg) \
-            -> Tuple[Quantity, bool, bool, ndarray, List]:
-        """
-        A method that will find the X-ray centroid for the RateMap that has been passed in. It takes
-        the user supplied coordinates from source initialisation as a starting point, finds the peak within a 500kpc
-        radius, re-centres the region, and iterates until the centroid converges to within 15kpc, or until 20
-        20 iterations has been reached.
-        :param RateMap rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
-        :param str method: Which peak finding method to use. Currently either hierarchical or simple can be chosen.
-        :param int num_iter: How many iterations should be allowed before the peak is declared as not converged.
-        :param UnitBase peak_unit: The unit the peak coordinate is returned in.
-        :return: The peak coordinate, a boolean flag as to whether the returned coordinates are near
-         a chip gap/edge, and a boolean flag as to whether the peak converged. It also returns the coordinates
-         of the points within the chosen point cluster, and a list of all point clusters that were not chosen.
-        :rtype: Tuple[Quantity, bool, bool, ndarray, List]
-        """
-        all_meth = ["hierarchical", "simple"]
-        if method not in all_meth:
-            raise ValueError("{0} is not a recognised, use one of the following methods: "
-                             "{1}".format(method, ", ".join(all_meth)))
-        central_coords = SkyCoord(*self.ra_dec.to("deg"))
-
-        # 500kpc in degrees, for the current redshift and cosmology
-        #  Or 5 arcminutes if no redshift information is present (that is allowed for the ExtendedSource class)
-        if self._redshift is not None:
-            search_aperture = rad_to_ang(Quantity(500, "kpc"), self._redshift, cosmo=self._cosmo)
-        else:
-            search_aperture = Quantity(5, 'arcmin').to('deg')
-
-        # Iteration counter just to kill it if it doesn't converge
-        count = 0
-        # Allow 20 iterations by default before we kill this - alternatively loop will exit when centre converges
-        #  to within 15kpc (or 0.15arcmin).
-        while count < num_iter:
-            # Define a 500kpc radius region centered on the current central_coords
-            cust_reg = CircleSkyRegion(central_coords, search_aperture)
-            pix_cust_reg = cust_reg.to_pixel(rt.radec_wcs)
-
-            # Setting up useful lists for adding regions to
-            reg_crossover = []
-            # I check through all available region lists to find regions that are within the custom region
-            for obs_id in self._other_regions:
-                other_regs = self._other_regions[obs_id]
-
-                cross = np.array([cust_reg.intersection(r).to_pixel(rt.radec_wcs).to_mask().data.sum()
-                                  != 0 and r.height == r.width for r in other_regs])
-
-                if len(cross) != 0:
-                    reg_crossover += list(np.array(other_regs)[cross])
-
-            reg_crossover = np.array(reg_crossover)
-            self._within_source_regions["search_aperture"] = reg_crossover
-            # Generate the source mask for the peak finding method
-            aperture_mask = self._generate_mask(rt, cust_reg, reg_type="search_aperture")
-
-            # Find the peak using the experimental clustering_peak method
-            if method == "hierarchical":
-                peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, peak_unit)
-            elif method == "simple":
-                peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
-                chosen_coords = []
-                other_coords = []
-
-            peak_deg = rt.coord_conv(peak, deg)
-            # Calculate the distance between new peak and old central coordinates
-            separation = Quantity(np.sqrt(abs(peak_deg[0].value - central_coords.ra.value) ** 2 +
-                                          abs(peak_deg[1].value - central_coords.dec.value) ** 2), deg)
-
-            central_coords = SkyCoord(*peak_deg.copy())
-            if self._redshift is not None:
-                separation = ang_to_rad(separation, self._redshift, self._cosmo)
-
-            if count != 0 and self._redshift is not None and separation <= Quantity(15, "kpc"):
-                break
-            elif count != 0 and self._redshift is None and separation <= Quantity(0.15, 'arcmin'):
-                break
-
-            count += 1
-
-        if count == num_iter:
-            converged = False
-            # To do the least amount of damage, if the peak doesn't converge then we just return the
-            #  user supplied coordinates
-            peak = self.ra_dec
-            near_edge = rt.near_edge(peak)
-        else:
-            converged = True
-
-        del self._within_source_regions["search_aperture"]
-        return peak, near_edge, converged, chosen_coords, other_coords
-
-    def _all_peaks(self):
-        """
-        An internal method that finds the X-ray peaks for all of the available observations and instruments,
-        as well as the combined ratemap. Peak positions for individual ratemap products are allowed to not
-        converge, and will just write None to the peak dictionary, but if the peak of the combined ratemap fails
-        to converge an error will be thrown. The combined ratemap peak will also be stored by itself in an
-        attribute, to allow a property getter easy access.
-        """
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt]
-
-        if len(comb_rt) != 0:
-            comb_rt = comb_rt[0]
-        else:
-            # I didn't want to import this here, but otherwise circular imports become a problem
-            from xga.sas import emosaic
-            emosaic(self, "image", self._peak_lo_en, self._peak_hi_en)
-            emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en)
-            comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
-
-        if self._use_peak:
-            coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(comb_rt)
-        else:
-            # If we don't care about peak finding then this is the boi to go for
-            coord = self.ra_dec
-            near_edge = comb_rt.near_edge(coord)
-            converged = True
-            cluster_coords = np.ndarray([])
-            other_coords = []
-
-        # Unfortunately if the peak convergence fails for the combined ratemap I have to raise an error
-        if converged:
-            self._peaks["combined"] = coord
-            self._peaks_near_edge["combined"] = near_edge
-            # I'm only going to save the point cluster positions for the combined ratemap
-            self._chosen_peak_cluster = cluster_coords
-            self._other_peak_clusters = other_coords
-        else:
-            raise PeakConvergenceFailedError("Peak finding on the combined ratemap failed to converge within "
-                                             "15kpc for {n} in the {l}-{u} energy "
-                                             "band.".format(n=self.name, l=self._peak_lo_en, u=self._peak_hi_en))
-
-        # TODO Decide what to do with this - see issue #85 for a description of why I'm not currently measuring
-        #  the individual peaks.
-        # for obs in self.obs_ids:
-        #     for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
-        #         if self._use_peak:
-        #             coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(rt)
-        #             if converged:
-        #                 self._peaks[obs][rt.instrument] = coord
-        #                 self._peaks_near_edge[obs][rt.instrument] = near_edge
-        #             else:
-        #                 self._peaks[obs][rt.instrument] = None
-        #                 self._peaks_near_edge[obs][rt.instrument] = None
-        #         else:
-        #             self._peaks[obs][rt.instrument] = self.ra_dec
-        #             self._peaks_near_edge[obs][rt.instrument] = rt.near_edge(self.ra_dec)
-
-    def _setup_new_region(self, radius: Quantity, reg_type: str):
-        """
-        This method is used to construct a new region (for instance 'custom' or 'r500'), using the a
-        radius passed in by the user. If the user also decided to use the X-ray peak as the centre of the
-        custom region, it will do iterative peak finding and re-centre the region. It then adds the region
-        objects and peripheral information into the existing storage structures.
-        :param Quantity radius: The radius of the new region being created.
-        :param str reg_type: The type of new region to be created.
-        """
-        # Start off with the central coordinates of the custom region as the user's passed RA and DEC
-        central_coords = SkyCoord(*self.ra_dec.to("deg"))
-
-        # If a custom region radius is passed, then we define one, though we also need to convert
-        #  whatever the input units are to degrees
-        if radius.unit.is_equivalent('deg'):
-            cust_reg = CircleSkyRegion(central_coords, radius.to('deg'))
-        # As we need radius in degrees, and we need an angular diameter distance to convert to degrees from
-        #  other units, we throw an error if there is no redshift.
-        elif radius.unit.is_equivalent('kpc') and self.redshift is None:
-            raise UnitConversionError("As you have not supplied a redshift, custom_region_radius can "
-                                      "only be in degrees")
-        elif radius.unit.is_equivalent('kpc') and self.redshift is not None:
-            # Use a handy function I prepared earlier to go to degrees
-            region_radius = rad_to_ang(radius, self._redshift, cosmo=self._cosmo)
-            radius = region_radius.copy()
-            cust_reg = CircleSkyRegion(central_coords, region_radius)
-        else:
-            raise UnitConversionError("Custom region radius must be in either angular or distance units.")
-
-        # Find a suitable combined ratemap - I've decided this custom region (global region if you will)
-        #  will be based around the use of complete products.
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        # This should be guaranteed to exist by now, the _all_peaks method requires this product too
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
-        
-        # Determine if the initial coordinates are near an edge
-        near_edge = comb_rt.near_edge(self.ra_dec)
-
-        if self._use_peak:
-            # Uses the peak of the combined ratemap as the centre, guaranteed to be there and converged,
-            #  because if it hadn't converged an error would have been thrown earlier
-            peak = self._peaks["combined"]
-            central_coords = SkyCoord(*peak.to("deg"))
-            cust_reg = CircleSkyRegion(central_coords, radius)
-
-        # Define a background region
-        # Annoyingly I can't remember why I had to do the regions as pixel first, but I promise there was
-        #  a good reason at the time.
-        pix_src_reg = cust_reg.to_pixel(comb_rt.radec_wcs)
-        in_reg = CirclePixelRegion(pix_src_reg.center, pix_src_reg.radius * self._back_inn_factor)
-        pix_bck_reg = CirclePixelRegion(pix_src_reg.center, pix_src_reg.radius
-                                        * self._back_out_factor).symmetric_difference(in_reg)
-        cust_back_reg = pix_bck_reg.to_sky(comb_rt.radec_wcs)
-
-        # Setting up useful lists for adding regions to
-        reg_crossover = []
-        bck_crossover = []
-        # I check through all available region lists to find regions that are within the custom region
-        for obs_id in self._other_regions:
-            other_regs = self._other_regions[obs_id]
-
-            # Which regions are within the custom source region
-            # Also are any regions that intersect with the custom region (could be an overdensity region) extended?
-            #  If so they should be removed - far more likely that the cluster has been
-            #  fragmented by the source finder.
-            cross = np.array([cust_reg.intersection(r).to_pixel(comb_rt.radec_wcs).to_mask().data.sum()
-                              != 0 and r.height == r.width for r in other_regs])
-
-            if len(cross) != 0:
-                reg_crossover += list(np.array(other_regs)[cross])
-
-            # Which regions are within the custom background region
-            bck_cross = np.array([cust_back_reg.intersection(r).to_pixel(comb_rt.radec_wcs).to_mask().data.sum()
-                                  != 0 for r in other_regs])
-            if len(bck_cross) != 0:
-                bck_crossover += list(np.array(other_regs)[bck_cross])
-
-        # Just quickly convert the lists to numpy arrays
-        reg_crossover = np.array(reg_crossover)
-        bck_crossover = np.array(bck_crossover)
-        # And save them
-        self._within_source_regions[reg_type] = reg_crossover
-        self._within_back_regions[reg_type] = bck_crossover
-
-        # Make the final masks for source and background regions.
-        src_mask, bck_mask = self._generate_mask(comb_rt, cust_reg, cust_back_reg, reg_type=reg_type)
-
-        # TODO Check that this isn't bollocks
-        src_area = src_mask.sum()
-        bck_area = bck_mask.sum()
-        rate_ratio = ((comb_rt.data*src_mask).sum() / (comb_rt.data*bck_mask).sum()) * (bck_area / src_area)
-
-        self._regions[reg_type] = cust_reg
-        self._back_regions[reg_type] = cust_back_reg
-        self._reg_masks[reg_type] = src_mask
-        self._back_masks[reg_type] = bck_mask
-        self._snr[reg_type] = rate_ratio
-
-    def get_peaks(self, obs_id: str = None, inst: str = None) -> Quantity:
-        """
-        :param str obs_id: The ObsID to return the X-ray peak coordinates for.
-        :param str inst: The instrument to return the X-ray peak coordinates for.
-        :return: The X-ray peak coordinates for the input parameters.
-        :rtype: Quantity
-        """
-        # Common sense checks, are the obsids/instruments associated with this source etc.
-        if obs_id is not None and obs_id not in self.obs_ids:
-            raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
-        elif obs_id is None and inst is not None:
-            raise ValueError("If obs_id is None, inst cannot be None as well.")
-        elif obs_id is not None and inst is not None and inst not in self._peaks[obs_id]:
-            raise NotAssociatedError("The instrument {i} is not associated with observation {o} of this "
-                                     "source.".format(i=inst, o=obs_id))
-        elif obs_id is None and inst is None:
-            chosen = self._peaks
-        elif obs_id is not None and inst is None:
-            chosen = self._peaks[obs_id]
-        else:
-            chosen = self._peaks[obs_id][inst]
-
-        return chosen
-
-    # Property SPECIFICALLY FOR THE COMBINED PEAK - as this is the peak we should be using mostly.
-    @property
-    def peak(self) -> Quantity:
-        """
-        A property getter for the combined X-ray peak coordinates. Most analysis will be centered
-        on these coordinates.
-        :return: The X-ray peak coordinates for the combine ratemap.
-        :rtype: Quantity
-        """
-        return self._peaks["combined"]
-
-    @property
-    def custom_radius(self) -> Quantity:
-        """
-        A getter for the custom region that can be defined on initialisation.
-        :return: The radius (in kpc) of the user defined custom region.
-        :rtype: Quantity
-        """
-        return self._custom_region_radius
-
-    @property
-    def point_clusters(self) -> Tuple[ndarray, List[ndarray]]:
-        """
-        This allows you to retrieve the point cluster positions from the hierarchical clustering
-        peak finding method run on the combined ratemap. This includes both the chosen cluster and
-        all others that were found.
-        :return: A numpy array of the positions of points of the chosen cluster (not galaxy cluster,
-        a cluster of points). A list of numpy arrays with the same information for all the other clusters
-        that were found
-        :rtype: Tuple[ndarray, List[ndarray]]
-        """
-        return self._chosen_peak_cluster, self._other_peak_clusters
-
-
-class GalaxyCluster(ExtendedSource):
-    def __init__(self, ra, dec, redshift, r200: Quantity = None, r500: Quantity = None, r2500: Quantity = None,
-                 richness: float = None, richness_err: float = None, wl_mass: Quantity = None,
-                 wl_mass_err: Quantity = None, name=None, custom_region_radius=None, use_peak=True,
-                 peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
-                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False):
-        super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
-                         back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits)
-
-        if r200 is None and r500 is None and r2500 is None:
-            raise ValueError("You must set at least one overdensity radius")
-
-        # Here we don't need to check if a non-null redshift was supplied, a redshift is required for
-        #  initialising a GalaxyCluster object. These chunks just convert the radii to kpc.
-        # I know its ugly to have the same code three times, but I want these to be in attributes.
-        if r200 is not None and r200.unit.is_equivalent("deg"):
-            self._r200 = ang_to_rad(r200, self._redshift, self._cosmo).to("kpc")
-        elif r200 is not None and r200.unit.is_equivalent("kpc"):
-            self._r200 = r200.to("kpc")
-        elif r200 is not None and not r200.unit.is_equivalent("kpc") and not r200.unit.is_equivalent("deg"):
-            raise UnitConversionError("R200 radius must be in either angular or distance units.")
-
-        if r500 is not None and r500.unit.is_equivalent("deg"):
-            self._r500 = ang_to_rad(r500, self._redshift, self._cosmo).to("kpc")
-        elif r500 is not None and r500.unit.is_equivalent("kpc"):
-            self._r500 = r500.to("kpc")
-        elif r500 is not None and not r500.unit.is_equivalent("kpc") and not r500.unit.is_equivalent("deg"):
-            raise UnitConversionError("R500 radius must be in either angular or distance units.")
-
-        if r2500 is not None and r2500.unit.is_equivalent("deg"):
-            self._r2500 = ang_to_rad(r2500, self._redshift, self._cosmo).to("kpc")
-        elif r2500 is not None and r2500.unit.is_equivalent("kpc"):
-            self._r2500 = r2500.to("kpc")
-        elif r2500 is not None and not r2500.unit.is_equivalent("kpc") and not r2500.unit.is_equivalent("deg"):
-            raise UnitConversionError("R2500 radius must be in either angular or distance units.")
-
-        if r200 is not None:
-            self._setup_new_region(self._r200, "r200")
-        if r500 is not None:
-            self._setup_new_region(self._r500, "r500")
-        if r2500 is not None:
-            self._setup_new_region(self._r2500, "r2500")
-
-        # Reading observables into their attributes, if the user doesn't pass a value for a particular observable
-        #  it will be None.
-        self._richness = richness
-        self._richness_err = richness_err
-
-        # Mass has a unit, unlike richness, so need to check that as we're reading it in
-        if wl_mass is not None and wl_mass.unit.is_equivalent("Msun"):
-            self._wl_mass = wl_mass.to("Msun")
-        elif wl_mass is not None and not wl_mass.unit.is_equivalent("Msun"):
-            raise UnitConversionError("The weak lensing mass value cannot be converted to MSun.")
-
-        if wl_mass_err is not None and wl_mass_err.unit.is_equivalent("Msun"):
-            self._wl_mass_err = wl_mass_err.to("Msun")
-        elif wl_mass_err is not None and not wl_mass_err.unit.is_equivalent("Msun"):
-            raise UnitConversionError("The weak lensing mass error value cannot be converted to MSun.")
-
-    # Property getters for the over density radii, they don't get setters as various things are defined on init
-    #  that I don't want to call again.
-    @property
-    def r200(self) -> Quantity:
-        """
-        Getter for the radius at which the average density is 200 times the critical density.
-        :return: The R200 in kpc.
-        :rtype: Quantity
-        """
-        return self._r200
-
-    @property
-    def r500(self) -> Quantity:
-        """
-        Getter for the radius at which the average density is 500 times the critical density.
-        :return: The R500 in kpc.
-        :rtype: Quantity
-        """
-        return self._r500
-
-    @property
-    def r2500(self) -> Quantity:
-        """
-        Getter for the radius at which the average density is 2500 times the critical density.
-        :return: The R2500 in kpc.
-        :rtype: Quantity
-        """
-        return self._r2500
-
-    # Property getters for other observables I've allowed to be passed in.
-    @property
-    def weak_lensing_mass(self) -> Tuple[Quantity, Quantity]:
-        """
-        Gets the weak lensing mass passed in at initialisation of the source.
-        :return: Two quantities, the weak lensing mass, and the weak lensing mass error in Msun. If the
-        values were not passed in at initialisation, the returned values will be None.
-        :rtype: Tuple[Quantity, Quantity]
-        """
-        return self._wl_mass, self._wl_mass_err
-
-    @property
-    def richness(self) -> Tuple[Quantity, Quantity]:
-        """
-        Gets the richness passed in at initialisation of the source.
-        :return: Two quantities, the richness, and the weak lensing mass error. If the
-        values were not passed in at initialisation, the returned values will be None.
-        :rtype: Tuple[Quantity, Quantity]
-        """
-        return self._richness, self._richness_err
-
-    # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
-    #  justified considering how often the cluster temperature is used in X-ray cluster studies.
-    def get_temperature(self, reg_type: str, model: str = None):
-        """
-        Convenience method that calls get_results to retrieve temperature measurements. All matching values
-        from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
-        column 1 is err-, and column 2 is err+).
-        :param str reg_type: The type of region that the fitted spectra were generated from.
-        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
-        :return: The temperature value, and uncertainties.
-        """
-        allowed_rtype = ["region", "custom", "r500", "r200", "r2500"]
-
-        if reg_type not in allowed_rtype:
-            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-        elif len(self._fit_results) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with this source")
-        elif reg_type not in self._fit_results:
-            av_regs = ", ".join(self._fit_results.keys())
-            raise ModelNotAssociatedError("{0} has no associated XSPEC fit to this source; available regions are "
-                                          "{1}".format(reg_type, av_regs))
-
-        # Find which available models have kT in them
-        models_with_kt = [m for m, v in self._fit_results[reg_type].items() if "kT" in v]
-
-        if model is not None and model not in self._fit_results[reg_type]:
-            av_mods = ", ".join(self._fit_results[reg_type].keys())
-            raise ModelNotAssociatedError("{0} has not been fitted to {1} spectra of this source; available "
-                                          "models are  {2}".format(model, reg_type, av_mods))
-        elif model is not None and "kT" not in self._fit_results[reg_type][model]:
-            raise ParameterNotAssociatedError("kT was not a free parameter in the {} fit to this "
-                                              "source.".format(model))
-        elif model is not None and "kT" in self._fit_results[reg_type][model]:
-            # Just going to call the get_results method with specific parameters, to get the result formatted
-            #  the same way.
-            return self.get_results(reg_type, model, "kT")
-        elif model is None and len(models_with_kt) != 1:
-            raise ValueError("The model parameter can only be None when there is only one model available"
-                             " with a kT measurement.")
-        # For convenience sake, if there is only one model with a kT measurement, I'll allow the model parameter
-        #  to be None.
-        elif model is None and len(models_with_kt) == 1:
-            return self.get_results(reg_type, models_with_kt[0], "kT")
-
-    def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
-                                same_peak: bool = True):
-        """
-        A method that generates and displays brightness profiles for the current cluster. Brightness profiles
-        exclude point sources and either measure the average counts per second within a circular annulus (radial),
-        or an angular region of a circular annulus (pizza). All points correspond to an annulus of width 1 pixel,
-        and this method does NOT do any rebinning to maximise signal to noise.
-        :param str reg_type: The region in which to view the radial brightness profile.
-        :param str profile_type: The type of brightness profile you wish to view, radial or pizza.
-        :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
-        slice will be 360 / num_slices degrees.
-        :param bool same_peak: If True then the radial profiles (including for PSF corrected ratemaps)
-         will all be constructed centered on the peak found for the 'normal' combined ratemap. If False,
-         peaks will be found for each individual combined ratemap and profiles will be constructed
-         centered on them.
-        """
-        allowed_rtype = ["custom", "r500", "r200", "r2500"]
-        if reg_type not in allowed_rtype:
-            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-
-        # Check that the passed profile type is valid
-        allowed_ptype = ["radial", "pizza"]
-        if profile_type not in allowed_ptype:
-            raise ValueError("The only allowed profile types are {}".format(", ".join(allowed_ptype)))
-
-        # Check that the valid region choice actually has an entry that is not None
-        if reg_type == "custom" and self._custom_region_radius is None:
-            raise NoRegionsError("No custom region has been setup for this cluster")
-        elif reg_type == "r200" and self._r200 is None:
-            raise NoRegionsError("No R200 region has been setup for this cluster")
-        elif reg_type == "r500" and self._r500 is None:
-            raise NoRegionsError("No R500 region has been setup for this cluster")
-        elif reg_type == "r2500" and self._r2500 is None:
-            raise NoRegionsError("No R2500 region has been setup for this cluster")
-
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
-        # If there have been PSF deconvolutions of the above data, then we can grab them too
-        psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", just_obj=False)
-                        if en_key + "_" in rt[-2]]
-
-        source_mask, background_mask = self.get_mask(reg_type)
-        # Get combined peak - basically the only peak internal methods will use
-        pix_peak = comb_rt.coord_conv(self.peak, pix)
-        rad = Quantity(self.get_source_region(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
-
-        # Setup the figure
-        plt.figure(figsize=(8, 5))
-        ax = plt.gca()
-
-        # The plotting will be slightly different based on the profile type, also have to call the methods
-        #  to generate the profiles as I don't currently store the data.
-        if profile_type == "radial":
-            ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
-                                                                             u=self._peak_hi_en.value))
-            brightness, radii, og_background = radial_brightness(comb_rt, source_mask, background_mask, pix_peak,
-                                                                 rad, self._redshift, kpc, self.cosmo)
-            plt.plot(radii, brightness, label="Emission")
-
-            for psf_comb_rt in psf_comb_rts:
-                p_rt = psf_comb_rt[-1]
-                # If the user wants to use individual peaks, we have to find them here.
-                if not same_peak:
-                    pix_peak = self.find_peak(p_rt)[0]
-                brightness, radii, background = radial_brightness(psf_comb_rt[-1], source_mask, background_mask,
-                                                                  pix_peak, rad, self._redshift, kpc, self.cosmo)
-                prof = plt.plot(radii, brightness, label="{m} PSF Corrected".format(m=p_rt.psf_model))
-                plt.axhline(background, color=prof[0].get_color(), linestyle="dashed",
-                            label="{m} PSF Corrected Background".format(m=p_rt.psf_model))
-
-        elif profile_type == "pizza":
-            ax.set_title("{n} - {l}-{u}keV Pizza Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
-                                                                            u=self._peak_hi_en.value))
-            brightness, radii, angles, og_background = pizza_brightness(comb_rt, source_mask, background_mask,
-                                                                        pix_peak, rad, num_slices, self._redshift,
-                                                                        kpc, self.cosmo)
-            for ang_ind in range(angles.shape[0]):
-                # Setup labels with the angles covered by the profile
-                lab_str = "{0}$^{{\circ}}$-{1}$^{{\circ}}$ Slice Emission".format(*angles[ang_ind, :].value)
-                plt.plot(radii, brightness[:, ang_ind], label=lab_str)
-
-        # Plot the background level
-        plt.axhline(og_background, color="black", linestyle="dashed", label="Background")
-
-        # This adds small ticks to the axis
-        ax.minorticks_on()
-        # Set the lower limit of the x-axis to 0
-        ax.set_xlim(0,)
-        # Adjusts how the ticks look
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
-        # Choose y-axis log scaling because otherwise you can't really make out the profiles very well
-        ax.set_yscale("log")
-        ax.set_xscale("log")
-        ax.set_xlim(radii.min().value, )
-        ax.xaxis.set_major_formatter(ScalarFormatter())
-
-        # Labels and legends
-        ax.set_ylabel("S$_{b}$ [count s$^{-1}$ pix$^{-2}$]")
-        ax.set_xlabel("Radius [kpc]")
-        plt.legend(loc="best")
-        # Removes white space around the plot
-        plt.tight_layout()
-        # Plots the plot
-        plt.show()
-        plt.close('all')
-
-    def combined_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
-        """
-        Combines conversion factors calculated for this source with individual instrument-observation
-        spectra, into one overall conversion factor.
-        :param str reg_type: The region type the conversion factor is associated with.
-        :param Quantity lo_en: The lower energy limit of the conversion factors.
-        :param Quantity hi_en: The upper energy limit of the conversion factors.
-        :return: A combined conversion factor that can be applied to a combined ratemap to
-        calculate luminosity.
-        :rtype: Quantity
-        """
-        # Grabbing the relevant spectra
-        spec = self.get_products("spectrum", extra_key=reg_type)
-        # Setting up variables to be added into
-        av_lum = Quantity(0, "erg/s")
-        total_rate = Quantity(0, "ct/s")
-        # Cycling through the relevant spectra
-        for s in spec:
-            # The luminosity is added to the average luminosity variable, will be divided by N
-            #  spectra at the end.
-            av_lum += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[1]
-            # The count rate is just added into a total count rate
-            total_rate += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2]
-
-        # Making av_lum actually an average
-        av_lum /= len(spec)
-
-        # Calculating and returning the combined factor.
-        return av_lum / total_rate
-
-
-class PointSource(BaseSource):
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=True, load_fits=False):
-        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
-        # This uses the added context of the type of source to find (or not find) matches in region files
-        # This is the internal dictionary where all regions, defined by regfiles or by users, will be stored
-        self._regions, self._alt_match_regions, self._other_sources = self._source_type_match("pnt")
 
 
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 17:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 16:14. Copyright (c) David J Turner
 
 
 from typing import Tuple, List, Union
@@ -35,7 +35,7 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
         pix_coord = Quantity(input_wcs.all_world2pix(*coord.value, 0), pix)
         deg_coord = coord
     else:
-        deg_coord = Quantity(input_wcs.radec_wcs.all_pix2world(*coord.value, 0), deg)
+        deg_coord = Quantity(input_wcs.all_pix2world(*coord.value, 0), deg)
         pix_coord = coord
 
     perturbed_coord = deg_coord + Quantity([0, small_offset.to("deg").value], 'deg')

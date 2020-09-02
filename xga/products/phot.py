@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:05. Copyright (c) David J Turner
 
 
 import warnings
@@ -68,37 +68,44 @@ class Image(BaseProduct):
                 warnings.warn("You are loading an {} with elements that are < 0, "
                               "they will be set to 0.".format(self._prod_type))
                 self._data[self._data < 0] = 0
-            self._header = read_header(self.path)
 
             # As the image must be loaded to know the shape, I've waited until here to set the _shape attribute
             self._shape = self._data.shape
-            # Will actually construct an image WCS as well because why not?
-            # XMM images typically have two, both useful, so we'll find all available and store them
-            wcses = find_all_wcs(self._header)
-
-            # Just iterating through and assigning to the relevant attributes
-            for w in wcses:
-                axes = [ax.lower() for ax in w.axis_type_names]
-                if "ra" in axes and "dec" in axes:
-                    if self._wcs_radec is None:
-                        self._wcs_radec = w
-                elif "x" in axes and "y" in axes:
-                    if self._wcs_xmmXY is None:
-                        self._wcs_xmmXY = w
-                elif "detx" in axes and "dety" in axes:
-                    if self._wcs_xmmdetXdetY is None:
-                        self._wcs_xmmdetXdetY = w
-                else:
-                    raise ValueError("This type of WCS is not recognised!")
-
-            # I'll only strongly require that the pixel-RADEC WCS is found
-            if self._wcs_radec is None:
-                raise FailedProductError("SAS has generated this image without a WCS capable of "
-                                         "going from pixels to RA-DEC.")
-
         else:
             raise FailedProductError("SAS failed to generate this product successfully, so you cannot "
                                      "access data from it. Check the usable attribute next time")
+
+    def _read_wcs_on_demand(self):
+        """
+        The equivalent of _read_on_demand, but for the header and wcs information. These are often
+        required more than the data for individual images (as the merged images are generally used
+        for analysis), so this function is split out in the interests of efficiency.
+        """
+        # Reads only the header information
+        self._header = read_header(self.path)
+
+        # XMM images typically have two, both useful, so we'll find all available and store them
+        wcses = find_all_wcs(self._header)
+
+        # Just iterating through and assigning to the relevant attributes
+        for w in wcses:
+            axes = [ax.lower() for ax in w.axis_type_names]
+            if "ra" in axes and "dec" in axes:
+                if self._wcs_radec is None:
+                    self._wcs_radec = w
+            elif "x" in axes and "y" in axes:
+                if self._wcs_xmmXY is None:
+                    self._wcs_xmmXY = w
+            elif "detx" in axes and "dety" in axes:
+                if self._wcs_xmmdetXdetY is None:
+                    self._wcs_xmmdetXdetY = w
+            else:
+                raise ValueError("This type of WCS is not recognised!")
+
+        # I'll only strongly require that the pixel-RADEC WCS is found
+        if self._wcs_radec is None:
+            raise FailedProductError("SAS has generated this image without a WCS capable of "
+                                     "going from pixels to RA-DEC.")
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -160,7 +167,7 @@ class Image(BaseProduct):
         """
         # If this WCS is None then _read_on_demand definitely hasn't run, this one MUST be set
         if self._wcs_radec is None:
-            self._read_on_demand()
+            self._read_wcs_on_demand()
         return self._wcs_radec
 
     # These two however, can be none, so the user should be allowed to set add WCS-es to those
@@ -176,7 +183,7 @@ class Image(BaseProduct):
         # Deliberately checking the radec WCS, as the skyXY WCS is allowed to be None after the
         # read_on_demand call
         if self._wcs_radec is None:
-            self._read_on_demand()
+            self._read_wcs_on_demand()
         return self._wcs_xmmXY
 
     @skyxy_wcs.setter
@@ -210,7 +217,7 @@ class Image(BaseProduct):
         # Deliberately checking the radec WCS, as the DETXY WCS is allowed to be None after the
         # read_on_demand call
         if self._wcs_radec is None:
-            self._read_on_demand()
+            self._read_wcs_on_demand()
         return self._wcs_xmmdetXdetY
 
     @detxy_wcs.setter
@@ -243,7 +250,7 @@ class Image(BaseProduct):
         :rtype: FITSHDR
         """
         if self._header is None:
-            self._read_on_demand()
+            self._read_wcs_on_demand()
         return self._header
 
     def coord_conv(self, coords: Quantity, output_unit: UnitBase) -> Quantity:
@@ -585,13 +592,30 @@ class RateMap(Image):
         self._psf_num_iterations = xga_image.psf_iterations
         self._psf_correction_algorithm = xga_image.psf_algorithm
 
+        self._path = xga_image.path
+        self._im_path = xga_image.path
+        self._expmap_path = xga_expmap.path
+
+        self._im_data = None
+        self._ex_data = None
+        self._data = None
+        # TODO Could I combine these two, and just make edges = 2, on sensor = 1 etc?
+        self._edge_mask = None
+        self._on_sensor_mask = None
+
+    def _construct_on_demand(self):
+        """
+        This method is complimentary to the _read_on_demand method of the base Image class, and ensures that
+        the ratemap array is only created if the user actually asks for it. Otherwise a lot of time is wasted
+        reading in files for individual images and exposure maps that are rarely used.
+        """
         # Runs read on demand to grab the data for the image, as this was the input path to the super init call
         self._read_on_demand()
         # That reads in the WCS information (important), and stores the im data in _data
         # That is read out into this variable
         self._im_data = self.data
         # Then the path is changed, so that the exposure map file becomes the focus
-        self._path = xga_expmap.path
+        self._path = self._expmap_path
         # Read on demand runs again and grabs the exposure map data
         self._read_on_demand()
         # Again read out into variable
@@ -649,11 +673,38 @@ class RateMap(Image):
         self._on_sensor_mask = det_map
 
         # Re-setting some paths to make more sense
-        self._path = xga_image.path
-        self._expmap_path = xga_expmap.path
+        self._path = self._im_path
 
         del self._im_data
         del self._ex_data
+
+    @property
+    def shape(self) -> Tuple[int, int]:
+        """
+        Property getter for the resolution of the ratemap. Standard XGA settings will make this 512x512.
+        :return: The shape of the numpy array describing the ratemap.
+        :rtype: Tuple[int, int]
+        """
+        if self._data is None:
+            self._construct_on_demand()
+        # There will not be a setter for this property, no-one is allowed to change the shape of the image.
+        return self._shape
+
+    @property
+    def data(self) -> np.ndarray:
+        """
+        Property getter for ratemap data, overrides the method in the base Image class. This is because
+        the ratemap class has a _construct_on_demand method that creates the ratemap data, which needs
+        to be called instead of _read_on_demand.
+        :return: A numpy array of shape self.shape containing the ratemap data.
+        :rtype: np.ndarray
+        """
+        # Calling this ensures the image object is read into memory
+        if self._data is None:
+            self._construct_on_demand()
+        return self._data
+
+
 
     def get_rate(self, at_coord: Quantity) -> float:
         """
@@ -687,7 +738,7 @@ class RateMap(Image):
         # Creates the data array that we'll be searching. Takes into account the passed mask, as well as
         #  the edge mask designed to remove pixels at the edges of detectors, where RateMap values can
         #  be artificially boosted.
-        masked_data = self.data * mask * self._edge_mask
+        masked_data = self.data * mask * self.edge_mask
 
         # Uses argmax to find the flattened coordinate of the max value, then unravel_index to convert
         #  it back to a 2D coordinate
@@ -733,7 +784,7 @@ class RateMap(Image):
         # Creates the data array that we'll be searching. Takes into account the passed mask, as well as
         #  the edge mask designed to remove pixels at the edges of detectors, where RateMap values can
         #  be artificially boosted.
-        masked_data = self.data * mask * self._edge_mask
+        masked_data = self.data * mask * self.edge_mask
         # How many non-zero elements are there in the array
         num_value = len(masked_data[masked_data != 0])
         # Find the number that corresponds to the top 5% (by default)
@@ -849,7 +900,7 @@ class RateMap(Image):
         # TODO Could totally make this into a basic cluster finder combined with clustering algorithm
         filt = projected_king(1000, resolution.value, 3)
         n_cut = int(filt.shape[0] / 2)
-        conv_data = fftconvolve(self.data*self._edge_mask, filt)[n_cut:-n_cut, n_cut:-n_cut]
+        conv_data = fftconvolve(self.data*self.edge_mask, filt)[n_cut:-n_cut, n_cut:-n_cut]
         mask_conv_data = conv_data * mask
 
         max_coords = np.unravel_index(np.argmax(mask_conv_data == mask_conv_data.max()), mask_conv_data.shape)
@@ -879,8 +930,8 @@ class RateMap(Image):
 
         # Checks the edge mask within a 5 by 5 array centered on the peak coord, if there are no edges then
         #  all elements will be 1 and it will sum to 25.
-        edge_sum = self._edge_mask[pix_coord[1] - 2:pix_coord[1] + 3,
-                                   pix_coord[0] - 2:pix_coord[0] + 3].sum()
+        edge_sum = self.edge_mask[pix_coord[1] - 2:pix_coord[1] + 3,
+                                  pix_coord[0] - 2:pix_coord[0] + 3].sum()
         # If it sums to less then we know that there is an edge near the peak.
         if edge_sum != 25:
             edge_flag = True
@@ -896,6 +947,8 @@ class RateMap(Image):
         :return: A boolean numpy array in the same shape as the RateMap.
         :rtype: ndarray
         """
+        if self._edge_mask is None:
+            self._construct_on_demand()
         return self._edge_mask
 
     @property
@@ -906,6 +959,8 @@ class RateMap(Image):
         :return: A boolean numpy array in the same shape as the RateMap.
         :rtype: ndarray
         """
+        if self._on_sensor_mask is None:
+            self._construct_on_demand()
         return self._on_sensor_mask
 
     @property

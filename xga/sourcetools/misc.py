@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/08/2020, 11:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:16. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
@@ -10,18 +10,18 @@ from numpy import array, ndarray, pi
 from xga.exceptions import HeasoftError
 
 
-def nh_lookup(src_ra: float, src_dec: float) -> ndarray:
+def nh_lookup(coord_pair) -> ndarray:
     """
     Uses HEASOFT to lookup hydrogen column density for given coordinates.
-    :param float src_ra: Right Ascension of object
-    :param float src_dec: Declination of object
+    :param Quantity coord_pair: An astropy quantity with RA and DEC of interest.
     :return : Average and weighted average nH values (in units of cm^-2)
     :rtype: ndarray
     """
     # Apparently minimal type-checking is the Python way, but for some reason this heasoft command fails if
     # integers are passed, so I'll convert them, let them TypeError if people pass weird types.
-    src_ra = float(src_ra)
-    src_dec = float(src_dec)
+    pos_deg = coord_pair.to("deg")
+    src_ra = float(pos_deg.value[0])
+    src_dec = float(pos_deg.value[1])
 
     heasoft_cmd = 'nh 2000 {ra} {dec}'.format(ra=src_ra, dec=src_dec)
 

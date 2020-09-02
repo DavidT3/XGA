@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 22:36. Copyright (c) David J Turner
 
 import json
 import os
@@ -8,9 +8,9 @@ from typing import List
 
 import pandas as pd
 import pkg_resources
-from astropy.io import fits
 from astropy.units import Quantity, def_unit
 from astropy.wcs import WCS
+from fitsio import read_header
 from fitsio.header import FITSHDR
 from numpy import nan, floor
 from tqdm import tqdm
@@ -108,7 +108,7 @@ def observation_census(config: ConfigParser) -> pd.DataFrame:
             # This is just ObsIDs, needed to see which ObsIDs have already been processed.
             obs_lookup_obs = [entry.split(',')[0] for entry in obs_lookup[1:]]
     else:
-        obs_lookup = ["ObsID,RA_PNT,DEC_PNT\n"]
+        obs_lookup = ["ObsID,RA_PNT,DEC_PNT,USE_PN,USE_MOS1,USE_MOS2\n"]
         obs_lookup_obs = []
 
     # Need to find out which observations are available, crude way of making sure they are ObsID directories
@@ -118,23 +118,38 @@ def observation_census(config: ConfigParser) -> pd.DataFrame:
     if len(obs_census) != 0:
         census_progress = tqdm(desc="Assembling list of ObsID pointings", total=len(obs_census))
         for obs in obs_census:
-            ra_pnt = ''
-            dec_pnt = ''
-            # Prepared to check all three events files, but if one succeeds the rest are
-            # skipped for efficiency
+            info = {'ra': None, 'dec': None, "the_rest": []}
             for key in ["clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts"]:
                 evt_path = config["XMM_FILES"][key].format(obs_id=obs)
-                if os.path.exists(evt_path) and ra_pnt == '' and dec_pnt == '':
-                    with fits.open(evt_path, mode='readonly') as evts:
-                        try:
-                            ra_pnt = evts[0].header["RA_PNT"]
-                            dec_pnt = evts[0].header["DEC_PNT"]
-                        except KeyError:
-                            pass
-                    break
-                    # If this part has run successfully there's no need to open the other images
-            # Format to write to the census.csv that lives in the config directory.
-            obs_lookup.append("{o},{r},{d}\n".format(o=obs, r=ra_pnt, d=dec_pnt))
+                if os.path.exists(evt_path):
+                    evts_header = read_header(evt_path)
+                    try:
+                        # Reads out the filter header, if it is CalClosed then we can't use it
+                        filt = evts_header["FILTER"]
+                        submode = evts_header["SUBMODE"]
+                        info['ra'] = evts_header["RA_PNT"]
+                        info['dec'] = evts_header["DEC_PNT"]
+                    except KeyError:
+                        # It won't actually, but this will trigger the if statement that tells XGA not to use
+                        #  this particular obs/inst combo
+                        filt = "CalClosed"
+
+                    # TODO Decide if I want to disallow small window mode observations
+                    if filt != "CalClosed":
+                        info["the_rest"].append("T")
+                    else:
+                        info["the_rest"].append("F")
+                else:
+                    info["the_rest"].append("F")
+
+            use_insts = ",".join(info["the_rest"])
+            # Write the information to the line that will go in the census csv
+            if info["ra"] is not None and info["dec"] is not None:
+                # Format to write to the census.csv that lives in the config directory.
+                obs_lookup.append("{o},{r},{d},{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
+            else:
+                obs_lookup.append("{o},,,{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
+
             census_progress.update(1)
         census_progress.close()
         with open(CENSUS_FILE, 'w') as census:
@@ -145,6 +160,9 @@ def observation_census(config: ConfigParser) -> pd.DataFrame:
                               columns=obs_lookup[0].strip("\n").split(','), dtype=str)
     obs_lookup["RA_PNT"] = obs_lookup["RA_PNT"].replace('', nan).astype(float)
     obs_lookup["DEC_PNT"] = obs_lookup["DEC_PNT"].replace('', nan).astype(float)
+    obs_lookup["USE_PN"] = obs_lookup["USE_PN"].replace('T', True).replace('F', False)
+    obs_lookup["USE_MOS1"] = obs_lookup["USE_MOS1"].replace('T', True).replace('F', False)
+    obs_lookup["USE_MOS2"] = obs_lookup["USE_MOS2"].replace('T', True).replace('F', False)
     return obs_lookup
 
 
