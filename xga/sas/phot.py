@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 15:30. Copyright (c) David J Turner
 
 import os
 from shutil import rmtree
@@ -20,7 +20,7 @@ from .run import sas_call
 # TODO Perhaps remove the option to add to the SAS expression
 @sas_call
 def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
-                   add_expr: str = "", num_cores: int = NUM_CORES):
+                   add_expr: str = "", num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for a configuration of the SAS evselect command that makes images.
     Images will be generated for every observation associated with every source passed to this function.
@@ -32,6 +32,7 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
     :param str add_expr: A string to be added to the SAS expression keyword
     :param int num_cores: The number of cores to use (if running locally), default is set to
     90% of available.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -102,11 +103,12 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
 
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
-    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
 @sas_call
-def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cores: int = NUM_CORES):
+def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cores: int = NUM_CORES,
+            disable_progress: bool = False):
     """
     A convenient Python wrapper for the SAS eexpmap command.
     Expmaps will be generated for every observation associated with every source passed to this function.
@@ -117,6 +119,7 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
     :param Quantity hi_en: The upper energy limit for the expmap, in astropy energy units.
     :param int num_cores: The number of cores to use (if running locally), default is set to
     90% of available.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     # I know that a lot of this code is the same as the evselect_image code, but its 1am so please don't
     # judge me too much.
@@ -136,7 +139,7 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
 
     # These are crucial, to generate an exposure map one must have a ccf.cif calibration file, and a reference
     # image. If they do not already exist, these commands should generate them.
-    cifbuild(sources)
+    cifbuild(sources, disable_progress=disable_progress)
     sources = evselect_image(sources, lo_en, hi_en)
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
@@ -203,13 +206,13 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
     execute = True  # This should be executed immediately
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
-    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
 @sas_call
 def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Quantity, psf_corr: bool = False,
             psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-            num_cores: int = NUM_CORES):
+            num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for the SAS emosaic command. Every image associated with the source,
     that is in the energy band specified by the user, will be added together.
@@ -224,6 +227,7 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use (if running locally), default is set to
     90% of available.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
@@ -237,10 +241,10 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
 
     # To make a mosaic we need to have the individual products in the first place
     if to_mosaic == "image":
-        sources = evselect_image(sources, lo_en, hi_en)
+        sources = evselect_image(sources, lo_en, hi_en, disable_progress=disable_progress)
         for_name = "img"
     elif to_mosaic == "expmap":
-        sources = eexpmap(sources, lo_en, hi_en)
+        sources = eexpmap(sources, lo_en, hi_en, disable_progress=disable_progress)
         for_name = "expmap"
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
@@ -308,11 +312,12 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     execute = True  # This should be executed immediately
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
-    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
 @sas_call
-def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA", num_cores: int = NUM_CORES):
+def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA", num_cores: int = NUM_CORES,
+           disable_progress: bool = False):
     """
     A wrapper for the psfgen SAS task. Used to generate XGA PSF objects, which in turn can be used to correct
     XGA images/ratemaps for optical effects. By default we use the ELLBETA model reported in Read et al. 2011
@@ -325,6 +330,7 @@ def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA",
     :param str psf_model: Which model to use when generating the PSF, default is ELLBETA, the best available.
     :param int num_cores: The number of cores to use (if running locally), default is set to
     90% of available.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -339,7 +345,7 @@ def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA",
                          " probably take too long...".format(bins))
 
     # Need a valid CIF for this task, so run cifbuild first.from
-    cifbuild(sources)
+    cifbuild(sources, disable_progress=disable_progress)
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
@@ -467,6 +473,6 @@ def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA",
 
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
-    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 

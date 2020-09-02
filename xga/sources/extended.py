@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 15:30. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple
@@ -89,8 +89,8 @@ class GalaxyCluster(ExtendedSource):
                 # Use the source method to remove data we've decided isn't worth keeping
                 self.disassociate_obs(reject_dict)
                 # Run these just so there is an up to date combined ratemap
-                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en)
-                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en)
+                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
                 # And need to reset regions and masks for the new state of this source object
                 if r200 is not None:
