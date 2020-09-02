@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 22:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 08:29. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1355,6 +1355,16 @@ class BaseSource:
         :rtype: int
         """
         return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
+
+    # As this is an intrinsic property of which matched observations are valid, there will be no setter
+    @property
+    def instruments(self) -> Dict:
+        """
+        A property of a source that details which instruments have valid data for which observations.
+        :return: A dictionary of ObsIDs and their associated valid instruments.
+        :rtype: Dict
+        """
+        return self._instruments
 
     def info(self):
         """
