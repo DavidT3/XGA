@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:37. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -582,7 +582,6 @@ class BaseSource:
         :return: List of matching products.
         :rtype: List[BaseProduct]
         """
-
         def unpack_list(to_unpack: list):
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
@@ -621,10 +620,10 @@ class BaseSource:
             # Only appends if this particular match is for the obs_id and instrument passed to this method
             # Though all matches will be returned if no obs_id/inst is passed
             if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                    and (extra_key == out[2] or extra_key is None) and not just_obj:
+                    and (extra_key in out or extra_key is None) and not just_obj:
                 matches.append(out)
             elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                    and (extra_key == out[2] or extra_key is None) and just_obj:
+                    and (extra_key in out or extra_key is None) and just_obj:
                 matches.append(out[-1])
         return matches
 
