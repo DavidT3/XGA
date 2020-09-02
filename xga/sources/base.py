@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 08:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:05. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -67,7 +67,7 @@ class BaseSource:
             on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))["ObsID"].values
         except NoMatchFoundError:
             on_axis_match = np.array([])
-        self._onaxis = np.isin(self._obs, on_axis_match)
+        self._onaxis = list(np.array(self._obs)[np.isin(self._obs, on_axis_match)])
 
         # nhlookup returns average and weighted average values, so just take the first
         self._nH = nh_lookup(ra, dec)[0]
@@ -1366,6 +1366,49 @@ class BaseSource:
         """
         return self._instruments
 
+    def disassociate_obs(self, to_remove):
+        """
+
+        :param dict to_remove: A dictionary of observations to remove, in the style of the source.instruments
+        dictionary, with the top level keys being ObsIDs, and the lower levels being instrument names.
+        """
+        # If we're un-associating certain observations, odds on the combined products are no longer valid
+        if "combined" in self._products:
+            del self._products["combined"]
+            self._fit_results = {}
+            self._test_stat = {}
+            self._dof = {}
+            self._total_count_rate = {}
+            self._total_exp = {}
+            self._luminosities = {}
+            for reg in [k for k in self._regions.keys() if k not in self._obs]:
+                del self._reg_masks[reg]
+                del self._back_masks[reg]
+
+        for o in to_remove:
+            for i in to_remove[o]:
+                del self._products[o][i]
+                del self._reg_masks[o][i]
+                del self._back_masks[o][i]
+                del self._instruments[o][self._instruments[o].index(i)]
+
+            if len(self._instruments[o]) == 0:
+                del self._detected[o]
+                del self._initial_regions[o]
+                del self._initial_region_matches[o]
+                del self._regions[o]
+                del self._back_regions[o]
+                del self._other_regions[o]
+                del self._alt_match_regions[o]
+                del self._within_source_regions[o]
+                del self._within_back_regions[o]
+                del self._peaks[o]
+
+                del self._obs[self._obs.index(o)]
+                if o in self._onaxis:
+                    del self._onaxis[self._onaxis.index(o)]
+                del self._instruments[o]
+
     def info(self):
         """
         Very simple function that just prints a summary of important information related to the source object..
@@ -1382,7 +1425,7 @@ class BaseSource:
         print("PN Observations - {}".format(self.num_pn_obs))
         print("MOS1 Observations - {}".format(self.num_mos1_obs))
         print("MOS2 Observations - {}".format(self.num_mos2_obs))
-        print("On-Axis - {}".format(self._onaxis.sum()))
+        print("On-Axis - {}".format(len(self._onaxis)))
         print("With regions - {}".format(len(self._initial_regions)))
         print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
         print("Obs with one match - {}".format(sum([1 for o in self._initial_region_matches if

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 16:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:05. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple
@@ -26,7 +26,8 @@ class GalaxyCluster(ExtendedSource):
                  richness: float = None, richness_err: float = None, wl_mass: Quantity = None,
                  wl_mass_err: Quantity = None, name=None, custom_region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
-                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False):
+                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False,
+                 clean_obs=True, clean_obs_reg="r500", clean_obs_threshold=0.3):
         super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
                          back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits)
 
@@ -79,6 +80,30 @@ class GalaxyCluster(ExtendedSource):
             self._wl_mass_err = wl_mass_err.to("Msun")
         elif wl_mass_err is not None and not wl_mass_err.unit.is_equivalent("Msun"):
             raise UnitConversionError("The weak lensing mass error value cannot be converted to MSun.")
+
+        if clean_obs and clean_obs_reg in self._reg_masks:
+            from xga.sas import emosaic
+            # Use this method to figure out what data to throw away
+            reject_dict = self.obs_check(clean_obs_reg, clean_obs_threshold)
+            if len(reject_dict) != 0:
+                # Use the source method to remove data we've decided isn't worth keeping
+                self.disassociate_obs(reject_dict)
+                # Run these just so there is an up to date combined ratemap
+                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en)
+                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en)
+
+                # And need to reset regions and masks for the new state of this source object
+                if r200 is not None:
+                    self._setup_new_region(self._r200, "r200")
+                if r500 is not None:
+                    self._setup_new_region(self._r500, "r500")
+                if r2500 is not None:
+                    self._setup_new_region(self._r2500, "r2500")
+                if self._custom_region_radius is not None:
+                    self._setup_new_region(self._custom_region_radius, "custom")
+        # Throws an error if a poor choice of region has been made
+        elif clean_obs and clean_obs_reg not in self._reg_masks:
+            raise NoRegionsError("{c} is not associated with this source".format(c=clean_obs_reg))
 
     # Property getters for the over density radii, they don't get setters as various things are defined on init
     #  that I don't want to call again.

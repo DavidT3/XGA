@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 14:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:05. Copyright (c) David J Turner
 
 
 import warnings
@@ -13,10 +13,10 @@ from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
+
 from xga.exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
 from xga.sourcetools import ang_to_rad
 from xga.utils import xmm_sky, find_all_wcs
-
 from . import BaseProduct, BaseAggregateProduct
 
 
@@ -673,7 +673,7 @@ class RateMap(Image):
         self._on_sensor_mask = det_map
 
         # Re-setting some paths to make more sense
-        self._path = self._im_data
+        self._path = self._im_path
 
         del self._im_data
         del self._ex_data
