@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/08/2020, 11:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/09/2020, 16:35. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -104,8 +104,8 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     return ann_mask
 
 
-def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, cen_rad_units: UnitBase = arcsec,
-              cosmo=Planck15) -> Tuple[np.ndarray, np.ndarray, Quantity]:
+def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, pix_step: int = 1,
+              cen_rad_units: UnitBase = arcsec, cosmo=Planck15) -> Tuple[np.ndarray, np.ndarray, Quantity]:
     """
     Will probably only ever be called by an internal brightness calculation, but two different methods
     need it so it gets its own method.
@@ -114,6 +114,7 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     :param Quantity rad: The outer radius of the set of annuli.
     :param float z: The redshift of the source of interest, required if the output radius units are
     a proper radius.
+    :param int pix_step: The width (in pixels) of each annular bin, default is 1.
     :param UnitBase cen_rad_units: The output units for the centres of the annulli returned by
     this function. The inner and outer radii will always be in pixels.
     :param cosmo: An instance of an astropy cosmology, the default is Planck15.
@@ -141,7 +142,7 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     rad = np.ceil(rad)
 
     # By this point, the rad should be in pixels
-    rads = np.arange(0, rad.value + 1).astype(int)
+    rads = np.arange(0, rad.value + 1, pix_step).astype(int)
     inn_rads = rads[:len(rads) - 1]
     out_rads = rads[1:len(rads)]
 
@@ -164,8 +165,8 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     return inn_rads, out_rads, cen_rads
 
 
-def radial_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray,
-                      centre: Quantity, rad: Quantity, z: float = None, cen_rad_units: UnitBase = arcsec,
+def radial_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray, centre: Quantity,
+                      rad: Quantity, z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
                       cosmo=Planck15) -> Tuple[np.ndarray, Quantity, np.float64]:
     """
     A simple method to calculate the average brightness in circular annuli upto the radius of
@@ -178,7 +179,8 @@ def radial_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarra
     :param Quantity rad: The outer radius of the brightness profile (THIS SHOULD BE THE SAME RADIUS AS THE REGION
     YOUR SRC_MASK IS BASED ON, OTHERWISE YOU'LL GET AN INVALID BACKGROUND MEASUREMENT).
     :param float z: The redshift of the source of interest.
-    :param BaseUnit cen_rad_units: The desired output units for the central radii of the annulli.
+    :param int pix_step: The width (in pixels) of each annular bin, default is 1.
+    :param BaseUnit cen_rad_units: The desired output units for the central radii of the annuli.
     :param cosmo: An astropy cosmology object for source coordinate conversions.
     :return: The brightness is returned in a flat numpy array, then the radii at the centre of the bins are
     returned in units of kpc, and finally the average brightness in the background region is returned.
@@ -192,7 +194,7 @@ def radial_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarra
     pix_cen = im_prod.coord_conv(centre, pix)
 
     # This sets up the annular bin radii, as well as finding the central radii of the bins in the chosen units.
-    inn_rads, out_rads, cen_rads = ann_radii(im_prod, centre, rad, z, cen_rad_units, cosmo)
+    inn_rads, out_rads, cen_rads = ann_radii(im_prod, centre, rad, z, pix_step, cen_rad_units, cosmo)
 
     # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
     #  dimension. Helps with broadcasting the annular masks with the region src_mask that gets rid of interlopers
@@ -216,7 +218,7 @@ def radial_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarra
 
 def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray,
                      centre: Quantity, rad: Quantity, num_slices: int = 4,
-                     z: float = None, cen_rad_units: UnitBase = arcsec,
+                     z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
                      cosmo=Planck15) -> Tuple[np.ndarray, Quantity, Quantity, np.float64]:
     """
     A different type of brightness profile that allows you to divide the cluster up azimuthally as
@@ -230,7 +232,8 @@ def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray
     YOUR SRC_MASK IS BASED ON, OTHERWISE YOU'LL GET AN INVALID BACKGROUND MEASUREMENT).
     :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
     :param float z: The redshift of the source of interest.
-    :param BaseUnit cen_rad_units: The desired output units for the central radii of the annulli.
+    :param int pix_step: The width (in pixels) of each annular bin, default is 1.
+    :param BaseUnit cen_rad_units: The desired output units for the central radii of the annuli.
     :param cosmo: An astropy cosmology object for source coordinate conversions.
     slice will be 360 / num_slices degrees.
     :return: The brightness is returned in a numpy array with a column per pizza slice, then the
@@ -246,7 +249,7 @@ def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray
     pix_cen = im_prod.coord_conv(centre, pix)
 
     # This sets up the annular bin radii, as well as finding the central radii of the bins in the chosen units.
-    inn_rads, out_rads, cen_rads = ann_radii(im_prod, centre, rad, z, cen_rad_units, cosmo)
+    inn_rads, out_rads, cen_rads = ann_radii(im_prod, centre, rad, z, pix_step, cen_rad_units, cosmo)
 
     # Setup the angular limits for the slices
     angs = Quantity(np.linspace(0, 360, int(num_slices)+1), deg)

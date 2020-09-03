@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 17:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/09/2020, 16:35. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple
@@ -17,10 +17,10 @@ from xga.xspec.fakeit import cluster_cr_conv
 
 
 def radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r200", use_peak: bool = True,
-                      radii: np.ndarray = np.linspace(0, 1, 20), lo_en: Quantity = Quantity(0.5, 'keV'),
-                      hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
-                      psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4,
-                      psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES) \
+                      pix_step: int = 1, radii: np.ndarray = np.linspace(0, 1, 20),
+                      lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
+                      custom_temps: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+                      psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Creates and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
@@ -32,6 +32,7 @@ def radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r200", 
     have an entry for this radius.
     :param bool use_peak: Controls whether the peak position is used as the centre of the brightness profile
     for each GalaxyCluster object.
+    :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
@@ -83,7 +84,7 @@ def radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r200", 
 
         rad = Quantity(src.get_source_region(scale_radius)[0].to_pixel(rt.radec_wcs).radius, pix)
         brightness, cen_rad, bck = radial_brightness(rt, source_mask, background_mask, pix_peak,
-                                                     rad, src.redshift, pix, src.cosmo)
+                                                     rad, src.redshift, pix_step, pix, src.cosmo)
 
         # Subtracting the background in the simplest way possible
         brightness -= bck
