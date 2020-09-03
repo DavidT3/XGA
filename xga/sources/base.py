@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 19:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/09/2020, 15:58. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -41,6 +41,12 @@ class BaseSource:
             s = SkyCoord(ra=self.ra_dec[0], dec=self.ra_dec[1])
             crd_str = s.to_string("hmsdms").replace("h", "").replace("m", "").replace("s", "").replace("d", "")
             ra_str, dec_str = crd_str.split(" ")
+            # A bug popped up where a conversion ended up with no decimal point and the self._name part got
+            #  really upset - so this adds one if there isn't one
+            if "." not in ra_str:
+                ra_str += "."
+            if "." not in dec_str:
+                dec_str += "."
             # Use the standard naming convention if one wasn't passed on initialisation of the source
             # Need it because its used for naming files later on.
             self._name = "J" + ra_str[:ra_str.index(".") + 2] + dec_str[:dec_str.index(".") + 2]
