@@ -1,9 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 13:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 14:42. Copyright (c) David J Turner
 
 
 from typing import Tuple, List, Union
-from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity, pix, deg, UnitConversionError, UnitBase
@@ -81,7 +80,8 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap], pix_rads: Quantity, out_
     elif out_unit.is_equivalent("deg"):
         conv_rads = deg_rads.to(out_unit)
     elif out_unit == pix:
-        warn("You're converting pixel radii to pixels...")
+        # Commenting out the sassy warning for now...
+        # warn("You're converting pixel radii to pixels...")
         conv_rads = pix_rads
     else:
         conv_rads = None
