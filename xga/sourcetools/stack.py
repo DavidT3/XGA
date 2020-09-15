@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 13:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 14:37. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -85,8 +85,9 @@ def radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r200", 
             pix_peak = rt.coord_conv(src.ra_dec, pix)
 
         rad = Quantity(src.get_source_region(scale_radius)[0].to_pixel(rt.radec_wcs).radius, pix)
-        brightness, cen_rad, rad_bins, bck = radial_brightness(rt, source_mask, background_mask, pix_peak, rad,
-                                                               src.redshift, pix_step, pix, src.cosmo, min_snr=min_snr)
+        brightness, cen_rad, rad_bins, bck, success = radial_brightness(rt, source_mask, background_mask, pix_peak, rad,
+                                                                        src.redshift, pix_step, pix, src.cosmo,
+                                                                        min_snr=min_snr)
 
         # Subtracting the background in the simplest way possible
         brightness -= bck

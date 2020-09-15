@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 13:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 14:37. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -152,7 +152,7 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
 
 def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, centre: Quantity,
                       rad: Quantity, z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
-                      cosmo=Planck15, min_snr: float = 0.0) -> Tuple[np.ndarray, Quantity, Quantity, np.float64]:
+                      cosmo=Planck15, min_snr: float = 0.0) -> Tuple[np.ndarray, Quantity, Quantity, np.float64, bool]:
     """
     A simple method to calculate the average brightness in circular annuli upto the radius of
     the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
@@ -170,8 +170,9 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     :param float min_snr: The minimum signal to noise allowed for each bin in the profile. If any point is
     below this threshold the profile will be rebinned. Default is 0.0
     :return: The brightness is returned in a flat numpy array, then the radii at the centre of the bins are
-    returned in units of kpc, and finally the average brightness in the background region is returned.
-    :rtype: Tuple[np.ndarray, Quantity, Quantity, np.float64]
+    returned in units of kpc, the width of the bins, and finally the average brightness in the background region is
+    returned.
+    :rtype: Tuple[np.ndarray, Quantity, Quantity, np.float64, bool]
     """
     if rt.shape != src_mask.shape:
         raise ValueError("The shape of the src_mask array ({0}) must be the same as that of im_prod "
@@ -213,9 +214,14 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     # Finds the elements in the the SNR profile that do not meet the minimum requirements provided by the user
     #  Flatten it just because I know this will always a be a 1D array and flattening makes it nicer to work with
     below = np.argwhere(snr_prof < min_snr).flatten()
+
+    # Making copies in case rebinning fails
+    init_br = br.copy()
+    init_inn = inn_rads.copy()
+    init_out = out_rads.copy()
+
     # Our task here is to combine radial bins until the minimum SNR requirements are met for all bins
     # Using a while loop for this doesn't feel super efficient, but as a first attempt hopefully it'll be fast enough
-
     # If the shape of below is (0,) then there are no bins at which the SNR is causing a problem
     while below.shape != (0,):
         # This is triggered if the first index where SNR is too low IS NOT the last bin in the profile
@@ -253,12 +259,20 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
         # Find out which bins are still below the SNR threshold (if any)
         below = np.argwhere(snr_prof < min_snr).flatten()
 
+    if len(inn_rads) == 0:
+        inn_rads = init_inn
+        out_rads = init_out
+        br = init_br
+        succeeded = False
+    else:
+        succeeded = True
+
     inn_rads = pix_rad_to_physical(rt, Quantity(inn_rads, pix), cen_rad_units, centre, z, cosmo)
     out_rads = pix_rad_to_physical(rt, Quantity(out_rads, pix), cen_rad_units, centre, z, cosmo)
     cen_rads = (inn_rads + out_rads) / 2
     rad_err = (out_rads-inn_rads) / 2
 
-    return br, cen_rads, rad_err, bg
+    return br, cen_rads, rad_err, bg, succeeded
 
 
 # TODO At some point implement minimum SNR for this also
