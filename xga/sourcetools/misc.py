@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 13:24. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
@@ -78,3 +78,4 @@ def ang_to_rad(ang: Quantity, z: float, cosmo=Planck15) -> Quantity:
     d_a = cosmo.angular_diameter_distance(z)
     rad = (ang.to("deg").value * (pi / 180) * d_a).to("kpc")
     return rad
+
