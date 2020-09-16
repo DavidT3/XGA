@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/09/2020, 09:49. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/09/2020, 12:42. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -241,6 +241,7 @@ def view_radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r2
     # The normalised covariance matrix
     norm_cov = results[4]
     # Finds the standard deviations by diagonalising the covariance matrix and taking the sqrt
+    # TODO This gives a slightly different answer to np.std for some reason
     sd = np.sqrt(np.diagonal(cov))
 
     fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 14))
