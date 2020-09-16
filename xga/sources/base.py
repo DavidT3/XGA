@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/09/2020, 15:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/09/2020, 14:09. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -661,6 +661,11 @@ class BaseSource:
         for obs_id in reg_paths:
             if reg_paths[obs_id] is not None:
                 ds9_regs = read_ds9(reg_paths[obs_id])
+                # Apparently can happen that there are no regions in a region file, so if that is the case
+                #  then I just set the ds9_regs to [None] because I know the rest of the code can deal with that.
+                #  It can't deal with an empty list
+                if len(ds9_regs) == 0:
+                    ds9_regs = [None]
             else:
                 ds9_regs = [None]
 
