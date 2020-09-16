@@ -1,2 +1,3 @@
 xga/_version.py export-subst
-.ipynb linguist-documentation
+.ipynb linguist-detectable=false
+

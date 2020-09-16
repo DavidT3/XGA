@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 15:30. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -19,7 +19,7 @@ from .run import sas_call
 @sas_call
 def evselect_spectrum(sources: List[BaseSource], reg_type: str, group_spec: bool = True, min_counts: int = 5,
                       min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                      num_cores: int = NUM_CORES):
+                      num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A wrapper for all of the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -39,6 +39,7 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, group_spec: bool
     slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to
     90% of available.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
     # This function supports passing both individual sources and sets of sources
@@ -57,7 +58,7 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, group_spec: bool
                         "they have no overdensity radii.".format(reg_type))
 
     # Have to make sure that all observations have an up to date cif file.
-    cifbuild(sources)
+    cifbuild(sources, disable_progress=disable_progress)
 
     # Define the various SAS commands that need to be populated, for a useful spectrum you also need ARF/RMF
     spec_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; evselect table={e} withspectrumset=yes " \
@@ -204,7 +205,7 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, group_spec: bool
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
 
-    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
 def evselect_annular_spectrum():

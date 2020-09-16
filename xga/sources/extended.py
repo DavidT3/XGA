@@ -1,8 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 14:37. Copyright (c) David J Turner
 
 import warnings
-from typing import Tuple
+from typing import Tuple, Union
 
 from astropy import wcs
 from astropy.cosmology import Planck15
@@ -89,8 +89,8 @@ class GalaxyCluster(ExtendedSource):
                 # Use the source method to remove data we've decided isn't worth keeping
                 self.disassociate_obs(reject_dict)
                 # Run these just so there is an up to date combined ratemap
-                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en)
-                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en)
+                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
                 # And need to reset regions and masks for the new state of this source object
                 if r200 is not None:
@@ -200,7 +200,7 @@ class GalaxyCluster(ExtendedSource):
             return self.get_results(reg_type, models_with_kt[0], "kT")
 
     def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
-                                same_peak: bool = True):
+                                same_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0):
         """
         A method that generates and displays brightness profiles for the current cluster. Brightness profiles
         exclude point sources and either measure the average counts per second within a circular annulus (radial),
@@ -214,6 +214,9 @@ class GalaxyCluster(ExtendedSource):
          will all be constructed centered on the peak found for the 'normal' combined ratemap. If False,
          peaks will be found for each individual combined ratemap and profiles will be constructed
          centered on them.
+        :param int pix_step: The width (in pixels) of each annular bin, default is 1.
+        :param Union[float, int] min_snr: The minimum signal to noise allowed for each radial bin. This is 0 by
+        default, which disables any automatic rebinning.
         """
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
@@ -254,27 +257,37 @@ class GalaxyCluster(ExtendedSource):
         if profile_type == "radial":
             ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                              u=self._peak_hi_en.value))
-            brightness, radii, og_background = radial_brightness(comb_rt, source_mask, background_mask, pix_peak,
-                                                                 rad, self._redshift, kpc, self.cosmo)
-            plt.plot(radii, brightness, label="Emission")
+            brightness, radii, radii_bins, og_background, success = radial_brightness(comb_rt, source_mask,
+                                                                                      background_mask, pix_peak, rad,
+                                                                                      self._redshift, pix_step, kpc,
+                                                                                      self.cosmo, min_snr=min_snr)
+            prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, fmt='x', capsize=2, label="Emission")
+            plt.plot(radii.value, brightness, color=prof[0].get_color())
 
             for psf_comb_rt in psf_comb_rts:
                 p_rt = psf_comb_rt[-1]
                 # If the user wants to use individual peaks, we have to find them here.
                 if not same_peak:
                     pix_peak = self.find_peak(p_rt)[0]
-                brightness, radii, background = radial_brightness(psf_comb_rt[-1], source_mask, background_mask,
-                                                                  pix_peak, rad, self._redshift, kpc, self.cosmo)
-                prof = plt.plot(radii, brightness, label="{m} PSF Corrected".format(m=p_rt.psf_model))
+                brightness, radii, radii_bins, background, success = radial_brightness(psf_comb_rt[-1], source_mask,
+                                                                                       background_mask, pix_peak, rad,
+                                                                                       self._redshift, pix_step, kpc,
+                                                                                       self.cosmo, min_snr=min_snr)
+                prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, capsize=2, fmt="x",
+                                    label="{m} PSF Corrected".format(m=p_rt.psf_model))
+                plt.plot(radii.value, brightness, color=prof[0].get_color())
+
                 plt.axhline(background, color=prof[0].get_color(), linestyle="dashed",
                             label="{m} PSF Corrected Background".format(m=p_rt.psf_model))
 
         elif profile_type == "pizza":
             ax.set_title("{n} - {l}-{u}keV Pizza Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                             u=self._peak_hi_en.value))
-            brightness, radii, angles, og_background = pizza_brightness(comb_rt, source_mask, background_mask,
-                                                                        pix_peak, rad, num_slices, self._redshift,
-                                                                        kpc, self.cosmo)
+            brightness, radii, angles, og_background, inn_rads, out_rads = pizza_brightness(comb_rt, source_mask,
+                                                                                            background_mask, pix_peak,
+                                                                                            rad, num_slices,
+                                                                                            self._redshift, pix_step,
+                                                                                            kpc, self.cosmo)
             for ang_ind in range(angles.shape[0]):
                 # Setup labels with the angles covered by the profile
                 lab_str = "{0}$^{{\circ}}$-{1}$^{{\circ}}$ Slice Emission".format(*angles[ang_ind, :].value)
@@ -334,3 +347,6 @@ class GalaxyCluster(ExtendedSource):
 
         # Calculating and returning the combined factor.
         return av_lum / total_rate
+
+
+

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/08/2020, 11:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 14:37. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -8,9 +8,9 @@ import numpy as np
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitBase, pix, deg, arcsec, UnitConversionError
 
-from xga.products import Image
-from xga.sourcetools import ang_to_rad, rad_to_ang
-from .misc import pix_deg_scale
+from xga.products import Image, RateMap
+from xga.sourcetools import rad_to_ang
+from .misc import pix_deg_scale, pix_rad_to_physical
 
 
 def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, shape: tuple,
@@ -104,8 +104,8 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     return ann_mask
 
 
-def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, cen_rad_units: UnitBase = arcsec,
-              cosmo=Planck15) -> Tuple[np.ndarray, np.ndarray, Quantity]:
+def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, pix_step: int = 1,
+              cen_rad_units: UnitBase = arcsec, cosmo=Planck15) -> Tuple[np.ndarray, np.ndarray, Quantity]:
     """
     Will probably only ever be called by an internal brightness calculation, but two different methods
     need it so it gets its own method.
@@ -114,6 +114,7 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     :param Quantity rad: The outer radius of the set of annuli.
     :param float z: The redshift of the source of interest, required if the output radius units are
     a proper radius.
+    :param int pix_step: The width (in pixels) of each annular bin, default is 1.
     :param UnitBase cen_rad_units: The output units for the centres of the annulli returned by
     this function. The inner and outer radii will always be in pixels.
     :param cosmo: An instance of an astropy cosmology, the default is Planck15.
@@ -141,83 +142,144 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     rad = np.ceil(rad)
 
     # By this point, the rad should be in pixels
-    rads = np.arange(0, rad.value + 1).astype(int)
+    rads = np.arange(0, rad.value + 1, pix_step).astype(int)
     inn_rads = rads[:len(rads) - 1]
     out_rads = rads[1:len(rads)]
 
-    deg_rads = Quantity(pix_deg_scale(deg_cen, im_prod.radec_wcs) * out_rads, 'deg')
-
-    if cen_rad_units.is_equivalent("kpc"):
-        # Quick convert to kpc with my handy function and add a zero at the beginning
-        kpc_rads = ang_to_rad(deg_rads, z, cosmo).insert(0, Quantity(0, "kpc"))
-        # Wham-bam now have the centres of the bins in kilo-parsecs
-        cen_rads = (kpc_rads[1:].to(cen_rad_units) + kpc_rads[:-1].to(cen_rad_units)) / 2
-    elif cen_rad_units.is_equivalent("deg"):
-        deg_rads = deg_rads.insert(0, Quantity(0, cen_rad_units))
-        cen_rads = (deg_rads[1:].to(cen_rad_units) +
-                    deg_rads[:-1].to(cen_rad_units)) / 2
-    elif cen_rad_units == pix:
-        cen_rads = Quantity((inn_rads + out_rads) / 2, 'pix')
-    else:
-        cen_rads = None
-        raise UnitConversionError("cen_rad_units doesn't appear to be a distance or angular unit.")
+    cen_rads = pix_rad_to_physical(im_prod, Quantity((inn_rads + out_rads)/2, pix), cen_rad_units, deg_cen, z, cosmo)
     return inn_rads, out_rads, cen_rads
 
 
-def radial_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray,
-                      centre: Quantity, rad: Quantity, z: float = None, cen_rad_units: UnitBase = arcsec,
-                      cosmo=Planck15) -> Tuple[np.ndarray, Quantity, np.float64]:
+def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, centre: Quantity,
+                      rad: Quantity, z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
+                      cosmo=Planck15, min_snr: float = 0.0) -> Tuple[np.ndarray, Quantity, Quantity, np.float64, bool]:
     """
     A simple method to calculate the average brightness in circular annuli upto the radius of
     the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
     earlier, interloper sources should be removed.
-    :param Image im_prod: An Image or RateMap object that you wish to construct a brightness profile from.
+    :param RateMap rt: A RateMap object to construct a brightness profile from.
     :param np.ndarray src_mask: A numpy array that masks out everything but the source, including interlopers.
     :param np.ndarray back_mask: A numpy array that masks out everything but the background, including interlopers.
     :param Quantity centre: The coordinates for the centre of the brightness profile.
     :param Quantity rad: The outer radius of the brightness profile (THIS SHOULD BE THE SAME RADIUS AS THE REGION
     YOUR SRC_MASK IS BASED ON, OTHERWISE YOU'LL GET AN INVALID BACKGROUND MEASUREMENT).
     :param float z: The redshift of the source of interest.
-    :param BaseUnit cen_rad_units: The desired output units for the central radii of the annulli.
+    :param int pix_step: The width (in pixels) of each annular bin, default is 1.
+    :param BaseUnit cen_rad_units: The desired output units for the central radii of the annuli.
     :param cosmo: An astropy cosmology object for source coordinate conversions.
+    :param float min_snr: The minimum signal to noise allowed for each bin in the profile. If any point is
+    below this threshold the profile will be rebinned. Default is 0.0
     :return: The brightness is returned in a flat numpy array, then the radii at the centre of the bins are
-    returned in units of kpc, and finally the average brightness in the background region is returned.
-    :rtype: Tuple[np.ndarray, Quantity, np.float64]
+    returned in units of kpc, the width of the bins, and finally the average brightness in the background region is
+    returned.
+    :rtype: Tuple[np.ndarray, Quantity, Quantity, np.float64, bool]
     """
-    if im_prod.shape != src_mask.shape:
+    if rt.shape != src_mask.shape:
         raise ValueError("The shape of the src_mask array ({0}) must be the same as that of im_prod "
-                         "({1}).".format(src_mask.shape, im_prod.shape))
+                         "({1}).".format(src_mask.shape, rt.shape))
+
+    # Returns conversion factor to degrees, so multiplying by 60 goes to arcminutes
+    # Getting this because we want to be able to convert pixel distance into arcminutes for dividing by the area
+    to_arcmin = pix_deg_scale(centre, rt.radec_wcs) * 60
+
+    # Adds any intersecting chip gaps into the background region mask
+    corr_back_mask = back_mask * rt.sensor_mask
+    # Calculates the area of the background region in arcmin^2
+    back_area = np.sum(corr_back_mask, axis=(0, 1)) * to_arcmin**2
+    # Finds the emission per arcmin^2 of the background region (accounting for removed sources and chip gaps)
+    bg = np.sum(rt.data * corr_back_mask, axis=(0, 1)) / back_area
 
     # Just making sure we have the centre in pixel coordinates
-    pix_cen = im_prod.coord_conv(centre, pix)
+    pix_cen = rt.coord_conv(centre, pix)
 
-    # This sets up the annular bin radii, as well as finding the central radii of the bins in the chosen units.
-    inn_rads, out_rads, cen_rads = ann_radii(im_prod, centre, rad, z, cen_rad_units, cosmo)
+    # This sets up the initial annular bin radii, as well as finding the central radii of the bins in the chosen units.
+    inn_rads, out_rads, init_cen_rads = ann_radii(rt, centre, rad, z, pix_step, cen_rad_units, cosmo)
 
     # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
     #  dimension. Helps with broadcasting the annular masks with the region src_mask that gets rid of interlopers
-    if im_prod.type == 'image':
-        masks = annular_mask(pix_cen, inn_rads, out_rads, im_prod.shape) * src_mask[..., None]
-    elif im_prod.type == 'ratemap':
-        masks = annular_mask(pix_cen, inn_rads, out_rads, im_prod.shape) * src_mask[..., None] \
-                * im_prod.sensor_mask[..., None]
+    masks = annular_mask(pix_cen, inn_rads, out_rads, rt.shape) * src_mask[..., None] * rt.sensor_mask[..., None]
+    # This calculates the area of each annulus mask
+    areas = np.sum(masks, axis=(0, 1)) * to_arcmin**2
 
     # Creates a 3D array of the masked data
-    masked_data = masks * im_prod.data[..., None]
-    # Calculates the average for each radius, use the masks array as weights to only include unmasked
-    #  areas in the average for each radius.
-    br = np.average(masked_data, axis=(0, 1), weights=masks)
+    masked_data = masks * rt.data[..., None]
+    # Calculates the sum of the pixel count rates for each annular radius, masking out other known sources
+    cr = np.sum(masked_data, axis=(0, 1))
+    # Then calculates the actual brightness profile by dividing by the area of each annulus
+    br = cr / areas
 
-    # Finds the average of the background region
-    bg = np.average(im_prod.data * back_mask, axis=(0, 1), weights=back_mask)
+    # Calculates the signal to noise profile, defined as the ratio between brightness profile and background
+    snr_prof = br / bg
 
-    return br, cen_rads, bg
+    # Finds the elements in the the SNR profile that do not meet the minimum requirements provided by the user
+    #  Flatten it just because I know this will always a be a 1D array and flattening makes it nicer to work with
+    below = np.argwhere(snr_prof < min_snr).flatten()
+
+    # Making copies in case rebinning fails
+    init_br = br.copy()
+    init_inn = inn_rads.copy()
+    init_out = out_rads.copy()
+
+    # Our task here is to combine radial bins until the minimum SNR requirements are met for all bins
+    # Using a while loop for this doesn't feel super efficient, but as a first attempt hopefully it'll be fast enough
+    # If the shape of below is (0,) then there are no bins at which the SNR is causing a problem
+    while below.shape != (0,):
+        # This is triggered if the first index where SNR is too low IS NOT the last bin in the profile
+        if below[0] != br.shape[0] - 1:
+            # We deal with and modify the count rates and areas separately as you have to combine bins in the count
+            #  rate and area regimes separately, then calculate brightness by dividing cr by area.
+            cr[below[0]] = cr[below[0]] + cr[below[0] + 1]
+            areas[below[0]] = areas[below[0]] + areas[below[0] + 1]
+            # Then the donor bin that was added to the problem bin is deleted
+            cr = np.delete(cr, below[0] + 1)
+            areas = np.delete(areas, below[0] + 1)
+            # The new outer radius of the problem bin is set to the outer radius of the donor bin
+            out_rads[below[0]] = out_rads[below[0] + 1]
+            # The outer radius entry of the donor bin is deleted
+            out_rads = np.delete(out_rads, below[0] + 1)
+            # The inner radius of the donor bin is deleted as there is only one bin now from problem inner
+            #  to donor outer radii
+            inn_rads = np.delete(inn_rads, below[0] + 1)
+        # This is triggered if the first index where SNR is to low IS the last bin in the profile
+        else:
+            # As this is the last bin in the profile, there is no extra bin in the outward direction to add to our
+            #  problem bin. As such the problem bin is added inwards, to the N-1th bin in the profile
+            cr[below[0] - 1] = cr[below[0] - 1] + cr[below[0]]
+            areas[below[0] - 1] = areas[below[0] - 1] + areas[below[0]]
+            cr = np.delete(cr, below[0])
+            areas = np.delete(areas, below[0])
+            out_rads[below[0] - 1] = out_rads[below[0]]
+            out_rads = np.delete(out_rads, below[0])
+            inn_rads = np.delete(inn_rads, below[0])
+
+        # Calculate the new brightness with our combined count rates and areas
+        br = cr/areas
+        # Recalculate the SNR profile after the re-binning in this iteration
+        snr_prof = br / bg
+        # Find out which bins are still below the SNR threshold (if any)
+        below = np.argwhere(snr_prof < min_snr).flatten()
+
+    if len(inn_rads) == 0:
+        inn_rads = init_inn
+        out_rads = init_out
+        br = init_br
+        succeeded = False
+    else:
+        succeeded = True
+
+    inn_rads = pix_rad_to_physical(rt, Quantity(inn_rads, pix), cen_rad_units, centre, z, cosmo)
+    out_rads = pix_rad_to_physical(rt, Quantity(out_rads, pix), cen_rad_units, centre, z, cosmo)
+    cen_rads = (inn_rads + out_rads) / 2
+    rad_err = (out_rads-inn_rads) / 2
+
+    return br, cen_rads, rad_err, bg, succeeded
 
 
+# TODO At some point implement minimum SNR for this also
 def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray,
                      centre: Quantity, rad: Quantity, num_slices: int = 4,
-                     z: float = None, cen_rad_units: UnitBase = arcsec,
-                     cosmo=Planck15) -> Tuple[np.ndarray, Quantity, Quantity, np.float64]:
+                     z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
+                     cosmo=Planck15) -> Tuple[np.ndarray, Quantity, Quantity, np.float64, np.ndarray, np.ndarray]:
     """
     A different type of brightness profile that allows you to divide the cluster up azimuthally as
     well as radially. It performs the same calculation as radial_brightness, but for N angular bins,
@@ -230,13 +292,14 @@ def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray
     YOUR SRC_MASK IS BASED ON, OTHERWISE YOU'LL GET AN INVALID BACKGROUND MEASUREMENT).
     :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
     :param float z: The redshift of the source of interest.
-    :param BaseUnit cen_rad_units: The desired output units for the central radii of the annulli.
+    :param int pix_step: The width (in pixels) of each annular bin, default is 1.
+    :param BaseUnit cen_rad_units: The desired output units for the central radii of the annuli.
     :param cosmo: An astropy cosmology object for source coordinate conversions.
     slice will be 360 / num_slices degrees.
     :return: The brightness is returned in a numpy array with a column per pizza slice, then the
     radii at the centre of the bins are returned in units of kpc, then the angle boundaries of each slice,
     and finally the average brightness in the background region is returned.
-    :rtype: Tuple[ndarray, Quantity, Quantity, np.float64]
+    :rtype: Tuple[ndarray, Quantity, Quantity, np.float64, ndarray, ndarray]
     """
     if im_prod.shape != src_mask.shape:
         raise ValueError("The shape of the src_mask array ({0}) must be the same as that of im_prod "
@@ -246,7 +309,7 @@ def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray
     pix_cen = im_prod.coord_conv(centre, pix)
 
     # This sets up the annular bin radii, as well as finding the central radii of the bins in the chosen units.
-    inn_rads, out_rads, cen_rads = ann_radii(im_prod, centre, rad, z, cen_rad_units, cosmo)
+    inn_rads, out_rads, cen_rads = ann_radii(im_prod, centre, rad, z, pix_step, cen_rad_units, cosmo)
 
     # Setup the angular limits for the slices
     angs = Quantity(np.linspace(0, 360, int(num_slices)+1), deg)
@@ -276,7 +339,62 @@ def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray
     # Just packaging the angles nicely
     return_angs = Quantity(np.stack([start_angs.value, stop_angs.value]).T, deg)
 
-    return br, cen_rads, return_angs, bg
+    return br, cen_rads, return_angs, bg, inn_rads, out_rads
+
+
+# def radial_rebinned_brightness(im_prod: Image, min_snr: float, src_mask: np.ndarray, back_mask: np.ndarray,
+#                                centre: Quantity, rad: Quantity, z: float = None, cen_rad_units: UnitBase = arcsec,
+#                                cosmo=Planck15) -> Tuple[np.ndarray, Quantity, np.float64]:
+#
+#     br, cen_rads, bg, inn_rads, out_rads = radial_brightness(im_prod, src_mask, back_mask, centre, rad, z, 1,
+#                                                              cen_rad_units, cosmo)
+#     # Calculates the signal to noise profile, defined as the ratio between brightness profile and background
+#     snr_prof = br/bg
+#
+#
+#     import sys
+#
+#     # Finds the elements in the the SNR profile that do not meet the minimum requirements provided by the user
+#     #  Flatten it just because I know this will always a be a 1D array and flattening makes it nicer to work with
+#     below_min_snr = np.argwhere(snr_prof < min_snr).flatten()
+#
+#     # Our task here is to combine radial bins until the minimum SNR requirements are met for all bins
+#     # Using a while loop for this doesn't feel super efficient, but as a first attempt hopefully it'll be fast enough
+#     new_br = br.copy()
+#     new_inn_rads = inn_rads.copy()
+#     new_out_rads = out_rads.copy()
+#
+#     # If the shape of below_min_snr is (0,) then there are no bins at which the SNR is causing a problem
+#     while below_min_snr.shape != (0,):
+#         # This is triggered if the first index where SNR is too low IS NOT the last bin in the profile
+#         if below_min_snr[0] != new_br.shape[0]-1:
+#             # The bin where SNR is too low (problem bin) has the next bin along (donor bin - in the outward direction)
+#             #  added to it
+#             new_br[below_min_snr[0]] = new_br[below_min_snr[0]] + new_br[below_min_snr[0] + 1]
+#             # Then the donor bin that was added to the problem bin is deleted
+#             new_br = np.delete(new_br, below_min_snr[0]+1)
+#             # The new outer radius of the problem bin is set to the outer radius of the donor bin
+#             new_out_rads[below_min_snr[0]] = new_out_rads[below_min_snr[0]+1]
+#             # The outer radius entry of the donor bin is deleted
+#             new_out_rads = np.delete(new_out_rads, below_min_snr[0]+1)
+#             # The inner radius of the donor bin is deleted as there is only one bin now from problem inner
+#             #  to donor outer radii
+#             new_inn_rads = np.delete(new_inn_rads, below_min_snr[0]+1)
+#         # This is triggered if the first index where SNR is to low IS the last bin in the profile
+#         else:
+#             # As this is the last bin in the profile, there is no extra bin in the outward direction to add to our
+#             #  problem bin. As such the problem bin is added inwards, to the N-1th bin in the profile
+#             new_br[below_min_snr[0] - 1] = new_br[below_min_snr[0] - 1] + new_br[below_min_snr[0]]
+#             new_br = np.delete(new_br, below_min_snr[0])
+#             new_out_rads[below_min_snr[0] - 1] = new_out_rads[below_min_snr[0]]
+#             new_out_rads = np.delete(new_out_rads, below_min_snr[0])
+#             new_inn_rads = np.delete(new_inn_rads, below_min_snr[0])
+#
+#         # Recalculate the SNR profile after the re-binning in this iteration
+#         snr_prof = new_br / bg
+#         # Find out which bins are still below the SNR threshold (if any)
+#         below_min_snr = np.argwhere(snr_prof < min_snr).flatten()
+
 
 
 

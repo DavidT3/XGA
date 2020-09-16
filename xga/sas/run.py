@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 15:30. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -91,7 +91,7 @@ def sas_call(sas_func):
         src_lookup = [repr(src) for src in sources]
 
         # This is the output from whatever function this is a decorator for
-        cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info = sas_func(*args, **kwargs)
+        cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = sas_func(*args, **kwargs)
 
         all_run = []  # Combined command list for all sources
         all_type = []  # Combined expected type list for all sources
@@ -120,8 +120,8 @@ def sas_call(sas_func):
             # Will run the commands locally in a pool
             raised_errors = []
             prod_type_str = ", ".join(set(all_type))
-            with tqdm(total=len(all_run), desc="Generating products of type(s) " + prod_type_str) as gen, \
-                    Pool(cores) as pool:
+            with tqdm(total=len(all_run), desc="Generating products of type(s) " + prod_type_str,
+                      disable=disable) as gen, Pool(cores) as pool:
                 def callback(results_in: Tuple[BaseProduct, str]):
                     """
                     Callback function for the apply_async pool method, gets called when a task finishes

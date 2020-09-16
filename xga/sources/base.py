@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 14:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/09/2020, 14:09. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -41,6 +41,12 @@ class BaseSource:
             s = SkyCoord(ra=self.ra_dec[0], dec=self.ra_dec[1])
             crd_str = s.to_string("hmsdms").replace("h", "").replace("m", "").replace("s", "").replace("d", "")
             ra_str, dec_str = crd_str.split(" ")
+            # A bug popped up where a conversion ended up with no decimal point and the self._name part got
+            #  really upset - so this adds one if there isn't one
+            if "." not in ra_str:
+                ra_str += "."
+            if "." not in dec_str:
+                dec_str += "."
             # Use the standard naming convention if one wasn't passed on initialisation of the source
             # Need it because its used for naming files later on.
             self._name = "J" + ra_str[:ra_str.index(".") + 2] + dec_str[:dec_str.index(".") + 2]
@@ -236,6 +242,8 @@ class BaseSource:
                 if os.path.exists(reg_file):
                     # Regions dictionary updated with path to region file, if it exists
                     reg_dict[obs_id] = reg_file
+                else:
+                    reg_dict[obs_id] = None
 
         # Cleans any observations that don't have at least one instrument associated with them
         obs_dict = {o: v for o, v in obs_dict.items() if len(v) != 0}
@@ -634,7 +642,6 @@ class BaseSource:
         to be related to the source.
         :return: Tuple[dict, dict]
         """
-
         def dist_from_source(reg):
             """
             Calculates the euclidean distance between the centre of a supplied region, and the
@@ -652,7 +659,16 @@ class BaseSource:
         # WCS transform from ANY of the images to convert pixels to degrees
 
         for obs_id in reg_paths:
-            ds9_regs = read_ds9(reg_paths[obs_id])
+            if reg_paths[obs_id] is not None:
+                ds9_regs = read_ds9(reg_paths[obs_id])
+                # Apparently can happen that there are no regions in a region file, so if that is the case
+                #  then I just set the ds9_regs to [None] because I know the rest of the code can deal with that.
+                #  It can't deal with an empty list
+                if len(ds9_regs) == 0:
+                    ds9_regs = [None]
+            else:
+                ds9_regs = [None]
+
             if isinstance(ds9_regs[0], PixelRegion):
                 # If regions exist in pixel coordinates, we need an image WCS to convert them to RA-DEC, so we need
                 #  one of the images supplied in the config file, not anything that XGA generates.
@@ -671,26 +687,32 @@ class BaseSource:
                 w = im[0][-1].radec_wcs
                 sky_regs = [reg.to_sky(w) for reg in ds9_regs]
                 reg_dict[obs_id] = np.array(sky_regs)
-            else:
+            elif isinstance(ds9_regs[0], SkyRegion):
                 reg_dict[obs_id] = np.array(ds9_regs)
+            else:
+                # So there is an entry in this for EVERY ObsID
+                reg_dict[obs_id] = np.array([None])
 
-            # Quickly calculating distance between source and center of regions, then sorting
-            # and getting indices. Thus I only match to the closest 5 regions.
-            diff_sort = np.array([dist_from_source(r) for r in reg_dict[obs_id]]).argsort()
-            # Unfortunately due to a limitation of the regions module I think you need images
-            #  to do this contains match...
-            # TODO Come up with an alternative to this that can work without a WCS
-            within = np.array([reg.contains(SkyCoord(*self._ra_dec, unit='deg'), w)
-                               for reg in reg_dict[obs_id][diff_sort[0:5]]])
+            # Hopefully this bodge doesn't have any unforeseen consequences
+            if reg_dict[obs_id][0] is not None:
+                # Quickly calculating distance between source and center of regions, then sorting
+                # and getting indices. Thus I only match to the closest 5 regions.
+                diff_sort = np.array([dist_from_source(r) for r in reg_dict[obs_id]]).argsort()
+                # Unfortunately due to a limitation of the regions module I think you need images
+                #  to do this contains match...
+                # TODO Come up with an alternative to this that can work without a WCS
+                within = np.array([reg.contains(SkyCoord(*self._ra_dec, unit='deg'), w)
+                                   for reg in reg_dict[obs_id][diff_sort[0:5]]])
 
-            # Make sure to re-order the region list to match the sorted within array
-            reg_dict[obs_id] = reg_dict[obs_id][diff_sort]
+                # Make sure to re-order the region list to match the sorted within array
+                reg_dict[obs_id] = reg_dict[obs_id][diff_sort]
 
-            # Expands it so it can be used as a mask on the whole set of regions for this observation
-            within = np.pad(within, [0, len(diff_sort) - len(within)])
-            match_dict[obs_id] = within
-            # Use the deleter for the hdulist to unload the astropy hdulist for this image
-            # del self._products[obs_id][inst][en]["image"].hdulist
+                # Expands it so it can be used as a mask on the whole set of regions for this observation
+                within = np.pad(within, [0, len(diff_sort) - len(within)])
+                match_dict[obs_id] = within
+            else:
+                match_dict[obs_id] = np.array([False])
+
         return reg_dict, match_dict
 
     def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
