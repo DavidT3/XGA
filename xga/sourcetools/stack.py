@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/09/2020, 09:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/09/2020, 09:49. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -202,16 +202,46 @@ def view_radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r2
                            hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
                            psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4,
                            psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES):
+    """
+    A convenience function that calls radial_data_stack and makes plots of the average profile, individual profiles,
+    covariance, and normalised covariance matrix.
+    :param List[GalaxyCluster] sources: The source objects that will contribute to the stacked brightness profile.
+    :param str scale_radius: The overdensity radius to scale the cluster radii by, all GalaxyCluster objects must
+    have an entry for this radius.
+    :param bool use_peak: Controls whether the peak position is used as the centre of the brightness profile
+    for each GalaxyCluster object.
+    :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
+    :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
+    :param Union[int, float] min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
+    0, which disables automatic rebinning.
+    :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
+    :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
+    :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
+    in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
+    for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+    :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
+    :param str psf_model: If PSF corrected, the PSF model used.
+    :param int psf_bins: If PSF corrected, the number of bins per side.
+    :param str psf_algo: If PSF corrected, the algorithm used.
+    :param int psf_iter: If PSF corrected, the number of algorithm iterations.
+    :param int num_cores: The number of cores to use when calculating the brightness profiles, the default is 90%
+    of available cores.
+    """
+    # Calls the stacking function
     results = radial_data_stack(sources, scale_radius, use_peak, pix_step, radii, min_snr, lo_en, hi_en,
                                 custom_temps, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, num_cores)
 
-    lum = results[0]
-    all_lum = results[1]
-    rs = results[2]
+    # Gets the average profile from the results
+    av_prof = results[0]
+    # Gets the individual scaled profiles from results
+    all_prof = results[1]
 
+    # The covariance matrix
     cov = results[3]
+    # The normalised covariance matrix
     norm_cov = results[4]
-    var = np.sqrt(np.diagonal(cov))
+    # Finds the standard deviations by diagonalising the covariance matrix and taking the sqrt
+    sd = np.sqrt(np.diagonal(cov))
 
     fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 14))
 
@@ -220,10 +250,10 @@ def view_radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r2
     ax[0, 1].set_title("All Profiles")
     ax[0, 1].set_xlabel("Radius [{}]".format(scale_radius))
 
-    ax[0, 0].plot(rs, lum, color="black", label="Average Profile")
-    ax[0, 0].errorbar(rs, lum, fmt="kx", yerr=var, capsize=2)
-    for i in range(0, all_lum.shape[0]):
-        ax[0, 1].plot(rs, all_lum[i, :])
+    ax[0, 0].plot(radii, av_prof, color="black", label="Average Profile")
+    ax[0, 0].errorbar(radii, av_prof, fmt="kx", yerr=sd, capsize=2)
+    for i in range(0, all_prof.shape[0]):
+        ax[0, 1].plot(radii, all_prof[i, :])
 
     ax[0, 0].set_xscale("log")
     ax[0, 0].set_yscale("log")
