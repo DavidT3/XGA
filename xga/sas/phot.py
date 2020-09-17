@@ -1,9 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 15:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:45. Copyright (c) David J Turner
 
 import os
 from shutil import rmtree
-from typing import List
+from typing import List, Union
 
 import numpy as np
 from astropy.units import Quantity, deg
@@ -12,6 +12,7 @@ from xga import OUTPUT, NUM_CORES
 from xga.exceptions import SASInputInvalid, NoProductAvailableError
 from xga.imagetools import data_limits
 from xga.sources import BaseSource
+from xga.sources.base import NullSource
 from xga.utils import energy_to_channel
 from .misc import cifbuild
 from .run import sas_call
@@ -19,14 +20,14 @@ from .run import sas_call
 
 # TODO Perhaps remove the option to add to the SAS expression
 @sas_call
-def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
+def evselect_image(sources: Union[List[BaseSource], NullSource], lo_en: Quantity, hi_en: Quantity,
                    add_expr: str = "", num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for a configuration of the SAS evselect command that makes images.
     Images will be generated for every observation associated with every source passed to this function.
     If images in the requested energy band are already associated with the source,
-    they will not be generated again
-    :param List[BaseSource] sources: A single source object, or a list of source objects.
+    they will not be generated again.
+    :param Union[List[BaseSource], NullSource] sources: A single source object, or a list of source objects.
     :param Quantity lo_en: The lower energy limit for the image, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the image, in astropy energy units.
     :param str add_expr: A string to be added to the SAS expression keyword
@@ -37,7 +38,7 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
     # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
+    if isinstance(sources, (BaseSource, NullSource)):
         sources = [sources]
 
     # Don't do much value checking in this module, but this one is so fundamental that I will do it
@@ -107,8 +108,8 @@ def evselect_image(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity,
 
 
 @sas_call
-def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cores: int = NUM_CORES,
-            disable_progress: bool = False):
+def eexpmap(sources: Union[List[BaseSource], NullSource], lo_en: Quantity, hi_en: Quantity,
+            num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for the SAS eexpmap command.
     Expmaps will be generated for every observation associated with every source passed to this function.
@@ -125,7 +126,7 @@ def eexpmap(sources: List[BaseSource], lo_en: Quantity, hi_en: Quantity, num_cor
     # judge me too much.
 
     # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
+    if isinstance(sources, (BaseSource, NullSource)):
         sources = [sources]
 
     # Don't do much value checking in this module, but this one is so fundamental that I will do it
@@ -232,6 +233,11 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
+
+    # NullSources are not allowed to be mosaiced, as they can have any observations associated and thus won't
+    #  necessarily overlap
+    if isinstance(sources, NullSource):
+        raise TypeError("You cannot create combined images of a NullSource")
 
     if to_mosaic not in ["image", "expmap"]:
         raise ValueError("The only valid choices for to_mosaic are image and expmap.")
@@ -351,6 +357,11 @@ def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA",
     # source object. Useful for the user, not so much here where the code expects an iterable.
     if not isinstance(sources, list):
         sources = [sources]
+
+    # NullSources are not allowed to be mosaiced, as they can have any observations associated and thus won't
+    #  necessarily overlap
+    if isinstance(sources, NullSource):
+        raise NotImplementedError("You cannot currently use PSFGen with a NullSource.")
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function

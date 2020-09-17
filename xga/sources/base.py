@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/09/2020, 14:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:45. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -24,7 +24,7 @@ from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObser
 from xga.products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, \
     ExpMap, RateMap, PSFGrid
 from xga.sourcetools import simple_xmm_match, nh_lookup, ang_to_rad
-from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT
+from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -1503,6 +1503,320 @@ class BaseSource:
         elif self._wl_mass is not None and self._wl_mass_err is None:
             print("Weak Lensing Mass - {0}".format(self._wl_mass))
 
+        print("-----------------------------------------------------\n")
+
+    def __len__(self) -> int:
+        """
+        Method to return the length of the products dictionary (which means the number of
+        individual ObsIDs associated with this source), when len() is called on an instance of this class.
+        :return: The integer length of the top level of the _products nested dictionary.
+        :rtype: int
+        """
+        return len(self.obs_ids)
+
+
+# Was going to write this as a subclass of BaseSource, as it will behave largely the same, but I don't
+#  want it declaring XGA products for tens of thousands of images etc.
+# As such will replicate the base functionality of BaseSource that will allow evselect_image, expmap, cifbuild
+# SAS wrappers to work.
+# This does have a lot of straight copied code from BaseSource, but I don't mind in this instance
+class NullSource:
+    def __init__(self, obs: List[str] = None):
+        """
+
+        :param obs:
+        """
+        # To find all census entries with non-na coordinates
+        cleaned_census = CENSUS.dropna()
+        self._ra_dec = np.array([None, None])
+        # The user can specify ObsIDs to associate with the NullSource, or associate all
+        #  of them by leaving it as None
+        if obs is None:
+            self._name = "AllObservations"
+            obs = cleaned_census["ObsID"].values
+        else:
+            # I know this is an ugly nested if statements, but I only wanted to run obs_check once
+            obs = np.array(obs)
+            obs_check = [o in cleaned_census["ObsID"].values for o in obs]
+            # If all user entered ObsIDs are in the census, then all is fine
+            if all(obs_check):
+                self._name = "{}Observations".format(len(obs))
+            # If they aren't all in the census then that is decidedly not fine
+            elif not all(obs_check):
+                not_valid = np.array(obs)[~np.array(obs_check)]
+                raise ValueError("The following are not present in the XGA census, "
+                                 "{}".format(", ".join(not_valid)))
+
+        # Find out which
+        instruments = {o: [] for o in obs}
+        for o in obs:
+            if cleaned_census[cleaned_census["ObsID"] == o]["USE_PN"].values[0]:
+                instruments[o].append("pn")
+            if cleaned_census[cleaned_census["ObsID"] == o]["USE_MOS1"].values[0]:
+                instruments[o].append("mos1")
+            if cleaned_census[cleaned_census["ObsID"] == o]["USE_MOS2"].values[0]:
+                instruments[o].append("mos2")
+
+        # This checks that the observations have at least one usable instrument
+        self._obs = [o for o in obs if len(instruments[o]) > 0]
+        self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+
+        # The SAS generation routine might need this information
+        self._att_files = {o: xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=o) for o in self._obs}
+        self._odf_paths = {o: xga_conf["XMM_FILES"]["odf_path"].format(obs_id=o) for o in self._obs}
+
+        # Need the event list objects declared unfortunately
+        self._products = {o: {} for o in self._obs}
+        for o in self._obs:
+            for inst in self._instruments[o]:
+                evt_key = "clean_{}_evts".format(inst)
+                evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=o)
+                self._products[o][inst] = {"events": EventList(evt_file, obs_id=o, instrument=inst, stdout_str="",
+                                                               stderr_str="", gen_cmd="")}
+
+        # This is a queue for products to be generated for this source, will be a numpy array in practise.
+        # Items in the same row will all be generated in parallel, whereas items in the same column will
+        # be combined into a command stack and run in order.
+        self.queue = None
+        # Another attribute destined to be an array, will contain the output type of each command submitted to
+        # the queue array.
+        self.queue_type = None
+        # This contains an array of the paths of the final output of each command in the queue
+        self.queue_path = None
+        # This contains an array of the extra information needed to instantiate class
+        # after the SAS command has run
+        self.queue_extra_info = None
+
+    def get_att_file(self, obs_id: str) -> str:
+        """
+        Fetches the path to the attitude file for an XMM observation.
+        :param obs_id: The ObsID to fetch the attitude file for.
+        :return: The path to the attitude file.
+        :rtype: str
+        """
+        if obs_id not in self._products:
+            raise NotAssociatedError("{} is not associated with this source".format(obs_id))
+        else:
+            return self._att_files[obs_id]
+
+    def get_odf_path(self, obs_id: str) -> str:
+        """
+        Fetches the path to the odf directory for an XMM observation.
+        :param obs_id: The ObsID to fetch the ODF path for.
+        :return: The path to the ODF path.
+        :rtype: str
+        """
+        if obs_id not in self._products:
+            raise NotAssociatedError("{} is not associated with this source".format(obs_id))
+        else:
+            return self._odf_paths[obs_id]
+
+    @property
+    def obs_ids(self) -> List[str]:
+        """
+        Property getter for ObsIDs associated with this source that are confirmed to have events files.
+        :return: A list of the associated XMM ObsIDs.
+        :rtype: List[str]
+        """
+        return self._obs
+
+    @property
+    def instruments(self) -> Dict:
+        """
+        A property of a source that details which instruments have valid data for which observations.
+        :return: A dictionary of ObsIDs and their associated valid instruments.
+        :rtype: Dict
+        """
+        return self._instruments
+
+    def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
+                     extra_info: np.ndarray, stack: bool = False):
+        """
+        Small function to update the numpy array that makes up the queue of products to be generated.
+        :param np.ndarray cmd_arr: Array containing SAS commands.
+        :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
+        by the cmd array. e.g. image or expmap.
+        :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
+        :param np.ndarray extra_info: Array of extra information dictionaries
+        :param stack: Should these commands be executed after a preceding line of commands,
+        or at the same time.
+        :return:
+        """
+        if self.queue is None:
+            # I could have done all of these in one array with 3 dimensions, but felt this was easier to read
+            # and with no real performance penalty
+            self.queue = cmd_arr
+            self.queue_type = p_type_arr
+            self.queue_path = p_path_arr
+            self.queue_extra_info = extra_info
+        elif stack:
+            self.queue = np.vstack((self.queue, cmd_arr))
+            self.queue_type = np.vstack((self.queue_type, p_type_arr))
+            self.queue_path = np.vstack((self.queue_path, p_path_arr))
+            self.queue_extra_info = np.vstack((self.queue_extra_info, extra_info))
+        else:
+            self.queue = np.append(self.queue, cmd_arr, axis=0)
+            self.queue_type = np.append(self.queue_type, p_type_arr, axis=0)
+            self.queue_path = np.append(self.queue_path, p_path_arr, axis=0)
+            self.queue_extra_info = np.append(self.queue_extra_info, extra_info, axis=0)
+
+    def get_queue(self) -> Tuple[List[str], List[str], List[List[str]], List[dict]]:
+        """
+        Calling this indicates that the queue is about to be processed, so this function combines SAS
+        commands along columns (command stacks), and returns N SAS commands to be run concurrently,
+        where N is the number of columns.
+        :return: List of strings, where the strings are bash commands to run SAS procedures, another
+        list of strings, where the strings are expected output types for the commands, a list of
+        lists of strings, where the strings are expected output paths for products of the SAS commands.
+        :rtype: Tuple[List[str], List[str], List[List[str]]]
+        """
+        if self.queue is None:
+            # This returns empty lists if the queue is undefined
+            processed_cmds = []
+            types = []
+            paths = []
+            extras = []
+        elif len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
+            processed_cmds = list(self.queue)
+            types = list(self.queue_type)
+            paths = [[str(path)] for path in self.queue_path]
+            extras = list(self.queue_extra_info)
+        else:
+            processed_cmds = [";".join(col) for col in self.queue.T]
+            types = list(self.queue_type[-1, :])
+            paths = [list(col.astype(str)) for col in self.queue_path.T]
+            extras = []
+            for col in self.queue_path.T:
+                # This nested dictionary comprehension combines a column of extra information
+                # dictionaries into one, for ease of access.
+                comb_extra = {k: v for ext_dict in col for k, v in ext_dict.items()}
+                extras.append(comb_extra)
+
+        # This is only likely to be called when processing is beginning, so this will wipe the queue.
+        self.queue = None
+        self.queue_type = None
+        self.queue_path = None
+        self.queue_extra_info = None
+        # The returned paths are lists of strings because we want to include every file in a stack to be able
+        # to check that exists
+        return processed_cmds, types, paths, extras
+
+    def update_products(self, prod_obj: BaseProduct):
+        """
+        This method will not actually store new products in this NullSource. It exists only because my SAS wrappers
+        will expect it to, and as such it doesn't do anything at all. This is because NullSource source could have
+        tens of thousands of products associated with them, and are only used to bulk generate basic products
+        (images, expmaps etc), I don't want the memory overhead of storing them.
+        :param BaseProduct prod_obj: The new product object to be added to the source object.
+        """
+        pass
+
+    def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
+                     just_obj: bool = True) -> List[BaseProduct]:
+        """
+        This is the getter for the products data structure of Source objects. Passing a 'product type'
+        such as 'events' or 'images' will return every matching entry in the products data structure.
+        :param str p_type: Product type identifier. e.g. image or expmap.
+        :param str obs_id: Optionally, a specific obs_id to search can be supplied.
+        :param str inst: Optionally, a specific instrument to search can be supplied.
+        :param str extra_key: Optionally, an extra key (like an energy bound) can be supplied.
+        :param bool just_obj: A boolean flag that controls whether this method returns just the product objects,
+        or the other information that goes with it like ObsID and instrument.
+        :return: List of matching products.
+        :rtype: List[BaseProduct]
+        """
+        def unpack_list(to_unpack: list):
+            """
+            A recursive function to go through every layer of a nested list and flatten it all out. It
+            doesn't return anything because to make life easier the 'results' are appended to a variable
+            in the namespace above this one.
+            :param list to_unpack: The list that needs unpacking.
+            """
+            # Must iterate through the given list
+            for entry in to_unpack:
+                # If the current element is not a list then all is chill, this element is ready for appending
+                # to the final list
+                if not isinstance(entry, list):
+                    out.append(entry)
+                else:
+                    # If the current element IS a list, then obviously we still have more unpacking to do,
+                    # so we call this function recursively.
+                    unpack_list(entry)
+
+        # Only certain product identifier are allowed
+        if p_type not in ALLOWED_PRODUCTS:
+            prod_str = ", ".join(ALLOWED_PRODUCTS)
+            raise UnknownProductError("{p} is not a recognised product type. Allowed product types are "
+                                      "{l}".format(p=p_type, l=prod_str))
+        elif obs_id not in self._products and obs_id is not None:
+            raise NotAssociatedError("{} is not associated with this source.".format(obs_id))
+        elif inst not in XMM_INST and inst is not None:
+            raise ValueError("{} is not an allowed instrument".format(inst))
+
+        matches = []
+        # Iterates through the dict search return, but each match is likely to be a very nested list,
+        # with the degree of nesting dependant on product type (as event lists live a level up from
+        # images for instance
+        for match in dict_search(p_type, self._products):
+            out = []
+            unpack_list(match)
+            # Only appends if this particular match is for the obs_id and instrument passed to this method
+            # Though all matches will be returned if no obs_id/inst is passed
+            if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
+                    and (extra_key in out or extra_key is None) and not just_obj:
+                matches.append(out)
+            elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
+                    and (extra_key in out or extra_key is None) and just_obj:
+                matches.append(out[-1])
+        return matches
+
+    # This is used to name files and directories so this is not allowed to change.
+    @property
+    def name(self) -> str:
+        """
+        The name of the source, either given at initialisation or generated from the user-supplied coordinates.
+        :return: The name of the source.
+        :rtype: str
+        """
+        return self._name
+
+    @property
+    def num_pn_obs(self) -> int:
+        """
+        Getter method that gives the number of PN observations.
+        :return: Integer number of PN observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'pn' in self._products[o]])
+
+    @property
+    def num_mos1_obs(self) -> int:
+        """
+        Getter method that gives the number of MOS1 observations.
+        :return: Integer number of MOS1 observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'mos1' in self._products[o]])
+
+    @property
+    def num_mos2_obs(self) -> int:
+        """
+        Getter method that gives the number of MOS2 observations.
+        :return: Integer number of MOS2 observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
+
+    def info(self):
+        """
+        Just prints a couple of pieces of information about the NullSource
+        """
+        print("\n-----------------------------------------------------")
+        print("Source Name - {}".format(self._name))
+        print("XMM ObsIDs - {}".format(self.__len__()))
+        print("PN Observations - {}".format(self.num_pn_obs))
+        print("MOS1 Observations - {}".format(self.num_mos1_obs))
+        print("MOS2 Observations - {}".format(self.num_mos2_obs))
         print("-----------------------------------------------------\n")
 
     def __len__(self) -> int:

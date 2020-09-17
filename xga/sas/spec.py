@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 15:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:45. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -10,6 +10,7 @@ import numpy as np
 
 from xga import OUTPUT, NUM_CORES
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
+from xga.sources.base import NullSource
 from xga.utils import xmm_sky
 from .misc import cifbuild
 from .run import sas_call
@@ -45,6 +46,11 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, group_spec: bool
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
+
+    # NullSources are not allowed to have spectra, as they can have any observations associated and thus won't
+    #  necessarily overlap
+    if isinstance(sources, NullSource):
+        raise TypeError("You cannot create spectra of a NullSource")
 
     if not all([type(src) != BaseSource for src in sources]):
         raise TypeError("You cannot generate spectra from a BaseSource object, really you shouldn't be using "
