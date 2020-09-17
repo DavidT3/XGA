@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 15:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:45. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -12,6 +12,7 @@ from xga import COMPUTE_MODE
 from xga.exceptions import SASNotFoundError
 from xga.products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 from xga.sources import BaseSource
+from xga.sources.base import NullSource
 
 if "SAS_DIR" not in os.environ:
     raise SASNotFoundError("SAS_DIR environment variable is not set, "
@@ -39,7 +40,9 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     out = out.decode("UTF-8")
     err = err.decode("UTF-8")
 
-    if p_type == "image":
+    # The if statements also check that the source isn't a NullSource - if it is we don't want to define
+    #  a product object because all NullSources are for is generating files in bulk.
+    if p_type == "image" and "NullSource" not in src:
         # Maybe let the user decide not to raise errors detected in stderr
         prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                      extra_info["lo_en"], extra_info["hi_en"])
@@ -49,22 +52,24 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
             prod.psf_model = extra_info["psf_model"]
             prod.psf_iterations = extra_info["psf_iter"]
             prod.psf_algorithm = extra_info["psf_algo"]
-    elif p_type == "expmap":
+    elif p_type == "expmap" and "NullSource" not in src:
         prod = ExpMap(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                       extra_info["lo_en"], extra_info["hi_en"])
-    elif p_type == "ccf":
+    elif p_type == "ccf" and "NullSource" not in src:
         # ccf files may not be destined to spend life as product objects, but that doesn't mean
         # I can't take momentarily advantage of the error parsing I built into the product classes
         prod = BaseProduct(p_path[0], "", "", out, err, cmd)
         prod = None
-    elif p_type == "spectrum":
+    elif p_type == "spectrum" and "NullSource" not in src:
         prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
                         extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info["reg_type"],
                         extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
-    elif p_type == "psf":
+    elif p_type == "psf" and "NullSource" not in src:
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                        extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
                        extra_info["instrument"], out, err, cmd)
+    elif "NullSource" in src:
+        prod = None
     else:
         raise NotImplementedError("Not implemented yet")
 
@@ -82,7 +87,7 @@ def sas_call(sas_func):
     def wrapper(*args, **kwargs):
         # The first argument of all of these SAS functions will be the source object (or a list of),
         # so rather than return them from the sas function I'll just access them like this.
-        if isinstance(args[0], BaseSource):
+        if isinstance(args[0], (BaseSource, NullSource)):
             sources = [args[0]]
         elif isinstance(args[0], list):
             sources = args[0]
@@ -99,7 +104,7 @@ def sas_call(sas_func):
         all_extras = []  # Combined extra information list for all sources
         source_rep = []  # For repr calls of each source object, needed for assigning products to sources
         for ind in range(len(cmd_list)):
-            source: BaseSource = sources[ind]
+            source = sources[ind]
             if len(cmd_list[ind]) > 0:
                 # If there are commands to add to a source queue, then do it
                 source.update_queue(cmd_list[ind], p_type[ind], paths[ind], extra_info[ind], to_stack)
@@ -194,3 +199,6 @@ def sas_call(sas_func):
             sources = sources[0]
         return sources
     return wrapper
+
+
+
