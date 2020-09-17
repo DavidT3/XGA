@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:39. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -125,11 +125,11 @@ def rl_psf(sources: List[BaseSource], iterations: int = 15, psf_model: str = "EL
         #  it doesn't already exist.
         key = "bound_{l}-{u}_{m}_{b}_rl{i}".format(l=float(lo_en.value), u=float(hi_en.value), m=psf_model,
                                                    b=bins, i=iterations)
-        # Check to see if a matching combined PSF corrected image is present
-        psf_corr_prod = [p for p in source.get_products("combined_image", just_obj=False) if key in p]
+        # Check to see if all individual PSF corrected images are present
+        psf_corr_prod = [p for p in source.get_products("image", just_obj=False) if key in p]
 
-        # If one is present then we skip, the correction has already been performed.
-        if len(psf_corr_prod) != 0:
+        # If all the PSF corrected images are present then we skip, the correction has already been performed.
+        if len(psf_corr_prod) == len(match_images):
             continue
 
         onwards = tqdm(total=len(match_images), desc="PSF Correcting {n} Images".format(n=source.name))
