@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:42. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -116,10 +116,6 @@ def rl_psf(sources: List[BaseSource], iterations: int = 15, psf_model: str = "EL
         en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
         # All the image objects of the specified energy range (so every combination of ObsID and instrument)
         match_images = source.get_products("image", extra_key=en_id)
-        for matched in match_images:
-            if matched.header["SUBMODE"] != "PrimeFullWindow":
-                warnings.warn("PSF corrected images for {s}-{o}-{i} may not be valid, as some were taken "
-                              "in a windowed mode.".format(s=source.name, o=matched.obs_id, i=matched.instrument))
 
         # This is the key under which the PSF corrected image will be stored, defining it to check that
         #  it doesn't already exist.
@@ -131,6 +127,12 @@ def rl_psf(sources: List[BaseSource], iterations: int = 15, psf_model: str = "EL
         # If all the PSF corrected images are present then we skip, the correction has already been performed.
         if len(psf_corr_prod) == len(match_images):
             continue
+
+        # Just warns the user that some of the images may not be valid
+        for matched in match_images:
+            if matched.header["SUBMODE"] != "PrimeFullWindow":
+                warnings.warn("PSF corrected images for {s}-{o}-{i} may not be valid, as some were taken "
+                              "in a windowed mode.".format(s=source.name, o=matched.obs_id, i=matched.instrument))
 
         onwards = tqdm(total=len(match_images), desc="PSF Correcting {n} Images".format(n=source.name))
         # For now just going to iterate through them, we'll see if I can improve it later
