@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/09/2020, 12:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/09/2020, 16:21. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -79,15 +79,19 @@ def radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r200", 
 
         # Retrieving the relevant ratemap object, as well as masks
         rt = [rt[-1] for rt in src.get_products("combined_ratemap", just_obj=False) if storage_key in rt][0]
-        source_mask, background_mask = src.get_mask(scale_radius)
 
         # The user can choose to use the original user passed coordinates, or the X-ray centroid
         if use_peak:
             pix_peak = rt.coord_conv(src.peak, pix)
+            source_mask, background_mask = src.get_mask(scale_radius, central_coord=src.peak)
+            # TODO Should I use my source radius mask or just remove interlopers?
+            source_mask = src.get_interloper_mask()
         else:
             pix_peak = rt.coord_conv(src.ra_dec, pix)
+            source_mask, background_mask = src.get_mask(scale_radius, central_coord=src.ra_dec)
+            source_mask = src.get_interloper_mask()
 
-        rad = Quantity(src.get_source_region(scale_radius)[0].to_pixel(rt.radec_wcs).radius, pix)
+        rad = Quantity(src.source_back_regions(scale_radius)[0].to_pixel(rt.radec_wcs).radius, pix)
         brightness, cen_rad, rad_bins, bck, success = radial_brightness(rt, source_mask, background_mask, pix_peak,
                                                                         rad, src.redshift, pix_step, pix, src.cosmo,
                                                                         min_snr=min_snr)

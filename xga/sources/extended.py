@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 14:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/09/2020, 16:21. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -13,7 +13,7 @@ from matplotlib.ticker import ScalarFormatter
 from xga.exceptions import ModelNotAssociatedError, \
     ParameterNotAssociatedError, NoRegionsError
 from xga.imagetools import radial_brightness, pizza_brightness
-from xga.sourcetools import ang_to_rad
+from xga.sourcetools import ang_to_rad, rad_to_ang
 from .general import ExtendedSource
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -39,31 +39,31 @@ class GalaxyCluster(ExtendedSource):
         # I know its ugly to have the same code three times, but I want these to be in attributes.
         if r200 is not None and r200.unit.is_equivalent("deg"):
             self._r200 = ang_to_rad(r200, self._redshift, self._cosmo).to("kpc")
+            # Radii must be stored in degrees in the internal radii dictionary
+            self._radii["r200"] = r200.to("deg")
         elif r200 is not None and r200.unit.is_equivalent("kpc"):
             self._r200 = r200.to("kpc")
+            self._radii["r200"] = rad_to_ang(r200, self.redshift, self.cosmo)
         elif r200 is not None and not r200.unit.is_equivalent("kpc") and not r200.unit.is_equivalent("deg"):
             raise UnitConversionError("R200 radius must be in either angular or distance units.")
 
         if r500 is not None and r500.unit.is_equivalent("deg"):
             self._r500 = ang_to_rad(r500, self._redshift, self._cosmo).to("kpc")
+            self._radii["r500"] = r500.to("deg")
         elif r500 is not None and r500.unit.is_equivalent("kpc"):
             self._r500 = r500.to("kpc")
+            self._radii["r500"] = rad_to_ang(r500, self.redshift, self.cosmo)
         elif r500 is not None and not r500.unit.is_equivalent("kpc") and not r500.unit.is_equivalent("deg"):
             raise UnitConversionError("R500 radius must be in either angular or distance units.")
 
         if r2500 is not None and r2500.unit.is_equivalent("deg"):
             self._r2500 = ang_to_rad(r2500, self._redshift, self._cosmo).to("kpc")
+            self._radii["r2500"] = r2500.to("deg")
         elif r2500 is not None and r2500.unit.is_equivalent("kpc"):
             self._r2500 = r2500.to("kpc")
+            self._radii["r2500"] = rad_to_ang(r2500, self.redshift, self.cosmo)
         elif r2500 is not None and not r2500.unit.is_equivalent("kpc") and not r2500.unit.is_equivalent("deg"):
             raise UnitConversionError("R2500 radius must be in either angular or distance units.")
-
-        if r200 is not None:
-            self._setup_new_region(self._r200, "r200")
-        if r500 is not None:
-            self._setup_new_region(self._r500, "r500")
-        if r2500 is not None:
-            self._setup_new_region(self._r2500, "r2500")
 
         # Reading observables into their attributes, if the user doesn't pass a value for a particular observable
         #  it will be None.
@@ -81,7 +81,7 @@ class GalaxyCluster(ExtendedSource):
         elif wl_mass_err is not None and not wl_mass_err.unit.is_equivalent("Msun"):
             raise UnitConversionError("The weak lensing mass error value cannot be converted to MSun.")
 
-        if clean_obs and clean_obs_reg in self._reg_masks:
+        if clean_obs and clean_obs_reg in self._radii:
             from xga.sas import emosaic
             # Use this method to figure out what data to throw away
             reject_dict = self.obs_check(clean_obs_reg, clean_obs_threshold)
@@ -92,15 +92,6 @@ class GalaxyCluster(ExtendedSource):
                 emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                 emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
-                # And need to reset regions and masks for the new state of this source object
-                if r200 is not None:
-                    self._setup_new_region(self._r200, "r200")
-                if r500 is not None:
-                    self._setup_new_region(self._r500, "r500")
-                if r2500 is not None:
-                    self._setup_new_region(self._r2500, "r2500")
-                if self._custom_region_radius is not None:
-                    self._setup_new_region(self._custom_region_radius, "custom")
         # Throws an error if a poor choice of region has been made
         elif clean_obs and clean_obs_reg not in self._reg_masks:
             raise NoRegionsError("{c} is not associated with this source".format(c=clean_obs_reg))
@@ -243,10 +234,12 @@ class GalaxyCluster(ExtendedSource):
         psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", just_obj=False)
                         if en_key + "_" in rt[-2]]
 
+        # TODO Decide what to do here
         source_mask, background_mask = self.get_mask(reg_type)
+        source_mask = self.get_interloper_mask()
         # Get combined peak - basically the only peak internal methods will use
         pix_peak = comb_rt.coord_conv(self.peak, pix)
-        rad = Quantity(self.get_source_region(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
+        rad = Quantity(self.source_back_regions(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
 
         # Setup the figure
         plt.figure(figsize=(8, 5))
