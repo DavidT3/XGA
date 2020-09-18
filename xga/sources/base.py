@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/09/2020, 16:21. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -14,8 +14,9 @@ from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase
 from fitsio import FITS
 from numpy import ndarray
-from regions import read_ds9, PixelRegion, SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
-    CompoundSkyRegion
+from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
+    EllipsePixelRegion, CirclePixelRegion
+from regions import read_ds9, PixelRegion, CompoundSkyRegion
 
 from xga import xga_conf
 from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
@@ -105,13 +106,17 @@ class BaseSource:
         # This block defines various dictionaries that are used in the sub source classes, when context allows
         # us to find matching source regions.
         self._regions = None
-        self._back_regions = None
         self._other_regions = None
         self._alt_match_regions = None
-        self._reg_masks = None
-        self._back_masks = None
-        self._within_source_regions = None
-        self._within_back_regions = None
+        self._interloper_regions = []
+        self._interloper_masks = {}
+
+        # Set up an attribute where a default central coordinate will live
+        self._default_coord = self.ra_dec
+
+        # Init the the radius multipliers that define the outer and inner edges of a background annulus
+        self._back_inn_factor = 1.05
+        self._back_out_factor = 1.5
 
         # Initialisation of fit result attributes
         self._fit_results = {}
@@ -127,6 +132,8 @@ class BaseSource:
         self._r200 = None
         self._r500 = None
         self._r2500 = None
+        # Also adding a radius dictionary attribute
+        self._radii = {}
         # Initialisation of cluster observables as None
         self._richness = None
         self._richness_err = None
@@ -905,15 +912,43 @@ class BaseSource:
         else:
             return self._detected
 
-    def get_source_region(self, reg_type: str, obs_id: str = None) -> Tuple[SkyRegion, SkyRegion]:
+    def source_back_regions(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
+            -> Tuple[SkyRegion, SkyRegion]:
         """
-        A method to retrieve region objects associated with a source object.
+        A method to retrieve source region and background region objects for a given source type with a
+        given central coordinate.
         :param str reg_type: The type of region which we wish to get from the source.
         :param str obs_id: The ObsID that the region is associated with (if appropriate).
+        :param Quantity central_coord: The central coordinate of the region.
         :return: The method returns both the source region and the associated background region.
-        :rtype: Tuple[SkyRegion, SkyRegion]
+        :rtype:
         """
-        allowed_rtype = ["r2500", "r500", "r200", "region", "custom"]
+        # Doing an initial check so I can throw a warning if the user wants a region-list region AND has supplied
+        #  custom central coordinates
+        if reg_type == "region" and central_coord is not None:
+            warnings.warn("You cannot use custom central coordinates with a region from supplied region files")
+        # elif reg_type != "region" and central_coord is None:
+        #     warnings.warn("No central coord supplied, using default (peak if use_peak is True), initial coordinates"
+        #                   "otherwise.")
+
+        if central_coord is None:
+            central_coord = self._default_coord
+
+        if type(central_coord) == Quantity:
+            centre = SkyCoord(*central_coord.to("deg"))
+        elif type(central_coord) == SkyCoord:
+            centre = central_coord
+        else:
+            print(central_coord)
+            print(type(central_coord))
+            raise TypeError("BOI")
+
+        # In case combined gets passed as the ObsID at any point
+        if obs_id == "combined":
+            obs_id = None
+
+        # The search radius won't be used by the user, just peak finding solutions
+        allowed_rtype = ["r2500", "r500", "r200", "region", "custom", "search"]
         if type(self) == BaseSource:
             raise TypeError("BaseSource class does not have the necessary information "
                             "to select a source region.")
@@ -924,82 +959,184 @@ class BaseSource:
         elif reg_type == "region" and obs_id is None:
             raise ValueError("ObsID cannot be None when getting region file regions.")
         elif reg_type == "region" and obs_id is not None:
-            chosen = self._regions[obs_id]
-            chosen_back = self._back_regions[obs_id]
-        elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._regions:
+            src_reg = self._regions[obs_id]
+        elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
             raise TypeError("There are no over-density radii associated with this source")
-        elif reg_type != "region" and reg_type in self._regions:
-            chosen = self._regions[reg_type]
-            chosen_back = self._back_regions[reg_type]
-        elif reg_type != "region" and reg_type not in self._regions:
+        elif reg_type != "region" and reg_type in self._radii:
+            # We know for certain that the radius will be in degrees, but it has to be converted to degrees
+            #  before being stored in the radii attribute
+            radius = self._radii[reg_type]
+            src_reg = CircleSkyRegion(centre, radius.to('deg'))
+        elif reg_type != "region" and reg_type not in self._radii:
             raise ValueError("{} is a valid region type, but is not associated with this "
                              "source.".format(reg_type))
         else:
             raise ValueError("OH NO")
 
-        return chosen, chosen_back
+        # Here is where we initialise the background regions, first in pixel coords, then converting to ra-dec.
+        # TODO Verify that just using the first image is okay
+        im = self.get_products("image")[0]
+        src_pix_reg = src_reg.to_pixel(im.radec_wcs)
+        # TODO Try and remember why I had to convert to pixel regions to make it work
+        if isinstance(src_reg, EllipseSkyRegion):
+            # Here we multiply the inner width/height by 1.05 (to just slightly clear the source region),
+            #  and the outer width/height by 1.5 (standard for XCS) - default values
+            # Ideally this would be an annulus region, but they are bugged in regions v0.4, so we must bodge
+            in_reg = EllipsePixelRegion(src_pix_reg.center, src_pix_reg.width * self._back_inn_factor,
+                                        src_pix_reg.height * self._back_inn_factor, src_pix_reg.angle)
+            out_reg = EllipsePixelRegion(src_pix_reg.center, src_pix_reg.width * self._back_out_factor,
+                                         src_pix_reg.height * self._back_out_factor, src_pix_reg.angle)
+            bck_reg = out_reg.symmetric_difference(in_reg)
+        elif isinstance(src_reg, CircleSkyRegion):
+            in_reg = CirclePixelRegion(src_pix_reg.center, src_pix_reg.radius * self._back_inn_factor)
+            out_reg = CirclePixelRegion(src_pix_reg.center, src_pix_reg.radius * self._back_out_factor)
+            bck_reg = out_reg.symmetric_difference(in_reg)
 
-    def get_nuisance_regions(self, obs_id: str = None) -> Tuple[list, list]:
-        """
-        This fetches two lists of region objects that describe all the regions that AREN'T the source, and
-        regions that also matched to the source coordinates but were not accepted as the source respectively.
-        :param obs_id: The ObsID for which you wish to retrieve the nuisance regions.
-        :return: A list of non-source regions, and a list of regions that matched to the user coordinates
-        but were not accepted as the source.
-        :rtype: Tuple[list, list]
-        """
-        if type(self) == BaseSource:
-            raise TypeError("BaseSource class does not have the necessary information "
-                            "to select a source region, so it cannot know which regions are nuisances.")
-        elif obs_id not in self.obs_ids:
-            raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
+        bck_reg = bck_reg.to_sky(im.radec_wcs)
 
-        return self._other_regions[obs_id], self._alt_match_regions[obs_id]
+        return src_reg, bck_reg
 
-    def get_mask(self, reg_type: str, obs_id: str = None, inst: str = None) -> Tuple[np.ndarray, np.ndarray]:
+    def within_region(self, region: SkyRegion) -> List[SkyRegion]:
         """
-        A method to retrieve the mask generated for a particular observation-image combination. The mask
-        can be used on an image in pixel coordinates.
-        :param str reg_type: The type of region which we wish to get from the source.
-        :param obs_id: The ObsID for which you wish to retrieve image masks.
-        :param inst: The XMM instrument for which you wish to retrieve image masks.
-        :return: Two boolean numpy arrays that can be used as image masks, the first is for the source,
-        the second is for the source's background region.
+        This method finds interloper sources that lie within the user supplied region.
+        :param SkyRegion region: The region in which we wish to search for interloper sources (for instance
+        a source region or background region).
+        :return: A list of regions that lie within the user supplied region.
+        :rtype: List[SkyRegion]
+        """
+        im = self.get_products("image")[0]
+
+        crossover = np.array([region.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
+                              for r in self._interloper_regions])
+        reg_within = np.array(self._interloper_regions)[crossover]
+
+        return reg_within
+
+    def get_source_mask(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
+            -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Method to retrieve source and background masks for the given region type.
+        :param str reg_type: The type of region for which to retrieve the mask.
+        :param str obs_id: The ObsID that the mask is associated with (if appropriate).
+        :param Quantity central_coord: The central coordinate of the region.
+        :return: The source and background masks for the requested ObsID (or the combined image if no ObsID).
         :rtype: Tuple[np.ndarray, np.ndarray]
         """
-        allowed_rtype = ["r2500", "r500", "r200", "region", "custom"]
-        if type(self) == BaseSource:
-            raise TypeError("BaseSource class does not have the necessary information "
-                            "to select a source region, so it cannot generate masks.")
-        elif obs_id is not None and obs_id not in self.obs_ids:
-            raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
-        elif obs_id is not None and inst is not None and inst not in self._reg_masks[obs_id]:
-            raise NotAssociatedError("The instrument {i} is not associated with observation {o} of this "
-                                     "source.".format(i=inst, o=obs_id))
-        elif reg_type not in allowed_rtype:
-            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-        elif reg_type == "region" and obs_id is None:
-            raise ValueError("ObsID cannot be None when getting region file regions.")
-        elif reg_type == "region" and obs_id is not None and inst is not None:
-            chosen = self._reg_masks[obs_id][inst]
-            chosen_back = self._back_masks[obs_id][inst]
-        elif reg_type == "region" and obs_id is not None and inst is None:
-            raise ValueError("Inst cannot be None when getting region file regions.")
-        elif reg_type in ["r2500", "r500", "r200"] and (obs_id is not None or inst is not None):
-            raise TypeError("XGA does not currently generate overdensity masks for individual "
-                            "images, only combined.")
-        elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._reg_masks:
-            raise TypeError("There are no over-density radii masks associated with this source")
-        elif reg_type != "region" and reg_type in self._reg_masks:
-            chosen = self._reg_masks[reg_type]
-            chosen_back = self._back_masks[reg_type]
-        elif reg_type != "region" and reg_type not in self._reg_masks:
-            raise ValueError("{} is a valid region type, but is not associated with this "
-                             "source.".format(reg_type))
-        else:
-            raise ValueError("OH NO")
+        if obs_id == "combined":
+            obs_id = None
 
-        return chosen, chosen_back
+        # Don't need to do a bunch of checks, because the method I call to make the
+        #  mask does all the checks anyway
+        src_reg, bck_reg = self.source_back_regions(reg_type, obs_id, central_coord)
+        if central_coord is None:
+            central_coord = self._default_coord
+
+        # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
+        if obs_id is None:
+            mask_image = self.get_products("combined_image")[0]
+        else:
+            # Just grab the first instrument that comes out the get method, the masks should be the same.
+            mask_image = self.get_products("image", obs_id)[0]
+
+        mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+        back_mask = bck_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+
+        return mask, back_mask
+
+    def _generate_interloper_mask(self, mask_image: Image) -> ndarray:
+        """
+        Internal method that makes interloper masks in the first place; I allow this because interloper
+        masks will never change, so can be safely generated and stored in an init of a source class.
+        :param Image mask_image: The image for which to create the interloper mask.
+        :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
+        :rtype: ndarray
+        """
+
+        masks = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+                 for reg in self._interloper_regions if reg is not None]
+        interlopers = sum([m for m in masks if m is not None])
+
+        mask = np.ones(mask_image.shape)
+        mask[interlopers != 0] = 0
+
+        return mask
+
+    def get_interloper_mask(self, obs_id: str = None) -> ndarray:
+        """
+        Returns a mask for a given ObsID (or combined data if no ObsID given) that will remove any sources
+        that have not been identified as the source of interest.
+        :param str obs_id: The ObsID that the mask is associated with (if appropriate).
+        :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
+        :rtype: ndarray
+        """
+        if type(self) == BaseSource:
+            raise TypeError("BaseSource objects don't have enough information to know which sources "
+                            "are interlopers.")
+
+        if obs_id is not None and obs_id != "combined" and obs_id not in self.obs_ids:
+            raise NotAssociatedError("{o} is not associated with {s}; only {a} are "
+                                     "available".format(o=obs_id, s=self.name, a=", ".join(self.obs_ids)))
+        elif obs_id is not None and obs_id != "combined":
+            mask = self._interloper_masks[obs_id]
+        elif obs_id is None or obs_id == "combined" and "combined" not in self._interloper_masks:
+            comb_ims = self.get_products("combined_image")
+            if len(comb_ims) == 0:
+                raise NoProductAvailableError("There are no combined images available for which to fetch"
+                                              " interloper masks.")
+            im = comb_ims[0]
+            mask = self._generate_interloper_mask(im)
+            self._interloper_masks["combined"] = mask
+        elif obs_id is None or obs_id == "combined" and "combined" in self._interloper_masks:
+            mask = self._interloper_masks["combined"]
+
+        return mask
+
+    def get_mask(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) -> \
+            Tuple[np.ndarray, np.ndarray]:
+        """
+        Method to retrieve source and background masks for the given region type, WITH INTERLOPERS REMOVED.
+        :param str reg_type: The type of region for which to retrieve the interloper corrected mask.
+        :param str obs_id: The ObsID that the mask is associated with (if appropriate).
+        :param Quantity central_coord: The central coordinate of the region.
+        :return: The source and background masks for the requested ObsID (or the combined image if no ObsID).
+        :rtype: Tuple[np.ndarray, np.ndarray]
+        """
+        # Grabs the source masks without interlopers removed
+        src_mask, bck_mask = self.get_source_mask(reg_type, obs_id, central_coord)
+        # Grabs the interloper mask
+        interloper_mask = self.get_interloper_mask(obs_id)
+
+        # Multiplies the uncorrected source and background masks with the interloper masks to correct
+        #  for interloper sources
+        total_src_mask = src_mask * interloper_mask
+        total_bck_mask = bck_mask * interloper_mask
+
+        return total_src_mask, total_bck_mask
+
+    def get_snr(self, reg_type: str, central_coord: Quantity = None) -> float:
+        """
+        This takes a region type and central coordinate and calculates the signal to noise ratio.
+        The background region is constructed using the back_inn_rad_factor and back_out_rad_factor
+        values, the defaults of which are 1.05*radius and 1.5*radius respectively.
+        :param str reg_type: The type of region for which to calculate the signal to noise ratio.
+        :param Quantity central_coord: The central coordinate of the region.
+        :return: The signal to noise ratio.
+        :rtype: float
+        """
+        # Grabs the interloper corrected source masks
+        src_mask, bck_mask = self.get_mask(reg_type, None, central_coord)
+
+        # Finds an appropriate ratemap
+        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
+        comb_rt = self.get_products("combined_ratemap", extra_key=en_key)[0]
+
+        # Sums the areas of the source and background masks
+        src_area = src_mask.sum()
+        bck_area = bck_mask.sum()
+        # Calculates signal to noise
+        ratio = ((comb_rt.data * src_mask).sum() / (comb_rt.data * bck_mask).sum()) * (bck_area / src_area)
+
+        return ratio
 
     def get_sas_region(self, reg_type: str, obs_id: str, inst: str, output_unit: UnitBase = xmm_sky) \
             -> Tuple[str, str]:
@@ -1015,7 +1152,6 @@ class BaseSource:
         another SAS region which will include background emission and exclude nuisance sources.
         :rtype: Tuple[str, str]
         """
-
         def sas_shape(reg: SkyRegion, im: Image) -> str:
             """
             This will convert the input SkyRegion into an appropriate SAS compatible region string, for use
@@ -1107,18 +1243,16 @@ class BaseSource:
         elif reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
         elif reg_type == "region":
-            source = self._regions[obs_id]
-            source_interlopers = self._within_source_regions[obs_id]
-            back = self._back_regions[obs_id]
-            background_interlopers = self._within_back_regions[obs_id]
-        elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._regions:
+            source, back = self.source_back_regions("region", obs_id)
+            source_interlopers = self.within_region(source)
+            background_interlopers = self.within_region(back)
+        elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
             raise TypeError("There are no over-density radii associated with this source")
-        elif reg_type != "region" and reg_type in self._regions:
-            source = self._regions[reg_type]
-            source_interlopers = self._within_source_regions[reg_type]
-            back = self._back_regions[reg_type]
-            background_interlopers = self._within_back_regions[reg_type]
-        elif reg_type != "region" and reg_type not in self._regions:
+        elif reg_type != "region" and reg_type in self._radii:
+            source, back = self.source_back_regions(reg_type, obs_id)
+            source_interlopers = self.within_region(source)
+            background_interlopers = self.within_region(back)
+        elif reg_type != "region" and reg_type not in self._radii:
             raise ValueError("{} is a valid region type, but is not associated with this "
                              "source.".format(reg_type))
         else:
@@ -1399,21 +1533,20 @@ class BaseSource:
         # If we're un-associating certain observations, odds on the combined products are no longer valid
         if "combined" in self._products:
             del self._products["combined"]
+            if "combined" in self._interloper_masks:
+                del self._interloper_masks["combined"]
             self._fit_results = {}
             self._test_stat = {}
             self._dof = {}
             self._total_count_rate = {}
             self._total_exp = {}
             self._luminosities = {}
-            for reg in [k for k in self._regions.keys() if k not in self._obs]:
-                del self._reg_masks[reg]
-                del self._back_masks[reg]
 
         for o in to_remove:
             for i in to_remove[o]:
                 del self._products[o][i]
-                del self._reg_masks[o][i]
-                del self._back_masks[o][i]
+                # del self._reg_masks[o][i]
+                # del self._back_masks[o][i]
                 del self._instruments[o][self._instruments[o].index(i)]
 
             if len(self._instruments[o]) == 0:
@@ -1421,11 +1554,11 @@ class BaseSource:
                 del self._initial_regions[o]
                 del self._initial_region_matches[o]
                 del self._regions[o]
-                del self._back_regions[o]
+                # del self._back_regions[o]
                 del self._other_regions[o]
                 del self._alt_match_regions[o]
-                del self._within_source_regions[o]
-                del self._within_back_regions[o]
+                # del self._within_source_regions[o]
+                # del self._within_back_regions[o]
                 del self._peaks[o]
 
                 del self._obs[self._obs.index(o)]
@@ -1465,23 +1598,23 @@ class BaseSource:
             fits = [k + " - " + ", ".join(models) for k, models in self._fit_results.items()]
             print("Available fits - {}".format(" | ".join(fits)))
 
-        if self._regions is not None and "custom" in self._regions:
+        if self._regions is not None and "custom" in self._radii:
             if self._redshift is not None:
                 region_radius = ang_to_rad(self._custom_region_radius, self._redshift, cosmo=self._cosmo)
             else:
                 region_radius = self._custom_region_radius.to("deg")
             print("Custom Region Radius - {}".format(region_radius.round(2)))
-            print("Custom Region SNR - {}".format(self._snr["custom"].round(2)))
+            print("Custom Region SNR - {}".format(self.get_snr("custom", self._default_coord).round(2)))
 
         if self._r200 is not None:
             print("R200 - {}".format(self._r200))
-            print("R200 SNR - {}".format(round(self._snr["r200"], 2)))
+            print("R200 SNR - {}".format(self.get_snr("r200", self._default_coord).round(2)))
         if self._r500 is not None:
             print("R500 - {}".format(self._r500))
-            print("R500 SNR - {}".format(round(self._snr["r500"], 2)))
+            print("R500 SNR - {}".format(self.get_snr("r500", self._default_coord).round(2)))
         if self._r2500 is not None:
             print("R2500 - {}".format(self._r500))
-            print("R2500 SNR - {}".format(round(self._snr["r2500"], 2)))
+            print("R2500 SNR - {}".format(self.get_snr("r2500", self._default_coord).round(2)))
 
         # There's probably a neater way of doing the observables - maybe a formatting function?
         if self._richness is not None and self._richness_err is not None \
