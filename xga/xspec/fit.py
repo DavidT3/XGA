@@ -1,22 +1,24 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 17:10. Copyright (c) David J Turner
 
 import os
 import warnings
-from typing import List
+from typing import List, Union
 
 import astropy.units as u
 from astropy.units import Quantity
 
 from xga import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
 from xga.exceptions import NoProductAvailableError, ModelNotAssociatedError
+from xga.samples.base import BaseSample
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 from .run import xspec_call
 
 
 @xspec_call
-def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quantity = Quantity(3.0, "keV"),
-                     start_met: float = 0.3, lum_en: List[Quantity] = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+def single_temp_apec(sources: Union[BaseSource, BaseSample], reg_type: str,
+                     start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
+                     lum_en: List[Quantity] = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
                      freeze_nh: bool = True, freeze_met: bool = True,
                      link_norm: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
@@ -25,7 +27,7 @@ def single_temp_apec(sources: List[BaseSource], reg_type: str, start_temp: Quant
     This is a convenience function for fitting an absorbed single temperature apec model to an object.
     It would be possible to do the exact same fit using the custom_model function, but as it will
     be a very common fit a dedicated function is in order.
-    :param List[BaseSource] sources: A single source object, or a list of source objects.
+    :param List[BaseSource] sources: A single source object, or a sample of sources.
     :param str reg_type: Tells the method what region's spectrum you want to use, for instance r500 or r200.
     :param Quantity start_temp: The initial temperature for the fit.
     :param start_met: The initial metallicity for the fit (in ZSun).
