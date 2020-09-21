@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
 
 import os
 import warnings
 from multiprocessing.dummy import Pool
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
 from astropy.units import Quantity
@@ -14,12 +14,13 @@ from scipy.signal import convolve
 from tqdm import tqdm
 
 from xga.products import PSFGrid, Image
+from xga.samples.base import BaseSample
 from xga.sas import evselect_image, psfgen, emosaic
 from xga.sources import BaseSource
 from xga.utils import NUM_CORES, OUTPUT, COMPUTE_MODE
 
 
-def rl_psf(sources: List[BaseSource], iterations: int = 15, psf_model: str = "ELLBETA",
+def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_model: str = "ELLBETA",
            lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
            bins: int = 4, num_cores: int = NUM_CORES):
     """
@@ -108,7 +109,7 @@ def rl_psf(sources: List[BaseSource], iterations: int = 15, psf_model: str = "EL
 
     # If just one source is passed in, make it a list of one, makes behaviour more consistent
     #  throughout this function.
-    if not isinstance(sources, list):
+    if not isinstance(sources, (list, BaseSample)):
         sources = [sources]
 
     for source in sources:

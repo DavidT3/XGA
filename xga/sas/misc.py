@@ -1,24 +1,25 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
 
 import os
-from typing import List, Union
+from typing import Union
 
 import numpy as np
 
 from xga import OUTPUT, NUM_CORES
+from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
 from .run import sas_call
 
 
 @sas_call
-def cifbuild(sources: Union[List[BaseSource], NullSource], num_cores: int = NUM_CORES,
+def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int = NUM_CORES,
              disable_progress: bool = False):
     """
     A wrapper for the XMM cifbuild command, which will be run before many of the more complex
     SAS commands, to check that a CIF compatible with the local version of SAS is available.
-    :param List[BaseSource] sources: A single source object, or a list of source objects.
+    :param Union[BaseSource, NullSource, BaseSample] sources: A single source object, or a sample of sources.
     :param int num_cores: The number of cores to use (if running locally), default is set to
     90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.

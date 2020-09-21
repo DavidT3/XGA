@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -11,6 +11,7 @@ from tqdm import tqdm
 from xga import COMPUTE_MODE
 from xga.exceptions import SASNotFoundError
 from xga.products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
+from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
 
@@ -89,10 +90,10 @@ def sas_call(sas_func):
         # so rather than return them from the sas function I'll just access them like this.
         if isinstance(args[0], (BaseSource, NullSource)):
             sources = [args[0]]
-        elif isinstance(args[0], list):
+        elif isinstance(args[0], BaseSample):
             sources = args[0]
         else:
-            raise TypeError("Please pass a source object, or a list of source objects.")
+            raise TypeError("Please pass a source, NullSource, or sample object.")
         src_lookup = [repr(src) for src in sources]
 
         # This is the output from whatever function this is a decorator for
