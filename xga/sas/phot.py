@@ -1,9 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
 
 import os
 from shutil import rmtree
-from typing import List, Union
+from typing import Union
 
 import numpy as np
 from astropy.units import Quantity, deg
@@ -11,6 +11,7 @@ from astropy.units import Quantity, deg
 from xga import OUTPUT, NUM_CORES
 from xga.exceptions import SASInputInvalid, NoProductAvailableError
 from xga.imagetools import data_limits
+from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
 from xga.utils import energy_to_channel
@@ -20,14 +21,14 @@ from .run import sas_call
 
 # TODO Perhaps remove the option to add to the SAS expression
 @sas_call
-def evselect_image(sources: Union[List[BaseSource], NullSource], lo_en: Quantity, hi_en: Quantity,
+def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity, hi_en: Quantity,
                    add_expr: str = "", num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for a configuration of the SAS evselect command that makes images.
     Images will be generated for every observation associated with every source passed to this function.
     If images in the requested energy band are already associated with the source,
     they will not be generated again.
-    :param Union[List[BaseSource], NullSource] sources: A single source object, or a list of source objects.
+    :param Union[BaseSource, NullSource, BaseSample] sources: A single source object, or a sample of sources.
     :param Quantity lo_en: The lower energy limit for the image, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the image, in astropy energy units.
     :param str add_expr: A string to be added to the SAS expression keyword
@@ -108,14 +109,14 @@ def evselect_image(sources: Union[List[BaseSource], NullSource], lo_en: Quantity
 
 
 @sas_call
-def eexpmap(sources: Union[List[BaseSource], NullSource], lo_en: Quantity, hi_en: Quantity,
+def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity, hi_en: Quantity,
             num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for the SAS eexpmap command.
     Expmaps will be generated for every observation associated with every source passed to this function.
     If expmaps in the requested energy band are already associated with the source,
     they will not be generated again
-    :param List[BaseSource] sources: A single source object, or a list of source objects.
+    :param Union[BaseSource, NullSource, BaseSample] sources: A single source object, or sample of sources.
     :param Quantity lo_en: The lower energy limit for the expmap, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the expmap, in astropy energy units.
     :param int num_cores: The number of cores to use (if running locally), default is set to
@@ -123,7 +124,7 @@ def eexpmap(sources: Union[List[BaseSource], NullSource], lo_en: Quantity, hi_en
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     # I know that a lot of this code is the same as the evselect_image code, but its 1am so please don't
-    # judge me too much.
+    #  judge me too much.
 
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, (BaseSource, NullSource)):
@@ -144,7 +145,7 @@ def eexpmap(sources: Union[List[BaseSource], NullSource], lo_en: Quantity, hi_en
     sources = evselect_image(sources, lo_en, hi_en)
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
-    if not isinstance(sources, list):
+    if not isinstance(sources, (list, BaseSample)):
         sources = [sources]
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
@@ -211,13 +212,13 @@ def eexpmap(sources: Union[List[BaseSource], NullSource], lo_en: Quantity, hi_en
 
 
 @sas_call
-def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Quantity, psf_corr: bool = False,
-            psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-            num_cores: int = NUM_CORES, disable_progress: bool = False):
+def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quantity, hi_en: Quantity,
+            psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+            psf_iter: int = 15, num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for the SAS emosaic command. Every image associated with the source,
     that is in the energy band specified by the user, will be added together.
-    :param List[BaseSource] sources: A single source object, or a list of source objects.
+    :param Union[BaseSource, BaseSample] sources: A single source object, or a sample of sources.
     :param str to_mosaic: The data type to produce a mosaic for, can be either image or expmap.
     :param Quantity lo_en: The lower energy limit for the combined image, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the combined image, in astropy energy units.
@@ -255,7 +256,7 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
-    if not isinstance(sources, list):
+    if not isinstance(sources, (list, BaseSample)):
         sources = [sources]
 
     mosaic_cmd = "cd {d}; emosaic imagesets='{ims}' mosaicedset={mim}"
@@ -322,15 +323,15 @@ def emosaic(sources: List[BaseSource], to_mosaic: str, lo_en: Quantity, hi_en: Q
 
 
 @sas_call
-def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA", num_cores: int = NUM_CORES,
-           disable_progress: bool = False):
+def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str = "ELLBETA",
+           num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A wrapper for the psfgen SAS task. Used to generate XGA PSF objects, which in turn can be used to correct
     XGA images/ratemaps for optical effects. By default we use the ELLBETA model reported in Read et al. 2011
     (doi:10.1051/0004-6361/201117525), and generate a grid of binsxbins PSFs that can be used
     to correct for the PSF over an entire image. The energy dependence of the PSF is assumed to be minimal, and the
     resultant PSF object will be paired up with an image that matches it's ObsID and instrument.
-    :param List[BaseSource] sources: A single source object, or a list of source objects.
+    :param Union[BaseSource, BaseSample] sources: A single source object, or a sample of sources.
     :param int bins: The image coordinate space will be divided into a grid of size binsxbins, PSFs will be
     generated at the central coordinates of the grid chunks.
     :param str psf_model: Which model to use when generating the PSF, default is ELLBETA, the best available.
@@ -355,7 +356,7 @@ def psfgen(sources: List[BaseSource], bins: int = 4, psf_model: str = "ELLBETA",
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
-    if not isinstance(sources, list):
+    if not isinstance(sources, (list, BaseSample)):
         sources = [sources]
 
     # NullSources are not allowed to be mosaiced, as they can have any observations associated and thus won't

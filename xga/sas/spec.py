@@ -1,14 +1,15 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/09/2020, 11:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
 
 import os
 import warnings
 from shutil import rmtree
-from typing import List
+from typing import Union
 
 import numpy as np
 
 from xga import OUTPUT, NUM_CORES
+from xga.samples.base import BaseSample
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
 from xga.sources.base import NullSource
 from xga.utils import xmm_sky
@@ -18,8 +19,8 @@ from .run import sas_call
 
 # TODO Add an option to generate core-excised spectra.
 @sas_call
-def evselect_spectrum(sources: List[BaseSource], reg_type: str, group_spec: bool = True, min_counts: int = 5,
-                      min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, group_spec: bool = True,
+                      min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
                       num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A wrapper for all of the SAS processes necessary to generate an XMM spectrum that can be analysed
@@ -27,7 +28,7 @@ def evselect_spectrum(sources: List[BaseSource], reg_type: str, group_spec: bool
     observation, will have a spectrum generated using the specified region type as as boundary. It is possible
     to generate both grouped and ungrouped spectra using this function, with the degree of grouping set
     by the min_counts, min_sn, and oversample parameters.
-    :param List[BaseSource] sources: A single source object, or a list of source objects.
+    :param Union[BaseSource, BaseSample] sources: A single source object, or a sample of sources.
     :param str reg_type: Tells the method what region source you want to use, for instance r500 or r200.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.

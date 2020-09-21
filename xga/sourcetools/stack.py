@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/09/2020, 16:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -12,13 +12,14 @@ from tqdm import tqdm
 
 from xga.exceptions import NoRegionsError, NoProductAvailableError
 from xga.imagetools.profile import radial_brightness
+from xga.samples.extended import ClusterSample
 from xga.sas import evselect_spectrum
 from xga.sources import GalaxyCluster
 from xga.utils import NUM_CORES, COMPUTE_MODE
 from xga.xspec.fakeit import cluster_cr_conv
 
 
-def radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r200", use_peak: bool = True,
+def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200", use_peak: bool = True,
                       pix_step: int = 1, radii: np.ndarray = np.linspace(0, 1, 20), min_snr: Union[int, float] = 0.0,
                       lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                       custom_temps: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
@@ -200,8 +201,8 @@ def radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r200", 
     return average_profile, scaled_brightness, radii, cov, norm_cov
 
 
-def view_radial_data_stack(sources: List[GalaxyCluster], scale_radius: str = "r200", use_peak: bool = True,
-                           pix_step: int = 1, radii: np.ndarray = np.linspace(0, 1, 20),
+def view_radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200",
+                           use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0, 1, 20),
                            min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
                            psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4,
