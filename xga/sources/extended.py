@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/09/2020, 16:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 11:11. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -22,9 +22,9 @@ warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class GalaxyCluster(ExtendedSource):
-    def __init__(self, ra, dec, redshift, r200: Quantity = None, r500: Quantity = None, r2500: Quantity = None,
-                 richness: float = None, richness_err: float = None, wl_mass: Quantity = None,
-                 wl_mass_err: Quantity = None, name=None, custom_region_radius=None, use_peak=True,
+    def __init__(self, ra, dec, redshift, name=None, r200: Quantity = None, r500: Quantity = None,
+                 r2500: Quantity = None, richness: float = None, richness_err: float = None,
+                 wl_mass: Quantity = None, wl_mass_err: Quantity = None, custom_region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False,
                  clean_obs=True, clean_obs_reg="r500", clean_obs_threshold=0.3):
