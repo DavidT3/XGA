@@ -1,8 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 14:59. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
+from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity, pix
@@ -177,35 +178,36 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
         xga.xspec.fakeit.cluster_cr_conv(sources, scale_radius, temps)
 
     combined_factors = []
-    # Now to generate a combined conversion factor
+    # Now to generate a combined conversion factor from count rate to luminosity
     for source in sources:
         combined_factors.append(source.combined_conv_factor(scale_radius, lo_en, hi_en).value)
 
-    combined_factors = np.array(combined_factors)
-    print("------combined factors-------")
-    print(combined_factors)
-    print("-----------------------------\n")
+    # Check for NaN values in the brightness profiles we've retrieved - very bad if they exist
+    no_nan = np.where(~np.isnan(sb.sum(axis=1)))[0]
+    # Selects only those clusters that don't have nans in their brightness profiles
+    combined_factors = np.array(combined_factors)[no_nan]
+
     # Multiplies each cluster profile by the matching conversion factor to go from countrate to luminosity
-    scaled_brightness = (sb.T * combined_factors).T
+    luminosity = (sb[no_nan, :].T * combined_factors).T
 
     # Finds the highest value in the profile of each cluster
-    max_brs = np.max(scaled_brightness, axis=1)
-    print(max_brs)
-    print('')
+    max_lums = np.max(luminosity, axis=1)
     # Finds the mean of the maximum values and calculates scaling factors so that the maximum
     #  value in each profile is now equal to the average
-    scale_factors = max_brs.mean() / max_brs
-    print(scale_factors)
-    print('')
+    scale_factors = max_lums.mean() / max_lums
     # Applied the rescaling factors
-    scaled_brightness = (scaled_brightness.T * scale_factors).T
+    scaled_luminosity = (luminosity.T * scale_factors).T
 
     # Calculates normalised and the usual covariance matrices
-    norm_cov = np.corrcoef(scaled_brightness, rowvar=False)
-    cov = np.cov(scaled_brightness, rowvar=False)
+    norm_cov = np.corrcoef(scaled_luminosity, rowvar=False)
+    cov = np.cov(scaled_luminosity, rowvar=False)
 
-    average_profile = np.mean(scaled_brightness, axis=0)
-    return average_profile, scaled_brightness, radii, cov, norm_cov
+    average_profile = np.mean(scaled_luminosity, axis=0)
+    for src_ind, src in enumerate(sources):
+        if src_ind not in no_nan:
+            warn("A NaN value was detected in {}'s brightness profile, and as such it has been excluded from the "
+                 "stack.".format(src.name))
+    return average_profile, scaled_luminosity, radii, cov, norm_cov
 
 
 def view_radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200",
