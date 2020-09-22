@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 10:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 10:32. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -621,11 +621,11 @@ class BaseSource:
             raise UnknownProductError("{p} is not a recognised product type. Allowed product types are "
                                       "{l}".format(p=p_type, l=prod_str))
         elif obs_id not in self._products and obs_id is not None:
-            raise NotAssociatedError("{} is not associated with this source.".format(obs_id))
+            raise NotAssociatedError("{0} is not associated with {1} .".format(obs_id, self.name))
         elif (obs_id is not None and obs_id in self._products) and \
                 (inst is not None and inst not in self._products[obs_id]):
-            raise NotAssociatedError("{0} is associated with this source, but {1} is not associated with that "
-                                     "observation".format(obs_id, inst))
+            raise NotAssociatedError("{0} is associated with {1}, but {2} is not associated with that "
+                                     "observation".format(obs_id, self.name, inst))
 
         matches = []
         # Iterates through the dict search return, but each match is likely to be a very nested list,
