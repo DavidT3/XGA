@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 16:10. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -90,7 +90,7 @@ def sas_call(sas_func):
         # so rather than return them from the sas function I'll just access them like this.
         if isinstance(args[0], (BaseSource, NullSource)):
             sources = [args[0]]
-        elif isinstance(args[0], BaseSample):
+        elif isinstance(args[0], (BaseSample, list)):
             sources = args[0]
         else:
             raise TypeError("Please pass a source, NullSource, or sample object.")

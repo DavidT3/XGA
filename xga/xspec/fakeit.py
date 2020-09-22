@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 16:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:07. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -66,6 +66,7 @@ def cluster_cr_conv(sources: Union[List[GalaxyCluster], GalaxyCluster], reg_type
 
     script_paths = []
     outfile_paths = []
+    src_inds = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for s_ind, source in enumerate(sources):
         # This function can take a single temperature to simulate at, or a list of them (one for each source).
@@ -135,11 +136,12 @@ def cluster_cr_conv(sources: Union[List[GalaxyCluster], GalaxyCluster], reg_type
         except (ModelNotAssociatedError, ParameterNotAssociatedError):
             script_paths.append(script_file)
             outfile_paths.append(out_file)
+            src_inds.append(s_ind)
 
     # New feature of XSPEC interface, tells the xspec_call decorator what type of output from the script
     #  to expect
     run_type = "conv_factors"
-    return script_paths, outfile_paths, num_cores, reg_type, run_type
+    return script_paths, outfile_paths, num_cores, reg_type, run_type, src_inds
 
 
 
