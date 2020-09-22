@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 17:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:07. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -83,8 +83,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], reg_type: str,
 
     script_paths = []
     outfile_paths = []
+    src_inds = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
-    for source in sources:
+    for src_ind, source in enumerate(sources):
         # Find matching spectrum objects associated with the current source, and checking if they are valid
         spec_objs = [match for match in source.get_products("spectrum", just_obj=False)
                      if reg_type in match and match[-1].usable]
@@ -153,8 +154,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], reg_type: str,
         except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
+            src_inds.append(src_ind)
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, reg_type, run_type
+    return script_paths, outfile_paths, num_cores, reg_type, run_type, src_inds
 
 
 def double_temp_apec():

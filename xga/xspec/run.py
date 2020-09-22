@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/08/2020, 17:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:07. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -115,14 +115,15 @@ def xspec_call(sas_func):
             sources = args[0]
         else:
             raise TypeError("Please pass a source object, or a list of source objects.")
-        src_lookup = [repr(src) for src in sources]
 
         # This is the output from whatever function this is a decorator for
         # First return is a list of paths of XSPEC scripts to execute, second is the expected output paths,
         #  and 3rd is the number of cores to use.
         # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
         #  countrate to luminosity conversion constants
-        script_list, paths, cores, reg_type, run_type = sas_func(*args, **kwargs)
+        script_list, paths, cores, reg_type, run_type, src_inds = sas_func(*args, **kwargs)
+        src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
+        rel_src_repr = [repr(src) for src_ind, src in enumerate(sources) if src_ind in src_inds]
 
         # This is what the returned information from the execute command gets stored in before being parceled out
         #  to source and spectrum objects
@@ -147,7 +148,7 @@ def xspec_call(sas_func):
 
                 for s_ind, s in enumerate(script_list):
                     pth = paths[s_ind]
-                    src = src_lookup[s_ind]
+                    src = rel_src_repr[s_ind]
                     pool.apply_async(execute_cmd, args=(s, pth, src, run_type), callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
@@ -167,7 +168,7 @@ def xspec_call(sas_func):
         for entry in results:
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add these results to
-            ind = src_lookup.index(entry)
+            ind = src_lookup[entry]
             s = sources[ind]
             # Is this fit usable?
             res_set = results[entry]
