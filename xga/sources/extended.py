@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 16:20. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -81,18 +81,19 @@ class GalaxyCluster(ExtendedSource):
             raise UnitConversionError("The weak lensing mass error value cannot be converted to MSun.")
 
         if clean_obs and clean_obs_reg in self._radii:
-            from xga.sas import emosaic
             # Use this method to figure out what data to throw away
             reject_dict = self.obs_check(clean_obs_reg, clean_obs_threshold)
             if len(reject_dict) != 0:
                 # Use the source method to remove data we've decided isn't worth keeping
                 self.disassociate_obs(reject_dict)
-                # Run these just so there is an up to date combined ratemap
-                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                # I used to run these just so there is an up to date combined ratemap, but its quite
+                #  inefficient to do it on an individual basis if dealing with a sample, so the user will have
+                #  to run those commands themselves later
+                # emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                # emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
         # Throws an error if a poor choice of region has been made
-        elif clean_obs and clean_obs_reg not in self._reg_masks:
+        elif clean_obs and clean_obs_reg not in self._radii:
             raise NoRegionsError("{c} is not associated with this source".format(c=clean_obs_reg))
 
     # Property getters for the over density radii, they don't get setters as various things are defined on init
