@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/09/2020, 16:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 09:49. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -622,8 +622,9 @@ class BaseSource:
                                       "{l}".format(p=p_type, l=prod_str))
         elif obs_id not in self._products and obs_id is not None:
             raise NotAssociatedError("{} is not associated with this source.".format(obs_id))
-        elif inst not in XMM_INST and inst is not None:
-            raise ValueError("{} is not an allowed instrument".format(inst))
+        elif obs_id in self._products and inst not in self._products[obs_id]:
+            raise NotAssociatedError("{0} is associated with this source, but {1} is not associated with that "
+                                     "observations".format(obs_id, inst))
 
         matches = []
         # Iterates through the dict search return, but each match is likely to be a very nested list,
@@ -1550,6 +1551,7 @@ class BaseSource:
                 del self._instruments[o][self._instruments[o].index(i)]
 
             if len(self._instruments[o]) == 0:
+                del self._products[o]
                 del self._detected[o]
                 del self._initial_regions[o]
                 del self._initial_region_matches[o]
