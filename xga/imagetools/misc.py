@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 14:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 
 from typing import Tuple, List, Union
@@ -8,8 +8,8 @@ import numpy as np
 from astropy.units import Quantity, pix, deg, UnitConversionError, UnitBase
 from astropy.wcs import WCS
 
-from xga.products import Image, RateMap
-from xga.sourcetools import ang_to_rad
+from ..products import Image, RateMap
+from ..sourcetools import ang_to_rad
 
 
 def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quantity(1, 'arcmin')) -> float:

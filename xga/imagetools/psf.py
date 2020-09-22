@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -13,11 +13,11 @@ from fitsio import write
 from scipy.signal import convolve
 from tqdm import tqdm
 
-from xga.products import PSFGrid, Image
-from xga.samples.base import BaseSample
-from xga.sas import evselect_image, psfgen, emosaic
-from xga.sources import BaseSource
-from xga.utils import NUM_CORES, OUTPUT, COMPUTE_MODE
+from ..products import PSFGrid, Image
+from ..samples.base import BaseSample
+from ..sas import evselect_image, psfgen, emosaic
+from ..sources import BaseSource
+from ..utils import NUM_CORES, OUTPUT, COMPUTE_MODE
 
 
 def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_model: str = "ELLBETA",

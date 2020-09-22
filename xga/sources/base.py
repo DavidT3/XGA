@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 10:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -14,18 +14,15 @@ from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase
 from fitsio import FITS
 from numpy import ndarray
-from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, \
-    EllipsePixelRegion, CirclePixelRegion
+from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
 from regions import read_ds9, PixelRegion, CompoundSkyRegion
 
-from xga import xga_conf
-from xga.exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, \
-    MultipleMatchError, NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, \
-    ParameterNotAssociatedError
-from xga.products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, \
-    ExpMap, RateMap, PSFGrid
-from xga.sourcetools import simple_xmm_match, nh_lookup, ang_to_rad
-from xga.utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
+from .. import xga_conf
+from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, MultipleMatchError, \
+    NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, RateMap, PSFGrid
+from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad
+from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really

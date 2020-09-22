@@ -1,16 +1,16 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import os
 from typing import Union
 
 import numpy as np
 
-from xga import OUTPUT, NUM_CORES
-from xga.samples.base import BaseSample
-from xga.sources import BaseSource
-from xga.sources.base import NullSource
 from .run import sas_call
+from .. import OUTPUT, NUM_CORES
+from ..samples.base import BaseSample
+from ..sources import BaseSource
+from ..sources.base import NullSource
 
 
 @sas_call

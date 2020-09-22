@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -7,7 +7,7 @@ from astropy.units import Quantity
 from numpy import ndarray
 from tqdm import tqdm
 
-from xga.sources.base import BaseSource
+from ..sources.base import BaseSource
 
 
 class BaseSample:

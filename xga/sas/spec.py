@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,13 +8,13 @@ from typing import Union
 
 import numpy as np
 
-from xga import OUTPUT, NUM_CORES
-from xga.samples.base import BaseSample
-from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
-from xga.sources.base import NullSource
-from xga.utils import xmm_sky
 from .misc import cifbuild
 from .run import sas_call
+from .. import OUTPUT, NUM_CORES
+from ..samples.base import BaseSample
+from ..sources import BaseSource, ExtendedSource, GalaxyCluster
+from ..sources.base import NullSource
+from ..utils import xmm_sky
 
 
 # TODO Add an option to generate core-excised spectra.

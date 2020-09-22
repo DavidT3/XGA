@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 
 import os
@@ -12,8 +12,8 @@ from fitsio import FITS, hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
-from xga.exceptions import ModelNotAssociatedError, ParameterNotAssociatedError
 from . import BaseProduct, BaseAggregateProduct
+from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError
 
 
 class Spectrum(BaseProduct):

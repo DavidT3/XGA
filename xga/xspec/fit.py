@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,11 +8,11 @@ from typing import List, Union
 import astropy.units as u
 from astropy.units import Quantity
 
-from xga import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
-from xga.exceptions import NoProductAvailableError, ModelNotAssociatedError
-from xga.samples.base import BaseSample
-from xga.sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 from .run import xspec_call
+from .. import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT
+from ..exceptions import NoProductAvailableError, ModelNotAssociatedError
+from ..samples.base import BaseSample
+from ..sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 
 
 @xspec_call

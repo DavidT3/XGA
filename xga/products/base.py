@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 00:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 
 import os
@@ -7,8 +7,8 @@ from typing import Tuple, List, Dict
 
 from astropy.units import Quantity
 
-from xga.exceptions import SASGenerationError, UnknownCommandlineError
-from xga.utils import SASERROR_LIST, SASWARNING_LIST
+from ..exceptions import SASGenerationError, UnknownCommandlineError
+from ..utils import SASERROR_LIST, SASWARNING_LIST
 
 
 class BaseProduct:

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 22:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import json
 import os
@@ -15,7 +15,7 @@ from fitsio.header import FITSHDR
 from numpy import nan, floor
 from tqdm import tqdm
 
-from xga.exceptions import XGAConfigError
+from .exceptions import XGAConfigError
 
 # If XDG_CONFIG_HOME is set, then use that, otherwise use this default config path
 CONFIG_PATH = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))

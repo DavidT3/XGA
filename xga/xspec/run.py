@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -13,10 +13,10 @@ import pandas as pd
 from fitsio import FITS
 from tqdm import tqdm
 
-from xga import COMPUTE_MODE
-from xga.exceptions import XSPECFitError, HeasoftError
-from xga.products import Spectrum
-from xga.sources import BaseSource
+from .. import COMPUTE_MODE
+from ..exceptions import XSPECFitError, HeasoftError
+from ..products import Spectrum
+from ..sources import BaseSource
 
 # Got to make sure we can access command line XSPEC.
 # Currently raises an error, but perhaps later on I'll relax this to a warning.

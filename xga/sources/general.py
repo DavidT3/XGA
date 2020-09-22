@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/09/2020, 16:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Dict
@@ -11,10 +11,10 @@ from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitBase, deg
 from numpy import ndarray
 
-from xga.exceptions import NotAssociatedError, PeakConvergenceFailedError, NoRegionsError, NoMatchFoundError
-from xga.products import RateMap
-from xga.sourcetools import rad_to_ang, ang_to_rad, nh_lookup
 from .base import BaseSource
+from ..exceptions import NotAssociatedError, PeakConvergenceFailedError, NoRegionsError, NoMatchFoundError
+from ..products import RateMap
+from ..sourcetools import rad_to_ang, ang_to_rad, nh_lookup
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
