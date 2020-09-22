@@ -1,11 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/09/2020, 08:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 from astropy.units.quantity import Quantity
 from pandas import DataFrame
 
-from xga import CENSUS
-from xga.exceptions import NoMatchFoundError
+from .. import CENSUS
+from ..exceptions import NoMatchFoundError
 
 
 def simple_xmm_match(src_ra: float, src_dec: float, half_width: Quantity = Quantity(20.0, 'arcmin')) -> DataFrame:

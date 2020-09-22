@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 16:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -8,12 +8,12 @@ from typing import Tuple
 
 from tqdm import tqdm
 
-from xga import COMPUTE_MODE
-from xga.exceptions import SASNotFoundError
-from xga.products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
-from xga.samples.base import BaseSample
-from xga.sources import BaseSource
-from xga.sources.base import NullSource
+from .. import COMPUTE_MODE
+from ..exceptions import SASNotFoundError
+from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
+from ..samples.base import BaseSample
+from ..sources import BaseSource
+from ..sources.base import NullSource
 
 if "SAS_DIR" not in os.environ:
     raise SASNotFoundError("SAS_DIR environment variable is not set, "

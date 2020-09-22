@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 16:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -10,11 +10,10 @@ from astropy.units import Quantity, UnitConversionError, pix, kpc
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 
-from xga.exceptions import ModelNotAssociatedError, \
-    ParameterNotAssociatedError, NoRegionsError
-from xga.imagetools import radial_brightness, pizza_brightness
-from xga.sourcetools import ang_to_rad, rad_to_ang
 from .general import ExtendedSource
+from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, NoRegionsError
+from ..imagetools import radial_brightness, pizza_brightness
+from ..sourcetools import ang_to_rad, rad_to_ang
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really

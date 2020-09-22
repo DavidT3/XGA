@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -10,13 +10,13 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from tqdm import tqdm
 
-from xga.exceptions import NoRegionsError, NoProductAvailableError
-from xga.imagetools.profile import radial_brightness
-from xga.samples.extended import ClusterSample
-from xga.sas import evselect_spectrum
-from xga.sources import GalaxyCluster
-from xga.utils import NUM_CORES, COMPUTE_MODE
-from xga.xspec.fakeit import cluster_cr_conv
+import xga.xspec.fakeit
+from ..exceptions import NoRegionsError, NoProductAvailableError
+from ..imagetools.profile import radial_brightness
+from ..samples.extended import ClusterSample
+from ..sas import evselect_spectrum
+from ..sources import GalaxyCluster
+from ..utils import NUM_CORES, COMPUTE_MODE
 
 
 def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200", use_peak: bool = True,
@@ -171,10 +171,10 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
 
     # Calculate all the conversion factors
     if custom_temps is not None:
-        cluster_cr_conv(sources, scale_radius, custom_temps)
+        xga.xspec.fakeit.cluster_cr_conv(sources, scale_radius, custom_temps)
     else:
         temps = Quantity([source.get_temperature(scale_radius, "tbabs*apec")[0] for source in sources], 'keV')
-        cluster_cr_conv(sources, scale_radius, temps)
+        xga.xspec.fakeit.cluster_cr_conv(sources, scale_radius, temps)
 
     combined_factors = []
     # Now to generate a combined conversion factor
@@ -182,14 +182,21 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
         combined_factors.append(source.combined_conv_factor(scale_radius, lo_en, hi_en).value)
 
     combined_factors = np.array(combined_factors)
+    print("------combined factors-------")
+    print(combined_factors)
+    print("-----------------------------\n")
     # Multiplies each cluster profile by the matching conversion factor to go from countrate to luminosity
     scaled_brightness = (sb.T * combined_factors).T
 
     # Finds the highest value in the profile of each cluster
     max_brs = np.max(scaled_brightness, axis=1)
+    print(max_brs)
+    print('')
     # Finds the mean of the maximum values and calculates scaling factors so that the maximum
     #  value in each profile is now equal to the average
     scale_factors = max_brs.mean() / max_brs
+    print(scale_factors)
+    print('')
     # Applied the rescaling factors
     scaled_brightness = (scaled_brightness.T * scale_factors).T
 

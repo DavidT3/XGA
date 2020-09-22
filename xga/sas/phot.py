@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 import os
 from shutil import rmtree
@@ -8,15 +8,15 @@ from typing import Union
 import numpy as np
 from astropy.units import Quantity, deg
 
-from xga import OUTPUT, NUM_CORES
-from xga.exceptions import SASInputInvalid, NoProductAvailableError
-from xga.imagetools import data_limits
-from xga.samples.base import BaseSample
-from xga.sources import BaseSource
-from xga.sources.base import NullSource
-from xga.utils import energy_to_channel
 from .misc import cifbuild
 from .run import sas_call
+from .. import OUTPUT, NUM_CORES
+from ..exceptions import SASInputInvalid, NoProductAvailableError
+from ..imagetools import data_limits
+from ..samples.base import BaseSample
+from ..sources import BaseSource
+from ..sources.base import NullSource
+from ..utils import energy_to_channel
 
 
 # TODO Perhaps remove the option to add to the SAS expression

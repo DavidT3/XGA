@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/09/2020, 14:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -8,9 +8,9 @@ import numpy as np
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitBase, pix, deg, arcsec, UnitConversionError
 
-from xga.products import Image, RateMap
-from xga.sourcetools import rad_to_ang
 from .misc import pix_deg_scale, pix_rad_to_physical
+from ..products import Image, RateMap
+from ..sourcetools import rad_to_ang
 
 
 def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, shape: tuple,

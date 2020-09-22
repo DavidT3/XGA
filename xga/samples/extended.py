@@ -1,13 +1,13 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/09/2020, 15:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
 
 from astropy.cosmology import Planck15
 from astropy.units import Quantity
 from numpy import ndarray
 from tqdm import tqdm
 
-from xga.samples.base import BaseSample
-from xga.sources.extended import GalaxyCluster
+from .base import BaseSample
+from ..sources.extended import GalaxyCluster
 
 
 # Names are required for the ClusterSample because they'll be used to access specific cluster objects
