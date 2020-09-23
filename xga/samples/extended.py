@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 12:58. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -103,6 +103,21 @@ class ClusterSample(BaseSample):
 
             dec_lb.update(1)
         dec_lb.close()
+
+        # And again I ask XGA to generate the merged images and exposure maps, in case any sources have been
+        #  cleaned and had data removed
+        if clean_obs:
+            emosaic(self, "image", peak_lo_en, peak_hi_en)
+            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+            for src in self._sources:
+                try:
+                    en_key = "bound_{0}-{1}".format(peak_lo_en.to("keV").value,
+                                                    peak_hi_en.to("keV").value)
+                    rt = src.get_products("combined_ratemap", extra_key=en_key)[0]
+                    peak = src.find_peak(rt)
+                except PeakConvergenceFailedError:
+                    pass
+
 
 
 
