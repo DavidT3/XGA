@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 17:08. Copyright (c) David J Turner
 
 import json
 import os
@@ -68,6 +68,10 @@ with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json
 with open(pkg_resources.resource_filename(__name__, "files/xspec_model_units.json5"), 'r') as filey:
     MODEL_UNITS = json.load(filey)
 ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
+# TODO Populate this further, also actually calculate and verify these myself, the value here is taken
+#  from pyproffit code
+# Conversion from Hydrogen number density to electron number density
+NHC = {"angr": 1.199}
 XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
 
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 16:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 17:08. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -311,7 +311,7 @@ class GalaxyCluster(ExtendedSource):
         plt.show()
         plt.close('all')
 
-    def combined_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
+    def combined_lum_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
         """
         Combines conversion factors calculated for this source with individual instrument-observation
         spectra, into one overall conversion factor.
@@ -340,6 +340,24 @@ class GalaxyCluster(ExtendedSource):
 
         # Calculating and returning the combined factor.
         return av_lum / total_rate
+
+    def combined_norm_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
+        """
+        Combines count-rate to normalisation conversion factors associated with this source
+        :param str reg_type: The region type the conversion factor is associated with.
+        :param Quantity lo_en: The lower energy limit of the conversion factors.
+        :param Quantity hi_en: The upper energy limit of the conversion factors.
+        :return: A combined conversion factor that can be applied to a combined ratemap to
+        calculate luminosity.
+        :rtype: Quantity
+        """
+        spec = self.get_products("spectrum", extra_key=reg_type)
+        total_rate = Quantity(0, "ct/s")
+        for s in spec:
+            total_rate += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2]
+
+        # Calculating and returning the combined factor.
+        return 1 / total_rate
 
 
 

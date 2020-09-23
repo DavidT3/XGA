@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 14:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 17:08. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -11,13 +11,13 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from tqdm import tqdm
 
-import xga.xspec.fakeit
 from ..exceptions import NoRegionsError, NoProductAvailableError
 from ..imagetools.profile import radial_brightness
 from ..samples.extended import ClusterSample
 from ..sas import evselect_spectrum
 from ..sources import GalaxyCluster
 from ..utils import NUM_CORES, COMPUTE_MODE
+from ..xspec.fakeit import cluster_cr_conv
 
 
 def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200", use_peak: bool = True,
@@ -172,15 +172,15 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
 
     # Calculate all the conversion factors
     if custom_temps is not None:
-        xga.xspec.fakeit.cluster_cr_conv(sources, scale_radius, custom_temps)
+        cluster_cr_conv(sources, scale_radius, custom_temps)
     else:
         temps = Quantity([source.get_temperature(scale_radius, "tbabs*apec")[0] for source in sources], 'keV')
-        xga.xspec.fakeit.cluster_cr_conv(sources, scale_radius, temps)
+        cluster_cr_conv(sources, scale_radius, temps)
 
     combined_factors = []
     # Now to generate a combined conversion factor from count rate to luminosity
     for source in sources:
-        combined_factors.append(source.combined_conv_factor(scale_radius, lo_en, hi_en).value)
+        combined_factors.append(source.combined_lum_conv_factor(scale_radius, lo_en, hi_en).value)
 
     # Check for NaN values in the brightness profiles we've retrieved - very bad if they exist
     no_nan = np.where(~np.isnan(sb.sum(axis=1)))[0]

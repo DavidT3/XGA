@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 16:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 17:08. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -84,7 +84,11 @@ class BaseSource:
 
         self._cosmo = cosmology
         if redshift is not None:
-            self.lum_dist = self._cosmo.luminosity_distance(self._redshift)
+            self._lum_dist = self._cosmo.luminosity_distance(self._redshift)
+            self._ang_diam_dist = self._cosmo.angular_diameter_distance(self._redshift)
+        else:
+            self._lum_dist = None
+            self._ang_diam_dist = None
         self._initial_regions, self._initial_region_matches = self._load_regions(region_dict)
 
         # This is a queue for products to be generated for this source, will be a numpy array in practise.
@@ -1602,6 +1606,25 @@ class BaseSource:
                 if o in self._onaxis:
                     del self._onaxis[self._onaxis.index(o)]
                 del self._instruments[o]
+
+    @property
+    def luminosity_distance(self) -> Quantity:
+        """
+        Tells the user the luminosity distance to the source if a redshift was supplied, if not returns None.
+        :return: The luminosity distance to the source, calculated using the cosmology associated with this source.
+        :rtype: Quantity
+        """
+        return self._lum_dist
+
+    @property
+    def angular_diameter_distance(self) -> Quantity:
+        """
+        Tells the user the angular diameter distance to the source if a redshift was supplied, if not returns None.
+        :return: The angular diameter distance to the source, calculated using the cosmology
+        associated with this source.
+        :rtype: Quantity
+        """
+        return self._ang_diam_dist
 
     def info(self):
         """
