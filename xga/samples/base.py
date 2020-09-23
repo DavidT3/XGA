@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:38. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -22,6 +22,10 @@ class BaseSample:
         self._names = []
         self._cosmo = cosmology
         self._sources = {}
+
+        # Just checking that, if names are being supplied, then they are all unique
+        if name is not None and len(set(name)) != len(name):
+            raise ValueError("Names supplied to samples must be unique.")
 
         dec_base = tqdm(desc="Declaring BaseSource Sample", total=len(ra), disable=no_prog_bar)
         for ind, r in enumerate(ra):
