@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 13:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 13:10. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -109,16 +109,22 @@ class ClusterSample(BaseSample):
         if clean_obs:
             emosaic(self, "image", peak_lo_en, peak_hi_en)
             emosaic(self, "expmap", peak_lo_en, peak_hi_en)
-            # Updates with new peaks
+
+        # TODO Reconsider if this is even necessary, the data that has been removed should by definition
+        #  not really include the peak
+        # Updates with new peaks
+        if clean_obs and use_peak:
             for n in self.names:
-                try:
-                    en_key = "bound_{0}-{1}".format(peak_lo_en.to("keV").value,
-                                                    peak_hi_en.to("keV").value)
-                    rt = self._sources[n].get_products("combined_ratemap", extra_key=en_key)[0]
-                    peak = self._sources[n].find_peak(rt)
-                    self._sources[n].peak = peak
-                except PeakConvergenceFailedError:
-                    pass
+                # If the source in question has had data removed
+                if self._sources[n].disassociated:
+                    try:
+                        en_key = "bound_{0}-{1}".format(peak_lo_en.to("keV").value,
+                                                        peak_hi_en.to("keV").value)
+                        rt = self._sources[n].get_products("combined_ratemap", extra_key=en_key)[0]
+                        peak = self._sources[n].find_peak(rt)
+                        self._sources[n].peak = peak[0]
+                    except PeakConvergenceFailedError:
+                        pass
 
 
 
