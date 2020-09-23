@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 16:20. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -20,7 +20,8 @@ from regions import read_ds9, PixelRegion, CompoundSkyRegion
 from .. import xga_conf
 from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
-from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, RateMap, PSFGrid
+from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
+    RateMap, PSFGrid
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
 
@@ -137,6 +138,11 @@ class BaseSource:
 
         self._wl_mass = None
         self._wl_mass_err = None
+
+        # These attributes pertain to the cleaning of observations (as in disassociating them from the source if
+        #  they don't include enough of the object we care about).
+        self._disassociated = False
+        self._disassociated_obs = {}
 
         # If there is an existing XGA output directory, then it makes sense to search for products that XGA
         #  may have already generated and load them in - saves us wasting time making them again.
@@ -1523,12 +1529,43 @@ class BaseSource:
         """
         return self._instruments
 
-    def disassociate_obs(self, to_remove):
+    @property
+    def disassociated(self) -> bool:
         """
+        Property that describes whether this source has had ObsIDs disassociated from it.
+        :return: A boolean flag, True means that ObsIDs/instruments have been removed, False means they haven't.
+        :rtype: bool
+        """
+        return self._disassociated
 
+    @property
+    def disassociated_obs(self) -> dict:
+        """
+        Property that details exactly what data has been disassociated from this source, if any.
+        :return: Dictionary describing which instruments of which ObsIDs have been disassociated from this source.
+        :rtype: dict
+        """
+        return self._disassociated_obs
+
+    def disassociate_obs(self, to_remove: dict):
+        """
+        Method that uses the supplied dictionary to safely remove data from the source. This data will no longer
+        be used in any analyses, and would typically be removed because it is of poor quality, or doesn't contribute
+        enough to justify its presence.
         :param dict to_remove: A dictionary of observations to remove, in the style of the source.instruments
         dictionary, with the top level keys being ObsIDs, and the lower levels being instrument names.
         """
+        if not self._disassociated:
+            self._disassociated = True
+        if len(self._disassociated_obs) == 0:
+            self._disassociated_obs = to_remove
+        else:
+            for o in to_remove:
+                if o not in self._disassociated_obs:
+                    self._disassociated_obs[o] = to_remove[o]
+                else:
+                    self._disassociated_obs[o] += to_remove[o]
+
         # If we're un-associating certain observations, odds on the combined products are no longer valid
         if "combined" in self._products:
             del self._products["combined"]

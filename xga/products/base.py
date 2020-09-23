@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:39. Copyright (c) David J Turner
 
 
 import os
@@ -40,8 +40,6 @@ class BaseProduct:
         self._prod_type = None
         self._obj_name = None
 
-        self.raise_errors(raise_properly)
-
     # Users are not allowed to change this, so just a getter.
     @property
     def usable(self) -> bool:
@@ -73,7 +71,7 @@ class BaseProduct:
             self._usable = False
         self._path = prod_path
 
-    def parse_stderr(self) -> Tuple[List[Dict], List[Dict], List]:
+    def parse_stderr(self) -> Tuple[List[str], List[Dict], List]:
         """
         This method parses the stderr associated with the generation of a product into errors confirmed to have
         come from SAS, and other unidentifiable errors. The SAS errors are returned with the actual error
@@ -124,6 +122,7 @@ class BaseProduct:
 
         # Defined as empty as they are returned by this method
         parsed_sas_errs = []
+        sas_errs_msgs = []
         parsed_sas_warns = []
         other_err_lines = []
         # err_str being "" is ideal, hopefully means that nothing has gone wrong
@@ -134,13 +133,22 @@ class BaseProduct:
             parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
             parsed_sas_warns, sas_warn_lines = find_sas(err_lines, "warning")
 
+            sas_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                             for e in parsed_sas_errs]
+
             # These are impossible to predict the form of, so they won't be parsed
             other_err_lines = [line for line in err_lines if line not in sas_err_lines
                                and line not in sas_warn_lines and line != ""]
-        return parsed_sas_errs, parsed_sas_warns, other_err_lines
+
+        if len(sas_errs_msgs) > 0:
+            self._usable = False
+        if len(other_err_lines) > 0:
+            self._usable = False
+
+        return sas_errs_msgs, parsed_sas_warns, other_err_lines
 
     @property
-    def sas_errors(self) -> List[Dict]:
+    def sas_errors(self) -> List[str]:
         """
         Property getter for the confirmed SAS errors associated with a product.
         :return: The list of confirmed SAS errors.
@@ -157,21 +165,17 @@ class BaseProduct:
         """
         return self._sas_warn
 
-    def raise_errors(self, raise_flag: bool):
+    def raise_errors(self):
         """
         Method to raise the errors parsed from std_err string.
-        :param raise_flag: Should this function actually raise the error properly.
         """
-        if raise_flag:
-            # I know this won't ever get to the later errors, I might change how this works later
-            for error in self._sas_error:
-                self._usable = False  # Just to make sure this object isn't used if the user uses try, except
-                raise SASGenerationError("{e} raised by {t} - {b}".format(e=error["name"], t=error["originator"],
-                                                                          b=error["message"]))
-            # This is for any unresolved errors.
-            for error in self._other_error:
-                if "warning" not in error:
-                    raise UnknownCommandlineError("{}".format(error))
+        for error in self._sas_error:
+            raise SASGenerationError(error)
+
+        # This is for any unresolved errors.
+        for error in self._other_error:
+            if "warning" not in error:
+                raise UnknownCommandlineError("{}".format(error))
 
     @property
     def obs_id(self) -> str:
@@ -207,20 +211,11 @@ class BaseProduct:
     @property
     def errors(self) -> List[dict]:
         """
-        Property getter for SAS errors detected during the generation of a product.
+        Property getter for non-SAS errors detected during the generation of a product.
         :return: A list of dictionaries of parsed errors.
         :rtype: List[dict]
         """
-        return self._sas_error
-
-    @property
-    def warnings(self) -> List[dict]:
-        """
-        Property getter for SAS warnings detected during the generation of a product.
-        :return: A list of dictionaries of parsed errors.
-        :rtype: List[dict]
-        """
-        return self._sas_error
+        return self._other_error
 
     # This is a fundamental property of the generated product, so I won't allow it be changed.
     @property

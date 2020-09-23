@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:41. Copyright (c) David J Turner
 
 import os
 from shutil import rmtree
@@ -277,6 +277,10 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
         exists = [match for match in source.get_products("combined_{}".format(to_mosaic), just_obj=False)
                   if en_id in match]
         if len(exists) == 1 and exists[0][-1].usable:
+            sources_cmds.append(np.array([]))
+            sources_paths.append(np.array([]))
+            sources_extras.append(np.array([]))
+            sources_types.append(np.array([]))
             continue
 
         # This fetches all image objects with the passed energy bounds
