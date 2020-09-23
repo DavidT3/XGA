@@ -1,5 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:47. Copyright (c) David J Turner
+
+from warnings import warn
 
 from astropy.cosmology import Planck15
 from astropy.units import Quantity
@@ -7,6 +9,7 @@ from numpy import ndarray
 from tqdm import tqdm
 
 from .base import BaseSample
+from ..exceptions import PeakConvergenceFailedError
 from ..sources.extended import GalaxyCluster
 
 
@@ -18,14 +21,15 @@ class ClusterSample(BaseSample):
                  custom_region_radius: Quantity = None, use_peak: bool = True,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
-                 load_fits: bool = False, clean_obs: bool = True, clean_obs_reg: str = "r500",
-                 clean_obs_threshold: float = 0.3, no_prog_bar: bool = True):
+                 load_fits: bool = False, clean_obs: bool = True, clean_obs_reg: str = "r200",
+                 clean_obs_threshold: float = 0.3, no_prog_bar: bool = False):
 
         # I don't like having this here, but it does avoid a circular import problem
         from xga.sas import evselect_image, eexpmap, emosaic
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
-        super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False, no_prog_bar=True)
+        super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
+                         no_prog_bar=no_prog_bar)
 
         # This part is super useful - it is much quicker to use the base sources to generate all
         #  necessary ratemaps, as we can do it in parallel for the entire sample, rather than one at a time as
@@ -85,10 +89,18 @@ class ClusterSample(BaseSample):
 
             # Will definitely load products (the True in this call), because I just made sure I generated a
             #  bunch to make GalaxyCluster declaration quicker
-            self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, use_peak,
-                                             peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
-                                             cosmology, True, load_fits, clean_obs, clean_obs_reg,
-                                             clean_obs_threshold)
+            try:
+                self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, use_peak,
+                                                 peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
+                                                 cosmology, True, load_fits, clean_obs, clean_obs_reg,
+                                                 clean_obs_threshold)
+            except PeakConvergenceFailedError:
+                warn("The peak finding algorithm has not converged for {}, using user supplied coordinates".format(n))
+                self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, False,
+                                                 peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
+                                                 cosmology, True, load_fits, clean_obs, clean_obs_reg,
+                                                 clean_obs_threshold)
+
             dec_lb.update(1)
         dec_lb.close()
 
