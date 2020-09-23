@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 12:07. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -16,6 +16,7 @@ from tqdm import tqdm
 from .. import COMPUTE_MODE
 from ..exceptions import XSPECFitError, HeasoftError
 from ..products import Spectrum
+from ..samples.base import BaseSample
 from ..sources import BaseSource
 
 # Got to make sure we can access command line XSPEC.
@@ -111,7 +112,7 @@ def xspec_call(sas_func):
         # so rather than return them from the XSPEC model function I'll just access them like this.
         if isinstance(args[0], BaseSource):
             sources = [args[0]]
-        elif isinstance(args[0], list):
+        elif isinstance(args[0], (list, BaseSample)):
             sources = args[0]
         else:
             raise TypeError("Please pass a source object, or a list of source objects.")
