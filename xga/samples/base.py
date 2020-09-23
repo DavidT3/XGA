@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 11:03. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -85,6 +85,28 @@ class BaseSample:
         :return: The chosen cosmology.
         """
         return self._cosmo
+
+    @property
+    def obs_ids(self) -> dict:
+        """
+        Property meant to inform the user about the number (and identities) of ObsIDs associated with the sources
+        in a given sample.
+        :return: A dictionary (where the top level keys are the source names) of the ObsIDs associated with the
+        individual sources in this sample.
+        :rtype: dict
+        """
+        return {n: s.obs_ids for n, s in self._sources.items()}
+
+    @property
+    def instruments(self) -> dict:
+        """
+        Property meant to inform the user about the number (and identities) of instruments associated with ObsIDs
+        associated with the sources in a given sample.
+        :return: A dictionary (where the top level keys are the source names) of the instruments associated with
+        ObsIDs associated with the individual sources in this sample.
+        :rtype: dict
+        """
+        return {n: s.instruments for n, s in self._sources.items()}
 
     def info(self):
         """
