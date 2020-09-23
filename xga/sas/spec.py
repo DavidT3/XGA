@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 16:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 11:22. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -92,7 +92,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
 
     # TODO Give myself cause to remove this by speeding up region string generation
     # This progress bar is being placed here because it can take QUITE a while to generate the SAS region strings
-    onwards = tqdm("Preparing evselect spectrum commands", total=len(sources), disable=disable_progress)
+    spec_prep = tqdm(desc="Preparing evselect spectrum commands", total=len(sources), disable=disable_progress)
     for source in sources:
         # rmfgen and arfgen both take arguments that describe if something is an extended source or not,
         #  so we check the source type
@@ -217,8 +217,8 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
 
-        onwards.update(1)
-    onwards.close()
+        spec_prep.update(1)
+    spec_prep.close()
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
