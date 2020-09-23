@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:41. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -9,7 +9,7 @@ from typing import Tuple
 from tqdm import tqdm
 
 from .. import COMPUTE_MODE
-from ..exceptions import SASNotFoundError
+from ..exceptions import SASNotFoundError, SASGenerationError
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 from ..samples.base import BaseSample
 from ..sources import BaseSource
@@ -94,11 +94,11 @@ def sas_call(sas_func):
             sources = args[0]
         else:
             raise TypeError("Please pass a source, NullSource, or sample object.")
-        src_lookup = [repr(src) for src in sources]
 
         # This is the output from whatever function this is a decorator for
         cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = sas_func(*args, **kwargs)
 
+        src_lookup = {}
         all_run = []  # Combined command list for all sources
         all_type = []  # Combined expected type list for all sources
         all_path = []  # Combined expected path list for all sources
@@ -107,6 +107,7 @@ def sas_call(sas_func):
         for ind in range(len(cmd_list)):
             source = sources[ind]
             if len(cmd_list[ind]) > 0:
+                src_lookup[repr(source)] = ind
                 # If there are commands to add to a source queue, then do it
                 source.update_queue(cmd_list[ind], p_type[ind], paths[ind], extra_info[ind], to_stack)
 
@@ -122,9 +123,10 @@ def sas_call(sas_func):
 
         # This is what the returned products get stored in before they're assigned to sources
         results = {s: [] for s in src_lookup}
+        # Any errors raised shouldn't be SAS, as they are stored within the product object.
+        raised_errors = []
         if to_execute and COMPUTE_MODE == "local" and len(all_run) > 0:
             # Will run the commands locally in a pool
-            raised_errors = []
             prod_type_str = ", ".join(set(all_type))
             with tqdm(total=len(all_run), desc="Generating products of type(s) " + prod_type_str,
                       disable=disable) as gen, Pool(cores) as pool:
@@ -169,9 +171,6 @@ def sas_call(sas_func):
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
-                for error in raised_errors:
-                    raise error
-
         elif to_execute and COMPUTE_MODE == "sge" and len(all_run) > 0:
             # This section will run the code on an HPC that uses the Sun Grid Engine for job submission.
             raise NotImplementedError("How did you even get here?")
@@ -189,10 +188,23 @@ def sas_call(sas_func):
         for entry in results:
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add this set of products to
-            ind = src_lookup.index(entry)
+            ind = src_lookup[entry]
             for product in results[entry]:
+                product: BaseProduct
+                if len(product.sas_errors) == 1:
+                    raise SASGenerationError(product.sas_errors[0]
+                                             + " {} is the associated source.".format(sources[ind].name))
+                elif len(product.sas_errors) > 1:
+                    errs = [SASGenerationError(e + " {} is the associated source.".format(sources[ind].name))
+                            for e in product.sas_errors]
+                    raise Exception(errs)
+
                 # For each product produced for this source, we add it to the storage hierarchy
                 sources[ind].update_products(product)
+
+        # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
+        for error in raised_errors:
+            raise error
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
