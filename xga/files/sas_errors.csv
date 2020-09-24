@@ -863,3 +863,4 @@ zeroNormConvolver,asmooth
 zerosInConvolver,colsmooth
 InvalidSummaryFile,cifbuild
 UnexpectedEOF,cifbuild
+UnknownAlgoId,rmfgen
