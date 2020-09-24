@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 14:30. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -132,8 +132,9 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
         # Just warns the user that some of the images may not be valid
         for matched in match_images:
             if matched.header["SUBMODE"] != "PrimeFullWindow":
-                warnings.warn("PSF corrected images for {s}-{o}-{i} may not be valid, as some were taken "
-                              "in a windowed mode.".format(s=source.name, o=matched.obs_id, i=matched.instrument))
+                warnings.warn("PSF corrected images for {s}-{o}-{i} may not be valid, as the data was taken"
+                              "in {m} mode".format(s=source.name, o=matched.obs_id, i=matched.instrument,
+                                                   m=matched.header["SUBMODE"]))
 
         onwards = tqdm(total=len(match_images), desc="PSF Correcting {n} Images".format(n=source.name))
         # For now just going to iterate through them, we'll see if I can improve it later
