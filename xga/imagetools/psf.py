@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 14:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 14:41. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -100,20 +100,15 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     hi_en = hi_en.to('keV')
     # Making sure that the necessary images and PSFs are generated
     evselect_image(sources, lo_en, hi_en, num_cores=num_cores)
-    psfgen(sources, bins, psf_model, num_cores=num_cores)
-
-    # This function isn't split out to be submitted to HPC jobs, unlike SAS tasks, so I make sure the num
-    #  of cores is set to 1 to minimise resource usage.
-    if COMPUTE_MODE != "local":
-        num_cores = 1
 
     # If just one source is passed in, make it a list of one, makes behaviour more consistent
     #  throughout this function.
     if not isinstance(sources, (list, BaseSample)):
         sources = [sources]
 
+    # Only those sources that don't already have the individual PSF corrected images should be run
+    sub_sources = []
     for source in sources:
-        source: BaseSource
         en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
         # All the image objects of the specified energy range (so every combination of ObsID and instrument)
         match_images = source.get_products("image", extra_key=en_id)
@@ -128,6 +123,22 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
         # If all the PSF corrected images are present then we skip, the correction has already been performed.
         if len(psf_corr_prod) == len(match_images):
             continue
+        else:
+            sub_sources.append(source)
+
+    # Should have cleaned it so that only those sources that need it will have PSFs generated
+    psfgen(sub_sources, bins, psf_model, num_cores=num_cores)
+
+    # This function isn't split out to be submitted to HPC jobs, unlike SAS tasks, so I make sure the num
+    #  of cores is set to 1 to minimise resource usage.
+    if COMPUTE_MODE != "local":
+        num_cores = 1
+
+    for source in sub_sources:
+        source: BaseSource
+        en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+        # All the image objects of the specified energy range (so every combination of ObsID and instrument)
+        match_images = source.get_products("image", extra_key=en_id)
 
         # Just warns the user that some of the images may not be valid
         for matched in match_images:
