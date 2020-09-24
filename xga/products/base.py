@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 10:32. Copyright (c) David J Turner
 
 
 import os
@@ -103,10 +103,10 @@ class BaseProduct:
 
                     if err_type == "error":
                         # Checking to see if the error identity is in the list of SAS errors
-                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident in sas_err]
+                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident.lower() in sas_err.lower()]
                     elif err_type == "warning":
                         # Checking to see if the error identity is in the list of SAS warnings
-                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident in sas_err]
+                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident.lower() in sas_err.lower()]
 
                     if len(sas_err_match) != 1:
                         originator = ""
@@ -121,7 +121,6 @@ class BaseProduct:
             return parsed_sas, sas_lines
 
         # Defined as empty as they are returned by this method
-        parsed_sas_errs = []
         sas_errs_msgs = []
         parsed_sas_warns = []
         other_err_lines = []
@@ -129,7 +128,8 @@ class BaseProduct:
         if self.unprocessed_stderr != "":
             # Errors will be added to the error summary, then raised later
             # That way if people try except the error away the object will have been constructed properly
-            err_lines = self.unprocessed_stderr.split('\n')  # Fingers crossed each line is a separate error
+            err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+            # Fingers crossed each line is a separate error
             parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
             parsed_sas_warns, sas_warn_lines = find_sas(err_lines, "warning")
 
