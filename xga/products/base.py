@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 12:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 14:33. Copyright (c) David J Turner
 
 
 import os
@@ -353,6 +353,19 @@ class BaseAggregateProduct:
         :rtype: Tuple[Quantity, Quantity]
         """
         return self._energy_bounds
+
+    @property
+    def sas_errors(self) -> List:
+        """
+        Equivelant to the BaseProduct sas_errors property, but reports any errors stored in the component products.
+        :return: A list of SAS errors related to component products.
+        :rtype: List
+        """
+        sas_err_list = []
+        for p in self._component_products:
+            prod = self._component_products[p]
+            sas_err_list += prod.sas_errors
+        return sas_err_list
 
     def __len__(self) -> int:
         """
