@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 17:35. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -21,7 +21,7 @@ from ..xspec.fakeit import cluster_cr_conv
 
 
 def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200", use_peak: bool = True,
-                      pix_step: int = 1, radii: np.ndarray = np.linspace(0, 1, 20), min_snr: Union[int, float] = 0.0,
+                      pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20), min_snr: Union[int, float] = 0.0,
                       lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                       custom_temps: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES) \
@@ -211,7 +211,7 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
 
 
 def view_radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200",
-                           use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0, 1, 20),
+                           use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
                            min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
                            psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4,
