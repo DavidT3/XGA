@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 13:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 10:33. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -93,13 +93,13 @@ class ClusterSample(BaseSample):
                 self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, use_peak,
                                                  peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
                                                  cosmology, True, load_fits, clean_obs, clean_obs_reg,
-                                                 clean_obs_threshold)
+                                                 clean_obs_threshold, False)
             except PeakConvergenceFailedError:
                 warn("The peak finding algorithm has not converged for {}, using user supplied coordinates".format(n))
                 self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, False,
                                                  peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
                                                  cosmology, True, load_fits, clean_obs, clean_obs_reg,
-                                                 clean_obs_threshold)
+                                                 clean_obs_threshold, False)
 
             dec_lb.update(1)
         dec_lb.close()
