@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 11:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 11:28. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -20,6 +20,9 @@ def cluster_density_profile(sources: Union[GalaxyCluster, ClusterSample], reg_ty
     #  like I do when its a Sample object
     if isinstance(sources, BaseSource):
         sources = [sources]
+
+    if not all([type(src) == GalaxyCluster for src in sources]):
+        raise TypeError("Only GalaxyCluster sources can be passed to cluster_density_profile.")
 
     if abund_table not in ABUND_TABLES:
         ab_list = ", ".join(ABUND_TABLES)
