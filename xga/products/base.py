@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 11:53. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 12:46. Copyright (c) David J Turner
 
 
 import os
@@ -22,6 +22,9 @@ class BaseProduct:
         :param str gen_cmd: The command used to generate the product.
         :param bool raise_properly: Shall we actually raise the errors as Python errors?
         """
+        # This attribute stores strings that indicate why a product object has been deemed as unusable
+        self._why_unusable = []
+
         # So this flag indicates whether we think this data product can be used for analysis
         self._usable = True
         if os.path.exists(path):
@@ -40,9 +43,6 @@ class BaseProduct:
         self._energy_bounds = (None, None)
         self._prod_type = None
         self._obj_name = None
-
-        # This attribute stores strings that indicate why a product object has been deemed as unusable
-        self._why_unusable = []
 
     # Users are not allowed to change this, so just a getter.
     @property

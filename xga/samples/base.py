@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 12:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 12:46. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -127,7 +127,7 @@ class BaseSample:
 
         if not triggered:
             print("All available spectra are okay")
-        print("\n-----------------------------------------------------")
+        print("-----------------------------------------------------\n")
 
     def info(self):
         """
