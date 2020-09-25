@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/09/2020, 09:27. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -561,8 +561,12 @@ class BaseSource:
                 for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
                     sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                     # Finds the appropriate matching spectrum object for the current table line
-                    spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1], just_obj=False)
-                            if reg_type in match and match[-1].usable][0][-1]
+                    try:
+                        spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1], just_obj=False)
+                                if reg_type in match and match[-1].usable][0][-1]
+                    except IndexError:
+                        raise NoProductAvailableError("A Spectrum object referenced in a fit file for {n} cannot be "
+                                                      "loaded".format(n=self._name))
 
                     # Adds information from this fit to the spectrum object.
                     spec.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)])
