@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 14:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/09/2020, 10:00. Copyright (c) David J Turner
 
 
 import os
@@ -366,6 +366,20 @@ class BaseAggregateProduct:
             prod = self._component_products[p]
             sas_err_list += prod.sas_errors
         return sas_err_list
+
+    @property
+    def unprocessed_stderr(self) -> List:
+        """
+        Equivelant to the BaseProduct sas_errors unprocessed_stderr, but returns a list of all the unprocessed
+        standard error outputs.
+        :return: List of stderr outputs.
+        :rtype: List
+        """
+        unprocessed_err_list = []
+        for p in self._component_products:
+            prod = self._component_products[p]
+            unprocessed_err_list.append(prod.unprocessed_stderr)
+        return unprocessed_err_list
 
     def __len__(self) -> int:
         """
