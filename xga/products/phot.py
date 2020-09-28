@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/09/2020, 15:23. Copyright (c) David J Turner
 
 
 import warnings
@@ -72,8 +72,10 @@ class Image(BaseProduct):
             # As the image must be loaded to know the shape, I've waited until here to set the _shape attribute
             self._shape = self._data.shape
         else:
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot "
-                                     "access data from it. Check the usable attribute next time")
+            reasons = ", ".join(self.not_usable_reasons)
+            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
+                                     "data from it; reason give is {}. Check the usable attribute next "
+                                     "time".format(reasons))
 
     def _read_wcs_on_demand(self):
         """
