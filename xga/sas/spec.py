@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 11:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/09/2020, 15:25. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -119,7 +119,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
-            if reg_type == "region" and source.get_source_region("region", obs_id)[0] is None:
+            if reg_type == "region" and source.source_back_regions("region", obs_id)[0] is None:
                 continue
 
             # This method returns a SAS expression for the source and background regions - excluding interlopers
