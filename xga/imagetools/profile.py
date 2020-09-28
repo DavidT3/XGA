@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/09/2020, 14:55. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -186,6 +186,9 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     corr_back_mask = back_mask * rt.sensor_mask
     # Calculates the area of the background region in arcmin^2
     back_area = np.sum(corr_back_mask, axis=(0, 1)) * to_arcmin**2
+    if back_area == 0:
+        raise ValueError("The background mask combined with the sensor mask is is all zeros, this is probably"
+                         " because you're looking at a large cluster at a low redshift.")
     # Finds the emission per arcmin^2 of the background region (accounting for removed sources and chip gaps)
     bg = np.sum(rt.data * corr_back_mask, axis=(0, 1)) / back_area
 
@@ -340,61 +343,5 @@ def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray
     return_angs = Quantity(np.stack([start_angs.value, stop_angs.value]).T, deg)
 
     return br, cen_rads, return_angs, bg, inn_rads, out_rads
-
-
-# def radial_rebinned_brightness(im_prod: Image, min_snr: float, src_mask: np.ndarray, back_mask: np.ndarray,
-#                                centre: Quantity, rad: Quantity, z: float = None, cen_rad_units: UnitBase = arcsec,
-#                                cosmo=Planck15) -> Tuple[np.ndarray, Quantity, np.float64]:
-#
-#     br, cen_rads, bg, inn_rads, out_rads = radial_brightness(im_prod, src_mask, back_mask, centre, rad, z, 1,
-#                                                              cen_rad_units, cosmo)
-#     # Calculates the signal to noise profile, defined as the ratio between brightness profile and background
-#     snr_prof = br/bg
-#
-#
-#     import sys
-#
-#     # Finds the elements in the the SNR profile that do not meet the minimum requirements provided by the user
-#     #  Flatten it just because I know this will always a be a 1D array and flattening makes it nicer to work with
-#     below_min_snr = np.argwhere(snr_prof < min_snr).flatten()
-#
-#     # Our task here is to combine radial bins until the minimum SNR requirements are met for all bins
-#     # Using a while loop for this doesn't feel super efficient, but as a first attempt hopefully it'll be fast enough
-#     new_br = br.copy()
-#     new_inn_rads = inn_rads.copy()
-#     new_out_rads = out_rads.copy()
-#
-#     # If the shape of below_min_snr is (0,) then there are no bins at which the SNR is causing a problem
-#     while below_min_snr.shape != (0,):
-#         # This is triggered if the first index where SNR is too low IS NOT the last bin in the profile
-#         if below_min_snr[0] != new_br.shape[0]-1:
-#             # The bin where SNR is too low (problem bin) has the next bin along (donor bin - in the outward direction)
-#             #  added to it
-#             new_br[below_min_snr[0]] = new_br[below_min_snr[0]] + new_br[below_min_snr[0] + 1]
-#             # Then the donor bin that was added to the problem bin is deleted
-#             new_br = np.delete(new_br, below_min_snr[0]+1)
-#             # The new outer radius of the problem bin is set to the outer radius of the donor bin
-#             new_out_rads[below_min_snr[0]] = new_out_rads[below_min_snr[0]+1]
-#             # The outer radius entry of the donor bin is deleted
-#             new_out_rads = np.delete(new_out_rads, below_min_snr[0]+1)
-#             # The inner radius of the donor bin is deleted as there is only one bin now from problem inner
-#             #  to donor outer radii
-#             new_inn_rads = np.delete(new_inn_rads, below_min_snr[0]+1)
-#         # This is triggered if the first index where SNR is to low IS the last bin in the profile
-#         else:
-#             # As this is the last bin in the profile, there is no extra bin in the outward direction to add to our
-#             #  problem bin. As such the problem bin is added inwards, to the N-1th bin in the profile
-#             new_br[below_min_snr[0] - 1] = new_br[below_min_snr[0] - 1] + new_br[below_min_snr[0]]
-#             new_br = np.delete(new_br, below_min_snr[0])
-#             new_out_rads[below_min_snr[0] - 1] = new_out_rads[below_min_snr[0]]
-#             new_out_rads = np.delete(new_out_rads, below_min_snr[0])
-#             new_inn_rads = np.delete(new_inn_rads, below_min_snr[0])
-#
-#         # Recalculate the SNR profile after the re-binning in this iteration
-#         snr_prof = new_br / bg
-#         # Find out which bins are still below the SNR threshold (if any)
-#         below_min_snr = np.argwhere(snr_prof < min_snr).flatten()
-
-
 
 
