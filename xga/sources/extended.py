@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 10:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/09/2020, 12:44. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -13,6 +13,7 @@ from matplotlib.ticker import ScalarFormatter
 from .general import ExtendedSource
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, NoRegionsError
 from ..imagetools import radial_brightness, pizza_brightness
+from ..products import Spectrum
 from ..sourcetools import ang_to_rad, rad_to_ang
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -305,7 +306,7 @@ class GalaxyCluster(ExtendedSource):
         ax.xaxis.set_major_formatter(ScalarFormatter())
 
         # Labels and legends
-        ax.set_ylabel("S$_{b}$ [count s$^{-1}$ pix$^{-2}$]")
+        ax.set_ylabel("S$_{b}$ [count s$^{-1}$ arcmin$^{-2}$]")
         ax.set_xlabel("Radius [kpc]")
         plt.legend(loc="best")
         # Removes white space around the plot
@@ -329,14 +330,18 @@ class GalaxyCluster(ExtendedSource):
         spec = self.get_products("spectrum", extra_key=reg_type)
         # Setting up variables to be added into
         av_lum = Quantity(0, "erg/s")
-        total_rate = Quantity(0, "ct/s")
+        total_phot = 0
         # Cycling through the relevant spectra
         for s in spec:
             # The luminosity is added to the average luminosity variable, will be divided by N
             #  spectra at the end.
             av_lum += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[1]
-            # The count rate is just added into a total count rate
-            total_rate += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2]
+            # Multiplying by 1e+4 because that is the length of the simulated exposure in seconds
+            total_phot += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2] * 1e+4
+
+        # Then the total combined rate is the total number of photons / the total summed exposure (which
+        #  is just 10000 seconds multiplied by the number of spectra).
+        total_rate = Quantity(total_phot / (1e+4 * len(spec)), 'ct/s')
 
         # Making av_lum actually an average
         av_lum /= len(spec)
@@ -355,11 +360,19 @@ class GalaxyCluster(ExtendedSource):
         :rtype: Quantity
         """
         spec = self.get_products("spectrum", extra_key=reg_type)
-        total_rate = Quantity(0, "ct/s")
+        total_phot = 0
         for s in spec:
-            total_rate += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2]
+            s: Spectrum
+            # Multiplying the rate by 10000 because that is the exposure of the simulated spectra
+            #  Set in xspec_scripts/cr_conv_calc.xcm
+            total_phot += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2].value * 1e+4
 
-        # Calculating and returning the combined factor.
+        # Then the total combined rate is the total number of photons / the total summed exposure (which
+        #  is just 10000 seconds multiplied by the number of spectra).
+        total_rate = Quantity(total_phot / (1e+4 * len(spec)), 'ct/s')
+
+        # Then we return 1/the rate because this method calculates the conversion factor from count rate to
+        #  normalisation (which is always 1 for these simulated spectra).
         return 1 / total_rate
 
 
