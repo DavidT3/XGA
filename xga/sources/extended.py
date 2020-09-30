@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/09/2020, 12:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 12:28. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -254,11 +254,16 @@ class GalaxyCluster(ExtendedSource):
         if profile_type == "radial":
             ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                              u=self._peak_hi_en.value))
-            brightness, radii, radii_bins, og_background, success = radial_brightness(comb_rt, source_mask,
-                                                                                      background_mask, pix_peak, rad,
-                                                                                      self._redshift, pix_step, kpc,
-                                                                                      self.cosmo, min_snr=min_snr)
-            prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, fmt='x', capsize=2, label="Emission")
+            brightness, brightness_errs, radii, radii_bins, og_background, success = radial_brightness(comb_rt,
+                                                                                                       source_mask,
+                                                                                                       background_mask,
+                                                                                                       pix_peak, rad,
+                                                                                                       self._redshift,
+                                                                                                       pix_step, kpc,
+                                                                                                       self.cosmo,
+                                                                                                       min_snr=min_snr)
+            prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, yerr=brightness_errs, fmt='x',
+                                capsize=2, label="Emission")
             plt.plot(radii.value, brightness, color=prof[0].get_color())
 
             for psf_comb_rt in psf_comb_rts:
@@ -266,12 +271,16 @@ class GalaxyCluster(ExtendedSource):
                 # If the user wants to use individual peaks, we have to find them here.
                 if not same_peak:
                     pix_peak = self.find_peak(p_rt)[0]
-                brightness, radii, radii_bins, background, success = radial_brightness(psf_comb_rt[-1], source_mask,
-                                                                                       background_mask, pix_peak, rad,
-                                                                                       self._redshift, pix_step, kpc,
-                                                                                       self.cosmo, min_snr=min_snr)
-                prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, capsize=2, fmt="x",
-                                    label="{m} PSF Corrected".format(m=p_rt.psf_model))
+                brightness, brightness_errs, radii, radii_bins, background, success = radial_brightness(psf_comb_rt[-1],
+                                                                                                        source_mask,
+                                                                                                        background_mask,
+                                                                                                        pix_peak, rad,
+                                                                                                        self._redshift,
+                                                                                                        pix_step, kpc,
+                                                                                                        self.cosmo,
+                                                                                                        min_snr=min_snr)
+                prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, yerr=brightness_errs, capsize=2,
+                                    fmt="x", label="{m} PSF Corrected".format(m=p_rt.psf_model))
                 plt.plot(radii.value, brightness, color=prof[0].get_color())
 
                 plt.axhline(background, color=prof[0].get_color(), linestyle="dashed",
