@@ -1,13 +1,13 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/08/2020, 10:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 15:59. Copyright (c) David J Turner
 
 from typing import Union
 
-from numpy import ndarray, power, clip, pi, meshgrid
+import numpy as np
 
 
 # TODO Should this function give an option for including different origins for the shells and annuli?
-def sph_cir_vol_int(shell_radii: ndarray, ann_radii: ndarray) -> ndarray:
+def sphere_circann_vol_intersec(shell_radii: np.ndarray, ann_radii: np.ndarray) -> np.ndarray:
     """
     This function calculates the volume intersection matrix of a set of circular annuli and a
     set of spherical shells. It is assumed that the annuli and shells have the same x and y origin. The
@@ -20,21 +20,19 @@ def sph_cir_vol_int(shell_radii: ndarray, ann_radii: ndarray) -> ndarray:
     and shell radii are along the 'y' axis.
     :rtype: ndarray
     """
-    i_ann, i_sph = meshgrid(ann_radii[0:-1], shell_radii[0:-1])
-    o_ann, o_sph = meshgrid(ann_radii[1:], shell_radii[1:])
+    i_ann, i_sph = np.meshgrid(ann_radii[0:-1], shell_radii[0:-1])
+    o_ann, o_sph = np.meshgrid(ann_radii[1:], shell_radii[1:])
     # The main term which makes use of the radii of the shells and annuli.
     # The use of clip enforces that none of the terms can be less than 0, as we don't care
     #  about those intersections, you can't have a negative volume. The None passed to clip is just to tell it
     #  that there is no upper limit that we wish to enforce.
-    main_term = power(clip((o_sph ** 2 - i_ann ** 2), 0, None), 3 / 2) - \
-                power(clip((o_sph ** 2 - o_ann ** 2), 0, None), 3 / 2) + \
-                power(clip((i_sph ** 2 - o_ann ** 2), 0, None), 3 / 2) - \
-                power(clip((i_sph ** 2 - i_ann ** 2), 0, None), 3 / 2)
+    main_term = np.power(np.clip((o_sph ** 2 - i_ann ** 2), 0, None), 3 / 2) - \
+                np.power(np.clip((o_sph ** 2 - o_ann ** 2), 0, None), 3 / 2) + \
+                np.power(np.clip((i_sph ** 2 - o_ann ** 2), 0, None), 3 / 2) - \
+                np.power(np.clip((i_sph ** 2 - i_ann ** 2), 0, None), 3 / 2)
 
     # Multiply by the necessary constants and return.
-    return (4 / 3) * pi * main_term
-
-
+    return (4 / 3) * np.pi * main_term
 
 
 
