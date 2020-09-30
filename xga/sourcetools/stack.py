@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 12:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 17:08. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -80,7 +80,7 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
                                                                 n=psf_bins, a=psf_algo, i=psf_iter)
 
         # Retrieving the relevant ratemap object, as well as masks
-        rt = [rt[-1] for rt in src.get_products("combined_ratemap", just_obj=False) if storage_key in rt][0]
+        rt = [r[-1] for r in src.get_products("combined_ratemap", just_obj=False) if storage_key in r][0]
 
         # The user can choose to use the original user passed coordinates, or the X-ray centroid
         if use_peak:
