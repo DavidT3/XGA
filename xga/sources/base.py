@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/09/2020, 09:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 09:41. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -974,7 +974,7 @@ class BaseSource:
         elif reg_type == "region" and obs_id is not None:
             src_reg = self._regions[obs_id]
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise TypeError("There are no over-density radii associated with this source")
+            raise TypeError("There is no {} associated with this source".format(reg_type))
         elif reg_type != "region" and reg_type in self._radii:
             # We know for certain that the radius will be in degrees, but it has to be converted to degrees
             #  before being stored in the radii attribute
@@ -1260,7 +1260,7 @@ class BaseSource:
             source_interlopers = self.within_region(source)
             background_interlopers = self.within_region(back)
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise TypeError("There are no over-density radii associated with this source")
+            raise TypeError("There is no {} associated with this source".format(reg_type))
         elif reg_type != "region" and reg_type in self._radii:
             source, back = self.source_back_regions(reg_type, obs_id)
             source_interlopers = self.within_region(source)
