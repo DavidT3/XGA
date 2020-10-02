@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 11:53. Copyright (c) David J Turner
 
 
 import os
@@ -29,36 +29,42 @@ class Spectrum(BaseProduct):
         else:
             self._rmf = None
             self._usable = False
+            self._why_unusable.append("RMFPathDoesNotExist")
 
         if os.path.exists(arf_path):
             self._arf = arf_path
         else:
             self._arf = None
             self._usable = False
+            self._why_unusable.append("ARFPathDoesNotExist")
 
         if os.path.exists(b_path):
             self._back_spec = b_path
         else:
             self._back_spec = None
             self._usable = False
+            self._why_unusable.append("BackSpecPathDoesNotExist")
 
         if os.path.exists(b_rmf_path):
             self._back_rmf = b_rmf_path
         else:
             self._back_rmf = None
             self._usable = False
+            self._why_unusable.append("BackRMFPathDoesNotExist")
 
         if os.path.exists(b_arf_path):
             self._back_arf = b_arf_path
         else:
-            self._arf_rmf = None
+            self._back_arf = None
             self._usable = False
+            self._why_unusable.append("BackARFPathDoesNotExist")
 
         allowed_regs = ["region", "r2500", "r500", "r200", "custom"]
         if reg_type in allowed_regs:
             self._reg_type = reg_type
         else:
             self._usable = False
+            self._why_unusable.append("InvalidRegionType")
             self._reg_type = None
             raise ValueError("{0} is not a supported region type, please use one of these; "
                              "{1}".format(reg_type, ", ".join(allowed_regs)))

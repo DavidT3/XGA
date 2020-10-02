@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 12:28. Copyright (c) David J Turner
 
 
 import warnings
@@ -72,8 +72,10 @@ class Image(BaseProduct):
             # As the image must be loaded to know the shape, I've waited until here to set the _shape attribute
             self._shape = self._data.shape
         else:
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot "
-                                     "access data from it. Check the usable attribute next time")
+            reasons = ", ".join(self.not_usable_reasons)
+            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
+                                     "data from it; reason give is {}. Check the usable attribute next "
+                                     "time".format(reasons))
 
     def _read_wcs_on_demand(self):
         """
@@ -596,6 +598,9 @@ class RateMap(Image):
         self._im_path = xga_image.path
         self._expmap_path = xga_expmap.path
 
+        self._im_obj = xga_image
+        self._ex_obj = xga_expmap
+
         self._im_data = None
         self._ex_data = None
         self._data = None
@@ -703,8 +708,6 @@ class RateMap(Image):
         if self._data is None:
             self._construct_on_demand()
         return self._data
-
-
 
     def get_rate(self, at_coord: Quantity) -> float:
         """
@@ -971,6 +974,24 @@ class RateMap(Image):
         :rtype: str
         """
         return self._expmap_path
+
+    @property
+    def image(self) -> Image:
+        """
+        This property allows the user to access the input Image object for this ratemap.
+        :return: The input XGA Image object used to create this ratemap.
+        :rtype: Image
+        """
+        return self._im_obj
+
+    @property
+    def expmap(self) -> ExpMap:
+        """
+        This property allows the user to access the input ExpMap object for this ratemap.
+        :return: The input XGA ExpMap object used to create this ratemap.
+        :rtype: ExpMap
+        """
+        return self._ex_obj
 
 
 class PSF(Image):

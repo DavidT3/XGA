@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 16:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 09:41. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -84,7 +84,11 @@ class BaseSource:
 
         self._cosmo = cosmology
         if redshift is not None:
-            self.lum_dist = self._cosmo.luminosity_distance(self._redshift)
+            self._lum_dist = self._cosmo.luminosity_distance(self._redshift)
+            self._ang_diam_dist = self._cosmo.angular_diameter_distance(self._redshift)
+        else:
+            self._lum_dist = None
+            self._ang_diam_dist = None
         self._initial_regions, self._initial_region_matches = self._load_regions(region_dict)
 
         # This is a queue for products to be generated for this source, will be a numpy array in practise.
@@ -557,8 +561,12 @@ class BaseSource:
                 for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
                     sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                     # Finds the appropriate matching spectrum object for the current table line
-                    spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1], just_obj=False)
-                            if reg_type in match and match[-1].usable][0][-1]
+                    try:
+                        spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1], just_obj=False)
+                                if reg_type in match and match[-1].usable][0][-1]
+                    except IndexError:
+                        raise NoProductAvailableError("A Spectrum object referenced in a fit file for {n} cannot be "
+                                                      "loaded".format(n=self._name))
 
                     # Adds information from this fit to the spectrum object.
                     spec.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)])
@@ -966,7 +974,7 @@ class BaseSource:
         elif reg_type == "region" and obs_id is not None:
             src_reg = self._regions[obs_id]
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise TypeError("There are no over-density radii associated with this source")
+            raise TypeError("There is no {} associated with this source".format(reg_type))
         elif reg_type != "region" and reg_type in self._radii:
             # We know for certain that the radius will be in degrees, but it has to be converted to degrees
             #  before being stored in the radii attribute
@@ -1252,7 +1260,7 @@ class BaseSource:
             source_interlopers = self.within_region(source)
             background_interlopers = self.within_region(back)
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise TypeError("There are no over-density radii associated with this source")
+            raise TypeError("There is no {} associated with this source".format(reg_type))
         elif reg_type != "region" and reg_type in self._radii:
             source, back = self.source_back_regions(reg_type, obs_id)
             source_interlopers = self.within_region(source)
@@ -1602,6 +1610,25 @@ class BaseSource:
                 if o in self._onaxis:
                     del self._onaxis[self._onaxis.index(o)]
                 del self._instruments[o]
+
+    @property
+    def luminosity_distance(self) -> Quantity:
+        """
+        Tells the user the luminosity distance to the source if a redshift was supplied, if not returns None.
+        :return: The luminosity distance to the source, calculated using the cosmology associated with this source.
+        :rtype: Quantity
+        """
+        return self._lum_dist
+
+    @property
+    def angular_diameter_distance(self) -> Quantity:
+        """
+        Tells the user the angular diameter distance to the source if a redshift was supplied, if not returns None.
+        :return: The angular diameter distance to the source, calculated using the cosmology
+        associated with this source.
+        :rtype: Quantity
+        """
+        return self._ang_diam_dist
 
     def info(self):
         """

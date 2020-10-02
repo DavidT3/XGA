@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/10/2020, 15:31. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -10,11 +10,14 @@ from astropy.units import Quantity
 from .run import xspec_call
 from .. import OUTPUT, NUM_CORES, COUNTRATE_CONV_SCRIPT
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..samples.extended import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
+from ..utils import ABUND_TABLES
 
 
+# TODO Rename this function to something more useful
 @xspec_call
-def cluster_cr_conv(sources: Union[List[GalaxyCluster], GalaxyCluster], reg_type: str, sim_temp: Quantity,
+def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str, sim_temp: Quantity,
                     sim_met: Union[float, List] = 0.3, conv_en: Quantity = Quantity([[0.5, 2.0]], "keV"),
                     abund_table: str = "angr", num_cores: int = NUM_CORES):
     """
@@ -34,6 +37,10 @@ def cluster_cr_conv(sources: Union[List[GalaxyCluster], GalaxyCluster], reg_type
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
+
+    if abund_table not in ABUND_TABLES:
+        ab_list = ", ".join(ABUND_TABLES)
+        raise ValueError("{0} is not in the accepted list of abundance tables; {1}".format(abund_table, ab_list))
 
     if reg_type not in allowed_bounds:
         raise ValueError("The only valid choices for reg_type are:\n {}".format(", ".join(allowed_bounds)))
@@ -86,11 +93,13 @@ def cluster_cr_conv(sources: Union[List[GalaxyCluster], GalaxyCluster], reg_type
                      if match[-1].usable]
         # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
         if len(spec_objs) == 0:
-            raise NoProductAvailableError("There are no matching spectra for this source object, you "
-                                          "need to generate them first!")
+            raise NoProductAvailableError("There are no matching spectra for {} object, you "
+                                          "need to generate them first!".format(source.name))
         elif len(spec_objs) != total_obs_inst:
-            raise NoProductAvailableError("The number of matching spectra is not equal to the number of "
-                                          "instrument/observation combinations.")
+            raise NoProductAvailableError("The number of matching spectra ({0}) is not equal to the number of "
+                                          "instrument/observation combinations ({1}) for {2}.".format(len(spec_objs),
+                                                                                                      total_obs_inst,
+                                                                                                      source.name))
 
         # Turn RMF and ARF paths into TCL style list for substitution into template
         rmf_paths = "{" + " ".join([spec[-1].rmf for spec in spec_objs]) + "}"

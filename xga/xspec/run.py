@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 11:50. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -16,6 +16,7 @@ from tqdm import tqdm
 from .. import COMPUTE_MODE
 from ..exceptions import XSPECFitError, HeasoftError
 from ..products import Spectrum
+from ..samples.base import BaseSample
 from ..sources import BaseSource
 
 # Got to make sure we can access command line XSPEC.
@@ -111,7 +112,7 @@ def xspec_call(sas_func):
         # so rather than return them from the XSPEC model function I'll just access them like this.
         if isinstance(args[0], BaseSource):
             sources = [args[0]]
-        elif isinstance(args[0], list):
+        elif isinstance(args[0], (list, BaseSample)):
             sources = args[0]
         else:
             raise TypeError("Please pass a source object, or a list of source objects.")
@@ -128,9 +129,14 @@ def xspec_call(sas_func):
         # This is what the returned information from the execute command gets stored in before being parceled out
         #  to source and spectrum objects
         results = {s: [] for s in src_lookup}
+        if run_type == "fit":
+            desc = "Running XSPEC Fits"
+        elif run_type == "conv_factors":
+            desc = "Running XSPEC Simulations"
+
         if COMPUTE_MODE == "local" and len(script_list) > 0:
             # This mode runs the XSPEC locally in a multiprocessing pool.
-            with tqdm(total=len(script_list), desc="Running XSPEC Scripts") as fit, Pool(cores) as pool:
+            with tqdm(total=len(script_list), desc=desc) as fit, Pool(cores) as pool:
                 def callback(results_in):
                     """
                     Callback function for the apply_async pool method, gets called when a task finishes

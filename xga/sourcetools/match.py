@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/09/2020, 16:04. Copyright (c) David J Turner
 
 from astropy.units.quantity import Quantity
 from pandas import DataFrame
 
-from .. import CENSUS
+from .. import CENSUS, BLACKLIST
 from ..exceptions import NoMatchFoundError
 
 
@@ -21,6 +21,7 @@ def simple_xmm_match(src_ra: float, src_dec: float, half_width: Quantity = Quant
     hw = half_width.to('deg').value
     matches = CENSUS[(CENSUS["RA_PNT"] <= src_ra+hw) & (CENSUS["RA_PNT"] >= src_ra-hw) &
                      (CENSUS["DEC_PNT"] <= src_dec+hw) & (CENSUS["DEC_PNT"] >= src_dec-hw)]
+    matches = matches[~matches["ObsID"].isin(BLACKLIST["ObsID"])]
     if len(matches) == 0:
         raise NoMatchFoundError("No XMM observation found within {a} of ra={r} "
                                 "dec={d}".format(r=round(src_ra, 4), d=round(src_dec, 4), a=half_width))

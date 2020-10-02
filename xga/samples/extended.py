@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 10:33. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -93,16 +93,39 @@ class ClusterSample(BaseSample):
                 self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, use_peak,
                                                  peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
                                                  cosmology, True, load_fits, clean_obs, clean_obs_reg,
-                                                 clean_obs_threshold)
+                                                 clean_obs_threshold, False)
             except PeakConvergenceFailedError:
                 warn("The peak finding algorithm has not converged for {}, using user supplied coordinates".format(n))
                 self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, False,
                                                  peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
                                                  cosmology, True, load_fits, clean_obs, clean_obs_reg,
-                                                 clean_obs_threshold)
+                                                 clean_obs_threshold, False)
 
             dec_lb.update(1)
         dec_lb.close()
+
+        # And again I ask XGA to generate the merged images and exposure maps, in case any sources have been
+        #  cleaned and had data removed
+        if clean_obs:
+            emosaic(self, "image", peak_lo_en, peak_hi_en)
+            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+
+        # TODO Reconsider if this is even necessary, the data that has been removed should by definition
+        #  not really include the peak
+        # Updates with new peaks
+        if clean_obs and use_peak:
+            for n in self.names:
+                # If the source in question has had data removed
+                if self._sources[n].disassociated:
+                    try:
+                        en_key = "bound_{0}-{1}".format(peak_lo_en.to("keV").value,
+                                                        peak_hi_en.to("keV").value)
+                        rt = self._sources[n].get_products("combined_ratemap", extra_key=en_key)[0]
+                        peak = self._sources[n].find_peak(rt)
+                        self._sources[n].peak = peak[0]
+                    except PeakConvergenceFailedError:
+                        pass
+
 
 
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/09/2020, 10:00. Copyright (c) David J Turner
 
 
 import os
@@ -22,6 +22,9 @@ class BaseProduct:
         :param str gen_cmd: The command used to generate the product.
         :param bool raise_properly: Shall we actually raise the errors as Python errors?
         """
+        # This attribute stores strings that indicate why a product object has been deemed as unusable
+        self._why_unusable = []
+
         # So this flag indicates whether we think this data product can be used for analysis
         self._usable = True
         if os.path.exists(path):
@@ -29,6 +32,7 @@ class BaseProduct:
         else:
             self._path = None
             self._usable = False
+            self._why_unusable.append("ProductPathDoesNotExist")
         # Saving this in attributes for future reference
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
@@ -69,6 +73,7 @@ class BaseProduct:
             prod_path = None
             # We won't be able to make use of this product if it isn't where we think it is
             self._usable = False
+            self._why_unusable.append("ProductPathDoesNotExist")
         self._path = prod_path
 
     def parse_stderr(self) -> Tuple[List[str], List[Dict], List]:
@@ -103,10 +108,10 @@ class BaseProduct:
 
                     if err_type == "error":
                         # Checking to see if the error identity is in the list of SAS errors
-                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident in sas_err]
+                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident.lower() in sas_err.lower()]
                     elif err_type == "warning":
                         # Checking to see if the error identity is in the list of SAS warnings
-                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident in sas_err]
+                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident.lower() in sas_err.lower()]
 
                     if len(sas_err_match) != 1:
                         originator = ""
@@ -121,7 +126,6 @@ class BaseProduct:
             return parsed_sas, sas_lines
 
         # Defined as empty as they are returned by this method
-        parsed_sas_errs = []
         sas_errs_msgs = []
         parsed_sas_warns = []
         other_err_lines = []
@@ -129,7 +133,8 @@ class BaseProduct:
         if self.unprocessed_stderr != "":
             # Errors will be added to the error summary, then raised later
             # That way if people try except the error away the object will have been constructed properly
-            err_lines = self.unprocessed_stderr.split('\n')  # Fingers crossed each line is a separate error
+            err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+            # Fingers crossed each line is a separate error
             parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
             parsed_sas_warns, sas_warn_lines = find_sas(err_lines, "warning")
 
@@ -142,8 +147,10 @@ class BaseProduct:
 
         if len(sas_errs_msgs) > 0:
             self._usable = False
+            self._why_unusable.append("SASErrorPresent")
         if len(other_err_lines) > 0:
             self._usable = False
+            self._why_unusable.append("OtherErrorPresent")
 
         return sas_errs_msgs, parsed_sas_warns, other_err_lines
 
@@ -248,6 +255,16 @@ class BaseProduct:
         """
         self._obj_name = name
 
+    @property
+    def not_usable_reasons(self) -> List:
+        """
+        Whenever the usable flag of a product is set to False (indicating you shouldn't use the product), a string
+        indicating the reason is added to a list, which this property returns.
+        :return: A list of reasons why this product is unusable.
+        :rtype: List
+        """
+        return self._why_unusable
+
 
 # TODO Obviously finish this, but also comment and docstring
 class BaseAggregateProduct:
@@ -336,6 +353,33 @@ class BaseAggregateProduct:
         :rtype: Tuple[Quantity, Quantity]
         """
         return self._energy_bounds
+
+    @property
+    def sas_errors(self) -> List:
+        """
+        Equivelant to the BaseProduct sas_errors property, but reports any errors stored in the component products.
+        :return: A list of SAS errors related to component products.
+        :rtype: List
+        """
+        sas_err_list = []
+        for p in self._component_products:
+            prod = self._component_products[p]
+            sas_err_list += prod.sas_errors
+        return sas_err_list
+
+    @property
+    def unprocessed_stderr(self) -> List:
+        """
+        Equivelant to the BaseProduct sas_errors unprocessed_stderr, but returns a list of all the unprocessed
+        standard error outputs.
+        :return: List of stderr outputs.
+        :rtype: List
+        """
+        unprocessed_err_list = []
+        for p in self._component_products:
+            prod = self._component_products[p]
+            unprocessed_err_list.append(prod.unprocessed_stderr)
+        return unprocessed_err_list
 
     def __len__(self) -> int:
         """

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 16:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/10/2020, 15:31. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -13,6 +13,7 @@ from matplotlib.ticker import ScalarFormatter
 from .general import ExtendedSource
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, NoRegionsError
 from ..imagetools import radial_brightness, pizza_brightness
+from ..products import Spectrum
 from ..sourcetools import ang_to_rad, rad_to_ang
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -26,7 +27,7 @@ class GalaxyCluster(ExtendedSource):
                  wl_mass: Quantity = None, wl_mass_err: Quantity = None, custom_region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False,
-                 clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3):
+                 clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3, regen_merged: bool = True):
         super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
                          back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits)
 
@@ -45,6 +46,8 @@ class GalaxyCluster(ExtendedSource):
             self._radii["r200"] = rad_to_ang(r200, self.redshift, self.cosmo)
         elif r200 is not None and not r200.unit.is_equivalent("kpc") and not r200.unit.is_equivalent("deg"):
             raise UnitConversionError("R200 radius must be in either angular or distance units.")
+        elif r200 is None and clean_obs_reg == "r200":
+            clean_obs_reg = "r500"
 
         if r500 is not None and r500.unit.is_equivalent("deg"):
             self._r500 = ang_to_rad(r500, self._redshift, self._cosmo).to("kpc")
@@ -89,8 +92,11 @@ class GalaxyCluster(ExtendedSource):
                 # I used to run these just so there is an up to date combined ratemap, but its quite
                 #  inefficient to do it on an individual basis if dealing with a sample, so the user will have
                 #  to run those commands themselves later
-                # emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                # emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                # Now I will run them only if the regen_merged flag is True
+                if regen_merged:
+                    from ..sas import emosaic
+                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
         # Throws an error if a poor choice of region has been made
         elif clean_obs and clean_obs_reg not in self._radii:
@@ -250,11 +256,16 @@ class GalaxyCluster(ExtendedSource):
         if profile_type == "radial":
             ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                              u=self._peak_hi_en.value))
-            brightness, radii, radii_bins, og_background, success = radial_brightness(comb_rt, source_mask,
-                                                                                      background_mask, pix_peak, rad,
-                                                                                      self._redshift, pix_step, kpc,
-                                                                                      self.cosmo, min_snr=min_snr)
-            prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, fmt='x', capsize=2, label="Emission")
+            brightness, brightness_errs, radii, radii_bins, og_background, success = radial_brightness(comb_rt,
+                                                                                                       source_mask,
+                                                                                                       background_mask,
+                                                                                                       pix_peak, rad,
+                                                                                                       self._redshift,
+                                                                                                       pix_step, kpc,
+                                                                                                       self.cosmo,
+                                                                                                       min_snr=min_snr)
+            prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, yerr=brightness_errs, fmt='x',
+                                capsize=2, label="Emission")
             plt.plot(radii.value, brightness, color=prof[0].get_color())
 
             for psf_comb_rt in psf_comb_rts:
@@ -262,12 +273,16 @@ class GalaxyCluster(ExtendedSource):
                 # If the user wants to use individual peaks, we have to find them here.
                 if not same_peak:
                     pix_peak = self.find_peak(p_rt)[0]
-                brightness, radii, radii_bins, background, success = radial_brightness(psf_comb_rt[-1], source_mask,
-                                                                                       background_mask, pix_peak, rad,
-                                                                                       self._redshift, pix_step, kpc,
-                                                                                       self.cosmo, min_snr=min_snr)
-                prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, capsize=2, fmt="x",
-                                    label="{m} PSF Corrected".format(m=p_rt.psf_model))
+                brightness, brightness_errs, radii, radii_bins, background, success = radial_brightness(psf_comb_rt[-1],
+                                                                                                        source_mask,
+                                                                                                        background_mask,
+                                                                                                        pix_peak, rad,
+                                                                                                        self._redshift,
+                                                                                                        pix_step, kpc,
+                                                                                                        self.cosmo,
+                                                                                                        min_snr=min_snr)
+                prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, yerr=brightness_errs, capsize=2,
+                                    fmt="x", label="{m} PSF Corrected".format(m=p_rt.psf_model))
                 plt.plot(radii.value, brightness, color=prof[0].get_color())
 
                 plt.axhline(background, color=prof[0].get_color(), linestyle="dashed",
@@ -302,7 +317,7 @@ class GalaxyCluster(ExtendedSource):
         ax.xaxis.set_major_formatter(ScalarFormatter())
 
         # Labels and legends
-        ax.set_ylabel("S$_{b}$ [count s$^{-1}$ pix$^{-2}$]")
+        ax.set_ylabel("S$_{b}$ [count s$^{-1}$ arcmin$^{-2}$]")
         ax.set_xlabel("Radius [kpc]")
         plt.legend(loc="best")
         # Removes white space around the plot
@@ -311,7 +326,7 @@ class GalaxyCluster(ExtendedSource):
         plt.show()
         plt.close('all')
 
-    def combined_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
+    def combined_lum_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
         """
         Combines conversion factors calculated for this source with individual instrument-observation
         spectra, into one overall conversion factor.
@@ -326,20 +341,50 @@ class GalaxyCluster(ExtendedSource):
         spec = self.get_products("spectrum", extra_key=reg_type)
         # Setting up variables to be added into
         av_lum = Quantity(0, "erg/s")
-        total_rate = Quantity(0, "ct/s")
+        total_phot = 0
         # Cycling through the relevant spectra
         for s in spec:
             # The luminosity is added to the average luminosity variable, will be divided by N
             #  spectra at the end.
             av_lum += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[1]
-            # The count rate is just added into a total count rate
-            total_rate += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2]
+            # Multiplying by 1e+4 because that is the length of the simulated exposure in seconds
+            total_phot += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2] * 1e+4
+
+        # Then the total combined rate is the total number of photons / the total summed exposure (which
+        #  is just 10000 seconds multiplied by the number of spectra).
+        total_rate = Quantity(total_phot / (1e+4 * len(spec)), 'ct/s')
 
         # Making av_lum actually an average
         av_lum /= len(spec)
 
         # Calculating and returning the combined factor.
         return av_lum / total_rate
+
+    def combined_norm_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
+        """
+        Combines count-rate to normalisation conversion factors associated with this source
+        :param str reg_type: The region type the conversion factor is associated with.
+        :param Quantity lo_en: The lower energy limit of the conversion factors.
+        :param Quantity hi_en: The upper energy limit of the conversion factors.
+        :return: A combined conversion factor that can be applied to a combined ratemap to
+        calculate luminosity.
+        :rtype: Quantity
+        """
+        spec = self.get_products("spectrum", extra_key=reg_type)
+        total_phot = 0
+        for s in spec:
+            s: Spectrum
+            # Multiplying the rate by 10000 because that is the exposure of the simulated spectra
+            #  Set in xspec_scripts/cr_conv_calc.xcm
+            total_phot += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2].value * 1e+4
+
+        # Then the total combined rate is the total number of photons / the total summed exposure (which
+        #  is just 10000 seconds multiplied by the number of spectra).
+        total_rate = Quantity(total_phot / (1e+4 * len(spec)), 'ct/s')
+
+        # Then we return 1/the rate because this method calculates the conversion factor from count rate to
+        #  normalisation (which is always 1 for these simulated spectra).
+        return 1 / total_rate
 
 
 

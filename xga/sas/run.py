@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 10:32. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -191,11 +191,13 @@ def sas_call(sas_func):
             ind = src_lookup[entry]
             for product in results[entry]:
                 product: BaseProduct
+                ext_info = " {s} is the associated source, the specific data used is " \
+                           "{o}-{i}.".format(s=sources[ind].name, o=product.obs_id, i=product.instrument)
                 if len(product.sas_errors) == 1:
                     raise SASGenerationError(product.sas_errors[0]
-                                             + " {} is the associated source.".format(sources[ind].name))
+                                             + ext_info)
                 elif len(product.sas_errors) > 1:
-                    errs = [SASGenerationError(e + " {} is the associated source.".format(sources[ind].name))
+                    errs = [SASGenerationError(e + ext_info)
                             for e in product.sas_errors]
                     raise Exception(errs)
 

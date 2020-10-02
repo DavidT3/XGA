@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/09/2020, 16:04. Copyright (c) David J Turner
 
 import json
 import os
 from configparser import ConfigParser
-from typing import List
+from typing import List, Tuple
 
 import pandas as pd
 import pkg_resources
@@ -21,6 +21,8 @@ from .exceptions import XGAConfigError
 CONFIG_PATH = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))
 # The path to the census file, which documents all available ObsIDs and their pointings
 CENSUS_FILE = os.path.join(CONFIG_PATH, 'census.csv')
+# The path to the blacklist file, which is where users can specify ObsIDs they don't want to be used in analyses
+BLACKLIST_FILE = os.path.join(CONFIG_PATH, 'blacklist.csv')
 # XGA config file path
 CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 # Section of the config file for setting up the XGA module
@@ -68,6 +70,10 @@ with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json
 with open(pkg_resources.resource_filename(__name__, "files/xspec_model_units.json5"), 'r') as filey:
     MODEL_UNITS = json.load(filey)
 ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
+# TODO Populate this further, also actually calculate and verify these myself, the value here is taken
+#  from pyproffit code
+# Conversion from Hydrogen number density to electron number density
+NHC = {"angr": 1.199}
 XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
 
 
@@ -91,14 +97,14 @@ def xmm_obs_id_test(test_string: str) -> bool:
     return probably_xmm
 
 
-def observation_census(config: ConfigParser) -> pd.DataFrame:
+def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     A function to initialise or update the file that stores which observations are available in the user
     specified XMM data directory, and what their pointing coordinates are.
     CURRENTLY THIS WILL NOT UPDATE TO DEAL WITH OBSID FOLDERS THAT HAVE BEEN DELETED.
     :param config: The XGA configuration object.
     :return: ObsIDs and pointing coordinates of available XMM observations.
-    :rtype: pd.DataFrame
+    :rtype: Tuple[pd.DataFrame, pd.DataFrame]
     """
     # The census lives in the XGA config folder, and CENSUS_FILE stores the path to it.
     # If it exists, it is read in, otherwise empty lists are initialised to be appended to.
@@ -110,6 +116,12 @@ def observation_census(config: ConfigParser) -> pd.DataFrame:
     else:
         obs_lookup = ["ObsID,RA_PNT,DEC_PNT,USE_PN,USE_MOS1,USE_MOS2\n"]
         obs_lookup_obs = []
+
+    # Creates black list file if one doesn't exist, then reads it in
+    if not os.path.exists(BLACKLIST_FILE):
+        with open(BLACKLIST_FILE, 'w') as bl:
+            bl.write("ObsID")
+    blacklist = pd.read_csv(BLACKLIST_FILE, header="infer", dtype=str)
 
     # Need to find out which observations are available, crude way of making sure they are ObsID directories
     # This also checks that I haven't run them before
@@ -163,7 +175,7 @@ def observation_census(config: ConfigParser) -> pd.DataFrame:
     obs_lookup["USE_PN"] = obs_lookup["USE_PN"].replace('T', True).replace('F', False)
     obs_lookup["USE_MOS1"] = obs_lookup["USE_MOS1"].replace('T', True).replace('F', False)
     obs_lookup["USE_MOS2"] = obs_lookup["USE_MOS2"].replace('T', True).replace('F', False)
-    return obs_lookup
+    return obs_lookup, blacklist
 
 
 def to_list(str_rep_list: str) -> list:
@@ -315,7 +327,7 @@ else:
     # Make sure that this is the absolute path
     xga_conf["XMM_FILES"]["root_xmm_dir"] = os.path.abspath(xga_conf["XMM_FILES"]["root_xmm_dir"]) + "/"
     # Read dataframe of ObsIDs and pointing coordinates into constant
-    CENSUS = observation_census(xga_conf)
+    CENSUS, BLACKLIST = observation_census(xga_conf)
     OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
 
     # These are the different ways the SAS runs can be partitioned out

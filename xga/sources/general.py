@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/10/2020, 15:31. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Dict
@@ -8,7 +8,7 @@ import numpy as np
 from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
-from astropy.units import Quantity, UnitBase, deg
+from astropy.units import Quantity, UnitBase, deg, UnitConversionError
 from numpy import ndarray
 
 from .base import BaseSource
@@ -30,14 +30,17 @@ class ExtendedSource(BaseSource):
         # Calling the BaseSource init method
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
 
+        self._custom_region_radius = None
         # Setting up the custom region radius attributes
         if custom_region_radius is not None and custom_region_radius.unit.is_equivalent("kpc"):
             rad = rad_to_ang(custom_region_radius, self._redshift, self._cosmo).to("deg")
             self._custom_region_radius = rad
             self._radii["custom"] = self._custom_region_radius
+            self._rad_info = True
         elif custom_region_radius is not None and not custom_region_radius.unit.is_equivalent("kpc"):
             self._custom_region_radius = custom_region_radius.to("deg")
             self._radii["custom"] = self._custom_region_radius
+            self._rad_info = True
 
         # Adding a custom radius to act as a search aperture for peak finding
         # 500kpc in degrees, for the current redshift and cosmology
@@ -95,9 +98,10 @@ class ExtendedSource(BaseSource):
         elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is not None:
             warnings.warn("{n} has not been detected in ANY region files, so generating and fitting products"
                           " with the 'region' reg_type will not work".format(n=self.name))
-        elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is None:
-            raise NoRegionsError("{n} has not been detected in ANY region files, and no custom region radius"
-                                 "has been passed. No analysis is possible.".format(n=self.name))
+        elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is None \
+                and "GalaxyCluster" not in repr(self):
+            raise NoRegionsError("{n} has not been detected in ANY region files, and no custom region or "
+                                 " overdensity radius has been passed. No analysis is possible.".format(n=self.name))
 
         # Call to a method that goes through all the observations and finds the X-ray centroid. Also at the same
         #  time finds the X-ray centroid of the combined ratemap (an essential piece of information).
@@ -261,6 +265,21 @@ class ExtendedSource(BaseSource):
         :rtype: Quantity
         """
         return self._peaks["combined"]
+
+    # I'm allowing this a setter, as some users may want to update the peak from outside (as is
+    #  done in the ClusterSample init).
+    @peak.setter
+    def peak(self, new_peak: Quantity):
+        """
+        Allows the user to update the peak value used during analyses manually.
+        :param Quantity new_peak: A new RA-DEC peak coordinate, in degrees.
+        """
+        if not new_peak.unit.is_equivalent("deg"):
+            raise UnitConversionError("The new peak value must be in RA and DEC coordinates")
+        elif len(new_peak) != 2:
+            raise ValueError("Please pass an astropy Quantity, in units of degrees, with two entries - "
+                             "one for RA and one for DEC.")
+        self._peaks["combined"] = new_peak.to("deg")
 
     @property
     def custom_radius(self) -> Quantity:

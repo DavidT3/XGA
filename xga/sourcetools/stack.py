@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 14:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 17:08. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -11,17 +11,17 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from tqdm import tqdm
 
-import xga.xspec.fakeit
 from ..exceptions import NoRegionsError, NoProductAvailableError
 from ..imagetools.profile import radial_brightness
 from ..samples.extended import ClusterSample
 from ..sas import evselect_spectrum
 from ..sources import GalaxyCluster
 from ..utils import NUM_CORES, COMPUTE_MODE
+from ..xspec.fakeit import cluster_cr_conv
 
 
 def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200", use_peak: bool = True,
-                      pix_step: int = 1, radii: np.ndarray = np.linspace(0, 1, 20), min_snr: Union[int, float] = 0.0,
+                      pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20), min_snr: Union[int, float] = 0.0,
                       lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                       custom_temps: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES) \
@@ -80,7 +80,7 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
                                                                 n=psf_bins, a=psf_algo, i=psf_iter)
 
         # Retrieving the relevant ratemap object, as well as masks
-        rt = [rt[-1] for rt in src.get_products("combined_ratemap", just_obj=False) if storage_key in rt][0]
+        rt = [r[-1] for r in src.get_products("combined_ratemap", just_obj=False) if storage_key in r][0]
 
         # The user can choose to use the original user passed coordinates, or the X-ray centroid
         if use_peak:
@@ -94,9 +94,11 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
             source_mask = src.get_interloper_mask()
 
         rad = Quantity(src.source_back_regions(scale_radius)[0].to_pixel(rt.radec_wcs).radius, pix)
-        brightness, cen_rad, rad_bins, bck, success = radial_brightness(rt, source_mask, background_mask, pix_peak,
-                                                                        rad, src.redshift, pix_step, pix, src.cosmo,
-                                                                        min_snr=min_snr)
+        brightness, brightness_err, cen_rad, rad_bins, bck, success = radial_brightness(rt, source_mask,
+                                                                                        background_mask, pix_peak,
+                                                                                        rad, src.redshift, pix_step,
+                                                                                        pix, src.cosmo,
+                                                                                        min_snr=min_snr)
 
         # Subtracting the background in the simplest way possible
         brightness -= bck
@@ -172,15 +174,15 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
 
     # Calculate all the conversion factors
     if custom_temps is not None:
-        xga.xspec.fakeit.cluster_cr_conv(sources, scale_radius, custom_temps)
+        cluster_cr_conv(sources, scale_radius, custom_temps)
     else:
         temps = Quantity([source.get_temperature(scale_radius, "tbabs*apec")[0] for source in sources], 'keV')
-        xga.xspec.fakeit.cluster_cr_conv(sources, scale_radius, temps)
+        cluster_cr_conv(sources, scale_radius, temps)
 
     combined_factors = []
     # Now to generate a combined conversion factor from count rate to luminosity
     for source in sources:
-        combined_factors.append(source.combined_conv_factor(scale_radius, lo_en, hi_en).value)
+        combined_factors.append(source.combined_lum_conv_factor(scale_radius, lo_en, hi_en).value)
 
     # Check for NaN values in the brightness profiles we've retrieved - very bad if they exist
     no_nan = np.where(~np.isnan(sb.sum(axis=1)))[0]
@@ -211,7 +213,7 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
 
 
 def view_radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200",
-                           use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0, 1, 20),
+                           use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
                            min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
                            psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4,
