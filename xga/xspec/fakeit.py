@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/10/2020, 15:31. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -93,11 +93,13 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str,
                      if match[-1].usable]
         # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
         if len(spec_objs) == 0:
-            raise NoProductAvailableError("There are no matching spectra for this source object, you "
-                                          "need to generate them first!")
+            raise NoProductAvailableError("There are no matching spectra for {} object, you "
+                                          "need to generate them first!".format(source.name))
         elif len(spec_objs) != total_obs_inst:
-            raise NoProductAvailableError("The number of matching spectra is not equal to the number of "
-                                          "instrument/observation combinations.")
+            raise NoProductAvailableError("The number of matching spectra ({0}) is not equal to the number of "
+                                          "instrument/observation combinations ({1}) for {2}.".format(len(spec_objs),
+                                                                                                      total_obs_inst,
+                                                                                                      source.name))
 
         # Turn RMF and ARF paths into TCL style list for substitution into template
         rmf_paths = "{" + " ".join([spec[-1].rmf for spec in spec_objs]) + "}"

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 12:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/10/2020, 15:31. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -46,6 +46,8 @@ class GalaxyCluster(ExtendedSource):
             self._radii["r200"] = rad_to_ang(r200, self.redshift, self.cosmo)
         elif r200 is not None and not r200.unit.is_equivalent("kpc") and not r200.unit.is_equivalent("deg"):
             raise UnitConversionError("R200 radius must be in either angular or distance units.")
+        elif r200 is None and clean_obs_reg == "r200":
+            clean_obs_reg = "r500"
 
         if r500 is not None and r500.unit.is_equivalent("deg"):
             self._r500 = ang_to_rad(r500, self._redshift, self._cosmo).to("kpc")
