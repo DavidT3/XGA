@@ -1,17 +1,25 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 13:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 17:42. Copyright (c) David J Turner
 
 
+import inspect
 import os
 from typing import Tuple, List, Dict
 
+import numpy as np
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
 
-from ..exceptions import SASGenerationError, UnknownCommandlineError
+from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
+from ..models import SB_MODELS, SB_MODELS_STARTS, DENS_MODELS, DENS_MODELS_STARTS, TEMP_MODELS, TEMP_MODELS_STARTS
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
-PROF_TYPE_YAXIS = {"base": "Unknown", "brightness": "Surface Brightness", "density": "Density"}
+PROF_TYPE_YAXIS = {"base": "Unknown", "brightness": "Surface Brightness", "density": "Density",
+                   "2d_temperature": "Projected Temperature", "3d_temperature": "3D Temperature"}
+PROF_TYPE_MODELS = {"brightness": SB_MODELS, "density": DENS_MODELS, "2d_temperature": TEMP_MODELS,
+                    "3d_temperature": TEMP_MODELS}
+PROF_TYPE_MODELS_STARTS = {"brightness": SB_MODELS_STARTS, "density": DENS_MODELS_STARTS,
+                           "2d_temperature": TEMP_MODELS_STARTS, "3d_temperature": TEMP_MODELS_STARTS}
 
 
 class BaseProduct:
@@ -454,6 +462,10 @@ class BaseProfile1D:
         self._radii_err = radii_err
         self._values_err = values_err
 
+        # Just checking that if one of these values is combined, then both are. Doesn't make sense otherwise.
+        if (obs_id == "combined" and inst != "combined") or (inst == "combined" and obs_id != "combined"):
+            raise ValueError("If ObsID or inst is set to combined, then both must be set to combined.")
+
         # Storing the passed source name in an attribute, as well as the ObsID and instrument
         self._src_name = source_name
         self._obs_id = obs_id
@@ -463,8 +475,111 @@ class BaseProfile1D:
         #  when I wanted to know but this is easier.
         self._prof_type = "base"
 
-        # Here is where information about fitted models is stored
-        self._model_fits = {}
+        # Here is where information about fitted models is stored (and any failed fit attempts)
+        self._good_model_fits = {}
+        self._bad_model_fits = {}
+
+    def fit(self, model, method, start_pars=None):
+        # These are the currently allowed fitting methods
+        fit_methods = ["curve_fit", "mcmc"]
+        # Checking that the user hasn't chosen a method that isn't allowed
+        if method not in fit_methods:
+            raise ValueError("{0} is not an accepted fitting method, please choose one of these; "
+                             "{1}".format(method, ", ".join(fit_methods)))
+
+        # Stopping the user from making stupid model choices
+        if self._prof_type == "base":
+            raise XGAFitError("A BaseProfile1D object currently cannot have a model fitted to it, as there"
+                              " is no physical context.")
+        elif model not in PROF_TYPE_MODELS[self._prof_type]:
+            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
+                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
+        else:
+            model_func = PROF_TYPE_MODELS[self._prof_type][model]
+
+        # This inspect module lets me grab the parameters expected by the model dynamically, and check
+        #  what the user might have passed in the start_pars variable against it
+        model_sig = inspect.signature(model_func)
+        # Ignore the first argument, as it will be radius
+        model_par_names = [p.name for p in list(model_sig.parameters.values())[1:]]
+        if start_pars is not None and len(start_pars) != len(model_par_names):
+            raise ValueError("start_pars must either be None, or have an entry for each parameter expected by"
+                             " the chosen model; {0} expects {1}".format(model, ", ".join(model_par_names)))
+        elif start_pars is None:
+            start_pars = PROF_TYPE_MODELS_STARTS[self._prof_type][model]
+
+        print(model_func)
+        print(start_pars)
+
+    def allowed_models(self):
+        """
+        This is a convenience function to tell the user what models can be used to fit a profile
+        of the current type, what parameters are expected, and what the defaults are.
+        """
+        if self._prof_type == "base":
+            allowed = []
+        else:
+            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+
+        to_print = {}
+        longest_name = 12
+        longest_pars = 21
+        longest_defaults = 26
+        for model in allowed:
+            model_func = PROF_TYPE_MODELS[self._prof_type][model]
+            model_sig = inspect.signature(model_func)
+            # Ignore the first argument, as it will be radius
+            model_par_names = ", ".join([p.name for p in list(model_sig.parameters.values())[1:]])
+            # The default start parameters of the fit
+            start_pars = ", ".join([str(p) for p in PROF_TYPE_MODELS_STARTS[self._prof_type][model]])
+            to_print[model] = [model, model_par_names, start_pars]
+            if len(model) > longest_name:
+                longest_name = len(model)
+            if len(model_par_names) > longest_pars:
+                longest_pars = len(model_par_names)
+            if len(start_pars) > longest_defaults:
+                longest_defaults = len(start_pars)
+
+        if longest_name % 2 != 0:
+            longest_name += 3
+        else:
+            longest_name += 2
+
+        if longest_pars % 2 != 0:
+            longest_pars += 3
+        else:
+            longest_pars += 2
+
+        if longest_defaults % 2 != 0:
+            longest_defaults += 3
+        else:
+            longest_defaults += 2
+
+        first_col = "|" + " " * np.ceil((longest_name - 12) / 2).astype(int) + " MODEL NAME " + " " * np.ceil(
+            (longest_name - 12) / 2).astype(int) + "|"
+
+        second_col = " " * np.ceil((longest_pars - 21) / 2).astype(int) + " EXPECTED PARAMETERS " + " " * np.ceil(
+            (longest_pars - 21) / 2).astype(int) + "|"
+
+        third_col = " "*np.ceil((longest_defaults-26) / 2).astype(int) + " DEFAULT START PARAMETERS " + \
+                    " " * np.ceil((longest_defaults-26) / 2).astype(int) + "|"
+        comb = first_col + second_col + third_col
+        print("\n" + "-"*len(comb))
+        print(first_col + second_col + third_col)
+        print("-"*len(comb))
+        for model in to_print:
+            the_line = "|" + " " * np.ceil((len(first_col) - len(to_print[model][0])) / 2).astype(int) + to_print[model][
+                0] + " " * np.ceil((len(first_col) - len(to_print[model][0])) / 2).astype(int) + "|"
+
+            the_line += " "*np.ceil((len(second_col)-len(to_print[model][1])) / 2).astype(int) + to_print[model][1] + \
+                        " "*np.ceil((len(second_col)-len(to_print[model][1])) / 2).astype(int) + "|"
+
+            the_line += " " * np.ceil((len(third_col) - len(to_print[model][2])) / 2).astype(int) + to_print[model][
+                2] + " " * np.ceil((len(third_col) - len(to_print[model][2])) / 2).astype(int) + "|"
+            print(the_line)
+        print("-" * len(comb) + "\n")
 
     def view(self, figsize=(10, 6), xscale="log", yscale="log", xlim=None, ylim=None, models=True):
         # Setting up figure for the plot
@@ -500,7 +615,7 @@ class BaseProfile1D:
         # If models have been fitted to this profile (and the user wants them plotted), then this runs through
         #  and adds them to the figure
         if models:
-            for model in self._model_fits:
+            for model in self._good_model_fits:
                 raise NotImplementedError("This method doesn't support models yet")
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
@@ -630,6 +745,11 @@ class BaseProfile1D:
         return self._inst
 
     def __len__(self):
+        """
+        The length of a BaseProfile1D object is equal to the length of the radii and values arrays
+        passed in on init.
+        :return: The number of bins in this radial profile.
+        """
         return len(self._radii)
 
 
