@@ -1,11 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 10:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 11:28. Copyright (c) David J Turner
 
 
 import os
 from typing import Tuple, List, Dict
 
-from astropy.units import Quantity, UnitConversionError
+from astropy.units import Quantity, UnitConversionError, Unit
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError
 from ..utils import SASERROR_LIST, SASWARNING_LIST
@@ -448,10 +448,83 @@ class BaseProfile1D:
         self._radii = radii
         self._values = values
         self._radii_err = radii_err
-        self._values.err = values_err
+        self._values_err = values_err
 
         # Going to have this convenient attribute for profile classes, I could just use the type() command
         #  when I wanted to know but this is easier.
         self._prof_type = "base"
+
+    # None of these properties concerning the radii and values are going to have setters, if the user wants to modify
+    #  it then they can define a new product.
+    @property
+    def radii(self) -> Quantity:
+        """
+        Getter for the radii passed in at init. These radii correspond to radii where the values were measured
+        :return: Astropy quantity array of radii.
+        :rtype: Quantity
+        """
+        return self._radii
+
+    @property
+    def radii_err(self) -> Quantity:
+        """
+        Getter for the uncertainties on the profile radii.
+        :return: Astropy quantity array of radii uncertainties, or a None value if no radii_err where passed.
+        :rtype: Quantity
+        """
+        return self._radii_err
+
+    @property
+    def radii_unit(self) -> Unit:
+        """
+        Getter for the unit of the radii passed by the user at init.
+        :return: An astropy unit object.
+        :rtype: Unit
+        """
+        return self._radii.unit
+
+    @property
+    def values(self) -> Quantity:
+        """
+        Getter for the values passed by user at init.
+        :return: Astropy quantity array of values.
+        :rtype: Quantity
+        """
+        return self._values
+
+    @property
+    def values_err(self) -> Quantity:
+        """
+        Getter for uncertainties on the profile values.
+        :return: Astropy quantity array of values uncertainties, or a None value if no values_err where passed.
+        :rtype: Quantity
+        """
+        return self._values_err
+
+    @property
+    def values_unit(self) -> Unit:
+        """
+        Getter for the unit of the values passed by the user at init.
+        :return: An astropy unit object.
+        :rtype: Unit
+        """
+        return self._values.unit
+
+    def __len__(self):
+        return len(self._radii)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
