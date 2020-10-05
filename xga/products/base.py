@@ -1,11 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/09/2020, 10:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 10:54. Copyright (c) David J Turner
 
 
 import os
 from typing import Tuple, List, Dict
 
-from astropy.units import Quantity
+from astropy.units import Quantity, UnitConversionError
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError
 from ..utils import SASERROR_LIST, SASWARNING_LIST
@@ -411,7 +411,47 @@ class BaseAggregateProduct:
         return list(self._component_products.values())[ind]
 
 
+class BaseProfile1D:
+    def __init__(self, radii: Quantity, values: Quantity, radii_err: Quantity = None, values_err: Quantity = None):
+        if type(radii) != Quantity or type(values) != Quantity:
+            raise TypeError("Both the radii and values passed into this object definition must "
+                            "be astropy quantities.")
+        elif radii_err is not None and type(radii_err) != Quantity:
+            raise TypeError("The radii_err variable must be an astropy Quantity, or None.")
+        elif radii_err is not None and radii_err.unit != radii.unit:
+            raise UnitConversionError("The radii_err unit must be the same as the radii unit.")
+        elif values_err is not None and type(values_err) != Quantity:
+            raise TypeError("The values_err variable must be an astropy Quantity, or None.")
+        elif values_err is not None and values_err.unit != values.unit:
+            raise UnitConversionError("The values_err unit must be the same as the values unit.")
 
+        # Check for one dimensionality
+        if radii.ndim != 1 or values.ndim != 1:
+            raise ValueError("The radii and values arrays must be one-dimensional. The shape of radii is {0} "
+                             "and the shape of values is {1}".format(radii.shape, values.shape))
+        elif (radii_err is not None and radii_err.ndim != 1) or (values_err is not None and values_err.ndim != 1):
+            raise ValueError("The radii_err and values_err arrays must be one-dimensional. The shape of "
+                             "radii_err is {0} and the shape of values_err is "
+                             "{1}".format(radii_err.shape, values_err.shape))
+        # Making sure the arrays have the same number of entries
+        elif radii.shape != values.shape:
+            raise ValueError("The radii and values arrays must have the same shape. The shape of radii is {0} "
+                             "and the shape of values is {1}".format(radii.shape, values.shape))
+        elif (radii_err is not None and radii_err.shape != radii.shape) or \
+                (values_err is not None and values_err.shape != values.shape):
+            raise ValueError("radii_err must be the same shape as radii, and values_err must be the same shape "
+                             "as values. The shape of radii_err is {0} where radii is {1}, and the shape of "
+                             "values_err is {2} where values is {3}".format(radii_err.shape, radii.shape,
+                                                                            values_err.shape, values.shape))
 
+        # Storing the key values in attributes
+        self._radii = radii
+        self._values = values
+        self._radii_err = radii_err
+        self._values.err = values_err
+
+        # Going to have this convenient attribute for profile classes, I could just use the type() command
+        #  when I wanted to know but this is easier.
+        self._prof_type = "base"
 
 
