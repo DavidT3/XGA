@@ -1,14 +1,17 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 11:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 13:04. Copyright (c) David J Turner
 
 
 import os
 from typing import Tuple, List, Dict
 
 from astropy.units import Quantity, UnitConversionError, Unit
+from matplotlib import pyplot as plt
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError
 from ..utils import SASERROR_LIST, SASWARNING_LIST
+
+PROF_TYPE_YAXIS = {"base": "Unknown", "brightness": "Surface Brightness", "density": "Density"}
 
 
 class BaseProduct:
@@ -42,7 +45,7 @@ class BaseProduct:
         self.og_cmd = gen_cmd
         self._energy_bounds = (None, None)
         self._prod_type = None
-        self._obj_name = None
+        self._src_name = None
 
     # Users are not allowed to change this, so just a getter.
     @property
@@ -236,24 +239,24 @@ class BaseProduct:
         return self._energy_bounds
 
     @property
-    def obj_name(self) -> str:
+    def src_name(self) -> str:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
         :return: The name of the source object this product is associated with.
         :rtype: str
         """
-        return self._obj_name
+        return self._src_name
 
     # This needs a setter, as this property only becomes not-None when the product is added to a source object.
-    @obj_name.setter
-    def obj_name(self, name: str):
+    @src_name.setter
+    def src_name(self, name: str):
         """
-        Property setter for the obj_name attribute of a product, should only really be called by a source object,
+        Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user.
         :param str name: The name of the source object associated with this product.
         """
-        self._obj_name = name
+        self._src_name = name
 
     @property
     def not_usable_reasons(self) -> List:
@@ -273,7 +276,7 @@ class BaseAggregateProduct:
         self._obs_id = obs_id
         self._inst = instrument
         self._prod_type = prod_type
-        self._obj_name = None
+        self._src_name = None
 
         # This was originally going to create the individual products here, but realised it was
         # easier to do in subclasses
@@ -283,24 +286,24 @@ class BaseAggregateProduct:
         self._energy_bounds = (None, None)
 
     @property
-    def obj_name(self) -> str:
+    def src_name(self) -> str:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
         :return: The name of the source object this product is associated with.
         :rtype: str
         """
-        return self._obj_name
+        return self._src_name
 
     # This needs a setter, as this property only becomes not-None when the product is added to a source object.
-    @obj_name.setter
-    def obj_name(self, name: str):
+    @src_name.setter
+    def src_name(self, name: str):
         """
-        Property setter for the obj_name attribute of a product, should only really be called by a source object,
+        Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user.
         :param str name: The name of the source object associated with this product.
         """
-        self._obj_name = name
+        self._src_name = name
 
     @property
     def obs_id(self) -> str:
@@ -412,7 +415,8 @@ class BaseAggregateProduct:
 
 
 class BaseProfile1D:
-    def __init__(self, radii: Quantity, values: Quantity, radii_err: Quantity = None, values_err: Quantity = None):
+    def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str,
+                 inst: str, radii_err: Quantity = None, values_err: Quantity = None):
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
                             "be astropy quantities.")
@@ -450,9 +454,74 @@ class BaseProfile1D:
         self._radii_err = radii_err
         self._values_err = values_err
 
+        # Storing the passed source name in an attribute, as well as the ObsID and instrument
+        self._src_name = source_name
+        self._obs_id = obs_id
+        self._inst = inst
+
         # Going to have this convenient attribute for profile classes, I could just use the type() command
         #  when I wanted to know but this is easier.
         self._prof_type = "base"
+
+        # Here is where information about fitted models is stored
+        self._model_fits = {}
+
+    def view(self, figsize=(10, 6), xscale="log", yscale="log", xlim=None, ylim=None, models=True):
+        # Setting up figure for the plot
+        plt.figure(figsize=figsize)
+
+        # Grabbing the axis object and making sure the ticks are set up how we want
+        ax = plt.gca()
+        ax.minorticks_on()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        if self._radii_err is not None and self._values_err is None:
+            plt.errorbar(self.radii.value, self.values.value, xerr=self.radii_err.value, label="Data", fmt="x",
+                         capsize=2)
+        elif self._radii_err is None and self._values_err is not None:
+            plt.errorbar(self.radii.value, self.values.value, yerr=self.values_err.value, label="Data", fmt="x",
+                         capsize=2)
+        elif self._radii_err is not None and self._values_err is not None:
+            plt.errorbar(self.radii.value, self.values.value, xerr=self.radii_err.value, yerr=self.values_err.value,
+                         label="Data", fmt="x")
+        else:
+            plt.plot(self.radii.value, self.values.value, 'x', label="Data")
+
+        # Setup the scale that the user wants to see
+        plt.xscale(xscale)
+        plt.yscale(yscale)
+
+        # If the user has manually set limits then we can use them
+        if xlim is not None:
+            plt.xlim(xlim)
+        if ylim is not None:
+            plt.ylim(ylim)
+
+        # If models have been fitted to this profile (and the user wants them plotted), then this runs through
+        #  and adds them to the figure
+        if models:
+            for model in self._model_fits:
+                raise NotImplementedError("This method doesn't support models yet")
+
+        # Parsing the astropy units so that if they are double height then the square brackets will adjust size
+        x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
+
+        # Adding them to the figure
+        plt.xlabel("Radii {}".format(x_unit))
+        plt.ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+
+        if self._obs_id == "combined":
+            plt.title("{s} {l} Profile".format(s=self._src_name, l=PROF_TYPE_YAXIS[self._prof_type]))
+        else:
+            plt.title("{s}-{o}-{i} {l} Profile".format(s=self._src_name, l=PROF_TYPE_YAXIS[self._prof_type],
+                                                       o=self.obs_id, i=self.instrument))
+
+        # Just going to leave matplotlib to decide where the legend should live
+        plt.legend(loc="best")
+
+        # And of course actually showing it
+        plt.show()
 
     # None of these properties concerning the radii and values are going to have setters, if the user wants to modify
     #  it then they can define a new product.
@@ -509,6 +578,56 @@ class BaseProfile1D:
         :rtype: Unit
         """
         return self._values.unit
+
+    # This definitely doesn't get a setter, as its basically a proxy for type() return, it will not change
+    #  during the life of the object
+    @property
+    def prof_type(self) -> str:
+        """
+        Getter for a string representing the type of profile stored in this object.
+        :return: String description of profile.
+        :rtype: str
+        """
+        return self._prof_type
+
+    @property
+    def src_name(self) -> str:
+        """
+        Getter for the name attribute of this profile, what source object it was derived from.
+        :return:
+        :rtype: object
+        """
+        return self._src_name
+
+    @src_name.setter
+    def src_name(self, new_name):
+        """
+        Setter for the name attribute of this profile, what source object it was derived from.
+        """
+        self._src_name = new_name
+
+    @property
+    def obs_id(self) -> str:
+        """
+        Property getter for the ObsID this profile was made from. Admittedly this information is implicit
+        in the location this object is stored in a source object, but I think it worth storing directly
+        as a property as well.
+        :return: XMM ObsID string.
+        :rtype: str
+        """
+        return self._obs_id
+
+    @property
+    def instrument(self) -> str:
+        """
+        Property getter for the instrument this profile was made from. Admittedly this information is implicit
+        in the location this object is stored in a source object, but I think it worth storing directly
+        as a property as well.
+        directly as a property as well.
+        :return: XMM instrument name string.
+        :rtype: str
+        """
+        return self._inst
 
     def __len__(self):
         return len(self._radii)

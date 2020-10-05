@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 12:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 13:04. Copyright (c) David J Turner
 
 
 import warnings
@@ -501,13 +501,13 @@ class Image(BaseProduct):
         #  and it makes the title ugly
         if self.obs_id != "combined":
             # Set the title with all relevant information about the image object in it
-            plt.title("Log Scaled {n} - {o}{i} {l}-{u}keV {t}".format(n=self.obj_name, o=self.obs_id,
+            plt.title("Log Scaled {n} - {o}{i} {l}-{u}keV {t}".format(n=self.src_name, o=self.obs_id,
                                                                       i=self.instrument.upper(),
                                                                       l=self._energy_bounds[0].to("keV").value,
                                                                       u=self._energy_bounds[1].to("keV").value,
                                                                       t=self.type))
         else:
-            plt.title("Log Scaled {n} - Combined {l}-{u}keV {t}".format(n=self.obj_name,
+            plt.title("Log Scaled {n} - Combined {l}-{u}keV {t}".format(n=self.src_name,
                                                                         l=self._energy_bounds[0].to("keV").value,
                                                                         u=self._energy_bounds[1].to("keV").value,
                                                                         t=self.type))

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 09:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 13:04. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -205,7 +205,7 @@ class BaseSource:
                 prod_objs["ratemap"] = RateMap(prod_objs["image"], prod_objs["expmap"])
             # Adds in the source name to the products
             for prod in prod_objs:
-                prod_objs[prod].obj_name = self._name
+                prod_objs[prod].src_name = self._name
             # As these files existed already, I don't have any stdout/err strings to pass, also no
             # command string.
 
@@ -312,7 +312,7 @@ class BaseSource:
             self._products["combined"] = {}
 
         # The product gets the name of this source object added to it
-        prod_obj.obj_name = self.name
+        prod_obj.src_name = self.name
 
         # Double check that something is trying to add products from another source to the current one.
         if obs_id != "combined" and obs_id not in self._products:
@@ -344,7 +344,7 @@ class BaseSource:
             exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False) if en_key in prod]
             if len(exs) == 1:
                 new_rt = RateMap(prod_obj, exs[0][-1])
-                new_rt.obj_name = self.name
+                new_rt.src_name = self.name
                 self._products[obs_id][inst][extra_key]["ratemap"] = new_rt
 
         # However, if its an exposure map that's been added, we have to look for matching image(s). There
@@ -358,7 +358,7 @@ class BaseSource:
             if len(ims) != 0:
                 for im in ims:
                     new_rt = RateMap(im[-1], prod_obj)
-                    new_rt.obj_name = self.name
+                    new_rt.src_name = self.name
                     self._products[obs_id][inst][im[-2]]["ratemap"] = new_rt
 
         # The same behaviours hold for combined_image and combined_expmap, but they get
@@ -367,7 +367,7 @@ class BaseSource:
             exs = [prod for prod in self.get_products("combined_expmap", just_obj=False) if en_key in prod]
             if len(exs) == 1:
                 new_rt = RateMap(prod_obj, exs[0][-1])
-                new_rt.obj_name = self.name
+                new_rt.src_name = self.name
                 # Remember obs_id for combined products is just 'combined'
                 self._products[obs_id][extra_key]["combined_ratemap"] = new_rt
 
@@ -376,7 +376,7 @@ class BaseSource:
             if len(ims) != 0:
                 for im in ims:
                     new_rt = RateMap(im[-1], prod_obj)
-                    new_rt.obj_name = self.name
+                    new_rt.src_name = self.name
                     self._products[obs_id][im[-2]]["combined_ratemap"] = new_rt
 
     def _existing_xga_products(self, read_fits: bool):
