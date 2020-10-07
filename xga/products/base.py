@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/10/2020, 17:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/10/2020, 10:57. Copyright (c) David J Turner
 
 
 import inspect
@@ -572,7 +572,11 @@ class BaseProfile1D:
             del ext_model_par_err
 
             # Setting up some radii between 0 and the maximum radius to sample the model at
-            model_radii = np.linspace(0, self._radii.max().value, model_rad_steps)
+            if self._radii_err is None:
+                model_radii = np.linspace(0, self._radii[-1].value, model_rad_steps)
+            else:
+                model_radii = np.linspace(0, self._radii[-1].value + self._radii_err[-1].value, model_rad_steps)
+
             # Copies the chosen radii model_real times, much as with the ext_model_par definition
             ext_model_radii = np.repeat(model_radii[..., None], model_real, axis=1)
 
