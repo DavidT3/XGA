@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/10/2020, 10:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/10/2020, 17:06. Copyright (c) David J Turner
 
 
 import inspect
@@ -16,11 +16,11 @@ from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitErro
 from ..models import SB_MODELS, SB_MODELS_STARTS, DENS_MODELS, DENS_MODELS_STARTS, TEMP_MODELS, TEMP_MODELS_STARTS
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
-PROF_TYPE_YAXIS = {"base": "Unknown", "brightness": "Surface Brightness", "density": "Density",
+PROF_TYPE_YAXIS = {"base": "Unknown", "brightness": "Surface Brightness", "gas_density": "Gas Density",
                    "2d_temperature": "Projected Temperature", "3d_temperature": "3D Temperature"}
-PROF_TYPE_MODELS = {"brightness": SB_MODELS, "density": DENS_MODELS, "2d_temperature": TEMP_MODELS,
+PROF_TYPE_MODELS = {"brightness": SB_MODELS, "gas_density": DENS_MODELS, "2d_temperature": TEMP_MODELS,
                     "3d_temperature": TEMP_MODELS}
-PROF_TYPE_MODELS_STARTS = {"brightness": SB_MODELS_STARTS, "density": DENS_MODELS_STARTS,
+PROF_TYPE_MODELS_STARTS = {"brightness": SB_MODELS_STARTS, "gas_density": DENS_MODELS_STARTS,
                            "2d_temperature": TEMP_MODELS_STARTS, "3d_temperature": TEMP_MODELS_STARTS}
 
 
@@ -481,6 +481,10 @@ class BaseProfile1D:
         # Here is where information about fitted models is stored (and any failed fit attempts)
         self._good_model_fits = {}
         self._bad_model_fits = {}
+        # Previously I stored model realisations in self._good_model_fits, but I'm splitting out into its
+        #  own attribute. Primarily because I want to be able to add realisations from non-model sources in
+        #  the Density1D profile product.
+        self._realisations = {}
 
         # Some types of profiles will support a background value (like surface brightness), which will
         #  need to be incorporated into the fit and plotting.
@@ -595,15 +599,19 @@ class BaseProfile1D:
             model_upper = np.percentile(model_realisations, upper, axis=1)
 
             # Store these realisations for statistics later on
-            self._good_model_fits[model] = {"par": fit_par, "par_err": fit_par_err, "start_pars": start_pars,
-                                            "mod_real": model_realisations, "mod_radii": model_radii,
-                                            "conf_level": conf_level, "mod_real_mean": model_mean,
-                                            "mod_real_lower": model_lower, "mod_real_upper": model_upper}
+            self._good_model_fits[model] = {"par": fit_par, "par_err": fit_par_err, "start_pars": start_pars}
+            self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
+                                         "conf_level": conf_level, "mod_real_mean": model_mean,
+                                         "mod_real_lower": model_lower, "mod_real_upper": model_upper}
 
         elif not already_done and success and method == "mcmc":
             raise NotImplementedError('HOW DID YOU GET HERE')
         elif not already_done and not success:
             self._bad_model_fits[model] = {"start_pars": start_pars}
+
+    # TODO Finish this properly
+    def get_realisation(self, real_type):
+        return self._realisations[real_type]["mod_radii"], self._realisations[real_type]["mod_real"]
 
     def allowed_models(self):
         """
@@ -718,8 +726,9 @@ class BaseProfile1D:
         if models:
             for model in self._good_model_fits:
                 model_func = PROF_TYPE_MODELS[self._prof_type][model]
-                info = self._good_model_fits[model]
-                line = plt.plot(info["mod_radii"], model_func(info["mod_radii"], *info["par"]),
+                info = self._realisations[model]
+                pars = self._good_model_fits[model]["par"]
+                line = plt.plot(info["mod_radii"], model_func(info["mod_radii"], *pars),
                                 label=model + " {}% Conf".format(info["conf_level"]))
                 colour = line[0].get_color()
                 plt.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
