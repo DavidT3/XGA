@@ -1,16 +1,17 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/10/2020, 10:06. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
+from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
-from astropy.units.quantity import Quantity
+from astropy.units import Quantity
 from numpy import array, ndarray, pi
 
 from ..exceptions import HeasoftError
 
 
-def nh_lookup(coord_pair) -> ndarray:
+def nh_lookup(coord_pair: Quantity) -> ndarray:
     """
     Uses HEASOFT to lookup hydrogen column density for given coordinates.
     :param Quantity coord_pair: An astropy quantity with RA and DEC of interest.
@@ -78,4 +79,68 @@ def ang_to_rad(ang: Quantity, z: float, cosmo=Planck15) -> Quantity:
     d_a = cosmo.angular_diameter_distance(z)
     rad = (ang.to("deg").value * (pi / 180) * d_a).to("kpc")
     return rad
+
+
+def name_to_coord(name: str):
+    """
+    I'd like it to be known that I hate papers and resources that either only give the name of an object
+    or its sexagesimal coordinates - however it happens upsettingly often so here we are. This function will
+    take a standard format name (e.g. XMMXCS J041853.9+555333.7) and return RA and DEC in degrees.
+    :param name:
+    """
+    raise NotImplementedError("I started this and will finish it at some point, but I got bored.")
+    if " " in name:
+        survey, coord_str = name.split(" ")
+        coord_str = coord_str[1:]
+    elif "J" in name:
+        survey, coord_str = name.sdplit("J")
+    else:
+        num_search = [d.isdigit() for d in name].index(True)
+        survey = name[:num_search]
+        coord_str = name[num_search:]
+
+    if "+" in coord_str:
+        ra, dec = coord_str.split("+")
+    elif "-" in coord_str:
+        ra, dec = coord_str.split("-")
+        dec = "-" + dec
+    else:
+        raise ValueError("There doesn't seem to be a + or - in the object name.")
+
+
+def coord_to_name(coord_pair: Quantity, survey: str = None) -> str:
+    """
+    This was originally just written in the init of BaseSource, but I figured I should split it out
+    into its own function really. This will take a coordinate pair, and optional survey name, and spit
+    out an object name in the standard format.
+    :return: Source name based on coordinates.
+    :rtype: str
+    """
+    s = SkyCoord(ra=coord_pair[0], dec=coord_pair[1])
+    crd_str = s.to_string("hmsdms").replace("h", "").replace("m", "").replace("s", "").replace("d", "")
+    ra_str, dec_str = crd_str.split(" ")
+    # A bug popped up where a conversion ended up with no decimal point and the return part got
+    #  really upset - so this adds one if there isn't one
+    if "." not in ra_str:
+        ra_str += "."
+    if "." not in dec_str:
+        dec_str += "."
+
+    if survey is None:
+        name = "J" + ra_str[:ra_str.index(".") + 2] + dec_str[:dec_str.index(".") + 2]
+    else:
+        name = survey + "J" + ra_str[:ra_str.index(".") + 2] + dec_str[:dec_str.index(".") + 2]
+
+    return name
+
+
+
+
+
+
+
+
+
+
+
 

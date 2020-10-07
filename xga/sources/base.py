@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 13:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/10/2020, 10:06. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -23,6 +23,7 @@ from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObserva
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
     RateMap, PSFGrid
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad
+from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -36,19 +37,7 @@ class BaseSource:
         if name is not None:
             self._name = name
         else:
-            # self.ra_dec rather than _ra_dec because ra_dec is in astropy degree units
-            s = SkyCoord(ra=self.ra_dec[0], dec=self.ra_dec[1])
-            crd_str = s.to_string("hmsdms").replace("h", "").replace("m", "").replace("s", "").replace("d", "")
-            ra_str, dec_str = crd_str.split(" ")
-            # A bug popped up where a conversion ended up with no decimal point and the self._name part got
-            #  really upset - so this adds one if there isn't one
-            if "." not in ra_str:
-                ra_str += "."
-            if "." not in dec_str:
-                dec_str += "."
-            # Use the standard naming convention if one wasn't passed on initialisation of the source
-            # Need it because its used for naming files later on.
-            self._name = "J" + ra_str[:ra_str.index(".") + 2] + dec_str[:dec_str.index(".") + 2]
+            self._name = coord_to_name(self.ra_dec)
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
