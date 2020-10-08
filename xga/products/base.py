@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/10/2020, 17:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/10/2020, 18:13. Copyright (c) David J Turner
 
 
 import inspect
@@ -490,6 +490,9 @@ class BaseProfile1D:
         #  need to be incorporated into the fit and plotting.
         self._background = Quantity(0, self._values.unit)
 
+        # This is where allowed realisation types are stored, but there are none for the base profile
+        self._allowed_real_types = []
+
     def fit(self, model: str, method: str = "mcmc", start_pars=None, model_real=1000, model_rad_steps=300,
             conf_level=90):
         # These are the currently allowed fitting methods
@@ -599,7 +602,8 @@ class BaseProfile1D:
             model_upper = np.percentile(model_realisations, upper, axis=1)
 
             # Store these realisations for statistics later on
-            self._good_model_fits[model] = {"par": fit_par, "par_err": fit_par_err, "start_pars": start_pars}
+            self._good_model_fits[model] = {"par": fit_par, "par_err": fit_par_err, "start_pars": start_pars,
+                                            "model_func": model_func}
             self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
                                          "conf_level": conf_level, "mod_real_mean": model_mean,
                                          "mod_real_lower": model_lower, "mod_real_upper": model_upper}
@@ -609,9 +613,41 @@ class BaseProfile1D:
         elif not already_done and not success:
             self._bad_model_fits[model] = {"start_pars": start_pars}
 
-    # TODO Finish this properly
-    def get_realisation(self, real_type):
-        return self._realisations[real_type]["mod_radii"], self._realisations[real_type]["mod_real"]
+    def get_realisation(self, real_type: str) -> Dict:
+        """
+        Get method for model realisation data, this includes the array of realisations, the radii at which
+        the realisations are generated, the upper and lower bounds, the mean, and the confidence level.
+        :param str real_type: The type of realisation to be retrieved, most often a model name, or the key
+        associated with a particular function that generated realisations (such as inv_abel_model).
+        :return: The realisation dictionary with relevant information in it, or None if no matching
+        realisation exists.
+        :rtype: Dict
+        """
+        if real_type in self._allowed_real_types or real_type in self._good_model_fits:
+            return self._realisations[real_type]
+        else:
+            return None
+
+    def get_model_fit(self, model) -> Dict:
+        """
+        Get method for parameters of fitted models.
+        :param model: The name of the model for which to retrieve parameters.
+        :return: A dictionary containing the fit parameters, their uncertainties, an instance of the model
+        function, and the initial parameters.
+        :rtype: Dict
+        """
+        if model not in PROF_TYPE_MODELS[self._prof_type]:
+            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
+                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
+        elif model in self._bad_model_fits:
+            raise XGAFitError("An attempt was made to fit {}, but it failed, no fit data can be "
+                              "retrieved.".format(model))
+        elif model not in self._good_model_fits:
+            raise XGAFitError("{} is valid for this profile, but hasn't been fit yet".format(model))
+
+        return self._good_model_fits[model]
 
     def allowed_models(self):
         """
@@ -743,7 +779,11 @@ class BaseProfile1D:
 
         # Adding them to the figure
         plt.xlabel("Radius {}".format(x_unit))
-        plt.ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+        if self._background.value == 0:
+            plt.ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+        else:
+            # If background has been subtracted it will be mentioned in the y axis label
+            plt.ylabel(r"{l} - Bck {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
 
         if self._obs_id == "combined":
             plt.title("{s} {l} Profile".format(s=self._src_name, l=PROF_TYPE_YAXIS[self._prof_type]))

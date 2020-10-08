@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/10/2020, 15:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/10/2020, 18:13. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -256,36 +256,28 @@ class GalaxyCluster(ExtendedSource):
         if profile_type == "radial":
             ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
                                                                              u=self._peak_hi_en.value))
-            brightness, brightness_errs, radii, radii_bins, og_background, success = radial_brightness(comb_rt,
-                                                                                                       source_mask,
-                                                                                                       background_mask,
-                                                                                                       pix_peak, rad,
-                                                                                                       self._redshift,
-                                                                                                       pix_step, kpc,
-                                                                                                       self.cosmo,
-                                                                                                       min_snr=min_snr)
-            prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, yerr=brightness_errs, fmt='x',
-                                capsize=2, label="Emission")
-            plt.plot(radii.value, brightness, color=prof[0].get_color())
+            sb_profile, success = radial_brightness(comb_rt, source_mask, background_mask, pix_peak, rad,
+                                                    self._redshift, pix_step, kpc, self.cosmo, min_snr=min_snr)
+            # TODO REPLACE ALL THIS PLOTTING STUFF WITH A sb_profile.view() call when I can combine different
+            #  profiles onto one plot
+            prof = plt.errorbar(sb_profile.radii.value, sb_profile.values.value, xerr=sb_profile.radii_err.value,
+                                yerr=sb_profile.values_err.value, fmt='x', capsize=2, label="Emission")
+            plt.plot(sb_profile.radii.value, sb_profile.values.value, color=prof[0].get_color())
 
             for psf_comb_rt in psf_comb_rts:
                 p_rt = psf_comb_rt[-1]
                 # If the user wants to use individual peaks, we have to find them here.
                 if not same_peak:
                     pix_peak = self.find_peak(p_rt)[0]
-                brightness, brightness_errs, radii, radii_bins, background, success = radial_brightness(psf_comb_rt[-1],
-                                                                                                        source_mask,
-                                                                                                        background_mask,
-                                                                                                        pix_peak, rad,
-                                                                                                        self._redshift,
-                                                                                                        pix_step, kpc,
-                                                                                                        self.cosmo,
-                                                                                                        min_snr=min_snr)
-                prof = plt.errorbar(radii.value, brightness, xerr=radii_bins.value, yerr=brightness_errs, capsize=2,
-                                    fmt="x", label="{m} PSF Corrected".format(m=p_rt.psf_model))
-                plt.plot(radii.value, brightness, color=prof[0].get_color())
+                psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], source_mask, background_mask, pix_peak,
+                                                            rad, self._redshift, pix_step, kpc, self.cosmo,
+                                                            min_snr=min_snr)
+                prof = plt.errorbar(psf_sb_profile.radii.value, psf_sb_profile.values.value,
+                                    xerr=psf_sb_profile.radii_err.value, yerr=psf_sb_profile.values_err.value,
+                                    fmt='x', capsize=2, label="{m} PSF Corrected".format(m=p_rt.psf_model))
+                plt.plot(psf_sb_profile.radii.value, psf_sb_profile.values.value, color=prof[0].get_color())
 
-                plt.axhline(background, color=prof[0].get_color(), linestyle="dashed",
+                plt.axhline(psf_sb_profile.background.value, color=prof[0].get_color(), linestyle="dashed",
                             label="{m} PSF Corrected Background".format(m=p_rt.psf_model))
 
         elif profile_type == "pizza":
@@ -302,7 +294,7 @@ class GalaxyCluster(ExtendedSource):
                 plt.plot(radii, brightness[:, ang_ind], label=lab_str)
 
         # Plot the background level
-        plt.axhline(og_background, color="black", linestyle="dashed", label="Background")
+        plt.axhline(sb_profile.background.value, color="black", linestyle="dashed", label="Background")
 
         # This adds small ticks to the axis
         ax.minorticks_on()
@@ -313,7 +305,7 @@ class GalaxyCluster(ExtendedSource):
         # Choose y-axis log scaling because otherwise you can't really make out the profiles very well
         ax.set_yscale("log")
         ax.set_xscale("log")
-        ax.set_xlim(radii.min().value, )
+        ax.set_xlim(sb_profile.radii.min().value, )
         ax.xaxis.set_major_formatter(ScalarFormatter())
 
         # Labels and legends
