@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/10/2020, 10:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/10/2020, 11:47. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -35,7 +35,8 @@ class BaseSource:
     def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=True, load_fits=False):
         self._ra_dec = np.array([ra, dec])
         if name is not None:
-            self._name = name
+            # We don't be liking spaces in source names
+            self._name = name.replace(" ", "")
         else:
             self._name = coord_to_name(self.ra_dec)
 
