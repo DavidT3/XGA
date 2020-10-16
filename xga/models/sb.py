@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 15:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 16:44. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -45,6 +45,8 @@ SB_MODELS_STARTS = {"beta_profile": [1, 50, 1], "double_beta_profile": [1, 400, 
                     "simple_vikhlinin": [1, 100, 1, 300, 3, 0.1, 1]}
 
 SB_MODELS_PRIORS = {"beta_profile": [[0, 3], [0, 1000], [0, 100]],
-                    "double_beta_profile": [[0, 1000], [0, 2000], [0, 1000], [0, 2000], [-100, 100], [0, 100]]}
+                    "double_beta_profile": [[0, 1000], [0, 2000], [0, 1000], [0, 2000], [-100, 100], [0, 100]],
+                    "simple_vikhlinin": [[0, 1000], [0, 2000], [-100, 100], [0, 2000], [-100, 100],
+                                         [-100, 100], [0, 100]]}
 
 

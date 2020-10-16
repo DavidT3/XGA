@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 16:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 16:44. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -148,45 +148,6 @@ def _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins
         warn("Minimum SNR rebinning failed for {}".format(src.name))
 
     return sb_prof
-
-
-# TODO DELETE THIS ONCE VERIFIED REPLACEMENT WORKS FINE
-# def _sample_sb_model(max_r, model, model_par, model_cov, num_samp=1000, num_rad_steps=300, conf_level=90):
-#     # Converting to the input expected by numpy's percentile function
-#     upper = 50 + (conf_level / 2)
-#     lower = 50 - (conf_level / 2)
-#
-#     # Calculate the uncertainties on the model_cov
-#     model_par_err = np.sqrt(np.diagonal(model_cov))
-#
-#     # Copying the model pars and errors into a new array with the length of the y axis being the number
-#     #  of samples we want to take from the parameter distributions.
-#     ext_model_par = np.repeat(model_par[..., None], num_samp, axis=1).T
-#     ext_model_par_err = np.repeat(model_par_err[..., None], num_samp, axis=1).T
-#
-#     # This generates num_samp random samples from the passed model parameters, assuming they are Gaussian
-#     model_par_dists = np.random.normal(ext_model_par, ext_model_par_err)
-#
-#     # No longer need these now we've drawn the random samples
-#     del ext_model_par
-#     del ext_model_par_err
-#
-#     # Setting up some radii between 0 and the maximum radius to sample the model at
-#     model_radii = np.linspace(0, max_r, num_rad_steps)
-#     # Copies the chosen radii num_samp times, much as with the ext_model_par definition
-#     model_radii = np.repeat(model_radii[..., None], num_samp, axis=1)  # .T
-#
-#     # Generates num_samp realisations of the model at the model_radii
-#     model_realisations = model(model_radii, *model_par_dists.T)
-#
-#     # Calculates the mean model value at each radius step
-#     model_mean = np.mean(model_realisations, axis=1)
-#     # Then calculates the values for the upper and lower limits (defined by the
-#     #  confidence level) for each radii
-#     model_lower = np.percentile(model_realisations, lower, axis=1)
-#     model_upper = np.percentile(model_realisations, upper, axis=1)
-#
-#     return model_radii[:, 0], model_realisations.T, model_mean, model_lower, model_upper
 
 
 # TODO Come up with some way of propagating the SB profile uncertainty to density

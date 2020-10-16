@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 15:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 16:44. Copyright (c) David J Turner
 
 
 import inspect
@@ -431,7 +431,6 @@ class BaseAggregateProduct:
 
 
 # TODO Sweep through and docstring up in here
-# TODO MOAR COMMENTS?
 class BaseProfile1D:
     def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None):
