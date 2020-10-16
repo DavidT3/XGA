@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 16:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 18:09. Copyright (c) David J Turner
 
 
 import inspect
@@ -7,7 +7,7 @@ import os
 from typing import Tuple, List, Dict
 from warnings import warn
 
-# import pymc3 as pm
+import corner
 import emcee as em
 import numpy as np
 from astropy.units import Quantity, UnitConversionError, Unit
@@ -127,10 +127,12 @@ class BaseProduct:
 
                     if err_type == "error":
                         # Checking to see if the error identity is in the list of SAS errors
-                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident.lower() in sas_err.lower()]
+                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident.lower()
+                                         in sas_err.lower()]
                     elif err_type == "warning":
                         # Checking to see if the error identity is in the list of SAS warnings
-                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident.lower() in sas_err.lower()]
+                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident.lower()
+                                         in sas_err.lower()]
 
                     if len(sas_err_match) != 1:
                         originator = ""
@@ -669,7 +671,7 @@ class BaseProfile1D:
 
             # Store these realisations for statistics later on
             self._good_model_fits[model] = {"par": fit_par, "par_err": fit_par_err, "start_pars": start_pars,
-                                            "model_func": model_func}
+                                            "model_func": model_func, "par_names": model_par_names}
             self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
                                          "conf_level": conf_level, "mod_real_mean": model_mean,
                                          "mod_real_lower": model_lower, "mod_real_upper": model_upper}
@@ -701,7 +703,7 @@ class BaseProfile1D:
 
             self._good_model_fits[model] = {"par": fit_par, "par_err_mi": fit_par_mi, "par_err_pl": fit_par_pl,
                                             "model_func": model_func, "sampler": sampler, "thinning": thinning,
-                                            "cut_off": cut_off}
+                                            "cut_off": cut_off, "par_names": model_par_names}
             self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
                                          "conf_level": conf_level, "mod_real_mean": model_mean,
                                          "mod_real_lower": model_lower, "mod_real_upper": model_upper}
@@ -828,6 +830,58 @@ class BaseProfile1D:
             print(the_line)
         print("-" * len(comb) + "\n")
 
+    def get_sampler(self, model: str):
+        if model not in PROF_TYPE_MODELS[self._prof_type]:
+            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
+                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
+        elif model in self._bad_model_fits:
+            raise XGAFitError("An attempt was made to fit {}, but it failed, no fit data can be "
+                              "retrieved.".format(model))
+        elif model not in self._good_model_fits:
+            raise XGAFitError("{} is valid for this profile, but hasn't been fit yet".format(model))
+        elif model in self._good_model_fits and "sampler" not in self._good_model_fits[model]:
+            raise XGAFitError("{} was not fit with MCMC, and as such the sampler object cannot be "
+                              "retrieved.".format(model))
+
+        return self._good_model_fits[model]["sampler"]
+
+    def get_chains(self, model):
+        sampler = self.get_sampler(model)
+        m_info = self.get_model_fit(model)
+
+        return sampler.get_chain(discard=m_info["cut_off"], thin=m_info["thinning"])
+
+    def get_flat_samples(self, model):
+        sampler = self.get_sampler(model)
+        m_info = self.get_model_fit(model)
+
+        return sampler.get_chain(discard=m_info["cut_off"], thin=m_info["thinning"], flat=True)
+
+    def view_chains(self, model):
+        chains = self.get_chains(model)
+        m_info = self.get_model_fit(model)
+
+        fig, axes = plt.subplots(len(m_info["par_names"]), figsize=(10, 2.4*len(m_info["par_names"])), sharex='col')
+        for i in range(len(m_info["par_names"])):
+            ax = axes[i]
+            ax.plot(chains[:, :, i], "k", alpha=0.3)
+            ax.set_xlim(0, len(chains))
+            ax.set_ylabel(m_info["par_names"][i])
+            ax.yaxis.set_label_coords(-0.1, 0.5)
+
+        axes[-1].set_xlabel("step number")
+        plt.show()
+
+    def view_corner(self, model):
+        m_info = self.get_model_fit(model)
+        samples = self.get_flat_samples(model)
+
+        # frac_conf_lev = [(50 - (m_info["conf_level"] / 2))/100, (50 + (m_info["conf_level"] / 2))/100]
+        fig = corner.corner(samples, labels=m_info["par_names"])#, quantiles=frac_conf_lev)
+        plt.show()
+
     def view(self, figsize=(8, 5), xscale="log", yscale="log", xlim=None, ylim=None, models=True):
         # Setting up figure for the plot
         plt.figure(figsize=figsize)
@@ -901,8 +955,8 @@ class BaseProfile1D:
         # And of course actually showing it
         plt.show()
 
-    # None of these properties concerning the radii and values are going to have setters, if the user wants to modify
-    #  it then they can define a new product.
+    # None of these properties concerning the radii and values are going to have setters, if the user
+    #  wants to modify it then they can define a new product.
     @property
     def radii(self) -> Quantity:
         """
