@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/10/2020, 18:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 15:29. Copyright (c) David J Turner
 
 
 import inspect
@@ -7,13 +7,17 @@ import os
 from typing import Tuple, List, Dict
 from warnings import warn
 
+# import pymc3 as pm
+import emcee as em
 import numpy as np
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, minimize
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
-from ..models import SB_MODELS, SB_MODELS_STARTS, DENS_MODELS, DENS_MODELS_STARTS, TEMP_MODELS, TEMP_MODELS_STARTS
+from ..models import SB_MODELS, SB_MODELS_STARTS, SB_MODELS_PRIORS, DENS_MODELS, DENS_MODELS_STARTS, TEMP_MODELS, \
+    TEMP_MODELS_STARTS
+from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
 PROF_TYPE_YAXIS = {"base": "Unknown", "brightness": "Surface Brightness", "gas_density": "Gas Density",
@@ -22,6 +26,8 @@ PROF_TYPE_MODELS = {"brightness": SB_MODELS, "gas_density": DENS_MODELS, "2d_tem
                     "3d_temperature": TEMP_MODELS}
 PROF_TYPE_MODELS_STARTS = {"brightness": SB_MODELS_STARTS, "gas_density": DENS_MODELS_STARTS,
                            "2d_temperature": TEMP_MODELS_STARTS, "3d_temperature": TEMP_MODELS_STARTS}
+# TODO FILL THIS OUT AND ADD PRIORS FOR OTHER MODELS
+PROF_TYPE_MODELS_PRIORS = {"brightness": SB_MODELS_PRIORS}
 
 
 class BaseProduct:
@@ -425,6 +431,7 @@ class BaseAggregateProduct:
 
 
 # TODO Sweep through and docstring up in here
+# TODO MOAR COMMENTS?
 class BaseProfile1D:
     def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None):
@@ -493,8 +500,9 @@ class BaseProfile1D:
         # This is where allowed realisation types are stored, but there are none for the base profile
         self._allowed_real_types = []
 
-    def fit(self, model: str, method: str = "mcmc", start_pars=None, model_real=1000, model_rad_steps=300,
-            conf_level=90):
+    def fit(self, model: str, method: str = "mcmc", priors=None, start_pars=None, model_real=1000,
+            model_rad_steps=300, conf_level=90, ml_mcmc_start: bool = True, ml_rand_dev: float = 1e-4,
+            num_walkers: int = 30, num_steps: int = 20000):
         # These are the currently allowed fitting methods
         method = method.lower()
         fit_methods = ["curve_fit", "mcmc"]
@@ -502,6 +510,8 @@ class BaseProfile1D:
         if method not in fit_methods:
             raise ValueError("{0} is not an accepted fitting method, please choose one of these; "
                              "{1}".format(method, ", ".join(fit_methods)))
+        elif method == "curve_fit" and priors is not None:
+            warn("You have chosen curve_fit, and also provided priors, these will not be used.")
 
         # Stopping the user from making stupid model choices
         if self._prof_type == "base":
@@ -515,6 +525,10 @@ class BaseProfile1D:
         else:
             model_func = PROF_TYPE_MODELS[self._prof_type][model]
 
+        # Changes confidence level to expected input for numpy percentile function
+        upper = 50 + (conf_level / 2)
+        lower = 50 - (conf_level / 2)
+
         # This inspect module lets me grab the parameters expected by the model dynamically, and check
         #  what the user might have passed in the start_pars variable against it
         model_sig = inspect.signature(model_func)
@@ -524,8 +538,16 @@ class BaseProfile1D:
             raise ValueError("start_pars must either be None, or have an entry for each parameter expected by"
                              " the chosen model; {0} expects {1}".format(model, ", ".join(model_par_names)))
         elif start_pars is None:
-            # If the user doesn't supply and starting parameters then we just have to use the default ones
+            # If the user doesn't supply any starting parameters then we just have to use the default ones
             start_pars = PROF_TYPE_MODELS_STARTS[self._prof_type][model]
+
+        # Even though we won't always need priors I'm just grab them anyway
+        if priors is not None and len(priors) != len(model_par_names):
+            raise ValueError("priors must either be None, or have an entry for each parameter expected by"
+                             " the chosen model; {0} expects {1}".format(model, ", ".join(model_par_names)))
+        elif priors is None:
+            # If the user doesn't supply any priors then we use the default ones
+            priors = PROF_TYPE_MODELS_PRIORS[self._prof_type][model]
 
         # I don't think I'm going to allow any fits without value uncertainties - just seems daft
         if self._values_err is None:
@@ -545,22 +567,71 @@ class BaseProfile1D:
         # Now we do the actual fitting part
         if method == "curve_fit" and not already_done:
             success = True
+            # Curve fit is a simple non-linear least squares implementation, its alright but fragile
             try:
-                fit_par, fit_cov = curve_fit(model_func, self._radii.value, self.values.value - self._background.value,
-                                             p0=start_pars, sigma=self._values_err.value)
+                fit_par, fit_cov = curve_fit(model_func, self._radii.value, self.values.value
+                                             - self._background.value, p0=start_pars, sigma=self._values_err.value)
                 # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
                 fit_par_err = np.sqrt(np.diagonal(fit_cov))
             except RuntimeError:
+                warn("RuntimeError was raised, curve_fit has failed.")
                 success = False
                 fit_par = np.full(len(start_pars), np.nan)
                 fit_par_err = np.full(len(start_pars), np.nan)
+
         elif method == "mcmc" and not already_done:
-            success = False
-            raise NotImplementedError("Haven't added MCMC fitting yet sozzle")
+            # I'm just defining these here so that the lines don't get too long for PEP standards
+            r_dat = self.radii.value
+            v_dat = self.values.value - self.background.value
+            v_err = self.values_err.value
+            n_par = len(priors)
+            prior_arr = np.array(priors)
+
+            # If this option is set then maximum likelihood estimation is used to get start parameters
+            if ml_mcmc_start:
+                for_max_like = lambda *args: -log_likelihood(*args, model_func)
+                max_like_res = minimize(for_max_like, start_pars, args=(r_dat, v_dat, v_err))
+                # TODO Review whether the small gaussian ball around max likelihood values is the best way to start.
+                pos = max_like_res.x + ml_rand_dev*np.random.randn(num_walkers, n_par)
+            else:
+                # TODO Review whether the random uniform draws are a good idea.
+                pos = np.random.uniform(prior_arr[:, 0], prior_arr[:, 1], size=(num_walkers, n_par))
+
+            # Making extended upper and lower bound prior arrays
+            lo_bounds = np.repeat(prior_arr[:, 0, None], pos.shape[0], axis=1).T
+            hi_bounds = np.repeat(prior_arr[:, 1, None], pos.shape[0], axis=1).T
+            # With the ml_mcmc_start option, it is possible that the start parameters are outside of the
+            #  range allowed by the the priors. In which case the MCMC fit will get super upset but not actually
+            #  throw an error.
+            start_check_greater = np.greater_equal(pos, prior_arr[:, 0])
+            start_check_lower = np.less_equal(pos, prior_arr[:, 1])
+            # So any start values that fall outside the allowed range will be moved to the boundary value
+            pos[~start_check_greater] = lo_bounds[~start_check_greater]
+            pos[~start_check_lower] = hi_bounds[~start_check_lower]
+
+            # This instantiates an Ensemble sampler with the number of walkers specified by the user,
+            #  with the log probability as defined in the functions above
+            sampler = em.EnsembleSampler(num_walkers, n_par, log_prob, args=(r_dat, v_dat, v_err,
+                                                                             model_func, priors))
+            # So now we start the sampler, running for the number of steps specified on function call, with
+            #  the starting parameters defined in the if statement above this.
+            sampler.run_mcmc(pos, num_steps, progress=False)
+
+            # The auto-correlation can produce an error that basically says not to trust the chains
+            try:
+                # The sampler has a convenient auto-correlation time derivation, which returns the
+                #  auto-correlation time for each parameter - with this I simply choose the highest one and
+                #  round up to the nearest 100 to use as the burn-in
+                auto_corr = sampler.get_autocorr_time()
+                cut_off = int(np.ceil(auto_corr.max() / 100) * 100)
+                success = True
+            except em.autocorr.AutocorrError as bugger:
+                print(bugger)
+                warn("AutoCorrelationError was raised, MCMC fit has failed. - Perhaps try more steps?")
+                success = False
 
         # Now do some checks after the fit has run, primarily for any infinite values
-        # TODO Possibly change this depending on the implementation of the MCMC fit
-        if not already_done and ((np.inf in fit_par or np.inf in fit_par_err)
+        if not already_done and method == "curve_fit" and ((np.inf in fit_par or np.inf in fit_par_err)
                                  or (True in np.isnan(fit_par) or True in np.isnan(fit_par_err))):
             # This is obviously bad, and enough of a reason to call a fit bad as an outright failure to fit
             success = False
@@ -590,10 +661,6 @@ class BaseProfile1D:
             # Generates model_real realisations of the model at the model_radii
             model_realisations = model_func(ext_model_radii, *model_par_dists.T)
 
-            # Changes confidence level to expected input for numpy percentile function
-            upper = 50 + (conf_level / 2)
-            lower = 50 - (conf_level / 2)
-
             # Calculates the mean model value at each radius step
             model_mean = np.mean(model_realisations, axis=1)
             # Then calculates the values for the upper and lower limits (defined by the
@@ -609,9 +676,42 @@ class BaseProfile1D:
                                          "mod_real_lower": model_lower, "mod_real_upper": model_upper}
 
         elif not already_done and success and method == "mcmc":
-            raise NotImplementedError('HOW DID YOU GET HERE')
-        elif not already_done and not success:
+            thinning = int(num_steps / model_real)
+            flat_samp = sampler.get_chain(discard=cut_off, thin=thinning, flat=True)
+
+            pars_lower = np.percentile(flat_samp, lower, axis=0)
+            pars_upper = np.percentile(flat_samp, upper, axis=0)
+            fit_par = np.mean(flat_samp, axis=0)
+            fit_par_mi = fit_par - pars_lower
+            fit_par_pl = pars_upper - fit_par
+
+            # Setting up some radii between 0 and the maximum radius to sample the model at
+            if self._radii_err is None:
+                model_radii = np.linspace(0, self._radii[-1].value, model_rad_steps)
+            else:
+                model_radii = np.linspace(0, self._radii[-1].value + self._radii_err[-1].value, model_rad_steps)
+
+            # Copies the chosen radii model_real times, much as with the ext_model_par definition
+            ext_model_radii = np.repeat(model_radii[..., None], flat_samp.shape[0], axis=1)
+
+            # Generates model_real realisations of the model at the model_radii
+            model_realisations = model_func(ext_model_radii, *flat_samp.T)
+            model_mean = np.mean(model_realisations, axis=1)
+            model_lower = np.percentile(model_realisations, lower, axis=1)
+            model_upper = np.percentile(model_realisations, upper, axis=1)
+
+            self._good_model_fits[model] = {"par": fit_par, "par_err_mi": fit_par_mi, "par_err_pl": fit_par_pl,
+                                            "model_func": model_func, "sampler": sampler, "thinning": thinning,
+                                            "cut_off": cut_off}
+            self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
+                                         "conf_level": conf_level, "mod_real_mean": model_mean,
+                                         "mod_real_lower": model_lower, "mod_real_upper": model_upper}
+
+        elif not already_done and not success and method == "mcmc":
             self._bad_model_fits[model] = {"start_pars": start_pars}
+
+        elif not already_done and not success and method == "curve_fit":
+            self._bad_model_fits[model] = {"priors": priors}
 
     def get_realisation(self, real_type: str) -> Dict:
         """
@@ -712,14 +812,19 @@ class BaseProfile1D:
         print(first_col + second_col + third_col)
         print("-"*len(comb))
         for model in to_print:
+            # I know this code is disgustingly ugly, but its not really important that you know how it works
+            # And perhaps I'll rewrite it at some point, who knows
             the_line = "|" + " " * np.ceil((len(first_col) - len(to_print[model][0])) / 2).astype(int) + \
-                       to_print[model][0] + " " * np.ceil((len(first_col) - len(to_print[model][0])) / 2).astype(int) \
+                       to_print[model][0] + " " * np.ceil((len(first_col) -
+                                                           len(to_print[model][0])) / 2).astype(int) \
                        + "|"
 
-            the_line += " "*np.ceil((len(second_col)-len(to_print[model][1])) / 2).astype(int) + to_print[model][1] + \
+            the_line += " "*np.ceil((len(second_col) -
+                                     len(to_print[model][1])) / 2).astype(int) + to_print[model][1] + \
                         " "*np.ceil((len(second_col)-len(to_print[model][1])) / 2).astype(int) + "|"
 
-            the_line += " " * np.ceil((len(third_col) - len(to_print[model][2])) / 2).astype(int) + to_print[model][
+            the_line += " " * np.ceil((len(third_col) -
+                                       len(to_print[model][2])) / 2).astype(int) + to_print[model][
                 2] + " " * np.ceil((len(third_col) - len(to_print[model][2])) / 2).astype(int) + "|"
             print(the_line)
         print("-" * len(comb) + "\n")

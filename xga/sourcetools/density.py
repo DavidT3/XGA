@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/10/2020, 18:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 15:29. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -259,25 +259,30 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], reg_type: str = 
 
 
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: str, fit_method: str = "mcmc",
-                          model_start_pars: list = None, reg_type: str = "r500", use_peak: bool = True,
-                          pix_step: int = 1, min_snr: Union[int, float] = 0.0, abund_table: str = "angr",
-                          lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-                          psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                          model_priors: List = None, model_start_pars: list = None, reg_type: str = "r500",
+                          use_peak: bool = True, pix_step: int = 1, min_snr: Union[int, float] = 0.0,
+                          abund_table: str = "angr", lo_en: Quantity = Quantity(0.5, 'keV'),
+                          hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True,
+                          psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, model_realisations: int = 500, model_rad_steps: int = 300,
-                          conf_level: int = 90, num_cores: int = NUM_CORES):
+                          conf_level: int = 90, num_cores: int = NUM_CORES, ml_mcmc_start: bool = True,
+                          ml_rand_dev: float = 1e-4, num_walkers: int = 30, num_steps: int = 20000):
 
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors = _dens_setup(sources, reg_type, abund_table, lo_en, hi_en, num_cores=num_cores)
 
     densities = {}
-    dens_prog = tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities", total=len(sources))
+    dens_prog = tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
+                     total=len(sources), position=0)
     for src_ind, src in enumerate(sources):
         sb_prof = _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
                           pix_step, min_snr)
 
         # Fit the user chosen model to sb_prof
-        sb_prof.fit(model, fit_method, model_start_pars, model_realisations, model_rad_steps, conf_level)
+        sb_prof.fit(model, fit_method, model_priors, model_start_pars, model_realisations, model_rad_steps,
+                    conf_level, ml_mcmc_start, ml_rand_dev, num_walkers, num_steps)
+        sb_prof.view()
 
         model_r = sb_prof.get_realisation(model)
         if model_r is not None:
