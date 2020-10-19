@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/10/2020, 14:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/10/2020, 14:33. Copyright (c) David J Turner
 from typing import Tuple
 
 import numpy as np
@@ -44,6 +44,17 @@ class SurfaceBrightness1D(BaseProfile1D):
 class GasMass1D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None):
+        """
+        A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
+        Clusters.
+        :param Quantity radii: The radii at which gas mass has been measured.
+        :param Quantity values: The gas mass that have been measured.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        """
         super().__init__(radii, values, source_name, obs_id, inst, radii_err, values_err)
         self._prof_type = "gas_mass"
 
