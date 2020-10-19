@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/07/2020, 18:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/10/2020, 14:54. Copyright (c) David J Turner
 
 from os import path
 
@@ -25,7 +25,8 @@ setup(name='xga',
       url='http://github.com/DavidT3/XGA',
       setup_requires=[],
       install_requires=["astropy>=4.0", "numpy>=1.18", "tqdm>=4.45", "regions==0.4", "pandas>=1.0.3",
-                        "fitsio>=1.1.2", "matplotlib>=3.1.3", "scipy>=1.4.1"],
+                        "fitsio>=1.1.2", "matplotlib>=3.1.3", "scipy>=1.4.1", "pyabel>=0.8.3", "corner>=2.1.0",
+                        "emcee>=3.0.2"],
       include_package_data=True,
       python_requires='>=3')
 
