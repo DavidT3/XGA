@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 18:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/10/2020, 11:07. Copyright (c) David J Turner
 
 
 import inspect
@@ -671,7 +671,8 @@ class BaseProfile1D:
 
             # Store these realisations for statistics later on
             self._good_model_fits[model] = {"par": fit_par, "par_err": fit_par_err, "start_pars": start_pars,
-                                            "model_func": model_func, "par_names": model_par_names}
+                                            "model_func": model_func, "par_names": model_par_names,
+                                            "conf_level": conf_level}
             self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
                                          "conf_level": conf_level, "mod_real_mean": model_mean,
                                          "mod_real_lower": model_lower, "mod_real_upper": model_upper}
@@ -703,7 +704,8 @@ class BaseProfile1D:
 
             self._good_model_fits[model] = {"par": fit_par, "par_err_mi": fit_par_mi, "par_err_pl": fit_par_pl,
                                             "model_func": model_func, "sampler": sampler, "thinning": thinning,
-                                            "cut_off": cut_off, "par_names": model_par_names}
+                                            "cut_off": cut_off, "par_names": model_par_names,
+                                            "conf_level": conf_level}
             self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
                                          "conf_level": conf_level, "mod_real_mean": model_mean,
                                          "mod_real_lower": model_lower, "mod_real_upper": model_upper}
@@ -830,7 +832,16 @@ class BaseProfile1D:
             print(the_line)
         print("-" * len(comb) + "\n")
 
-    def get_sampler(self, model: str):
+    def get_sampler(self, model: str) -> em.EnsembleSampler:
+        """
+        A get method meant to retrieve the MCMC ensemble sampler used to fit a particular
+        model (supplied by the user). Checks are applied to the supplied model, to make
+        sure that it is valid for the type of profile, that a good fit has actually been
+        performed, and that the fit was performed with Emcee and not another method.
+        :param str model: The name of the model for which to retrieve the sampler.
+        :return: The Emcee sampler used to fit the user supplied model - if applicable.
+        :rtype: em.EnsembleSampler
+        """
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
             prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
@@ -847,23 +858,46 @@ class BaseProfile1D:
 
         return self._good_model_fits[model]["sampler"]
 
-    def get_chains(self, model):
+    def get_chains(self, model: str) -> np.ndarray:
+        """
+        Get method for the sampler chains of an MCMC fit to the user supplied model. get_sampler is
+        called to retrieve the sampler object, as well as perform validity checks on the model name.
+        :param str model: The name of the model for which to retrieve the chains.
+        :return: The sampler chains, with burn-in discarded, and with thinning applied.
+        :rtype: np.ndarray
+        """
         sampler = self.get_sampler(model)
         m_info = self.get_model_fit(model)
 
         return sampler.get_chain(discard=m_info["cut_off"], thin=m_info["thinning"])
 
-    def get_flat_samples(self, model):
+    def get_flat_samples(self, model: str) -> np.ndarray:
+        """
+        Get method for the flattened samples of an MCMC fit to the user supplied model. get_sampler is
+        called to retrieve the sampler object, as well as perform validity checks on the model name.
+        :param str model: The name of the model for which to retrieve the flat samples.
+        :return: The flattened posterior samples, with burn-in discarded, and with thinning applied.
+        :rtype: np.ndarray
+        """
         sampler = self.get_sampler(model)
         m_info = self.get_model_fit(model)
 
         return sampler.get_chain(discard=m_info["cut_off"], thin=m_info["thinning"], flat=True)
 
-    def view_chains(self, model):
+    def view_chains(self, model: str, figsize: Tuple = None):
+        """
+        Simple view method to quickly look at the MCMC chains for a given model fit.
+        :param str model: The name of the model for which to view the MCMC chains.
+        :param Tuple figsize: Desired size of the figure, if None will be set automatically.
+        """
         chains = self.get_chains(model)
         m_info = self.get_model_fit(model)
 
-        fig, axes = plt.subplots(len(m_info["par_names"]), figsize=(10, 2.4*len(m_info["par_names"])), sharex='col')
+        if figsize is not None:
+            fig, axes = plt.subplots(len(m_info["par_names"]), figsize=(10, 2.4*len(m_info["par_names"])),
+                                     sharex='col')
+        else:
+            fig, axes = plt.subplots(len(m_info["par_names"]), figsize=figsize, sharex='col')
         for i in range(len(m_info["par_names"])):
             ax = axes[i]
             ax.plot(chains[:, :, i], "k", alpha=0.3)
@@ -874,12 +908,21 @@ class BaseProfile1D:
         axes[-1].set_xlabel("step number")
         plt.show()
 
-    def view_corner(self, model):
+    def view_corner(self, model: str, figsize: Tuple = (8, 8)):
+        """
+        A convenient view method to examine the corner plot of the parameter posterior distributions.
+        :param str model: The name of the model for which to view the corner plot.
+        :param Tuple figsize: The desired figure size.
+        """
         m_info = self.get_model_fit(model)
         samples = self.get_flat_samples(model)
 
-        # frac_conf_lev = [(50 - (m_info["conf_level"] / 2))/100, (50 + (m_info["conf_level"] / 2))/100]
-        fig = corner.corner(samples, labels=m_info["par_names"])#, quantiles=frac_conf_lev)
+        frac_conf_lev = [(50 - (m_info["conf_level"] / 2))/100, 0.5, (50 + (m_info["conf_level"] / 2))/100]
+        fig = corner.corner(samples, labels=m_info["par_names"], figsize=figsize, quantiles=frac_conf_lev,
+                            show_titles=True)
+        t = PROF_TYPE_YAXIS[self._prof_type]
+        plt.suptitle("{m} - {s} {t} Profile - {c}% Confidence".format(m=model, s=self.src_name, t=t,
+                                                                      c=m_info["conf_level"]), fontsize=14, y=1.02)
         plt.show()
 
     def view(self, figsize=(8, 5), xscale="log", yscale="log", xlim=None, ylim=None, models=True):
