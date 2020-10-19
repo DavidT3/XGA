@@ -1,19 +1,29 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/10/2020, 17:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/10/2020, 14:32. Copyright (c) David J Turner
 from typing import Tuple
-from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
-from scipy.integrate import trapz
+from scipy.integrate import trapz, cumtrapz
 
 from ..products.base import BaseProfile1D
 
 
-# TODO DOCSTRING EVERYTHING FFS
 class SurfaceBrightness1D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, background: Quantity = None):
+        """
+        A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
+        of Galaxy Clusters. Allows for the viewing, fitting of the profile.
+        :param Quantity radii: The radii at which surface brightness has been measured.
+        :param Quantity values: The surface brightnesses that have been measured.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param Quantity background: The background brightness value.
+        """
         super().__init__(radii, values, source_name, obs_id, inst, radii_err, values_err)
 
         if type(background) != Quantity:
@@ -31,9 +41,32 @@ class SurfaceBrightness1D(BaseProfile1D):
         #  BaseProfile1D
 
 
+class GasMass1D(BaseProfile1D):
+    def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str, inst: str,
+                 radii_err: Quantity = None, values_err: Quantity = None):
+        super().__init__(radii, values, source_name, obs_id, inst, radii_err, values_err)
+        self._prof_type = "gas_mass"
+
+        # As this will more often than not be generated from GasDensity1D, we have to allow an
+        #  external realisation to be added
+        self._allowed_real_types = ["gas_dens_prof"]
+
+
 class GasDensity1D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None):
+        """
+        A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
+        Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
+        and generation of gas mass radial profiles.
+        :param Quantity radii: The radii at which gas density has been measured.
+        :param Quantity values: The gas densities that have been measured.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        """
         super().__init__(radii, values, source_name, obs_id, inst, radii_err, values_err)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
@@ -48,58 +81,51 @@ class GasDensity1D(BaseProfile1D):
         # These are the allowed realisation types (in addition to whatever density models there are
         self._allowed_real_types = ["inv_abel_model", "inv_abel_data"]
 
+        # Setting the type
         self._prof_type = "gas_density"
 
-    def add_realisation(self, real_type: str, radii: Quantity, realisation: Quantity, conf_level: int = 90):
-        if real_type not in self._allowed_real_types:
-            raise ValueError("{r} is not an acceptable realisation type, this profile object currently supports"
-                             " the following; {a}".format(r=real_type, a=", ".join(self._allowed_real_types)))
-        elif real_type in self._realisations:
-            warn("There was already a realisation of this type stored in this profile, it has been overwritten.")
+        # Setting up a dictionary to store gas mass results in.
+        self._gas_masses = {}
 
-        if radii.shape[0] != realisation.shape[0]:
-            raise ValueError("First axis of radii and realisation arrays must be the same length.")
-
-        # Check that the radii units are alright
-        if not radii.unit.is_equivalent(self.radii_unit):
-            raise UnitConversionError("The supplied radii cannot be converted to the radius unit"
-                                      " of this profile ({u})".format(u=self.radii_unit.to_string()))
-        else:
-            radii = radii.to(self.radii_unit)
-
-        # Check that the realisation unit are alright
-        if not realisation.unit.is_equivalent(self.values_unit):
-            raise UnitConversionError("The supplied realisation cannot be converted to the values unit"
-                                      " of this profile ({u})".format(u=self.values_unit.to_string()))
-        else:
-            realisation = realisation.to(self.values_unit)
-
-        upper = 50 + (conf_level / 2)
-        lower = 50 - (conf_level / 2)
-
-        # Calculates the mean model value at each radius step
-        model_mean = np.mean(realisation, axis=1)
-        # Then calculates the values for the upper and lower limits (defined by the
-        #  confidence level) for each radii
-        model_lower = np.percentile(realisation, lower, axis=1)
-        model_upper = np.percentile(realisation, upper, axis=1)
-
-        self._realisations[real_type] = {"mod_real": realisation, "mod_radii": radii, "conf_level": conf_level,
-                                         "mod_real_mean": model_mean, "mod_real_lower": model_lower,
-                                         "mod_real_upper": model_upper}
-
-    def gas_mass(self, real_type: str, outer_rad: Quantity, conf_level: int = 90) -> Tuple[Quantity]:
+    def gas_mass(self, real_type: str, outer_rad: Quantity, conf_level: int = 90) -> Tuple[Quantity, Quantity]:
+        """
+        A method to calculate and return the gas mass (with uncertainties).
+        :param str real_type: The realisation type to measure the mass from.
+        :param Quantity outer_rad: The radius to measure the gas mass out to.
+        :param int conf_level: The confidence level for the gas mass uncertainties.
+        :return: A Quantity containing three values (mass, -err, +err), and another Quantity containing
+        the entire mass distribution from the whole realisation.
+        :rtype: Tuple[Quantity, Quantity]
+        """
         if real_type not in self._realisations:
-            raise ValueError("{r} is not an acceptable realisation type, this profile object currently has realisations"
-                             " stored for".format(r=real_type, a=", ".join(list(self._realisations.keys()))))
-
+            raise ValueError("{r} is not an acceptable realisation type, this profile object currently has "
+                             "realisations stored for".format(r=real_type,
+                                                              a=", ".join(list(self._realisations.keys()))))
         if not outer_rad.unit.is_equivalent(self.radii_unit):
             raise UnitConversionError("The supplied outer radius cannot be converted to the radius unit"
                                       " of this profile ({u})".format(u=self.radii_unit.to_string()))
         else:
             outer_rad = outer_rad.to(self.radii_unit)
 
-        if real_type not in self._good_model_fits:
+        run_int = True
+        # Setting up storage structure if this particular configuration hasn't been run already
+        # It goes realisation type - radius - confidence level
+        if real_type not in self._gas_masses:
+            self._gas_masses[real_type] = {}
+            self._gas_masses[real_type][str(outer_rad.value)] = {}
+            self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)] = {"result": None,
+                                                                                  "distribution": None}
+        elif str(outer_rad.value) not in self._gas_masses[real_type]:
+            self._gas_masses[real_type][str(outer_rad.value)] = {}
+            self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)] = {"result": None,
+                                                                                  "distribution": None}
+        elif str(conf_level) not in self._gas_masses[real_type][str(outer_rad.value)]:
+            self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)] = {"result": None,
+                                                                                  "distribution": None}
+        else:
+            run_int = False
+
+        if real_type not in self._good_model_fits and run_int:
             real_info = self._realisations[real_type]
 
             allowed_ind = np.where(real_info["mod_radii"] <= outer_rad)[0]
@@ -107,27 +133,50 @@ class GasDensity1D(BaseProfile1D):
             trunc_real = real_info["mod_real"].to("solMass / Mpc3")[allowed_ind, :] * trunc_rad[..., None]**2
 
             gas_masses = Quantity(4*np.pi*trapz(trunc_real.value.T, trunc_rad.value), "solMass")
-        else:
+
+            upper = 50 + (conf_level / 2)
+            lower = 50 - (conf_level / 2)
+
+            gas_mass_mean = np.mean(gas_masses)
+            gas_mass_lower = gas_mass_mean - np.percentile(gas_masses, lower)
+            gas_mass_upper = np.percentile(gas_masses, upper) - gas_mass_mean
+            storage = Quantity(np.array([gas_mass_mean.value, gas_mass_lower.value, gas_mass_upper.value]),
+                               gas_mass_mean.unit)
+            self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]["result"] = storage
+            self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]["distribution"] = gas_masses
+
+        elif real_type in self._good_model_fits and run_int:
             raise NotImplementedError("Cannot integrate models yet")
 
-        upper = 50 + (conf_level / 2)
-        lower = 50 - (conf_level / 2)
+        results: Quantity = self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]['result']
+        dist: Quantity = self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]["distribution"]
+        return results, dist
 
-        gas_mass_mean = np.mean(gas_masses)
-        gas_mass_lower = np.percentile(gas_masses, lower)
-        gas_mass_upper = np.percentile(gas_masses, upper)
+    def gas_mass_profile(self, real_type: str, outer_rad: Quantity, conf_level: int = 90) -> GasMass1D:
+        """
+        A method to calculate and return a gas mass profile.
+        :param str real_type: The realisation type to measure the mass profile from.
+        :param Quantity outer_rad: The radius to measure the gas mass profile out to.
+        :param int conf_level: The confidence level for the gas mass profile uncertainties.
+        :return:
+        :rtype:
+        """
+        # Run this for the checks it performs
+        mass_res = self.gas_mass(real_type, outer_rad, conf_level)
 
-        return gas_mass_mean, gas_mass_mean - gas_mass_lower, gas_mass_upper - gas_mass_mean, gas_masses
+        real_info = self._realisations[real_type]
+        allowed_ind = np.where(real_info["mod_radii"] <= outer_rad)[0]
+        trunc_rad = real_info["mod_radii"][allowed_ind].to("Mpc")
+        trunc_real = real_info["mod_real"].to("solMass / Mpc3")[allowed_ind, :] * trunc_rad[..., None] ** 2
+        gas_mass_real = Quantity(4 * np.pi * cumtrapz(trunc_real.value.T, trunc_rad.value), "solMass").T
 
-    def gas_mass_profile(self):
-        raise NotImplementedError("Haven't done this yet sozzle")
+        gas_mass_prof = np.mean(gas_mass_real, axis=1)
+        # TODO Implement upper and lower bounds when BaseProfile1D supports non-gaussian errors
+        gm_prof = GasMass1D(trunc_rad[1:], gas_mass_prof, self.src_name, self.obs_id, self.instrument)
+        gm_prof.add_realisation("gas_dens_prof", trunc_rad[1:], gas_mass_real, conf_level)
 
+        return gm_prof
 
-class GasMass1D(BaseProfile1D):
-    def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None):
-        super().__init__(radii, values, source_name, obs_id, inst, radii_err, values_err)
-        self._prof_type = "gas_mass"
 
 
 
