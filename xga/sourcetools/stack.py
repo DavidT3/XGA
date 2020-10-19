@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/10/2020, 18:13. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -18,6 +18,7 @@ from ..sas import evselect_spectrum
 from ..sources import GalaxyCluster
 from ..utils import NUM_CORES, COMPUTE_MODE
 from ..xspec.fakeit import cluster_cr_conv
+from ..xspec.fit import single_temp_apec
 
 
 def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200", use_peak: bool = True,
@@ -94,22 +95,14 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
             source_mask = src.get_interloper_mask()
 
         rad = Quantity(src.source_back_regions(scale_radius)[0].to_pixel(rt.radec_wcs).radius, pix)
-        brightness, brightness_err, cen_rad, rad_bins, bck, success = radial_brightness(rt, source_mask,
-                                                                                        background_mask, pix_peak,
-                                                                                        rad, src.redshift, pix_step,
-                                                                                        pix, src.cosmo,
-                                                                                        min_snr=min_snr)
-
-        # Subtracting the background in the simplest way possible
-        brightness -= bck
-        # If a value goes below zero currently setting it to 0, this is BAD
-        brightness[brightness < 0] = 0
+        sb_prof, success = radial_brightness(rt, source_mask, background_mask, pix_peak, rad, src.redshift, pix_step,
+                                             pix, src.cosmo, min_snr=min_snr)
 
         # Calculates the value of pixel radii in terms of the scale radii
-        scaled_radii = (cen_rad / rad).value
+        scaled_radii = (sb_prof.radii / rad).value
 
         # Interpolating brightness profile values at the radii passed by the user
-        interp_brightness = np.interp(radii, scaled_radii, brightness)
+        interp_brightness = np.interp(radii, scaled_radii, (sb_prof.values - sb_prof.background).value)
 
         return interp_brightness, src_id
 
@@ -171,6 +164,8 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
     # First must make sure we have generated spectra for all the clusters, as we need the ARFs and RMFs to
     #  simulate spectra and calculate conversion values
     evselect_spectrum(sources, scale_radius)  # Use our standard setting for spectra generation
+    # Use a simple single_temp_apec to fit said spectra, with all the default settings
+    single_temp_apec(sources, reg_type=scale_radius)
 
     # Calculate all the conversion factors
     if custom_temps is not None:

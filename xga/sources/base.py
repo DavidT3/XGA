@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 09:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/10/2020, 11:47. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -23,6 +23,7 @@ from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObserva
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
     RateMap, PSFGrid
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad
+from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -34,21 +35,10 @@ class BaseSource:
     def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=True, load_fits=False):
         self._ra_dec = np.array([ra, dec])
         if name is not None:
-            self._name = name
+            # We don't be liking spaces in source names
+            self._name = name.replace(" ", "")
         else:
-            # self.ra_dec rather than _ra_dec because ra_dec is in astropy degree units
-            s = SkyCoord(ra=self.ra_dec[0], dec=self.ra_dec[1])
-            crd_str = s.to_string("hmsdms").replace("h", "").replace("m", "").replace("s", "").replace("d", "")
-            ra_str, dec_str = crd_str.split(" ")
-            # A bug popped up where a conversion ended up with no decimal point and the self._name part got
-            #  really upset - so this adds one if there isn't one
-            if "." not in ra_str:
-                ra_str += "."
-            if "." not in dec_str:
-                dec_str += "."
-            # Use the standard naming convention if one wasn't passed on initialisation of the source
-            # Need it because its used for naming files later on.
-            self._name = "J" + ra_str[:ra_str.index(".") + 2] + dec_str[:dec_str.index(".") + 2]
+            self._name = coord_to_name(self.ra_dec)
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
@@ -205,7 +195,7 @@ class BaseSource:
                 prod_objs["ratemap"] = RateMap(prod_objs["image"], prod_objs["expmap"])
             # Adds in the source name to the products
             for prod in prod_objs:
-                prod_objs[prod].obj_name = self._name
+                prod_objs[prod].src_name = self._name
             # As these files existed already, I don't have any stdout/err strings to pass, also no
             # command string.
 
@@ -312,7 +302,7 @@ class BaseSource:
             self._products["combined"] = {}
 
         # The product gets the name of this source object added to it
-        prod_obj.obj_name = self.name
+        prod_obj.src_name = self.name
 
         # Double check that something is trying to add products from another source to the current one.
         if obs_id != "combined" and obs_id not in self._products:
@@ -344,7 +334,7 @@ class BaseSource:
             exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False) if en_key in prod]
             if len(exs) == 1:
                 new_rt = RateMap(prod_obj, exs[0][-1])
-                new_rt.obj_name = self.name
+                new_rt.src_name = self.name
                 self._products[obs_id][inst][extra_key]["ratemap"] = new_rt
 
         # However, if its an exposure map that's been added, we have to look for matching image(s). There
@@ -358,7 +348,7 @@ class BaseSource:
             if len(ims) != 0:
                 for im in ims:
                     new_rt = RateMap(im[-1], prod_obj)
-                    new_rt.obj_name = self.name
+                    new_rt.src_name = self.name
                     self._products[obs_id][inst][im[-2]]["ratemap"] = new_rt
 
         # The same behaviours hold for combined_image and combined_expmap, but they get
@@ -367,7 +357,7 @@ class BaseSource:
             exs = [prod for prod in self.get_products("combined_expmap", just_obj=False) if en_key in prod]
             if len(exs) == 1:
                 new_rt = RateMap(prod_obj, exs[0][-1])
-                new_rt.obj_name = self.name
+                new_rt.src_name = self.name
                 # Remember obs_id for combined products is just 'combined'
                 self._products[obs_id][extra_key]["combined_ratemap"] = new_rt
 
@@ -376,7 +366,7 @@ class BaseSource:
             if len(ims) != 0:
                 for im in ims:
                     new_rt = RateMap(im[-1], prod_obj)
-                    new_rt.obj_name = self.name
+                    new_rt.src_name = self.name
                     self._products[obs_id][im[-2]]["combined_ratemap"] = new_rt
 
     def _existing_xga_products(self, read_fits: bool):

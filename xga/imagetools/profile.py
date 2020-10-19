@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 12:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/10/2020, 18:13. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -10,6 +10,7 @@ from astropy.units import Quantity, UnitBase, pix, deg, arcsec, UnitConversionEr
 
 from .misc import pix_deg_scale, pix_rad_to_physical
 from ..products import Image, RateMap
+from ..products.profile import SurfaceBrightness1D
 from ..sourcetools import rad_to_ang
 
 
@@ -152,8 +153,7 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
 
 def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, centre: Quantity,
                       rad: Quantity, z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
-                      cosmo=Planck15, min_snr: float = 0.0) \
-        -> Tuple[np.ndarray, np.ndarray, Quantity, Quantity, np.float64, bool]:
+                      cosmo=Planck15, min_snr: float = 0.0) -> Tuple[SurfaceBrightness1D, bool]:
     """
     A simple method to calculate the average brightness in circular annuli upto the radius of
     the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
@@ -173,13 +173,12 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     :return: The brightness is returned in a flat numpy array, then the radii at the centre of the bins are
     returned in units of kpc, the width of the bins, and finally the average brightness in the background region is
     returned.
-    :rtype: Tuple[np.ndarray, np.ndarray, Quantity, Quantity, np.float64, bool]
+    :rtype: Tuple[SurfaceBrightness1D, bool]
     """
     if rt.shape != src_mask.shape:
         raise ValueError("The shape of the src_mask array ({0}) must be the same as that of im_prod "
                          "({1}).".format(src_mask.shape, rt.shape))
 
-    # TODO REMOVE THIS IF SHIT - trying to make an uncertainty map
     cr_err_map = np.divide(np.sqrt(rt.image.data), rt.expmap.data, out=np.zeros_like(rt.image.data),
                            where=rt.expmap.data != 0)
 
@@ -214,7 +213,6 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     masked_data = masks * rt.data[..., None]
     # Calculates the sum of the pixel count rates for each annular radius, masking out other known sources
     cr = np.sum(masked_data, axis=(0, 1))
-    # TODO REMOVE IF SHIT
     cr_errs = np.sqrt(np.sum(masks * cr_err_map[..., None]**2, axis=(0, 1)))
 
     # Then calculates the actual brightness profile by dividing by the area of each annulus
@@ -293,7 +291,11 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     cen_rads = (inn_rads + out_rads) / 2
     rad_err = (out_rads-inn_rads) / 2
 
-    return br, br_errs, cen_rads, rad_err, bg, succeeded
+    # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product
+    br_prof = SurfaceBrightness1D(cen_rads, Quantity(br, 'ct/(s*arcmin**2)'), rt.src_name, rt.obs_id, rt.instrument,
+                                  rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'), Quantity(bg, 'ct/(s*arcmin**2)'))
+
+    return br_prof, succeeded
 
 
 # TODO At some point implement minimum SNR for this also
@@ -322,6 +324,8 @@ def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray
     and finally the average brightness in the background region is returned.
     :rtype: Tuple[ndarray, Quantity, Quantity, np.float64, ndarray, ndarray]
     """
+    raise NotImplementedError("The supporting infrastructure to allow pizza profile product objects hasn't been"
+                              " written yet sorry!")
     if im_prod.shape != src_mask.shape:
         raise ValueError("The shape of the src_mask array ({0}) must be the same as that of im_prod "
                          "({1}).".format(src_mask.shape, im_prod.shape))

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/07/2020, 23:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 17:42. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -414,4 +414,39 @@ class IncompatibleProductError(Exception):
             return 'IncompatibleProductError has been raised'
 
 
+class XGAFitError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when there is an issue with a fit that XGA is trying to perform.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
 
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'XGAFitError has been raised'
+
+
+class XGAInvalidModelError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when the user is trying to fit a model that is not appropriate to the data.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'XGAInvalidModelError has been raised'

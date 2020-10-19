@@ -1,14 +1,34 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/09/2020, 10:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/10/2020, 14:32. Copyright (c) David J Turner
 
 
+import inspect
 import os
 from typing import Tuple, List, Dict
+from warnings import warn
 
-from astropy.units import Quantity
+import corner
+import emcee as em
+import numpy as np
+from astropy.units import Quantity, UnitConversionError, Unit
+from matplotlib import pyplot as plt
+from scipy.optimize import curve_fit, minimize
 
-from ..exceptions import SASGenerationError, UnknownCommandlineError
+from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
+from ..models import SB_MODELS, SB_MODELS_STARTS, SB_MODELS_PRIORS, DENS_MODELS, DENS_MODELS_STARTS, TEMP_MODELS, \
+    TEMP_MODELS_STARTS
+from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
+
+PROF_TYPE_YAXIS = {"base": "Unknown", "brightness": "Surface Brightness", "gas_density": "Gas Density",
+                   "2d_temperature": "Projected Temperature", "3d_temperature": "3D Temperature",
+                   "gas_mass": "Cumulative Gas Mass"}
+PROF_TYPE_MODELS = {"brightness": SB_MODELS, "gas_density": DENS_MODELS, "2d_temperature": TEMP_MODELS,
+                    "3d_temperature": TEMP_MODELS}
+PROF_TYPE_MODELS_STARTS = {"brightness": SB_MODELS_STARTS, "gas_density": DENS_MODELS_STARTS,
+                           "2d_temperature": TEMP_MODELS_STARTS, "3d_temperature": TEMP_MODELS_STARTS}
+# TODO FILL THIS OUT AND ADD PRIORS FOR OTHER MODELS
+PROF_TYPE_MODELS_PRIORS = {"brightness": SB_MODELS_PRIORS}
 
 
 class BaseProduct:
@@ -42,7 +62,7 @@ class BaseProduct:
         self.og_cmd = gen_cmd
         self._energy_bounds = (None, None)
         self._prod_type = None
-        self._obj_name = None
+        self._src_name = None
 
     # Users are not allowed to change this, so just a getter.
     @property
@@ -108,10 +128,12 @@ class BaseProduct:
 
                     if err_type == "error":
                         # Checking to see if the error identity is in the list of SAS errors
-                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident.lower() in sas_err.lower()]
+                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident.lower()
+                                         in sas_err.lower()]
                     elif err_type == "warning":
                         # Checking to see if the error identity is in the list of SAS warnings
-                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident.lower() in sas_err.lower()]
+                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident.lower()
+                                         in sas_err.lower()]
 
                     if len(sas_err_match) != 1:
                         originator = ""
@@ -236,24 +258,24 @@ class BaseProduct:
         return self._energy_bounds
 
     @property
-    def obj_name(self) -> str:
+    def src_name(self) -> str:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
         :return: The name of the source object this product is associated with.
         :rtype: str
         """
-        return self._obj_name
+        return self._src_name
 
     # This needs a setter, as this property only becomes not-None when the product is added to a source object.
-    @obj_name.setter
-    def obj_name(self, name: str):
+    @src_name.setter
+    def src_name(self, name: str):
         """
-        Property setter for the obj_name attribute of a product, should only really be called by a source object,
+        Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user.
         :param str name: The name of the source object associated with this product.
         """
-        self._obj_name = name
+        self._src_name = name
 
     @property
     def not_usable_reasons(self) -> List:
@@ -273,7 +295,7 @@ class BaseAggregateProduct:
         self._obs_id = obs_id
         self._inst = instrument
         self._prod_type = prod_type
-        self._obj_name = None
+        self._src_name = None
 
         # This was originally going to create the individual products here, but realised it was
         # easier to do in subclasses
@@ -283,24 +305,24 @@ class BaseAggregateProduct:
         self._energy_bounds = (None, None)
 
     @property
-    def obj_name(self) -> str:
+    def src_name(self) -> str:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
         :return: The name of the source object this product is associated with.
         :rtype: str
         """
-        return self._obj_name
+        return self._src_name
 
     # This needs a setter, as this property only becomes not-None when the product is added to a source object.
-    @obj_name.setter
-    def obj_name(self, name: str):
+    @src_name.setter
+    def src_name(self, name: str):
         """
-        Property setter for the obj_name attribute of a product, should only really be called by a source object,
+        Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user.
         :param str name: The name of the source object associated with this product.
         """
-        self._obj_name = name
+        self._src_name = name
 
     @property
     def obs_id(self) -> str:
@@ -409,6 +431,753 @@ class BaseAggregateProduct:
 
     def __getitem__(self, ind):
         return list(self._component_products.values())[ind]
+
+
+# TODO Sweep through and docstring up in here
+class BaseProfile1D:
+    def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str,
+                 inst: str, radii_err: Quantity = None, values_err: Quantity = None):
+        if type(radii) != Quantity or type(values) != Quantity:
+            raise TypeError("Both the radii and values passed into this object definition must "
+                            "be astropy quantities.")
+        elif radii_err is not None and type(radii_err) != Quantity:
+            raise TypeError("The radii_err variable must be an astropy Quantity, or None.")
+        elif radii_err is not None and radii_err.unit != radii.unit:
+            raise UnitConversionError("The radii_err unit must be the same as the radii unit.")
+        elif values_err is not None and type(values_err) != Quantity:
+            raise TypeError("The values_err variable must be an astropy Quantity, or None.")
+        elif values_err is not None and values_err.unit != values.unit:
+            raise UnitConversionError("The values_err unit must be the same as the values unit.")
+
+        # Check for one dimensionality
+        if radii.ndim != 1 or values.ndim != 1:
+            raise ValueError("The radii and values arrays must be one-dimensional. The shape of radii is {0} "
+                             "and the shape of values is {1}".format(radii.shape, values.shape))
+        elif (radii_err is not None and radii_err.ndim != 1) or (values_err is not None and values_err.ndim != 1):
+            raise ValueError("The radii_err and values_err arrays must be one-dimensional. The shape of "
+                             "radii_err is {0} and the shape of values_err is "
+                             "{1}".format(radii_err.shape, values_err.shape))
+        # Making sure the arrays have the same number of entries
+        elif radii.shape != values.shape:
+            raise ValueError("The radii and values arrays must have the same shape. The shape of radii is {0} "
+                             "and the shape of values is {1}".format(radii.shape, values.shape))
+        elif (radii_err is not None and radii_err.shape != radii.shape) or \
+                (values_err is not None and values_err.shape != values.shape):
+            raise ValueError("radii_err must be the same shape as radii, and values_err must be the same shape "
+                             "as values. The shape of radii_err is {0} where radii is {1}, and the shape of "
+                             "values_err is {2} where values is {3}".format(radii_err.shape, radii.shape,
+                                                                            values_err.shape, values.shape))
+
+        # Storing the key values in attributes
+        self._radii = radii
+        self._values = values
+        self._radii_err = radii_err
+        self._values_err = values_err
+
+        # Just checking that if one of these values is combined, then both are. Doesn't make sense otherwise.
+        if (obs_id == "combined" and inst != "combined") or (inst == "combined" and obs_id != "combined"):
+            raise ValueError("If ObsID or inst is set to combined, then both must be set to combined.")
+
+        # Storing the passed source name in an attribute, as well as the ObsID and instrument
+        self._src_name = source_name
+        self._obs_id = obs_id
+        self._inst = inst
+
+        # Going to have this convenient attribute for profile classes, I could just use the type() command
+        #  when I wanted to know but this is easier.
+        self._prof_type = "base"
+
+        # Here is where information about fitted models is stored (and any failed fit attempts)
+        self._good_model_fits = {}
+        self._bad_model_fits = {}
+        # Previously I stored model realisations in self._good_model_fits, but I'm splitting out into its
+        #  own attribute. Primarily because I want to be able to add realisations from non-model sources in
+        #  the Density1D profile product.
+        self._realisations = {}
+
+        # Some types of profiles will support a background value (like surface brightness), which will
+        #  need to be incorporated into the fit and plotting.
+        self._background = Quantity(0, self._values.unit)
+
+        # This is where allowed realisation types are stored, but there are none for the base profile
+        self._allowed_real_types = []
+
+    def fit(self, model: str, method: str = "mcmc", priors=None, start_pars=None, model_real=1000,
+            model_rad_steps=300, conf_level=90, ml_mcmc_start: bool = True, ml_rand_dev: float = 1e-4,
+            num_walkers: int = 30, num_steps: int = 20000):
+        # These are the currently allowed fitting methods
+        method = method.lower()
+        fit_methods = ["curve_fit", "mcmc"]
+        # Checking that the user hasn't chosen a method that isn't allowed
+        if method not in fit_methods:
+            raise ValueError("{0} is not an accepted fitting method, please choose one of these; "
+                             "{1}".format(method, ", ".join(fit_methods)))
+        elif method == "curve_fit" and priors is not None:
+            warn("You have chosen curve_fit, and also provided priors, these will not be used.")
+
+        # Stopping the user from making stupid model choices
+        if self._prof_type == "base":
+            raise XGAFitError("A BaseProfile1D object currently cannot have a model fitted to it, as there"
+                              " is no physical context.")
+        elif model not in PROF_TYPE_MODELS[self._prof_type]:
+            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
+                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
+        else:
+            model_func = PROF_TYPE_MODELS[self._prof_type][model]
+
+        # Changes confidence level to expected input for numpy percentile function
+        upper = 50 + (conf_level / 2)
+        lower = 50 - (conf_level / 2)
+
+        # This inspect module lets me grab the parameters expected by the model dynamically, and check
+        #  what the user might have passed in the start_pars variable against it
+        model_sig = inspect.signature(model_func)
+        # Ignore the first argument, as it will be radius
+        model_par_names = [p.name for p in list(model_sig.parameters.values())[1:]]
+        if start_pars is not None and len(start_pars) != len(model_par_names):
+            raise ValueError("start_pars must either be None, or have an entry for each parameter expected by"
+                             " the chosen model; {0} expects {1}".format(model, ", ".join(model_par_names)))
+        elif start_pars is None:
+            # If the user doesn't supply any starting parameters then we just have to use the default ones
+            start_pars = PROF_TYPE_MODELS_STARTS[self._prof_type][model]
+
+        # Even though we won't always need priors I'm just grab them anyway
+        if priors is not None and len(priors) != len(model_par_names):
+            raise ValueError("priors must either be None, or have an entry for each parameter expected by"
+                             " the chosen model; {0} expects {1}".format(model, ", ".join(model_par_names)))
+        elif priors is None:
+            # If the user doesn't supply any priors then we use the default ones
+            priors = PROF_TYPE_MODELS_PRIORS[self._prof_type][model]
+
+        # I don't think I'm going to allow any fits without value uncertainties - just seems daft
+        if self._values_err is None:
+            raise XGAFitError("You cannot fit to a profile that doesn't have value uncertainties.")
+
+        # Check whether a good fit result already exists for this model
+        if model in self._good_model_fits:
+            warn("{} already has a successful fit result for this profile".format(model))
+            already_done = True
+        else:
+            already_done = False
+
+        # Check whether this fit is in the bad fit dictionary
+        if model in self._bad_model_fits:
+            warn("{} already has a failed fit result for this profile".format(model))
+
+        # Now we do the actual fitting part
+        if method == "curve_fit" and not already_done:
+            success = True
+            # Curve fit is a simple non-linear least squares implementation, its alright but fragile
+            try:
+                fit_par, fit_cov = curve_fit(model_func, self._radii.value, self.values.value
+                                             - self._background.value, p0=start_pars, sigma=self._values_err.value)
+                # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
+                fit_par_err = np.sqrt(np.diagonal(fit_cov))
+            except RuntimeError:
+                warn("RuntimeError was raised, curve_fit has failed.")
+                success = False
+                fit_par = np.full(len(start_pars), np.nan)
+                fit_par_err = np.full(len(start_pars), np.nan)
+
+        elif method == "mcmc" and not already_done:
+            # I'm just defining these here so that the lines don't get too long for PEP standards
+            r_dat = self.radii.value
+            v_dat = self.values.value - self.background.value
+            v_err = self.values_err.value
+            n_par = len(priors)
+            prior_arr = np.array(priors)
+
+            # If this option is set then maximum likelihood estimation is used to get start parameters
+            if ml_mcmc_start:
+                for_max_like = lambda *args: -log_likelihood(*args, model_func)
+                max_like_res = minimize(for_max_like, start_pars, args=(r_dat, v_dat, v_err))
+                # TODO Review whether the small gaussian ball around max likelihood values is the best way to start.
+                pos = max_like_res.x + ml_rand_dev*np.random.randn(num_walkers, n_par)
+            else:
+                # TODO Review whether the random uniform draws are a good idea.
+                pos = np.random.uniform(prior_arr[:, 0], prior_arr[:, 1], size=(num_walkers, n_par))
+
+            # Making extended upper and lower bound prior arrays
+            lo_bounds = np.repeat(prior_arr[:, 0, None], pos.shape[0], axis=1).T
+            hi_bounds = np.repeat(prior_arr[:, 1, None], pos.shape[0], axis=1).T
+            # With the ml_mcmc_start option, it is possible that the start parameters are outside of the
+            #  range allowed by the the priors. In which case the MCMC fit will get super upset but not actually
+            #  throw an error.
+            start_check_greater = np.greater_equal(pos, prior_arr[:, 0])
+            start_check_lower = np.less_equal(pos, prior_arr[:, 1])
+            # So any start values that fall outside the allowed range will be moved to the boundary value
+            pos[~start_check_greater] = lo_bounds[~start_check_greater]
+            pos[~start_check_lower] = hi_bounds[~start_check_lower]
+
+            # This instantiates an Ensemble sampler with the number of walkers specified by the user,
+            #  with the log probability as defined in the functions above
+            sampler = em.EnsembleSampler(num_walkers, n_par, log_prob, args=(r_dat, v_dat, v_err,
+                                                                             model_func, priors))
+            # So now we start the sampler, running for the number of steps specified on function call, with
+            #  the starting parameters defined in the if statement above this.
+            sampler.run_mcmc(pos, num_steps, progress=False)
+
+            # The auto-correlation can produce an error that basically says not to trust the chains
+            try:
+                # The sampler has a convenient auto-correlation time derivation, which returns the
+                #  auto-correlation time for each parameter - with this I simply choose the highest one and
+                #  round up to the nearest 100 to use as the burn-in
+                auto_corr = sampler.get_autocorr_time()
+                cut_off = int(np.ceil(auto_corr.max() / 100) * 100)
+                success = True
+            except em.autocorr.AutocorrError as bugger:
+                print(bugger)
+                warn("AutoCorrelationError was raised, MCMC fit has failed. - Perhaps try more steps?")
+                success = False
+
+        # Now do some checks after the fit has run, primarily for any infinite values
+        if not already_done and method == "curve_fit" and ((np.inf in fit_par or np.inf in fit_par_err)
+                                 or (True in np.isnan(fit_par) or True in np.isnan(fit_par_err))):
+            # This is obviously bad, and enough of a reason to call a fit bad as an outright failure to fit
+            success = False
+
+        # If the fit succeeded to our satisfaction then it gets stored in the good dictionary, otherwise we record
+        #  it in the bad dictionary.
+        if not already_done and success and method == "curve_fit":
+            ext_model_par = np.repeat(fit_par[..., None], model_real, axis=1).T
+            ext_model_par_err = np.repeat(fit_par_err[..., None], model_real, axis=1).T
+
+            # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
+            model_par_dists = np.random.normal(ext_model_par, ext_model_par_err)
+
+            # No longer need these now we've drawn the random samples
+            del ext_model_par
+            del ext_model_par_err
+
+            # Setting up some radii between 0 and the maximum radius to sample the model at
+            if self._radii_err is None:
+                model_radii = np.linspace(0, self._radii[-1].value, model_rad_steps)
+            else:
+                model_radii = np.linspace(0, self._radii[-1].value + self._radii_err[-1].value, model_rad_steps)
+
+            # Copies the chosen radii model_real times, much as with the ext_model_par definition
+            ext_model_radii = np.repeat(model_radii[..., None], model_real, axis=1)
+
+            # Generates model_real realisations of the model at the model_radii
+            model_realisations = model_func(ext_model_radii, *model_par_dists.T)
+
+            # Calculates the mean model value at each radius step
+            model_mean = np.mean(model_realisations, axis=1)
+            # Then calculates the values for the upper and lower limits (defined by the
+            #  confidence level) for each radii
+            model_lower = np.percentile(model_realisations, lower, axis=1)
+            model_upper = np.percentile(model_realisations, upper, axis=1)
+
+            # Store these realisations for statistics later on
+            self._good_model_fits[model] = {"par": fit_par, "par_err": fit_par_err, "start_pars": start_pars,
+                                            "model_func": model_func, "par_names": model_par_names,
+                                            "conf_level": conf_level}
+            self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
+                                         "conf_level": conf_level, "mod_real_mean": model_mean,
+                                         "mod_real_lower": model_lower, "mod_real_upper": model_upper}
+
+        elif not already_done and success and method == "mcmc":
+            thinning = int(num_steps / model_real)
+            flat_samp = sampler.get_chain(discard=cut_off, thin=thinning, flat=True)
+
+            pars_lower = np.percentile(flat_samp, lower, axis=0)
+            pars_upper = np.percentile(flat_samp, upper, axis=0)
+            fit_par = np.mean(flat_samp, axis=0)
+            fit_par_mi = fit_par - pars_lower
+            fit_par_pl = pars_upper - fit_par
+
+            # Setting up some radii between 0 and the maximum radius to sample the model at
+            if self._radii_err is None:
+                model_radii = np.linspace(0, self._radii[-1].value, model_rad_steps)
+            else:
+                model_radii = np.linspace(0, self._radii[-1].value + self._radii_err[-1].value, model_rad_steps)
+
+            # Copies the chosen radii model_real times, much as with the ext_model_par definition
+            ext_model_radii = np.repeat(model_radii[..., None], flat_samp.shape[0], axis=1)
+
+            # Generates model_real realisations of the model at the model_radii
+            model_realisations = model_func(ext_model_radii, *flat_samp.T)
+            model_mean = np.mean(model_realisations, axis=1)
+            model_lower = np.percentile(model_realisations, lower, axis=1)
+            model_upper = np.percentile(model_realisations, upper, axis=1)
+
+            self._good_model_fits[model] = {"par": fit_par, "par_err_mi": fit_par_mi, "par_err_pl": fit_par_pl,
+                                            "model_func": model_func, "sampler": sampler, "thinning": thinning,
+                                            "cut_off": cut_off, "par_names": model_par_names,
+                                            "conf_level": conf_level}
+            self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
+                                         "conf_level": conf_level, "mod_real_mean": model_mean,
+                                         "mod_real_lower": model_lower, "mod_real_upper": model_upper}
+
+        elif not already_done and not success and method == "mcmc":
+            self._bad_model_fits[model] = {"start_pars": start_pars}
+
+        elif not already_done and not success and method == "curve_fit":
+            self._bad_model_fits[model] = {"priors": priors}
+
+    def get_realisation(self, real_type: str) -> Dict:
+        """
+        Get method for model realisation data, this includes the array of realisations, the radii at which
+        the realisations are generated, the upper and lower bounds, the mean, and the confidence level.
+        :param str real_type: The type of realisation to be retrieved, most often a model name, or the key
+        associated with a particular function that generated realisations (such as inv_abel_model).
+        :return: The realisation dictionary with relevant information in it, or None if no matching
+        realisation exists.
+        :rtype: Dict
+        """
+        if real_type in self._allowed_real_types or real_type in self._good_model_fits:
+            return self._realisations[real_type]
+        else:
+            return None
+
+    def get_model_fit(self, model) -> Dict:
+        """
+        Get method for parameters of fitted models.
+        :param model: The name of the model for which to retrieve parameters.
+        :return: A dictionary containing the fit parameters, their uncertainties, an instance of the model
+        function, and the initial parameters.
+        :rtype: Dict
+        """
+        if model not in PROF_TYPE_MODELS[self._prof_type]:
+            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
+                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
+        elif model in self._bad_model_fits:
+            raise XGAFitError("An attempt was made to fit {}, but it failed, no fit data can be "
+                              "retrieved.".format(model))
+        elif model not in self._good_model_fits:
+            raise XGAFitError("{} is valid for this profile, but hasn't been fit yet".format(model))
+
+        return self._good_model_fits[model]
+
+    def allowed_models(self):
+        """
+        This is a convenience function to tell the user what models can be used to fit a profile
+        of the current type, what parameters are expected, and what the defaults are.
+        """
+        # Base profile don't have any type of model associated with them, so just making an empty list
+        if self._prof_type == "base":
+            allowed = []
+        else:
+            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+
+        # These set up the dictionary of printables, and variables that store the longest entry for each column
+        to_print = {}
+        # Initial values are the column sizes of the headers
+        longest_name = 12
+        longest_pars = 21
+        longest_defaults = 26
+        for model in allowed:
+            # Function object grabbed
+            model_func = PROF_TYPE_MODELS[self._prof_type][model]
+            # Looking for the variables in the function signature
+            model_sig = inspect.signature(model_func)
+            # Ignore the first argument, as it will be radius
+            model_par_names = ", ".join([p.name for p in list(model_sig.parameters.values())[1:]])
+            # The default start parameters of the fit
+            start_pars = ", ".join([str(p) for p in PROF_TYPE_MODELS_STARTS[self._prof_type][model]])
+            to_print[model] = [model, model_par_names, start_pars]
+            if len(model) > longest_name:
+                longest_name = len(model)
+            if len(model_par_names) > longest_pars:
+                longest_pars = len(model_par_names)
+            if len(start_pars) > longest_defaults:
+                longest_defaults = len(start_pars)
+
+        if longest_name % 2 != 0:
+            longest_name += 3
+        else:
+            longest_name += 2
+
+        if longest_pars % 2 != 0:
+            longest_pars += 3
+        else:
+            longest_pars += 2
+
+        if longest_defaults % 2 != 0:
+            longest_defaults += 3
+        else:
+            longest_defaults += 2
+
+        # This next lot is just boring string formatting and printing, I'm sure you can figure it out.
+        first_col = "|" + " " * np.ceil((longest_name - 12) / 2).astype(int) + " MODEL NAME " + " " * np.ceil(
+            (longest_name - 12) / 2).astype(int) + "|"
+
+        second_col = " " * np.ceil((longest_pars - 21) / 2).astype(int) + " EXPECTED PARAMETERS " + " " * np.ceil(
+            (longest_pars - 21) / 2).astype(int) + "|"
+
+        third_col = " "*np.ceil((longest_defaults-26) / 2).astype(int) + " DEFAULT START PARAMETERS " + \
+                    " " * np.ceil((longest_defaults-26) / 2).astype(int) + "|"
+        comb = first_col + second_col + third_col
+        print("\n" + "-"*len(comb))
+        print(first_col + second_col + third_col)
+        print("-"*len(comb))
+        for model in to_print:
+            # I know this code is disgustingly ugly, but its not really important that you know how it works
+            # And perhaps I'll rewrite it at some point, who knows
+            the_line = "|" + " " * np.ceil((len(first_col) - len(to_print[model][0])) / 2).astype(int) + \
+                       to_print[model][0] + " " * np.ceil((len(first_col) -
+                                                           len(to_print[model][0])) / 2).astype(int) \
+                       + "|"
+
+            the_line += " "*np.ceil((len(second_col) -
+                                     len(to_print[model][1])) / 2).astype(int) + to_print[model][1] + \
+                        " "*np.ceil((len(second_col)-len(to_print[model][1])) / 2).astype(int) + "|"
+
+            the_line += " " * np.ceil((len(third_col) -
+                                       len(to_print[model][2])) / 2).astype(int) + to_print[model][
+                2] + " " * np.ceil((len(third_col) - len(to_print[model][2])) / 2).astype(int) + "|"
+            print(the_line)
+        print("-" * len(comb) + "\n")
+
+    def get_sampler(self, model: str) -> em.EnsembleSampler:
+        """
+        A get method meant to retrieve the MCMC ensemble sampler used to fit a particular
+        model (supplied by the user). Checks are applied to the supplied model, to make
+        sure that it is valid for the type of profile, that a good fit has actually been
+        performed, and that the fit was performed with Emcee and not another method.
+        :param str model: The name of the model for which to retrieve the sampler.
+        :return: The Emcee sampler used to fit the user supplied model - if applicable.
+        :rtype: em.EnsembleSampler
+        """
+        if model not in PROF_TYPE_MODELS[self._prof_type]:
+            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
+                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
+        elif model in self._bad_model_fits:
+            raise XGAFitError("An attempt was made to fit {}, but it failed, no fit data can be "
+                              "retrieved.".format(model))
+        elif model not in self._good_model_fits:
+            raise XGAFitError("{} is valid for this profile, but hasn't been fit yet".format(model))
+        elif model in self._good_model_fits and "sampler" not in self._good_model_fits[model]:
+            raise XGAFitError("{} was not fit with MCMC, and as such the sampler object cannot be "
+                              "retrieved.".format(model))
+
+        return self._good_model_fits[model]["sampler"]
+
+    def get_chains(self, model: str) -> np.ndarray:
+        """
+        Get method for the sampler chains of an MCMC fit to the user supplied model. get_sampler is
+        called to retrieve the sampler object, as well as perform validity checks on the model name.
+        :param str model: The name of the model for which to retrieve the chains.
+        :return: The sampler chains, with burn-in discarded, and with thinning applied.
+        :rtype: np.ndarray
+        """
+        sampler = self.get_sampler(model)
+        m_info = self.get_model_fit(model)
+
+        return sampler.get_chain(discard=m_info["cut_off"], thin=m_info["thinning"])
+
+    def get_flat_samples(self, model: str) -> np.ndarray:
+        """
+        Get method for the flattened samples of an MCMC fit to the user supplied model. get_sampler is
+        called to retrieve the sampler object, as well as perform validity checks on the model name.
+        :param str model: The name of the model for which to retrieve the flat samples.
+        :return: The flattened posterior samples, with burn-in discarded, and with thinning applied.
+        :rtype: np.ndarray
+        """
+        sampler = self.get_sampler(model)
+        m_info = self.get_model_fit(model)
+
+        return sampler.get_chain(discard=m_info["cut_off"], thin=m_info["thinning"], flat=True)
+
+    def view_chains(self, model: str, figsize: Tuple = None):
+        """
+        Simple view method to quickly look at the MCMC chains for a given model fit.
+        :param str model: The name of the model for which to view the MCMC chains.
+        :param Tuple figsize: Desired size of the figure, if None will be set automatically.
+        """
+        chains = self.get_chains(model)
+        m_info = self.get_model_fit(model)
+
+        if figsize is not None:
+            fig, axes = plt.subplots(len(m_info["par_names"]), figsize=(10, 2.4*len(m_info["par_names"])),
+                                     sharex='col')
+        else:
+            fig, axes = plt.subplots(len(m_info["par_names"]), figsize=figsize, sharex='col')
+        for i in range(len(m_info["par_names"])):
+            ax = axes[i]
+            ax.plot(chains[:, :, i], "k", alpha=0.3)
+            ax.set_xlim(0, len(chains))
+            ax.set_ylabel(m_info["par_names"][i])
+            ax.yaxis.set_label_coords(-0.1, 0.5)
+
+        axes[-1].set_xlabel("step number")
+        plt.show()
+
+    def view_corner(self, model: str, figsize: Tuple = (8, 8)):
+        """
+        A convenient view method to examine the corner plot of the parameter posterior distributions.
+        :param str model: The name of the model for which to view the corner plot.
+        :param Tuple figsize: The desired figure size.
+        """
+        m_info = self.get_model_fit(model)
+        samples = self.get_flat_samples(model)
+
+        frac_conf_lev = [(50 - (m_info["conf_level"] / 2))/100, 0.5, (50 + (m_info["conf_level"] / 2))/100]
+        fig = corner.corner(samples, labels=m_info["par_names"], figsize=figsize, quantiles=frac_conf_lev,
+                            show_titles=True)
+        t = PROF_TYPE_YAXIS[self._prof_type]
+        plt.suptitle("{m} - {s} {t} Profile - {c}% Confidence".format(m=model, s=self.src_name, t=t,
+                                                                      c=m_info["conf_level"]), fontsize=14, y=1.02)
+        plt.show()
+
+    def add_realisation(self, real_type: str, radii: Quantity, realisation: Quantity, conf_level: int = 90):
+        """
+        A method to add a realisation generated by some external process (such as the density
+        measurement functions).
+        :param str real_type: The type of realisation being added.
+        :param Quantity radii: The radii at which the realisation is generated.
+        :param Quantity realisation: The values of the realisation.
+        :param int conf_level: The confidence level.
+        """
+        if real_type not in self._allowed_real_types:
+            raise ValueError("{r} is not an acceptable realisation type, this profile object currently supports"
+                             " the following; {a}".format(r=real_type, a=", ".join(self._allowed_real_types)))
+        elif real_type in self._realisations:
+            warn("There was already a realisation of this type stored in this profile, it has been overwritten.")
+
+        if radii.shape[0] != realisation.shape[0]:
+            raise ValueError("First axis of radii and realisation arrays must be the same length.")
+
+        # Check that the radii units are alright
+        if not radii.unit.is_equivalent(self.radii_unit):
+            raise UnitConversionError("The supplied radii cannot be converted to the radius unit"
+                                      " of this profile ({u})".format(u=self.radii_unit.to_string()))
+        else:
+            radii = radii.to(self.radii_unit)
+
+        # Check that the realisation unit are alright
+        if not realisation.unit.is_equivalent(self.values_unit):
+            raise UnitConversionError("The supplied realisation cannot be converted to the values unit"
+                                      " of this profile ({u})".format(u=self.values_unit.to_string()))
+        else:
+            realisation = realisation.to(self.values_unit)
+
+        upper = 50 + (conf_level / 2)
+        lower = 50 - (conf_level / 2)
+
+        # Calculates the mean model value at each radius step
+        model_mean = np.mean(realisation, axis=1)
+        # Then calculates the values for the upper and lower limits (defined by the
+        #  confidence level) for each radii
+        model_lower = np.percentile(realisation, lower, axis=1)
+        model_upper = np.percentile(realisation, upper, axis=1)
+
+        self._realisations[real_type] = {"mod_real": realisation, "mod_radii": radii, "conf_level": conf_level,
+                                         "mod_real_mean": model_mean, "mod_real_lower": model_lower,
+                                         "mod_real_upper": model_upper}
+
+    def view(self, figsize=(8, 5), xscale="log", yscale="log", xlim=None, ylim=None, models=True):
+        # Setting up figure for the plot
+        plt.figure(figsize=figsize)
+
+        # Grabbing the axis object and making sure the ticks are set up how we want
+        ax = plt.gca()
+        ax.minorticks_on()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        # Taking off any background
+        sub_values = self.values.value - self.background.value
+        if self._radii_err is not None and self._values_err is None:
+            plt.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value, label="Data", fmt="x",
+                         capsize=2)
+        elif self._radii_err is None and self._values_err is not None:
+            plt.errorbar(self.radii.value, sub_values, yerr=self.values_err.value, label="Data", fmt="x",
+                         capsize=2)
+        elif self._radii_err is not None and self._values_err is not None:
+            plt.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value, yerr=self.values_err.value,
+                         label="Data", fmt="x", capsize=2)
+        else:
+            plt.plot(self.radii.value, sub_values, 'x', label="Data")
+
+        # Setup the scale that the user wants to see
+        plt.xscale(xscale)
+        plt.yscale(yscale)
+
+        # If the user has manually set limits then we can use them
+        if xlim is not None:
+            plt.xlim(xlim)
+        if ylim is not None:
+            plt.ylim(ylim)
+
+        # If models have been fitted to this profile (and the user wants them plotted), then this runs through
+        #  and adds them to the figure
+        if models:
+            for model in self._good_model_fits:
+                model_func = PROF_TYPE_MODELS[self._prof_type][model]
+                info = self._realisations[model]
+                pars = self._good_model_fits[model]["par"]
+                line = plt.plot(info["mod_radii"], model_func(info["mod_radii"], *pars),
+                                label=model + " {}% Conf".format(info["conf_level"]))
+                colour = line[0].get_color()
+                plt.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
+                                 where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=colour,
+                                 alpha=0.7, interpolate=True)
+                plt.plot(info["mod_radii"], info["mod_real_lower"], color=colour, linestyle="dashed")
+                plt.plot(info["mod_radii"], info["mod_real_upper"], color=colour, linestyle="dashed")
+
+        # Parsing the astropy units so that if they are double height then the square brackets will adjust size
+        x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
+
+        # Adding them to the figure
+        plt.xlabel("Radius {}".format(x_unit))
+        if self._background.value == 0:
+            plt.ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+        else:
+            # If background has been subtracted it will be mentioned in the y axis label
+            plt.ylabel(r"{l} - Bck {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+
+        if self._obs_id == "combined":
+            plt.title("{s} {l} Profile".format(s=self._src_name, l=PROF_TYPE_YAXIS[self._prof_type]))
+        else:
+            plt.title("{s}-{o}-{i} {l} Profile".format(s=self._src_name, l=PROF_TYPE_YAXIS[self._prof_type],
+                                                       o=self.obs_id, i=self.instrument))
+
+        # Just going to leave matplotlib to decide where the legend should live
+        plt.legend(loc="best")
+
+        # And of course actually showing it
+        plt.show()
+
+    # None of these properties concerning the radii and values are going to have setters, if the user
+    #  wants to modify it then they can define a new product.
+    @property
+    def radii(self) -> Quantity:
+        """
+        Getter for the radii passed in at init. These radii correspond to radii where the values were measured
+        :return: Astropy quantity array of radii.
+        :rtype: Quantity
+        """
+        return self._radii
+
+    @property
+    def radii_err(self) -> Quantity:
+        """
+        Getter for the uncertainties on the profile radii.
+        :return: Astropy quantity array of radii uncertainties, or a None value if no radii_err where passed.
+        :rtype: Quantity
+        """
+        return self._radii_err
+
+    @property
+    def radii_unit(self) -> Unit:
+        """
+        Getter for the unit of the radii passed by the user at init.
+        :return: An astropy unit object.
+        :rtype: Unit
+        """
+        return self._radii.unit
+
+    @property
+    def values(self) -> Quantity:
+        """
+        Getter for the values passed by user at init.
+        :return: Astropy quantity array of values.
+        :rtype: Quantity
+        """
+        return self._values
+
+    @property
+    def values_err(self) -> Quantity:
+        """
+        Getter for uncertainties on the profile values.
+        :return: Astropy quantity array of values uncertainties, or a None value if no values_err where passed.
+        :rtype: Quantity
+        """
+        return self._values_err
+
+    @property
+    def values_unit(self) -> Unit:
+        """
+        Getter for the unit of the values passed by the user at init.
+        :return: An astropy unit object.
+        :rtype: Unit
+        """
+        return self._values.unit
+
+    @property
+    def background(self) -> Quantity:
+        """
+        Getter for the background associated with the profile values. If no background is set this will
+        be zero.
+        :return: Astropy scalar quantity.
+        :rtype: Quantity
+        """
+        return self._background
+
+    # This definitely doesn't get a setter, as its basically a proxy for type() return, it will not change
+    #  during the life of the object
+    @property
+    def prof_type(self) -> str:
+        """
+        Getter for a string representing the type of profile stored in this object.
+        :return: String description of profile.
+        :rtype: str
+        """
+        return self._prof_type
+
+    @property
+    def src_name(self) -> str:
+        """
+        Getter for the name attribute of this profile, what source object it was derived from.
+        :return:
+        :rtype: object
+        """
+        return self._src_name
+
+    @src_name.setter
+    def src_name(self, new_name):
+        """
+        Setter for the name attribute of this profile, what source object it was derived from.
+        """
+        self._src_name = new_name
+
+    @property
+    def obs_id(self) -> str:
+        """
+        Property getter for the ObsID this profile was made from. Admittedly this information is implicit
+        in the location this object is stored in a source object, but I think it worth storing directly
+        as a property as well.
+        :return: XMM ObsID string.
+        :rtype: str
+        """
+        return self._obs_id
+
+    @property
+    def instrument(self) -> str:
+        """
+        Property getter for the instrument this profile was made from. Admittedly this information is implicit
+        in the location this object is stored in a source object, but I think it worth storing directly
+        as a property as well.
+        directly as a property as well.
+        :return: XMM instrument name string.
+        :rtype: str
+        """
+        return self._inst
+
+    def __len__(self):
+        """
+        The length of a BaseProfile1D object is equal to the length of the radii and values arrays
+        passed in on init.
+        :return: The number of bins in this radial profile.
+        """
+        return len(self._radii)
+
+
+
+
+
+
+
+
+
+
 
 
 

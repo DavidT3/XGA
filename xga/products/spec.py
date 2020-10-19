@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 11:53. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 13:04. Copyright (c) David J Turner
 
 
 import os
@@ -453,7 +453,7 @@ class Spectrum(BaseProduct):
             ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
             # Set the title with all relevant information about the spectrum object in it
-            plt.title("{n} - {o}{i} {r} Spectrum".format(n=self.obj_name, o=self.obs_id, i=self.instrument.upper(),
+            plt.title("{n} - {o}{i} {r} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper(),
                                                          r=self.reg_type))
             for mod_ind, mod in enumerate(self._plot_data):
                 x = self._plot_data[mod]["x"]
