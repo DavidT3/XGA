@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 13:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/10/2020, 11:54. Copyright (c) David J Turner
 
 
 import warnings
@@ -59,9 +59,14 @@ class Image(BaseProduct):
         """
         # Usable flag to check that nothing went wrong in the image generation
         if self.usable:
-            # Not all images produced by SAS are going to be needed all the time, so they will only be read in if
-            # asked for.
-            self._data = read(self.path).astype("float64")
+            try:
+                # Not all images produced by SAS are going to be needed all the time, so they will only be read in if
+                # asked for.
+                self._data = read(self.path).astype("float64")
+            except OSError:
+                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
+                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
+                                        "associated with {s}.".format(f=self.path, s=self.src_name))
             if self._data.min() < 0:
                 # This throws a non-fatal warning to let the user know there are negative pixel values,
                 #  and that they're being 'corrected'
@@ -83,8 +88,13 @@ class Image(BaseProduct):
         required more than the data for individual images (as the merged images are generally used
         for analysis), so this function is split out in the interests of efficiency.
         """
-        # Reads only the header information
-        self._header = read_header(self.path)
+        try:
+            # Reads only the header information
+            self._header = read_header(self.path)
+        except OSError:
+            raise FileNotFoundError("FITSIO read_header cannot open {f}, possibly because there is a problem with "
+                                    "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
+                                    "with {s}.".format(f=self.path, s=self.src_name))
 
         # XMM images typically have two, both useful, so we'll find all available and store them
         wcses = find_all_wcs(self._header)

@@ -1,5 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 12:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/10/2020, 10:11. Copyright (c) David J Turner
+
+from warnings import warn
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -7,6 +9,7 @@ from astropy.units import Quantity
 from numpy import ndarray
 from tqdm import tqdm
 
+from ..exceptions import NoMatchFoundError
 from ..sources.base import BaseSource
 
 
@@ -15,8 +18,8 @@ class BaseSample:
                  load_products: bool = True, load_fits: bool = False, no_prog_bar: bool = False):
         # Slight duplication of data here, but I'm going to save the inputted information into attributes,
         #  that way I don't have to iterate through my sources everytime the user might want to pull it out
-        self._ra_dec = [(r, d) for r, d in zip(ra, dec)]
-        self._redshifts = redshift
+        self._ra_dec = []
+        self._redshifts = []
         # This is an empty list so that if no name is passed the automatically generated names can be added during
         #  declaration
         self._names = []
@@ -40,12 +43,20 @@ class BaseSample:
             else:
                 z = None
 
-            temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits)
-            n = temp.name
-            self._sources[n] = temp
-            self._names.append(n)
+            try:
+                temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits)
+                n = temp.name
+                self._sources[n] = temp
+                self._names.append(n)
+                self._ra_dec.append((r, d))
+                self._redshifts.append(z)
+            except NoMatchFoundError:
+                warn("Source {n} does not appear to have any XMM data, and will not be included in the "
+                     "sample.".format(n=n))
             dec_base.update(1)
         dec_base.close()
+
+        self._redshifts = np.array(self._redshifts)
 
     # These next few properties are all quantities passed in by the user on init, then used to
     #  declare source objects - as such they cannot ever be set by the user.

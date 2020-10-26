@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 10:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/10/2020, 18:23. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -60,7 +60,6 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         # ccf files may not be destined to spend life as product objects, but that doesn't mean
         # I can't take momentarily advantage of the error parsing I built into the product classes
         prod = BaseProduct(p_path[0], "", "", out, err, cmd)
-        prod = None
     elif p_type == "spectrum" and "NullSource" not in src:
         prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
                         extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info["reg_type"],
@@ -201,8 +200,11 @@ def sas_call(sas_func):
                             for e in product.sas_errors]
                     raise Exception(errs)
 
-                # For each product produced for this source, we add it to the storage hierarchy
-                sources[ind].update_products(product)
+                # ccfs aren't actually stored in the source product storage, but they are briefly put into
+                #  BaseProducts for error parsing etc. So if the product type is None we don't store it
+                if product.type is not None:
+                    # For each product produced for this source, we add it to the storage hierarchy
+                    sources[ind].update_products(product)
 
         # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
         for error in raised_errors:

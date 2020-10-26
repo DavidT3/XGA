@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/09/2020, 15:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/10/2020, 16:59. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -225,3 +225,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
 
 def evselect_annular_spectrum():
     raise NotImplementedError("Haven't quite got around to doing this bit yet")
+
+
+
+

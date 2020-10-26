@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/10/2020, 14:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/10/2020, 10:12. Copyright (c) David J Turner
 
 
 import inspect
@@ -615,22 +615,28 @@ class BaseProfile1D:
             #  with the log probability as defined in the functions above
             sampler = em.EnsembleSampler(num_walkers, n_par, log_prob, args=(r_dat, v_dat, v_err,
                                                                              model_func, priors))
-            # So now we start the sampler, running for the number of steps specified on function call, with
-            #  the starting parameters defined in the if statement above this.
-            sampler.run_mcmc(pos, num_steps, progress=False)
-
-            # The auto-correlation can produce an error that basically says not to trust the chains
             try:
-                # The sampler has a convenient auto-correlation time derivation, which returns the
-                #  auto-correlation time for each parameter - with this I simply choose the highest one and
-                #  round up to the nearest 100 to use as the burn-in
-                auto_corr = sampler.get_autocorr_time()
-                cut_off = int(np.ceil(auto_corr.max() / 100) * 100)
+                # So now we start the sampler, running for the number of steps specified on function call, with
+                #  the starting parameters defined in the if statement above this.
+                sampler.run_mcmc(pos, num_steps, progress=False)
                 success = True
-            except em.autocorr.AutocorrError as bugger:
+            except ValueError as bugger:
                 print(bugger)
-                warn("AutoCorrelationError was raised, MCMC fit has failed. - Perhaps try more steps?")
                 success = False
+
+            if success:
+                # The auto-correlation can produce an error that basically says not to trust the chains
+                try:
+                    # The sampler has a convenient auto-correlation time derivation, which returns the
+                    #  auto-correlation time for each parameter - with this I simply choose the highest one and
+                    #  round up to the nearest 100 to use as the burn-in
+                    auto_corr = sampler.get_autocorr_time()
+                    cut_off = int(np.ceil(auto_corr.max() / 100) * 100)
+                    success = True
+                except (em.autocorr.AutocorrError, ValueError) as bugger:
+                    print(bugger)
+                    # warn("AutoCorrelationError was raised, MCMC fit has failed. - Perhaps try more steps?")
+                    success = False
 
         # Now do some checks after the fit has run, primarily for any infinite values
         if not already_done and method == "curve_fit" and ((np.inf in fit_par or np.inf in fit_par_err)
@@ -894,8 +900,9 @@ class BaseProfile1D:
         chains = self.get_chains(model)
         m_info = self.get_model_fit(model)
 
+        print(len(m_info["par_names"]))
         if figsize is not None:
-            fig, axes = plt.subplots(len(m_info["par_names"]), figsize=(10, 2.4*len(m_info["par_names"])),
+            fig, axes = plt.subplots(len(m_info["par_names"]), figsize=(10, 4*len(m_info["par_names"])),
                                      sharex='col')
         else:
             fig, axes = plt.subplots(len(m_info["par_names"]), figsize=figsize, sharex='col')
