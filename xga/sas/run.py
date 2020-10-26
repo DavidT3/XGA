@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/10/2020, 17:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/10/2020, 18:23. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -200,8 +200,9 @@ def sas_call(sas_func):
                             for e in product.sas_errors]
                     raise Exception(errs)
 
-                # ccfs aren't actually stored in the source product storage
-                if product.type != "ccf":
+                # ccfs aren't actually stored in the source product storage, but they are briefly put into
+                #  BaseProducts for error parsing etc. So if the product type is None we don't store it
+                if product.type is not None:
                     # For each product produced for this source, we add it to the storage hierarchy
                     sources[ind].update_products(product)
 
