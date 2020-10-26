@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 13:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/10/2020, 16:59. Copyright (c) David J Turner
 
 
 import os
@@ -59,7 +59,7 @@ class Spectrum(BaseProduct):
             self._usable = False
             self._why_unusable.append("BackARFPathDoesNotExist")
 
-        allowed_regs = ["region", "r2500", "r500", "r200", "custom"]
+        allowed_regs = ["region", "r2500", "r500", "r200", "custom", "annular"]
         if reg_type in allowed_regs:
             self._reg_type = reg_type
         else:
@@ -510,12 +510,94 @@ class Spectrum(BaseProduct):
 
 
 class AnnularSpectra(BaseAggregateProduct):
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, raise_properly: bool = True):
-        raise NotImplementedError("Annular Spectra aren't even started")
-        # super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+    def __init__(self, spec_paths: list, rmf_paths: list, arf_paths: list, b_path: str, b_rmf_path: str,
+                 b_arf_path: str, inn_radii: Quantity, out_radii: Quantity, obs_id: str, instrument: str,
+                 stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
+        super().__init__(spec_paths, 'ann_spec', obs_id, instrument)
 
+        # TODO Check that the radii quantities are in length units
+        # We just check that the arrays with inner and outer radii are the same length
+        if len(inn_radii) != len(out_radii):
+            raise ValueError("The inn_radii and out_radii arrays must be the same length.")
+        self._num_ann = len(inn_radii)
 
+        # Now we check that the number of spectra, rmfs, and arfs match the number we expect
+        len_checks = [len(p) == self._num_ann for p in [spec_paths, rmf_paths, arf_paths]]
+        if not all(len_checks):
+            raise ValueError("There must be the same number of spec_paths, rmf_paths, and arf_paths as there "
+                             "are annuli.")
+
+        # Stored the passed file lists in attributes just for future reference
+        self._inn_radii = inn_radii
+        self._out_radii = out_radii
+        self._rad_pairs = np.append(inn_radii, out_radii)
+
+        # Saving the various file paths
+        self._rmfs = rmf_paths
+        self._arfs = arf_paths
+
+        for f_ind, f in enumerate(spec_paths):
+            interim = Spectrum(f, rmf_paths[f_ind], arf_paths[f_ind], b_path, b_rmf_path, b_arf_path, "annular",
+                               obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+
+            pos_key = inn_radii[f_ind].value + "-" + out_radii[f_ind].value
+            self._component_products[pos_key] = interim
+
+        self._all_usable = all(p.usable for p in self)
+
+    @property
+    def num_annuli(self) -> int:
+        """
+        A property getter for the number of annular spectra.
+        :return: The number of annular spectra associated with this product.
+        :rtype: int
+        """
+        return self._num_ann
+
+    @property
+    def rmf(self) -> list:
+        """
+        This method returns the list of RMF files for the annular spectra associated with this object.
+        :return: The path to the RMF files associated with the annular spectra of this object.
+        :rtype: list
+        """
+        return self._rmfs
+
+    @property
+    def arf(self) -> list:
+        """
+        This method returns the list of ARF files for the annular spectra associated with this object.
+        :return: The path to the ARF files associated with the annular spectra of this object.
+        :rtype: list
+        """
+        return self._arfs
+
+    @property
+    def background(self) -> str:
+        """
+        This method returns the path to the background spectrum.
+        :return: Path of the background spectrum.
+        :rtype: str
+        """
+        return self._component_products.values()[0].background
+
+    @property
+    def background_rmf(self) -> str:
+        """
+        This method returns the path to the background spectrum's RMF file.
+        :return: The path the the background spectrum's RMF.
+        :rtype: str
+        """
+        return self._component_products.values()[0].background_rmf
+
+    @property
+    def background_arf(self) -> str:
+        """
+        This method returns the path to the background spectrum's ARF file.
+        :return: The path the the background spectrum's ARF.
+        :rtype: str
+        """
+        return self._component_products.values()[0].background_arf
 
 
 
