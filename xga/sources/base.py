@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/10/2020, 11:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 10:37. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1043,6 +1043,12 @@ class BaseSource:
 
         mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
         back_mask = bck_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+
+        # If the masks are None, then they are set to an array of zeros
+        if mask is None:
+            mask = np.zeros(mask_image.shape)
+        if back_mask is None:
+            back_mask = np.zeros(mask_image.shape)
 
         return mask, back_mask
 
