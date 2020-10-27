@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 10:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 12:35. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Dict
@@ -364,8 +364,6 @@ class ExtendedSource(BaseSource):
 
 class PointSource(BaseSource):
     def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=True, load_fits=False):
-        raise NotImplementedError("Unfortunately as I specialise in clusters, I haven't put any effort into "
-                                  "point sources yet.")
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by regfiles or by users, will be stored
