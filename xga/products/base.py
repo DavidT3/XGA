@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/10/2020, 10:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 12:03. Copyright (c) David J Turner
 
 
 import inspect
@@ -165,7 +165,7 @@ class BaseProduct:
 
             # These are impossible to predict the form of, so they won't be parsed
             other_err_lines = [line for line in err_lines if line not in sas_err_lines
-                               and line not in sas_warn_lines and line != ""]
+                               and line not in sas_warn_lines and line != "" and "warn" not in line]
 
         if len(sas_errs_msgs) > 0:
             self._usable = False
