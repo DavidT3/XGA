@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/10/2020, 15:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 10:37. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Dict
@@ -331,7 +331,8 @@ class ExtendedSource(BaseSource):
         for o in self.obs_ids:
             # Exposure maps of the peak finding energy range for this ObsID
             exp_maps = self.get_products("expmap", o, extra_key=extra_key)
-            m = self.get_source_mask(reg_type, o, central_coord=self._default_coord)
+            m = self.get_source_mask(reg_type, o, central_coord=self._default_coord)[0]
+
             for ex in exp_maps:
                 # Grabs exposure map data, then alters it so anything that isn't zero is a one
                 ex_data = ex.data
