@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 12:35. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 17:25. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Dict
@@ -363,8 +363,40 @@ class ExtendedSource(BaseSource):
 
 
 class PointSource(BaseSource):
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=True, load_fits=False):
+    def __init__(self, ra, dec, redshift=None, name=None, point_radius=Quantity(30, 'arcsec'), use_peak=True,
+                 peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
+                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False):
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
         # This uses the added context of the type of source to find (or not find) matches in region files
-        # This is the internal dictionary where all regions, defined by regfiles or by users, will be stored
+        # This is the internal dictionary where all regions, defined by reg-files or by users, will be stored
         self._regions, self._alt_match_regions, self._other_sources = self._source_type_match("pnt")
+
+        if point_radius is not None and point_radius.unit.is_equivalent("kpc"):
+            rad = rad_to_ang(point_radius, self._redshift, self._cosmo).to("deg")
+            self._custom_region_radius = rad
+            self._radii["custom"] = self._custom_region_radius
+            self._rad_info = True
+        elif point_radius is not None and not point_radius.unit.is_equivalent("kpc"):
+            self._custom_region_radius = point_radius.to("deg")
+            self._radii["custom"] = self._custom_region_radius
+            self._rad_info = True
+
+        # Adding a custom radius to act as a search aperture for peak finding
+        # 500kpc in degrees, for the current redshift and cosmology
+        #  Or 5 arcminutes if no redshift information is present (that is allowed for the ExtendedSource class)
+        if self._redshift is not None:
+            search_aperture = rad_to_ang(Quantity(20, "kpc"), self._redshift, cosmo=self._cosmo)
+        else:
+            search_aperture = Quantity(20, 'arcsec').to('deg')
+        self._radii["search"] = search_aperture
+
+        self._use_peak = use_peak
+        self._back_inn_factor = back_inn_rad_factor
+        self._back_out_factor = back_out_rad_factor
+        # Make sure the peak energy boundaries are in keV
+        self._peak_lo_en = peak_lo_en.to('keV')
+        self._peak_hi_en = peak_hi_en.to('keV')
+        # self._peaks = {o: {} for o in self.obs_ids}
+        # self._peaks.update({"combined": None})
+
+

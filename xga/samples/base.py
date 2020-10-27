@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/10/2020, 10:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 17:25. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -18,13 +18,17 @@ class BaseSample:
                  load_products: bool = True, load_fits: bool = False, no_prog_bar: bool = False):
         # Slight duplication of data here, but I'm going to save the inputted information into attributes,
         #  that way I don't have to iterate through my sources everytime the user might want to pull it out
-        self._ra_dec = []
+        self._ra_decs = []
         self._redshifts = []
         # This is an empty list so that if no name is passed the automatically generated names can be added during
         #  declaration
         self._names = []
         self._cosmo = cosmology
         self._sources = {}
+        # This stores the indexes of the sources that work and will be stored in this object, for use by things
+        #  like the PointSample declaration, where names aren't strongly required but there are arguments that
+        #  aren't passed to this object and stored by it.
+        self._accepted_inds = []
 
         # Just checking that, if names are being supplied, then they are all unique
         if name is not None and len(set(name)) != len(name):
@@ -48,8 +52,9 @@ class BaseSample:
                 n = temp.name
                 self._sources[n] = temp
                 self._names.append(n)
-                self._ra_dec.append((r, d))
+                self._ra_decs.append((r, d))
                 self._redshifts.append(z)
+                self._accepted_inds.append(ind)
             except NoMatchFoundError:
                 warn("Source {n} does not appear to have any XMM data, and will not be included in the "
                      "sample.".format(n=n))
@@ -76,7 +81,7 @@ class BaseSample:
         :return: List of source RA-DEC positions as supplied at sample initialisation.
         :rtype: Quantity
         """
-        return Quantity(self._ra_dec, 'deg')
+        return Quantity(self._ra_decs, 'deg')
 
     @property
     def redshifts(self) -> ndarray:
