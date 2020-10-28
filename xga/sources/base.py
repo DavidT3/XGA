@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 10:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 13:59. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1286,11 +1286,11 @@ class BaseSource:
         return final_src, final_back
 
     @property
-    def nH(self) -> float:
+    def nH(self) -> Quantity:
         """
         Property getter for neutral hydrogen column attribute.
         :return: Neutral hydrogen column surface density.
-        :rtype: float
+        :rtype: Quantity
         """
         return self._nH
 
