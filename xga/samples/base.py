@@ -1,6 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 17:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 10:54. Copyright (c) David J Turner
 
+from typing import Union
 from warnings import warn
 
 import numpy as np
@@ -16,6 +17,9 @@ from ..sources.base import BaseSource
 class BaseSample:
     def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None, cosmology=Planck15,
                  load_products: bool = True, load_fits: bool = False, no_prog_bar: bool = False):
+        if len(ra) == 0:
+            raise ValueError("You have passed an empty array for the RA values.")
+
         # Slight duplication of data here, but I'm going to save the inputted information into attributes,
         #  that way I don't have to iterate through my sources everytime the user might want to pull it out
         self._ra_decs = []
@@ -61,8 +65,6 @@ class BaseSample:
             dec_base.update(1)
         dec_base.close()
 
-        self._redshifts = np.array(self._redshifts)
-
     # These next few properties are all quantities passed in by the user on init, then used to
     #  declare source objects - as such they cannot ever be set by the user.
     @property
@@ -91,7 +93,7 @@ class BaseSample:
         :return: List of redshifts.
         :rtype: ndarray
         """
-        return self._redshifts
+        return np.array(self._redshifts)
 
     @property
     def cosmo(self):
@@ -184,18 +186,54 @@ class BaseSample:
         else:
             raise StopIteration
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Union[int, str]) -> BaseSource:
         """
         This returns the relevant source when a sample is addressed using the name of a source as the key,
         or using an integer index.
+        :param Union[int, str] key: The index or name of the source to fetch.
+        :return: The relevant Source object.
+        :rtype: BaseSource
         """
         if isinstance(key, int):
             src = self._sources[self._names[key]]
         elif isinstance(key, str):
             src = self._sources[key]
         else:
+            src = None
             ValueError("Only a source name or integer index may be used to address a sample object")
         return src
+
+    def __delitem__(self, key: Union[int, str]):
+        """
+        This deletes a source from the sample, along with all accompanying data, using the index or
+        name of the source.
+        :param Union[int, str] key: The index or name of the source to delete.
+        """
+        if isinstance(key, int):
+            del self._sources[self._names[key]]
+        elif isinstance(key, str):
+            del self._sources[key]
+            key = self._names.index(key)
+        else:
+            ValueError("Only a source name or integer index may be used to address a sample object")
+
+        # Now the standard stored values
+        del self._names[key]
+        del self._ra_decs[key]
+        del self._redshifts[key]
+        del self._accepted_inds[key]
+
+        # This function is specific to the Sample type, as some Sample classes have extra information stored
+        #  that will need to be deleted.
+        self._del_data(key)
+
+    def _del_data(self, key: int):
+        """
+        This function will be replaced in subclasses that store more information about sources
+        in internal attributes.
+        :param int key: The index or name of the source to delete.
+        """
+        pass
 
 
 
