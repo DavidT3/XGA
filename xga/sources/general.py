@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 11:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 16:18. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Dict
@@ -261,7 +261,7 @@ class ExtendedSource(BaseSource):
         """
         A property getter for the combined X-ray peak coordinates. Most analysis will be centered
         on these coordinates.
-        :return: The X-ray peak coordinates for the combine ratemap.
+        :return: The X-ray peak coordinates for the combined ratemap.
         :rtype: Quantity
         """
         return self._peaks["combined"]
@@ -387,13 +387,12 @@ class PointSource(BaseSource):
             self._radii["custom"] = self._custom_region_radius
             self._rad_info = True
 
-        # Adding a custom radius to act as a search aperture for peak finding
-        # 500kpc in degrees, for the current redshift and cosmology
-        #  Or 5 arcminutes if no redshift information is present (that is allowed for the ExtendedSource class)
-        if self._redshift is not None:
-            search_aperture = rad_to_ang(Quantity(20, "kpc"), self._redshift, cosmo=self._cosmo)
+        if self._redshift is not None and point_radius.unit.is_equivalent("kpc"):
+            search_aperture = rad_to_ang(point_radius.to("kpc"), self._redshift, cosmo=self._cosmo)
+        elif point_radius.unit.is_equivalent("deg"):
+            search_aperture = point_radius.to("deg")
         else:
-            search_aperture = Quantity(20, 'arcsec').to('deg')
+            raise UnitConversionError("Can't convert {u} to a XGA supported length unit".format(u=point_radius.unit))
         self._radii["search"] = search_aperture
 
         self._use_peak = use_peak
@@ -402,8 +401,14 @@ class PointSource(BaseSource):
         # Make sure the peak energy boundaries are in keV
         self._peak_lo_en = peak_lo_en.to('keV')
         self._peak_hi_en = peak_hi_en.to('keV')
-        # self._peaks = {o: {} for o in self.obs_ids}
-        # self._peaks.update({"combined": None})
+        self._peaks = {o: {} for o in self.obs_ids}
+        self._peaks.update({"combined": None})
+        self._peaks_near_edge = {o: {} for o in self.obs_ids}
+
+        self._all_peaks()
+
+        if self._use_peak:
+            self._default_coord = self.peak
 
     @property
     def point_radius(self) -> Quantity:
@@ -415,6 +420,52 @@ class PointSource(BaseSource):
         """
         return self._custom_region_radius
 
+    def _all_peaks(self):
+        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
+        comb_rt = self.get_products("combined_ratemap", extra_key=en_key)
+
+        if len(comb_rt) != 0:
+            comb_rt = comb_rt[0]
+        else:
+            from xga.sas import emosaic
+            emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+            emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+            comb_rt = self.get_products("combined_ratemap", extra_key=en_key)[0]
+
+        if self._use_peak:
+            coord, near_edge = self.find_peak(comb_rt)
+            # Updating nH for new coord, probably won't make a difference most of the time
+            self._nH = nh_lookup(coord)[0]
+        else:
+            # If we don't care about peak finding then this is the boi to go for
+            coord = self.ra_dec
+            near_edge = comb_rt.near_edge(coord)
+
+        self._peaks["combined"] = coord
+        self._peaks_near_edge["combined"] = near_edge
+
+    def find_peak(self, rt: RateMap, peak_unit: UnitBase = deg) -> Tuple[Quantity, bool]:
+        """
+        Uses a simple 'brightest pixel' method to measure a peak coordinate for the point source.
+        :param RateMap rt: The RateMap to measure the peak from.
+        :param UnitBase peak_unit: The desired output unit of the peak.
+        :return:  The peak, and a boolean flag as to whether the peak is near an edge.
+        :rtype: Tuple[Quantity, bool]
+        """
+        central_coords = SkyCoord(*self.ra_dec.to("deg"))
+        aperture_mask = self.get_mask("search", rt.obs_id, central_coords)[0]
+        peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
+
+        return peak, near_edge
+
+    @property
+    def peak(self) -> Quantity:
+        """
+        A property getter for the combined X-ray peak coordinates.
+        :return: The X-ray peak coordinates for the combined ratemap.
+        :rtype: Quantity
+        """
+        return self._peaks["combined"]
 
 
 
