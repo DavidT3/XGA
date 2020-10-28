@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 17:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 10:31. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Dict
@@ -398,5 +398,17 @@ class PointSource(BaseSource):
         self._peak_hi_en = peak_hi_en.to('keV')
         # self._peaks = {o: {} for o in self.obs_ids}
         # self._peaks.update({"combined": None})
+
+    @property
+    def point_radius(self) -> Quantity:
+        """
+        Property getter to access the point_radius declared on initialisation of the source, the radius
+        of the region that is used for point source analysis.
+        :return: The radius of the point source analysis region.
+        :rtype: Quantity
+        """
+        return self._custom_region_radius
+
+
 
 
