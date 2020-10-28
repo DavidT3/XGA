@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 10:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 16:19. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1286,11 +1286,11 @@ class BaseSource:
         return final_src, final_back
 
     @property
-    def nH(self) -> float:
+    def nH(self) -> Quantity:
         """
         Property getter for neutral hydrogen column attribute.
         :return: Neutral hydrogen column surface density.
-        :rtype: float
+        :rtype: Quantity
         """
         return self._nH
 
@@ -1634,7 +1634,7 @@ class BaseSource:
         print("Source Name - {}".format(self._name))
         print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
         if self._peaks is not None:
-            print("X-ray Centroid - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
+            print("X-ray Peak - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
         print("nH - {}".format(self.nH))
         if self._redshift is not None:
             print("Redshift - {}".format(round(self._redshift, 3)))
