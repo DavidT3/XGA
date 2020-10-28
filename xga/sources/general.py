@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 10:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 11:17. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Dict
@@ -370,6 +370,7 @@ class PointSource(BaseSource):
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by reg-files or by users, will be stored
         self._regions, self._alt_match_regions, self._other_sources = self._source_type_match("pnt")
+        self._detected = {o: self._regions[o] is not None for o in self._regions}
 
         if point_radius is not None and point_radius.unit.is_equivalent("kpc"):
             rad = rad_to_ang(point_radius, self._redshift, self._cosmo).to("deg")
