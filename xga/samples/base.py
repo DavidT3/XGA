@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 10:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 14:39. Copyright (c) David J Turner
 
 from typing import Union
 from warnings import warn
@@ -153,7 +153,7 @@ class BaseSample:
         """
         print("\n-----------------------------------------------------")
         print("Number of Sources - {}".format(len(self)))
-        print("Redshift Information - {}".format(self._redshifts is not None))
+        print("Redshift Information - {}".format(self._redshifts[0] is not None))
         print("-----------------------------------------------------\n")
 
     # The length of the sample object will be the number of associated sources.

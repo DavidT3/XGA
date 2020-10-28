@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 10:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 14:39. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -12,7 +12,7 @@ from ..sources.general import PointSource
 
 
 class PointSample(BaseSample):
-    def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray, name: np.ndarray = None,
+    def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
                  point_radius: Quantity = None, use_peak=True, peak_lo_en=Quantity(0.5, "keV"),
                  peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05, back_out_rad_factor=1.5,
                  cosmology=Planck15, load_fits=False, no_prog_bar: bool = False, psf_corr: bool = False):
