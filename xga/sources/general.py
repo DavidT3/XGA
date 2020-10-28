@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 11:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 11:37. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Dict
@@ -363,14 +363,19 @@ class ExtendedSource(BaseSource):
 
 
 class PointSource(BaseSource):
-    def __init__(self, ra, dec, redshift=None, name=None, point_radius=Quantity(30, 'arcsec'), use_peak=True,
+    def __init__(self, ra, dec, redshift=None, name=None, point_radius=Quantity(30, 'arcsec'), use_peak=False,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False):
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by reg-files or by users, will be stored
-        self._regions, self._alt_match_regions, self._other_sources = self._source_type_match("pnt")
+        self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("pnt")
         self._detected = {o: self._regions[o] is not None for o in self._regions}
+
+        # Making a combined list of interloper regions
+        self._interloper_regions = []
+        for o in self._other_regions:
+            self._interloper_regions += self._other_regions[o]
 
         if point_radius is not None and point_radius.unit.is_equivalent("kpc"):
             rad = rad_to_ang(point_radius, self._redshift, self._cosmo).to("deg")
