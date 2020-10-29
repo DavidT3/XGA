@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 15:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 17:09. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -77,6 +77,7 @@ class BaseSource:
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
+        self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
 
         self._cosmo = cosmology
         if redshift is not None:
