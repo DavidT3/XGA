@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 15:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 11:20. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -13,9 +13,13 @@ from ..sources.general import PointSource
 
 class PointSample(BaseSample):
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
-                 point_radius: Quantity = None, use_peak=False, peak_lo_en=Quantity(0.5, "keV"),
+                 point_radius: Quantity = Quantity(30, 'arcsec'), use_peak=False, peak_lo_en=Quantity(0.5, "keV"),
                  peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05, back_out_rad_factor=1.5,
                  cosmology=Planck15, load_fits=False, no_prog_bar: bool = False, psf_corr: bool = False):
+
+        # People might pass a single value for point_radius, in which case things will breal
+        if point_radius.isscalar:
+            point_radius = Quantity([point_radius.value]*len(ra), point_radius.unit)
 
         # I don't like having this here, but it does avoid a circular import problem
         from xga.sas import evselect_image, eexpmap, emosaic
@@ -34,7 +38,7 @@ class PointSample(BaseSample):
         self._sources = {}
 
         self._point_radii = []
-        dec_lb = tqdm(desc="Setting up Point Sources", total=len(ra), disable=no_prog_bar)
+        dec_lb = tqdm(desc="Setting up Point Sources", total=len(self._accepted_inds), disable=no_prog_bar)
         for ind, rd in enumerate(self._ra_decs):
             r, d = rd
             z = self._redshifts[ind]
