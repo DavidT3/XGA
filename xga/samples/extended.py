@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 11:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 11:20. Copyright (c) David J Turner
 
 from typing import Union
 from warnings import warn
@@ -66,7 +66,7 @@ class ClusterSample(BaseSample):
         del self._sources
         self._sources = {}
 
-        dec_lb = tqdm(desc="Setting up Galaxy Clusters", total=len(ra), disable=no_prog_bar)
+        dec_lb = tqdm(desc="Setting up Galaxy Clusters", total=len(self.names), disable=no_prog_bar)
         for ind, r in enumerate(ra):
             # Just splitting out relevant values for this particular cluster so the object declaration isn't
             #  super ugly.
