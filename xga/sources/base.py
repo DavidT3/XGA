@@ -1,8 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 16:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 15:38. Copyright (c) David J Turner
 
 import os
 import warnings
+from copy import deepcopy
 from itertools import product
 from typing import Tuple, List, Dict
 
@@ -132,6 +133,9 @@ class BaseSource:
 
         self._wl_mass = None
         self._wl_mass_err = None
+
+        self._peak_lo_en = Quantity(0.5, 'keV')
+        self._peak_hi_en = Quantity(2.0, 'keV')
 
         # These attributes pertain to the cleaning of observations (as in disassociating them from the source if
         #  they don't include enough of the object we care about).
@@ -1600,7 +1604,8 @@ class BaseSource:
                 del self._alt_match_regions[o]
                 # del self._within_source_regions[o]
                 # del self._within_back_regions[o]
-                del self._peaks[o]
+                if self._peaks is not None:
+                    del self._peaks[o]
 
                 del self._obs[self._obs.index(o)]
                 if o in self._onaxis:
@@ -1625,6 +1630,66 @@ class BaseSource:
         :rtype: Quantity
         """
         return self._ang_diam_dist
+
+    def obs_check(self, reg_type: str, threshold_fraction: float = 0.5) -> Dict:
+        """
+        This method uses exposure maps and region masks to determine which ObsID/instrument combinations
+        are not contributing to the analysis. It calculates the area intersection of the mask and exposure
+        map, and if (for a given ObsID-Instrument) the ratio of that area to the maximum area calculated
+        is less than the threshold fraction, that ObsID-instrument will be included in the returned
+        rejection dictionary.
+        :param str reg_type: The region type for which to calculate the area intersection.
+        :param float threshold_fraction: Area to max area ratios below this value will mean the
+        ObsID-Instrument is rejected.
+        :return: A dictionary of ObsID keys on the top level, then instruments a level down, that
+        should be rejected according to the criteria supplied to this method.
+        :rtype: Dict
+        """
+        # Again don't particularly want to do this local import, but its just easier
+        from xga.sas import eexpmap
+
+        # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
+        #  first, then checking where the source lies on the exposure map
+        eexpmap(self, self._peak_lo_en, self._peak_hi_en)
+
+        extra_key = "bound_{l}-{u}".format(l=self._peak_lo_en.to("keV").value, u=self._peak_hi_en.to("keV").value)
+
+        max_area = 0
+        area = {o: {} for o in self.obs_ids}
+        for o in self.obs_ids:
+            # Exposure maps of the peak finding energy range for this ObsID
+            exp_maps = self.get_products("expmap", o, extra_key=extra_key)
+            m = self.get_source_mask(reg_type, o, central_coord=self._default_coord)[0]
+
+            for ex in exp_maps:
+                # Grabs exposure map data, then alters it so anything that isn't zero is a one
+                ex_data = ex.data
+                ex_data[ex_data > 0] = 1
+                # We do this because it then becomes very easy to calculate the intersection area of the mask
+                #  with the XMM chips. Just mask the modified expmap, then sum.
+                area[o][ex.instrument] = (ex_data*m).sum()
+                # Stores the maximum area intersection, this is used in the threshold calculation
+                if area[o][ex.instrument] > max_area:
+                    max_area = area[o][ex.instrument]
+
+        # Just in case the maximum area hasn't changed at all...
+        if max_area == 0:
+            # Everything has to be rejected in this case
+            return deepcopy(self._instruments)
+            # raise NoMatchFoundError("There doesn't appear to be any intersection between any {r} mask and "
+            #                         "the data from the simple match".format(r=reg_type))
+
+        # Now we know the max intersection area for all data, we can accept or reject particular data
+        reject_dict = {}
+        for o in area:
+            for i in area[o]:
+                frac = (area[o][i] / max_area)
+                if frac <= threshold_fraction and o not in reject_dict:
+                    reject_dict[o] = [i]
+                elif frac <= threshold_fraction and o in reject_dict:
+                    reject_dict[o].append(i)
+
+        return reject_dict
 
     def info(self):
         """

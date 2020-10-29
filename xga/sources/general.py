@@ -1,8 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 16:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 15:38. Copyright (c) David J Turner
 
 import warnings
-from typing import Tuple, List, Dict
+from typing import Tuple, List
 
 import numpy as np
 from astropy import wcs
@@ -12,7 +12,7 @@ from astropy.units import Quantity, UnitBase, deg, UnitConversionError
 from numpy import ndarray
 
 from .base import BaseSource
-from ..exceptions import NotAssociatedError, PeakConvergenceFailedError, NoRegionsError, NoMatchFoundError
+from ..exceptions import NotAssociatedError, PeakConvergenceFailedError, NoRegionsError, NoValidObservationsError
 from ..products import RateMap
 from ..sourcetools import rad_to_ang, ang_to_rad, nh_lookup
 
@@ -303,69 +303,12 @@ class ExtendedSource(BaseSource):
         """
         return self._chosen_peak_cluster, self._other_peak_clusters
 
-    def obs_check(self, reg_type: str, threshold_fraction: float = 0.5) -> Dict:
-        """
-        This method uses exposure maps and region masks to determine which ObsID/instrument combinations
-        are not contributing to the analysis. It calculates the area intersection of the mask and exposure
-        map, and if (for a given ObsID-Instrument) the ratio of that area to the maximum area calculated
-        is less than the threshold fraction, that ObsID-instrument will be included in the returned
-        rejection dictionary.
-        :param str reg_type: The region type for which to calculate the area intersection.
-        :param float threshold_fraction: Area to max area ratios below this value will mean the
-        ObsID-Instrument is rejected.
-        :return: A dictionary of ObsID keys on the top level, then instruments a level down, that
-        should be rejected according to the criteria supplied to this method.
-        :rtype: Dict
-        """
-        # Again don't particularly want to do this local import, but its just easier
-        from xga.sas import eexpmap
-
-        # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
-        #  first, then checking where the source lies on the exposure map
-        eexpmap(self, self._peak_lo_en, self._peak_hi_en)
-
-        extra_key = "bound_{l}-{u}".format(l=self._peak_lo_en.to("keV").value, u=self._peak_hi_en.to("keV").value)
-
-        max_area = 0
-        area = {o: {} for o in self.obs_ids}
-        for o in self.obs_ids:
-            # Exposure maps of the peak finding energy range for this ObsID
-            exp_maps = self.get_products("expmap", o, extra_key=extra_key)
-            m = self.get_source_mask(reg_type, o, central_coord=self._default_coord)[0]
-
-            for ex in exp_maps:
-                # Grabs exposure map data, then alters it so anything that isn't zero is a one
-                ex_data = ex.data
-                ex_data[ex_data > 0] = 1
-                # We do this because it then becomes very easy to calculate the intersection area of the mask
-                #  with the XMM chips. Just mask the modified expmap, then sum.
-                area[o][ex.instrument] = (ex_data*m).sum()
-                # Stores the maximum area intersection, this is used in the threshold calculation
-                if area[o][ex.instrument] > max_area:
-                    max_area = area[o][ex.instrument]
-
-        # Just in case the maximum area hasn't changed at all...
-        if max_area == 0:
-            raise NoMatchFoundError("There doesn't appear to be any intersection between any {r} mask and "
-                                    "the data from the simple match".format(r=reg_type))
-
-        # Now we know the max intersection area for all data, we can accept or reject particular data
-        reject_dict = {}
-        for o in area:
-            for i in area[o]:
-                frac = (area[o][i] / max_area)
-                if frac <= threshold_fraction and o not in reject_dict:
-                    reject_dict[o] = [i]
-                elif frac <= threshold_fraction and o in reject_dict:
-                    reject_dict[o].append(i)
-
-        return reject_dict
-
 
 class PointSource(BaseSource):
     def __init__(self, ra, dec, redshift=None, name=None, point_radius=Quantity(30, 'arcsec'), use_peak=False,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
-                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False):
+                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False,
+                 regen_merged: bool = True):
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by reg-files or by users, will be stored
@@ -394,6 +337,22 @@ class PointSource(BaseSource):
         else:
             raise UnitConversionError("Can't convert {u} to a XGA supported length unit".format(u=point_radius.unit))
         self._radii["search"] = search_aperture
+
+        # Here we automatically clean the observations, to make sure the point source does actually lie
+        #  on the detector and not just near it
+        # Use a pretty harsh acceptance fraction
+        reject_dict = self.obs_check("custom", 0.9)
+        if len(reject_dict) != 0:
+            # Use the source method to remove data we've decided isn't worth keeping
+            self.disassociate_obs(reject_dict)
+            if len(self._obs) == 0:
+                raise NoValidObservationsError("Observation cleaning has been run and there are no remaining"
+                                               " observations. ")
+
+            if regen_merged:
+                from ..sas import emosaic
+                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
         self._use_peak = use_peak
         self._back_inn_factor = back_inn_rad_factor
@@ -466,6 +425,10 @@ class PointSource(BaseSource):
         :rtype: Quantity
         """
         return self._peaks["combined"]
+
+
+
+
 
 
 
