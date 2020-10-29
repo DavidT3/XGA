@@ -1,11 +1,12 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/10/2020, 10:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 11:07. Copyright (c) David J Turner
 
+from typing import Union
 from warnings import warn
 
+import numpy as np
 from astropy.cosmology import Planck15
 from astropy.units import Quantity
-from numpy import ndarray
 from tqdm import tqdm
 
 from .base import BaseSample
@@ -16,14 +17,32 @@ from ..sources.extended import GalaxyCluster
 
 # Names are required for the ClusterSample because they'll be used to access specific cluster objects
 class ClusterSample(BaseSample):
-    def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray, name: ndarray, r200: Quantity = None,
-                 r500: Quantity = None, r2500: Quantity = None, richness: ndarray = None,
-                 richness_err: ndarray = None, wl_mass: Quantity = None, wl_mass_err: Quantity = None,
+    def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray, name: np.ndarray, r200: Quantity = None,
+                 r500: Quantity = None, r2500: Quantity = None, richness: np.ndarray = None,
+                 richness_err: np.ndarray = None, wl_mass: Quantity = None, wl_mass_err: Quantity = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
                  load_fits: bool = False, clean_obs: bool = True, clean_obs_reg: str = "r200",
                  clean_obs_threshold: float = 0.3, no_prog_bar: bool = False, psf_corr: bool = False):
+
+        # These are various cluster specific attributes to make it easier for people to access them
+        # Radii attributes
+        self._r200s = []
+        self._r200_unit = None
+        self._r500s = []
+        self._r500_unit = None
+        self._r2500s = []
+        self._r2500_unit = None
+        self._customs = []
+        self._custom_unit = None
+
+        # Other attributes
+        self._richnesses = []
+        self._richness_errs = []
+        self._wl_masses = []
+        self._wl_mass_errs = []
+        self._wl_mass_unit = None
 
         # I don't like having this here, but it does avoid a circular import problem
         from xga.sas import evselect_image, eexpmap, emosaic
@@ -60,20 +79,36 @@ class ClusterSample(BaseSample):
                 # I know this code is a bit ugly, but oh well
                 if r200 is not None:
                     r2 = r200[ind]
+                    self._r200s.append(r2.value)
+                    if self._r200_unit is None:
+                        self._r200_unit = r2.unit
                 else:
                     r2 = None
+                    self._r200s.append(r2)
                 if r500 is not None:
                     r5 = r500[ind]
+                    self._r500s.append(r5.value)
+                    if self._r500_unit is None:
+                        self._r500_unit = r5.unit
                 else:
                     r5 = None
+                    self._r500s.append(r5)
                 if r2500 is not None:
                     r25 = r2500[ind]
+                    self._r2500s.append(r25.value)
+                    if self._r2500_unit is None:
+                        self._r2500_unit = r25.unit
                 else:
                     r25 = None
+                    self._r2500s.append(r25)
                 if custom_region_radius is not None:
                     cr = custom_region_radius[ind]
+                    self._customs.append(cr.value)
+                    if self._custom_unit is None:
+                        self._custom_unit = cr.unit
                 else:
                     cr = None
+                    self._customs.append(cr)
 
                 # Here we check the options that are allowed to be None
                 if richness is not None:
@@ -82,13 +117,22 @@ class ClusterSample(BaseSample):
                 else:
                     lam = None
                     lam_err = None
+                # This is like this because lambda is requested as a numpy array, not a quantity
+                self._richnesses.append(lam)
+                self._richness_errs.append(lam_err)
 
                 if wl_mass is not None:
                     wlm = wl_mass[ind]
                     wlm_err = wl_mass_err[ind]
+                    self._wl_masses.append(wlm.value)
+                    self._wl_mass_errs.append(wlm_err.value)
+                    if self._wl_mass_unit is None:
+                        self._wl_mass_unit = wlm.unit
                 else:
                     wlm = None
                     wlm_err = None
+                    self._wl_masses.append(wlm)
+                    self._wl_mass_errs.append(wlm_err)
 
                 # Will definitely load products (the True in this call), because I just made sure I generated a
                 #  bunch to make GalaxyCluster declaration quicker
@@ -134,7 +178,69 @@ class ClusterSample(BaseSample):
         if psf_corr:
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
+    @property
+    def r200s(self) -> Union[Quantity, np.ndarray]:
+        """
+        Property getter for R200 values of valid clusters - added for the convenience of the user,
+        so they don't have to iterate through the different source objects in the sample.
+        :return: The R200 values of the Galaxy Clusters in this sample.
+        :rtype: Union[Quantity, np.ndarray]
+        """
+        if self._r200_unit is None:
+            to_ret = np.array(self._r200s)
+        else:
+            to_ret = Quantity(self._r200s, self._r200_unit)
+        return to_ret
 
+    @property
+    def r500s(self) -> Union[Quantity, np.ndarray]:
+        """
+        Property getter for R500 values of valid clusters - added for the convenience of the user,
+        so they don't have to iterate through the different source objects in the sample.
+        :return: The R500 values of the Galaxy Clusters in this sample.
+        :rtype: Union[Quantity, np.ndarray]
+        """
+        if self._r500_unit is None:
+            to_ret = np.array(self._r500s)
+        else:
+            to_ret = Quantity(self._r500s, self._r500_unit)
+        return to_ret
+
+    @property
+    def r2500s(self) -> Union[Quantity, np.ndarray]:
+        """
+        Property getter for R2500 values of valid clusters - added for the convenience of the user,
+        so they don't have to iterate through the different source objects in the sample.
+        :return: The R2500 values of the Galaxy Clusters in this sample.
+        :rtype: Union[Quantity, np.ndarray]
+        """
+        if self._r2500_unit is None:
+            to_ret = np.array(self._r2500s)
+        else:
+            to_ret = Quantity(self._r2500s, self._r2500_unit)
+        return to_ret
+
+    @property
+    def custom_radii(self) -> Union[Quantity, np.ndarray]:
+        """
+        Property getter for custom radii values of valid clusters - added for the convenience of the user,
+        so they don't have to iterate through the different source objects in the sample.
+        :return: The custom radii values of the Galaxy Clusters in this sample.
+        :rtype: Union[Quantity, np.ndarray]
+        """
+        if self._custom_unit is None:
+            to_ret = np.array(self._customs)
+        else:
+            to_ret = Quantity(self._customs, self._custom_unit)
+        return to_ret
+
+    def _del_data(self, key: int):
+        """
+        Specific to the ClusterSample class, this deletes the extra data stored during the initialisation
+        of this type of sample.
+        :param int key: The index or name of the source to delete.
+        """
+        del self._point_radii[key]
 
 
 

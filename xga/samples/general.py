@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 15:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 11:07. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -54,7 +54,6 @@ class PointSample(BaseSample):
         # I'm not worried about pr never having existed - declaration of a sample will fail
         #  if not data is passed.
         self._pr_unit = pr.unit
-        self._point_radii = self._point_radii
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
         if psf_corr:
