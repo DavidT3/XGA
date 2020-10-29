@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 11:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 15:38. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -7,6 +7,7 @@ from astropy.units import Quantity, Unit
 from tqdm import tqdm
 
 from .base import BaseSample
+from ..exceptions import NoValidObservationsError
 from ..imagetools.psf import rl_psf
 from ..sources.general import PointSource
 
@@ -37,6 +38,9 @@ class PointSample(BaseSample):
         del self._sources
         self._sources = {}
 
+        # A list to store the inds of any declarations that failed due to NoValidObservations, so some
+        #  attributes can be cleaned up later
+        failed_names = []
         self._point_radii = []
         dec_lb = tqdm(desc="Setting up Point Sources", total=len(self._accepted_inds), disable=no_prog_bar)
         for ind, rd in enumerate(self._ra_decs):
@@ -48,16 +52,34 @@ class PointSample(BaseSample):
             else:
                 pr = None
 
-            self._sources[n] = PointSource(r, d, z, n, pr, use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
-                                           back_out_rad_factor, cosmology, True, load_fits)
-            pr = self._sources[n].point_radius
-            self._point_radii.append(pr.value)
+            # Observation cleaning goes on automatically in PointSource, so if a NoValidObservations error is
+            #  thrown I have to catch it and not add that source to this sample.
+            try:
+                self._sources[n] = PointSource(r, d, z, n, pr, use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
+                                               back_out_rad_factor, cosmology, True, load_fits, False)
+                pr = self._sources[n].point_radius
+                self._point_radii.append(pr.value)
+            except NoValidObservationsError:
+                failed_names.append(n)
+
             dec_lb.update(1)
         dec_lb.close()
+
+        # This deals with any deleted sources due to NoValidObservations, this is super clunky but oh well
+        for f_n in failed_names:
+            f_ind = self._names.index(f_n)
+            del self._names[f_ind]
+            del self._ra_decs[f_ind]
+            del self._redshifts[f_ind]
 
         # I'm not worried about pr never having existed - declaration of a sample will fail
         #  if not data is passed.
         self._pr_unit = pr.unit
+
+        # I've cleaned the observations, and its possible some of the data has been thrown away,
+        #  so I should regenerate the mosaic images/expmaps
+        emosaic(self, "image", peak_lo_en, peak_hi_en)
+        emosaic(self, "expmap", peak_lo_en, peak_hi_en)
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
         if psf_corr:
