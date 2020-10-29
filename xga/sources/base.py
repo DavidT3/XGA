@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 16:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 10:03. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -56,6 +56,11 @@ class BaseSource:
         # This checks that the observations have at least one usable instrument
         self._obs = [o for o in obs if len(instruments[o]) > 0]
         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+
+        # self._obs can be empty after this cleaning step, so do quick check and raise error if so.
+        if len(self._obs) == 0:
+            raise NoValidObservationsError("{s} has {n} observations ({a}), none of which have the necessary"
+                                           " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
 
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
@@ -252,7 +257,8 @@ class BaseSource:
         # Cleans any observations that don't have at least one instrument associated with them
         obs_dict = {o: v for o, v in obs_dict.items() if len(v) != 0}
         if len(obs_dict) == 0:
-            raise NoValidObservationsError("No matching observations have the necessary files.")
+            raise NoValidObservationsError("{s} has {n} observations ({a}), none of which have the necessary"
+                                           " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict, odf_dict
 
     def update_products(self, prod_obj: BaseProduct):
@@ -552,7 +558,8 @@ class BaseSource:
                     sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                     # Finds the appropriate matching spectrum object for the current table line
                     try:
-                        spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1], just_obj=False)
+                        spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1],
+                                                                     just_obj=False)
                                 if reg_type in match and match[-1].usable][0][-1]
                     except IndexError:
                         raise NoProductAvailableError("A Spectrum object referenced in a fit file for {n} cannot be "
@@ -931,7 +938,8 @@ class BaseSource:
         if reg_type == "region" and central_coord is not None:
             warnings.warn("You cannot use custom central coordinates with a region from supplied region files")
         # elif reg_type != "region" and central_coord is None:
-        #     warnings.warn("No central coord supplied, using default (peak if use_peak is True), initial coordinates"
+        #     warnings.warn("No central coord supplied, using default (peak if use_peak is True),
+        #     initial coordinates"
         #                   "otherwise.")
 
         if central_coord is None:
