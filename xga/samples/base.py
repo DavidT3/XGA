@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 14:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 09:27. Copyright (c) David J Turner
 
 from typing import Union
 from warnings import warn
@@ -10,7 +10,7 @@ from astropy.units import Quantity
 from numpy import ndarray
 from tqdm import tqdm
 
-from ..exceptions import NoMatchFoundError
+from ..exceptions import NoMatchFoundError, NoValidObservationsError
 from ..sources.base import BaseSource
 
 
@@ -59,7 +59,7 @@ class BaseSample:
                 self._ra_decs.append((r, d))
                 self._redshifts.append(z)
                 self._accepted_inds.append(ind)
-            except NoMatchFoundError:
+            except (NoMatchFoundError, NoValidObservationsError):
                 warn("Source {n} does not appear to have any XMM data, and will not be included in the "
                      "sample.".format(n=n))
             dec_base.update(1)
