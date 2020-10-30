@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 17:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/10/2020, 11:43. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1644,12 +1644,12 @@ class BaseSource:
         """
         This method uses exposure maps and region masks to determine which ObsID/instrument combinations
         are not contributing to the analysis. It calculates the area intersection of the mask and exposure
-        map, and if (for a given ObsID-Instrument) the ratio of that area to the maximum area calculated
-        is less than the threshold fraction, that ObsID-instrument will be included in the returned
+        map, and if (for a given ObsID-Instrument) the ratio of that area to the full area of the region
+        calculated is less than the threshold fraction, that ObsID-instrument will be included in the returned
         rejection dictionary.
         :param str reg_type: The region type for which to calculate the area intersection.
-        :param float threshold_fraction: Area to max area ratios below this value will mean the
-        ObsID-Instrument is rejected.
+        :param float threshold_fraction: Area to full area of region ratio that has to be reached before
+        a specific observation is allowed.
         :return: A dictionary of ObsID keys on the top level, then instruments a level down, that
         should be rejected according to the criteria supplied to this method.
         :rtype: Dict
@@ -1663,12 +1663,13 @@ class BaseSource:
 
         extra_key = "bound_{l}-{u}".format(l=self._peak_lo_en.to("keV").value, u=self._peak_hi_en.to("keV").value)
 
-        max_area = 0
         area = {o: {} for o in self.obs_ids}
+        full_area = {o: {} for o in self.obs_ids}
         for o in self.obs_ids:
             # Exposure maps of the peak finding energy range for this ObsID
             exp_maps = self.get_products("expmap", o, extra_key=extra_key)
             m = self.get_source_mask(reg_type, o, central_coord=self._default_coord)[0]
+            full_area[o] = m.sum()
 
             for ex in exp_maps:
                 # Grabs exposure map data, then alters it so anything that isn't zero is a one
@@ -1677,22 +1678,20 @@ class BaseSource:
                 # We do this because it then becomes very easy to calculate the intersection area of the mask
                 #  with the XMM chips. Just mask the modified expmap, then sum.
                 area[o][ex.instrument] = (ex_data*m).sum()
-                # Stores the maximum area intersection, this is used in the threshold calculation
-                if area[o][ex.instrument] > max_area:
-                    max_area = area[o][ex.instrument]
 
-        # Just in case the maximum area hasn't changed at all...
-        if max_area == 0:
+        if max(list(full_area.values())) == 0:
             # Everything has to be rejected in this case
             return deepcopy(self._instruments)
             # raise NoMatchFoundError("There doesn't appear to be any intersection between any {r} mask and "
             #                         "the data from the simple match".format(r=reg_type))
 
-        # Now we know the max intersection area for all data, we can accept or reject particular data
         reject_dict = {}
         for o in area:
             for i in area[o]:
-                frac = (area[o][i] / max_area)
+                if full_area[o] != 0:
+                    frac = (area[o][i] / full_area[o])
+                else:
+                    frac = 0
                 if frac <= threshold_fraction and o not in reject_dict:
                     reject_dict[o] = [i]
                 elif frac <= threshold_fraction and o in reject_dict:
