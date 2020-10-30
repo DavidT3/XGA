@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 11:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/10/2020, 12:52. Copyright (c) David J Turner
 
 from typing import Union
 from warnings import warn
@@ -240,8 +240,16 @@ class ClusterSample(BaseSample):
         of this type of sample.
         :param int key: The index or name of the source to delete.
         """
-        del self._point_radii[key]
+        del self._r200s[key]
+        del self._r500s[key]
+        del self._r2500s[key]
+        del self._customs[key]
 
+        del self._wl_masses[key]
+        del self._wl_mass_errs[key]
+
+        del self._richnesses[key]
+        del self._richness_errs[key]
 
 
 
