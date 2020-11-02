@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 14:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 15:21. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -968,7 +968,7 @@ class BaseSource:
         elif reg_type == "region" and obs_id is not None:
             src_reg = self._regions[obs_id]
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise TypeError("There is no {} associated with this source".format(reg_type))
+            raise ValueError("There is no {} associated with this source".format(reg_type))
         elif reg_type != "region" and reg_type in self._radii:
             # We know for certain that the radius will be in degrees, but it has to be converted to degrees
             #  before being stored in the radii attribute
