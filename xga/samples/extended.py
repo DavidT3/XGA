@@ -1,11 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 11:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 15:43. Copyright (c) David J Turner
 
 from warnings import warn
 
+import numpy as np
 from astropy.cosmology import Planck15
 from astropy.units import Quantity
-from numpy import ndarray
 from tqdm import tqdm
 
 from .base import BaseSample
@@ -16,9 +16,9 @@ from ..sources.extended import GalaxyCluster
 
 # Names are required for the ClusterSample because they'll be used to access specific cluster objects
 class ClusterSample(BaseSample):
-    def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray, name: ndarray, r200: Quantity = None,
-                 r500: Quantity = None, r2500: Quantity = None, richness: ndarray = None,
-                 richness_err: ndarray = None, wl_mass: Quantity = None, wl_mass_err: Quantity = None,
+    def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray, name: np.ndarray, r200: Quantity = None,
+                 r500: Quantity = None, r2500: Quantity = None, richness: np.ndarray = None,
+                 richness_err: np.ndarray = None, wl_mass: Quantity = None, wl_mass_err: Quantity = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
@@ -134,7 +134,50 @@ class ClusterSample(BaseSample):
         if psf_corr:
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
+    @property
+    def r200_snr(self) -> np.ndarray:
+        """
+        Fetches and returns the R200 signal to noises from the constituent sources.
+        :return: The signal to noise ration calculated at the R200.
+        :rtype: np.ndarray
+        """
+        snrs = []
+        for s in self:
+            try:
+                snrs.append(s.get_snr("r200"))
+            except ValueError:
+                snrs.append(None)
+        return np.array(snrs)
 
+    @property
+    def r500_snr(self) -> np.ndarray:
+        """
+        Fetches and returns the R500 signal to noises from the constituent sources.
+        :return: The signal to noise ration calculated at the R500.
+        :rtype: np.ndarray
+        """
+        snrs = []
+        for s in self:
+            try:
+                snrs.append(s.get_snr("r500"))
+            except ValueError:
+                snrs.append(None)
+        return np.array(snrs)
+
+    @property
+    def r2500_snr(self) -> np.ndarray:
+        """
+        Fetches and returns the R2500 signal to noises from the constituent sources.
+        :return: The signal to noise ration calculated at the R2500.
+        :rtype: np.ndarray
+        """
+        snrs = []
+        for s in self:
+            try:
+                snrs.append(s.get_snr("r2500"))
+            except ValueError:
+                snrs.append(None)
+        return np.array(snrs)
 
 
 
