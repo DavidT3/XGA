@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 14:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 16:24. Copyright (c) David J Turner
 
 from typing import Union
 from warnings import warn
@@ -194,13 +194,13 @@ class BaseSample:
         :return: The relevant Source object.
         :rtype: BaseSource
         """
-        if isinstance(key, int):
+        if isinstance(key, (int, np.integer)):
             src = self._sources[self._names[key]]
         elif isinstance(key, str):
             src = self._sources[key]
         else:
             src = None
-            ValueError("Only a source name or integer index may be used to address a sample object")
+            raise ValueError("Only a source name or integer index may be used to address a sample object")
         return src
 
     def __delitem__(self, key: Union[int, str]):
@@ -209,7 +209,7 @@ class BaseSample:
         name of the source.
         :param Union[int, str] key: The index or name of the source to delete.
         """
-        if isinstance(key, int):
+        if isinstance(key, (int, np.integer)):
             del self._sources[self._names[key]]
         elif isinstance(key, str):
             del self._sources[key]
