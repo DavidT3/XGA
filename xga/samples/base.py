@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 16:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 16:25. Copyright (c) David J Turner
 
 from typing import Union
 from warnings import warn
@@ -215,7 +215,7 @@ class BaseSample:
             del self._sources[key]
             key = self._names.index(key)
         else:
-            ValueError("Only a source name or integer index may be used to address a sample object")
+            raise ValueError("Only a source name or integer index may be used to address a sample object")
 
         # Now the standard stored values
         del self._names[key]
