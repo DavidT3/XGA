@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 15:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 14:57. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1260,7 +1260,7 @@ class BaseSource:
             source_interlopers = self.within_region(source)
             background_interlopers = self.within_region(back)
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise TypeError("There is no {} associated with this source".format(reg_type))
+            raise ValueError("There is no {} associated with this source".format(reg_type))
         elif reg_type != "region" and reg_type in self._radii:
             source, back = self.source_back_regions(reg_type, obs_id)
             source_interlopers = self.within_region(source)
