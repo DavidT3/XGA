@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 12:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/11/2020, 17:34. Copyright (c) David J Turner
 
 
 import inspect
@@ -1038,7 +1038,7 @@ class BaseProfile1D:
             plt.ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
         else:
             # If background has been subtracted it will be mentioned in the y axis label
-            plt.ylabel(r"{l} - Bck {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            plt.ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
 
         if self._obs_id == "combined":
             plt.title("{s} {l} Profile".format(s=self._src_name, l=PROF_TYPE_YAXIS[self._prof_type]))
@@ -1051,6 +1051,15 @@ class BaseProfile1D:
 
         # And of course actually showing it
         plt.show()
+
+    @property
+    def good_model_fits(self) -> List:
+        """
+        A list of the names of models that have been successfully fitted to the profile.
+        :return: A list of model names.
+        :rtype: Dict
+        """
+        return list(self._good_model_fits.keys())
 
     # None of these properties concerning the radii and values are going to have setters, if the user
     #  wants to modify it then they can define a new product.
@@ -1176,7 +1185,188 @@ class BaseProfile1D:
         """
         return len(self._radii)
 
+    def __add__(self, other):
+        to_combine = [self]
+        if type(other) == list:
+            to_combine += other
+        elif isinstance(other, BaseProfile1D):
+            to_combine.append(other)
+        elif isinstance(other, BaseAggregateProfile1D):
+            to_combine += other.profiles
+        else:
+            raise TypeError("You may only add 1D Profiles, 1D Aggregate Profiles, or a list of 1D profiles"
+                            " to this object.")
+        return BaseAggregateProfile1D(to_combine)
 
+
+class BaseAggregateProfile1D:
+    def __init__(self, profiles: List[BaseProfile1D]):
+        types = [type(p) for p in profiles]
+        if len(set(types)) != 1:
+            raise TypeError("All component profiles must be of the same type")
+
+        x_units = [p.radii_unit for p in profiles]
+        if len(set(x_units)) != 1:
+            raise TypeError("All component profiles must have the same radii units.")
+
+        y_units = [p.values_unit for p in profiles]
+        if len(set(y_units)) != 1:
+            raise TypeError("All component profiles must have the same value units.")
+
+        backs = [p.background.value != 0 for p in profiles]
+        if len(set(backs)) != 1:
+            raise ValueError("All component profiles must have a background, or not have a "
+                             "background. You cannot profiles that do to profiles that don't.")
+        elif backs[0]:
+            # An attribute to tell us whether backgrounds are present in the component profiles
+            self._back_avail = True
+        else:
+            self._back_avail = False
+
+        self._profiles = profiles
+        self._radii_unit = x_units[0]
+        self._values_unit = y_units[0]
+        # Not doing a check that all the prof types are the same, because that should be included in the
+        #  type check on the first line of this init
+        self._prof_type = profiles[0].prof_type
+
+    @property
+    def radii_unit(self) -> Unit:
+        """
+        Getter for the unit of the radii passed by the user at init.
+        :return: An astropy unit object.
+        :rtype: Unit
+        """
+        return self._radii_unit
+
+    @property
+    def values_unit(self) -> Unit:
+        """
+        Getter for the unit of the values passed by the user at init.
+        :return: An astropy unit object.
+        :rtype: Unit
+        """
+        return self._values_unit
+
+    @property
+    def prof_type(self) -> str:
+        """
+        Getter for a string representing the type of profile stored in this object.
+        :return: String description of profile.
+        :rtype: str
+        """
+        return self._prof_type
+
+    @property
+    def profiles(self) -> List[BaseProfile1D]:
+        """
+        This property is for the constituent profiles that makes up this aggregate profile.
+        :return: A list of the profiles that make up this object.
+        :rtype: List[BaseProfile1D]
+        """
+        return self._profiles
+
+    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, model=None,
+             back_sub=True, legend=True):
+        # Setting up figure for the plot
+        fig = plt.figure(figsize=figsize)
+        # Grabbing the axis object and making sure the ticks are set up how we want
+        main_ax = plt.gca()
+        main_ax.minorticks_on()
+        if model is not None:
+            res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
+            res_ax.minorticks_on()
+            res_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+            res_ax.axhline(0.0, color="black")
+
+        main_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        for p in self._profiles:
+            if back_sub:
+                sub_values = p.values.value - p.background.value
+            else:
+                sub_values = p.values.value
+            if p.radii_err is not None and p.values_err is None:
+                line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, fmt="x", capsize=2,
+                                        label=p.src_name)
+            elif p.radii_err is None and p.values_err is not None:
+                line = main_ax.errorbar(p.radii.value, sub_values, yerr=p.values_err.value, fmt="x", capsize=2,
+                                        label=p.src_name)
+            elif p.radii_err is not None and p.values_err is not None:
+                line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, yerr=p.values_err.value,
+                                        fmt="x", capsize=2, label=p.src_name)
+            else:
+                line = main_ax.plot(p.radii.value, sub_values, 'x', label=p.src_name)
+
+            # If the user passes a model name, and that model has been fitted to the data, then that
+            #  model will be plotted
+            if model is not None and model in p.good_model_fits:
+                model_func = PROF_TYPE_MODELS[self._prof_type][model]
+                info = p.get_realisation(model)
+                pars = p.get_model_fit(model)["par"]
+
+                colour = line[0].get_color()
+                main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars), color=colour)
+                main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
+                                     where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=colour,
+                                     alpha=0.7, interpolate=True)
+                main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=colour, linestyle="dashed")
+                main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=colour, linestyle="dashed")
+
+                res_ax.plot(p.radii.value, model_func(p.radii.value, *pars)-sub_values, 'D', color=colour)
+        # Parsing the astropy units so that if they are double height then the square brackets will adjust size
+        x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
+
+        # Adding them to the figure
+        main_ax.set_xlabel("Radius {}".format(x_unit))
+        if self._back_avail == 0 or not back_sub:
+            main_ax.set_ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+        else:
+            # If background has been subtracted it will be mentioned in the y axis label
+            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+
+        if model is None:
+            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
+        else:
+            plt.suptitle("{l} Profiles - {m} fit".format(l=PROF_TYPE_YAXIS[self._prof_type], m=model), y=0.91)
+
+        # Adds a legend with source names to the side if the user requested it
+        if legend:
+            main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+
+        # If the user has manually set limits then we can use them
+        if xlim is not None:
+            main_ax.set_xlim(xlim)
+        if ylim is not None:
+            main_ax.set_ylim(ylim)
+
+        # Setup the scale that the user wants to see
+        main_ax.set_xscale(xscale)
+        main_ax.set_yscale(yscale)
+        if model is not None:
+            res_ax.set_xlim(main_ax.get_xlim())
+            res_ax.set_xlabel("Radius {}".format(x_unit))
+            res_ax.set_xscale(xscale)
+            outer_ylim = 1.1*max([abs(lim) for lim in res_ax.get_ylim()])
+            res_ax.set_ylim(-outer_ylim, outer_ylim)
+            res_ax.set_ylabel("Model - Data")
+
+        # And of course actually showing it
+        plt.show()
+
+    def __add__(self, other):
+        to_combine = self.profiles
+        if type(other) == list:
+            to_combine += other
+        elif isinstance(other, BaseProfile1D):
+            to_combine.append(other)
+        elif isinstance(other, BaseAggregateProfile1D):
+            to_combine += other.profiles
+        else:
+            raise TypeError("You may only add 1D Profiles, 1D Aggregate Profiles, or a list of 1D profiles"
+                            " to this object.")
+        return BaseAggregateProfile1D(to_combine)
 
 
 
