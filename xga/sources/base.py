@@ -1,18 +1,18 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 15:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 17:12. Copyright (c) David J Turner
 
 import os
 import warnings
 from copy import deepcopy
 from itertools import product
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Union
 
 import numpy as np
 from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
-from astropy.units import Quantity, UnitBase
+from astropy.units import Quantity, UnitBase, Unit, UnitConversionError
 from fitsio import FITS
 from numpy import ndarray
 from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
@@ -22,8 +22,8 @@ from .. import xga_conf
 from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
-    RateMap, PSFGrid
-from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad
+    RateMap, PSFGrid, BaseProfile1D
+from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
 
@@ -259,7 +259,8 @@ class BaseSource:
             raise NoValidObservationsError("No matching observations have the necessary files.")
         return obs_dict, reg_dict, att_dict, odf_dict
 
-    def update_products(self, prod_obj: BaseProduct):
+    # TODO Maybe allow BaseAggregateProfile1D to be stored in the future
+    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D]):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
         but will overwrite existing products with a warning. Raises errors if the ObsID is not associated
@@ -267,7 +268,7 @@ class BaseSource:
         :param BaseProduct prod_obj: The new product object to be added to the source object.
         """
         # Aggregate products are things like PSF grids and sets of annular spectra.
-        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct)):
+        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D)):
             raise TypeError("Only product objects can be assigned to sources.")
 
         en_bnds = prod_obj.energy_bounds
@@ -1499,6 +1500,41 @@ class BaseSource:
             return self._luminosities[reg_type][model]
         else:
             return self._luminosities[reg_type][model][en_key]
+
+    def get_radius(self, r_name: str, out_unit: Union[Unit, str] = 'deg') -> Quantity:
+        """
+        Allows a radius associated with this source to be retrieved in specified distance units. Note
+        that physical distance units such as kiloparsecs may only be used if the source has
+        redshift information.
+        :param str r_name: The name of the desired radius, r200 for instance.
+        :param Union[Unit, str] out_unit: An astropy unit, either a Unit instance or a string
+        representation. Default is degrees.
+        :return: The desired radius in the desired units.
+        :rtype: Quantity
+        """
+        # If a string representation was passed, we make it an astropy unit
+        if isinstance(out_unit, str):
+            out_unit = Unit(out_unit)
+
+        # In case somebody types in R500 rather than r500 for instance.
+        r_name = r_name.lower()
+        if r_name not in self._radii:
+            raise ValueError("There is no {r} radius associated with this object.".format(r=r_name))
+        elif out_unit.is_equivalent('kpc') and self._redshift is None:
+            raise UnitConversionError("You cannot convert to this unit without redshift information.")
+
+        if self._radii[r_name].unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
+            out_rad = self._radii[r_name].to(out_unit)
+        elif self._radii[r_name].unit.is_equivalent('deg') and out_unit.is_equivalent('kpc'):
+            out_rad = ang_to_rad(self._radii[r_name], self._redshift, self._cosmo).to(out_unit)
+        elif self._radii[r_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
+            out_rad = self._radii[r_name].to(out_unit)
+        elif self._radii[r_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
+            out_rad = rad_to_ang(self._radii[r_name], self._redshift, self._cosmo).to(out_unit)
+        else:
+            raise UnitConversionError("Cannot understand {} as a distance unit".format(str(out_unit)))
+
+        return out_rad
 
     @property
     def num_pn_obs(self) -> int:
