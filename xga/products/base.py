@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 13:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 16:15. Copyright (c) David J Turner
 
 
 import inspect
@@ -579,6 +579,11 @@ class BaseProfile1D:
                                              - self._background.value, p0=start_pars, sigma=self._values_err.value)
                 # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
                 fit_par_err = np.sqrt(np.diagonal(fit_cov))
+                frac_err = np.divide(fit_par_err, fit_par, where=fit_par != 0)
+                if frac_err.max() > 10:
+                    warn("A parameter uncertainty is more than 10 times larger than the parameter, curve_fit "
+                         "has failed.")
+                    success = False
             except RuntimeError:
                 warn("RuntimeError was raised, curve_fit has failed.")
                 success = False
