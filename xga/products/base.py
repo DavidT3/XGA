@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 16:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 16:54. Copyright (c) David J Turner
 
 
 import inspect
@@ -576,13 +576,18 @@ class BaseProfile1D:
             # Curve fit is a simple non-linear least squares implementation, its alright but fragile
             try:
                 fit_par, fit_cov = curve_fit(model_func, self._radii.value, self.values.value
-                                             - self._background.value, p0=start_pars, sigma=self._values_err.value)
+                                             - self._background.value, p0=start_pars, sigma=self._values_err.value,
+                                             absolute_sigma=True)
                 # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
                 fit_par_err = np.sqrt(np.diagonal(fit_cov))
                 frac_err = np.divide(fit_par_err, fit_par, where=fit_par != 0)
                 if frac_err.max() > 10:
                     warn("A parameter uncertainty is more than 10 times larger than the parameter, curve_fit "
                          "has failed.")
+                    success = False
+                # If there is an infinite value in the covariance matrix, it means curve_fit was
+                #  unable to estimate it properly
+                if np.inf in fit_cov:
                     success = False
             except RuntimeError:
                 warn("RuntimeError was raised, curve_fit has failed.")
