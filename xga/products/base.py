@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/11/2020, 17:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 10:57. Copyright (c) David J Turner
 
 
 import inspect
@@ -1266,26 +1266,49 @@ class BaseAggregateProfile1D:
         """
         return self._profiles
 
-    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, model=None,
-             back_sub=True, legend=True):
+    def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
+             ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
+             just_model: bool = False):
+        """
+        A method that allows us to see all the profiles that make up this aggregate profile, plotted
+        on the same figure.
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+        to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+        to let matplotlib decide by itself.
+        :param str model: The name of the model fit to display, default is None. If the model
+        hasn't been fitted, or it failed, then it won't be displayed.
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool legend: Should a legend with source names be added to the figure, default is True.
+        :param bool just_model: Should only the models, not the data, be plotted. Default is False.
+        """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
         # Grabbing the axis object and making sure the ticks are set up how we want
         main_ax = plt.gca()
         main_ax.minorticks_on()
         if model is not None:
+            # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
             res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
             res_ax.minorticks_on()
             res_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+            # Adds a zero line for reference, as its ideally where residuals would be
             res_ax.axhline(0.0, color="black")
-
+        # Setting some aesthetic parameters for the main plotting axis
         main_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
+        # Cycles through the component profiles of this aggregate profile, plotting them all
         for p in self._profiles:
+            # This subtracts the background if the user wants a background subtracted plot
             if back_sub:
                 sub_values = p.values.value - p.background.value
             else:
                 sub_values = p.values.value
+
+            # Now the actual plotting of the data
             if p.radii_err is not None and p.values_err is None:
                 line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, fmt="x", capsize=2,
                                         label=p.src_name)
@@ -1297,6 +1320,17 @@ class BaseAggregateProfile1D:
                                         fmt="x", capsize=2, label=p.src_name)
             else:
                 line = main_ax.plot(p.radii.value, sub_values, 'x', label=p.src_name)
+
+            # If the user only wants the models to be plotted, then this goes through the matplotlib
+            #  artist objects that make up the line plot and hides them.
+            # Take this approach because I still want them on the legend, and I want the colour to use
+            #  for the model plot
+            if just_model and model is not None:
+                line[0].set_visible(False)
+                if len(line) != 1:
+                    for coll in line[1:]:
+                        for art_obj in coll:
+                            art_obj.set_visible(False)
 
             # If the user passes a model name, and that model has been fitted to the data, then that
             #  model will be plotted
@@ -1313,12 +1347,15 @@ class BaseAggregateProfile1D:
                 main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=colour, linestyle="dashed")
                 main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=colour, linestyle="dashed")
 
+                # This calculates and plots the residuals between the model and the data on the extra
+                #  axis we added near the beginning of this method
                 res_ax.plot(p.radii.value, model_func(p.radii.value, *pars)-sub_values, 'D', color=colour)
+
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
         x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
         y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
 
-        # Adding them to the figure
+        # Setting the main plot's x label
         main_ax.set_xlabel("Radius {}".format(x_unit))
         if self._back_avail == 0 or not back_sub:
             main_ax.set_ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
@@ -1326,31 +1363,44 @@ class BaseAggregateProfile1D:
             # If background has been subtracted it will be mentioned in the y axis label
             main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
 
-        if model is None:
-            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
-        else:
-            plt.suptitle("{l} Profiles - {m} fit".format(l=PROF_TYPE_YAXIS[self._prof_type], m=model), y=0.91)
-
         # Adds a legend with source names to the side if the user requested it
+        # I let the user decide because there could be quite a few names in it and it could get messy
         if legend:
-            main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+            # TODO I'd like this to dynamically choose the number of columns depending on the number of
+            #  profiles but I got bored figuring how to do it
+            main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+            # This makes sure legend keys are shown, even if the data is hidden
+            for leg_key in main_leg.legendHandles:
+                leg_key.set_visible(True)
 
-        # If the user has manually set limits then we can use them
+        # If the user has manually set limits then we can use them, only on the main axis because
+        #  we grab those limits from the axes object for the residual axis later
         if xlim is not None:
             main_ax.set_xlim(xlim)
         if ylim is not None:
             main_ax.set_ylim(ylim)
 
-        # Setup the scale that the user wants to see
+        # Setup the scale that the user wants to see, again on the main axis
         main_ax.set_xscale(xscale)
         main_ax.set_yscale(yscale)
         if model is not None:
+            # We want the residual x axis limits to be identical to the main axis, as the
+            # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
             res_ax.set_xlabel("Radius {}".format(x_unit))
             res_ax.set_xscale(xscale)
+            # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
+            #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
+            # That way its symmetrical
             outer_ylim = 1.1*max([abs(lim) for lim in res_ax.get_ylim()])
             res_ax.set_ylim(-outer_ylim, outer_ylim)
             res_ax.set_ylabel("Model - Data")
+
+        # Adds a title to this figure, changes depending on whether model fits are plotted as well
+        if model is None:
+            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
+        else:
+            plt.suptitle("{l} Profiles - {m} fit".format(l=PROF_TYPE_YAXIS[self._prof_type], m=model), y=0.91)
 
         # And of course actually showing it
         plt.show()
