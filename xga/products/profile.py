@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/10/2020, 14:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 13:24. Copyright (c) David J Turner
 from typing import Tuple
 
 import numpy as np
@@ -11,7 +11,8 @@ from ..products.base import BaseProfile1D
 
 class SurfaceBrightness1D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None, background: Quantity = None):
+                 lo_en: Quantity, hi_en: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
+                 background: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
@@ -20,6 +21,8 @@ class SurfaceBrightness1D(BaseProfile1D):
         :param str source_name: The name of the source this profile is associated with.
         :param str obs_id: The observation which this profile was generated from.
         :param str inst: The instrument which this profile was generated from.
+        :param Quantity lo_en: The lower energy bound of the ratemap that this profile was generated from.
+        :param Quantity hi_en: The upper energy bound of the ratemap that this profile was generated from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
         :param Quantity background: The background brightness value.
@@ -31,6 +34,9 @@ class SurfaceBrightness1D(BaseProfile1D):
 
         # Set the internal type attribute to brightness profile
         self._prof_type = "brightness"
+
+        # Setting the energy bounds
+        self._energy_bounds = (lo_en, hi_en)
 
         # Check that the background passed by the user is the same unit as values
         if background is not None and background.unit == values.unit:

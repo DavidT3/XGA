@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 10:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 13:24. Copyright (c) David J Turner
 
 
 import inspect
 import os
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Union
 from warnings import warn
 
 import corner
@@ -498,6 +498,10 @@ class BaseProfile1D:
         # Some types of profiles will support a background value (like surface brightness), which will
         #  need to be incorporated into the fit and plotting.
         self._background = Quantity(0, self._values.unit)
+
+        # Need to be able to store upper and lower energy bounds for those profiles that
+        #  have them (like brightness profiles for instance)
+        self._energy_bounds = (None, None)
 
         # This is where allowed realisation types are stored, but there are none for the base profile
         self._allowed_real_types = []
@@ -1177,6 +1181,16 @@ class BaseProfile1D:
         """
         return self._inst
 
+    @property
+    def energy_bounds(self) -> Union[Tuple[Quantity, Quantity], Tuple[None, None]]:
+        """
+        Getter method for the energy_bounds property, which returns the rest frame energy band that this
+        profile was generated from
+        :return: Tuple containing the lower and upper energy limits as Astropy quantities.
+        :rtype: Union[Tuple[Quantity, Quantity], Tuple[None, None]]
+        """
+        return self._energy_bounds
+
     def __len__(self):
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
@@ -1201,18 +1215,23 @@ class BaseProfile1D:
 
 class BaseAggregateProfile1D:
     def __init__(self, profiles: List[BaseProfile1D]):
+        # This checks that all types of profiles in the profiles list are the same
         types = [type(p) for p in profiles]
         if len(set(types)) != 1:
             raise TypeError("All component profiles must be of the same type")
 
+        # This checks that all profiles have the same x units
         x_units = [p.radii_unit for p in profiles]
         if len(set(x_units)) != 1:
             raise TypeError("All component profiles must have the same radii units.")
 
+        # THis checks that they all have the same y units. This is likely to be true if they are the same
+        #  type, but you never know
         y_units = [p.values_unit for p in profiles]
         if len(set(y_units)) != 1:
             raise TypeError("All component profiles must have the same value units.")
 
+        # We check to see if all profiles either have a background, or not
         backs = [p.background.value != 0 for p in profiles]
         if len(set(backs)) != 1:
             raise ValueError("All component profiles must have a background, or not have a "
@@ -1223,12 +1242,19 @@ class BaseAggregateProfile1D:
         else:
             self._back_avail = False
 
+        # Here we check that all energy bounds are the same
+        bounds = [p.energy_bounds for p in profiles]
+        if len(set(bounds)) != 1:
+            raise ValueError("All component profiles must have been generate from the same energy range,"
+                             " otherwise they aren't directly comparable.")
+
         self._profiles = profiles
         self._radii_unit = x_units[0]
         self._values_unit = y_units[0]
         # Not doing a check that all the prof types are the same, because that should be included in the
         #  type check on the first line of this init
         self._prof_type = profiles[0].prof_type
+        self._energy_bounds = bounds[0]
 
     @property
     def radii_unit(self) -> Unit:
@@ -1266,9 +1292,19 @@ class BaseAggregateProfile1D:
         """
         return self._profiles
 
+    @property
+    def energy_bounds(self) -> Union[Tuple[Quantity, Quantity], Tuple[None, None]]:
+        """
+        Getter method for the energy_bounds property, which returns the rest frame energy band that
+        the component profiles of this object were generated from.
+        :return: Tuple containing the lower and upper energy limits as Astropy quantities.
+        :rtype: Union[Tuple[Quantity, Quantity], Tuple[None, None]]
+        """
+        return self._energy_bounds
+
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
              ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
-             just_model: bool = False):
+             just_model: bool = False, custom_title: str = None):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -1284,6 +1320,7 @@ class BaseAggregateProfile1D:
         :param bool back_sub: Should the plotted data be background subtracted, default is True.
         :param bool legend: Should a legend with source names be added to the figure, default is True.
         :param bool just_model: Should only the models, not the data, be plotted. Default is False.
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1397,10 +1434,13 @@ class BaseAggregateProfile1D:
             res_ax.set_ylabel("Model - Data")
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
-        if model is None:
+        if model is None and custom_title is None:
             plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
-        else:
+        elif custom_title is None:
             plt.suptitle("{l} Profiles - {m} fit".format(l=PROF_TYPE_YAXIS[self._prof_type], m=model), y=0.91)
+        else:
+            # If the user doesn't like my title, they can supply their own
+            plt.suptitle(custom_title, y=0.91)
 
         # And of course actually showing it
         plt.show()
