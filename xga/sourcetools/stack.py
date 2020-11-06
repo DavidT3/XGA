@@ -1,12 +1,12 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/11/2020, 11:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/11/2020, 16:55. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
 from warnings import warn
 
 import numpy as np
-from astropy.units import Quantity, pix
+from astropy.units import Quantity, pix, kpc
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from tqdm import tqdm
@@ -69,7 +69,8 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
         correctly in the results array.
         :param Quantity lower: The lower energy limit to use.
         :param Quantity upper: The higher energy limit to use.
-        :return: The profile and the cluster identifier.
+        :return: The scaled profile, the cluster identifier, and the original generated
+        surface brightness profile.
         :rtype: Tuple[Quantity, int]
         """
         # The storage key is different based on whether the user wishes to generate profiles from PSF corrected
@@ -94,12 +95,13 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
             source_mask, background_mask = src.get_mask(scale_radius, central_coord=src.ra_dec)
             source_mask = src.get_interloper_mask()
 
-        rad = Quantity(src.source_back_regions(scale_radius)[0].to_pixel(rt.radec_wcs).radius, pix)
+        rad = src.get_radius(scale_radius, kpc)
         # This is because a ValueError can be raised by radial_brightness when there is a problem with the
         #  background mask
         try:
-            sb_prof, success = radial_brightness(rt, source_mask, background_mask, pix_peak, rad, src.redshift, pix_step,
-                                                 pix, src.cosmo, min_snr=min_snr)
+            sb_prof, success = radial_brightness(rt, source_mask, background_mask, pix_peak, rad, src.redshift,
+                                                 pix_step, kpc, src.cosmo, min_snr=min_snr)
+            src.update_products(sb_prof)
             # Calculates the value of pixel radii in terms of the scale radii
             scaled_radii = (sb_prof.radii / rad).value
             # Interpolating brightness profile values at the radii passed by the user
