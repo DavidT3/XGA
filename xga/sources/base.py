@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 17:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/11/2020, 16:41. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -260,6 +260,7 @@ class BaseSource:
         return obs_dict, reg_dict, att_dict, odf_dict
 
     # TODO Maybe allow BaseAggregateProfile1D to be stored in the future
+    # TODO IMPLEMENT STORING PROFILES HERE
     def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D]):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
@@ -319,17 +320,51 @@ class BaseSource:
             # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
             if extra_key not in self._products[obs_id][inst]:
                 self._products[obs_id][inst][extra_key] = {}
-            self._products[obs_id][inst][extra_key][p_type] = prod_obj
+            # Most products will fall into this first conditional
+            if "profile" not in p_type:
+                self._products[obs_id][inst][extra_key][p_type] = prod_obj
+            # Profiles are stored in a list, just because there can be so many giving them all extra keys
+            #  is too much work
+            elif "profile" in p_type and p_type not in self._products[obs_id][inst][extra_key]:
+                self._products[obs_id][inst][extra_key][p_type] = [prod_obj]
+            elif "profile" in p_type and p_type in self._products[obs_id][inst][extra_key]:
+                self._products[obs_id][inst][extra_key][p_type].append(prod_obj)
+
         elif extra_key is None and obs_id != "combined":
-            self._products[obs_id][inst][p_type] = prod_obj
+            if "profile" not in p_type:
+                self._products[obs_id][inst][p_type] = prod_obj
+            # Profiles are stored in a list, just because there can be so many giving them all extra keys
+            #  is too much work
+            elif "profile" in p_type and p_type not in self._products[obs_id][inst]:
+                self._products[obs_id][inst][p_type] = {0: prod_obj}
+            elif "profile" in p_type and p_type in self._products[obs_id][inst]:
+                self._products[obs_id][inst][p_type].update({len(self._products[obs_id][inst][p_type]): prod_obj})
+
         # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
         #  and ObsID = 'combined'
         elif extra_key is not None and obs_id == "combined":
             if extra_key not in self._products[obs_id]:
                 self._products[obs_id][extra_key] = {}
-            self._products[obs_id][extra_key][p_type] = prod_obj
+
+            if "profile" not in p_type:
+                self._products[obs_id][extra_key][p_type] = prod_obj
+            # Profiles are stored in a list, just because there can be so many giving them all extra keys
+            #  is too much work
+            elif "profile" in p_type and p_type not in self._products[obs_id][extra_key]:
+                self._products[obs_id][extra_key][p_type] = {0: prod_obj}
+            elif "profile" in p_type and p_type in self._products[obs_id][extra_key]:
+                self._products[obs_id][extra_key][p_type].update(
+                    {len(self._products[obs_id][extra_key][p_type]): prod_obj})
+
         elif extra_key is None and obs_id == "combined":
-            self._products[obs_id][p_type] = prod_obj
+            if "profile" not in p_type:
+                self._products[obs_id][p_type] = prod_obj
+            # Profiles are stored in a list, just because there can be so many giving them all extra keys
+            #  is too much work
+            elif "profile" in p_type and p_type not in self._products[obs_id]:
+                self._products[obs_id][p_type] = {0: prod_obj}
+            elif "profile" in p_type and p_type in self._products[obs_id]:
+                self._products[obs_id][p_type].update({len(self._products[obs_id][p_type]): prod_obj})
 
         # This is for an image being added, so we look for a matching exposure map. If it exists we can
         #  make a ratemap
