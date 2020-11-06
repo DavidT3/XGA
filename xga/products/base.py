@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 16:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/11/2020, 13:47. Copyright (c) David J Turner
 
 
 import inspect
@@ -1144,7 +1144,7 @@ class BaseProfile1D:
     # This definitely doesn't get a setter, as its basically a proxy for type() return, it will not change
     #  during the life of the object
     @property
-    def prof_type(self) -> str:
+    def type(self) -> str:
         """
         Getter for a string representing the type of profile stored in this object.
         :return: String description of profile.
@@ -1263,7 +1263,7 @@ class BaseAggregateProfile1D:
         self._values_unit = y_units[0]
         # Not doing a check that all the prof types are the same, because that should be included in the
         #  type check on the first line of this init
-        self._prof_type = profiles[0].prof_type
+        self._prof_type = profiles[0].type
         self._energy_bounds = bounds[0]
 
     @property
@@ -1285,7 +1285,7 @@ class BaseAggregateProfile1D:
         return self._values_unit
 
     @property
-    def prof_type(self) -> str:
+    def type(self) -> str:
         """
         Getter for a string representing the type of profile stored in this object.
         :return: String description of profile.
