@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/11/2020, 13:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/11/2020, 17:29. Copyright (c) David J Turner
 from typing import Tuple
 
 import numpy as np
@@ -10,9 +10,9 @@ from ..products.base import BaseProfile1D
 
 
 class SurfaceBrightness1D(BaseProfile1D):
-    def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str, inst: str,
-                 lo_en: Quantity, hi_en: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
-                 background: Quantity = None):
+    def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str, inst: str, lo_en: Quantity,
+                 hi_en: Quantity, centre: Quantity, pix_step: int, min_snr: float, outer_rad: Quantity,
+                 radii_err: Quantity = None, values_err: Quantity = None, background: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
@@ -45,6 +45,50 @@ class SurfaceBrightness1D(BaseProfile1D):
             raise UnitConversionError("The background unit must be the same as the values unit.")
         # If no background is passed then the internal background attribute stays at 0 as it was set in
         #  BaseProfile1D
+
+        # Useful quantities from generation of surface brightness profile
+        self._centre = centre
+        self._pix_step = pix_step
+        self._min_snr = min_snr
+        self._outer_rad = outer_rad
+
+    @property
+    def centre(self) -> Quantity:
+        """
+        Property that returns the central coordinate that the profile was generated from.
+        :return: An astropy quantity of the central coordinate
+        :rtype: Quantity
+        """
+        return self._centre
+
+    @property
+    def pix_step(self) -> int:
+        """
+        Property that returns the integer pixel step size used to generate the annuli that
+        make up this profile.
+        :return: The pixel step used to generate the surface brightness profile.
+        :rtype: int
+        """
+        return self._pix_step
+
+    @property
+    def min_snr(self) -> float:
+        """
+        Property that returns minimum signal to noise value that was imposed upon this profile
+        during generation.
+        :return: The minimum signal to noise value used to generate this profile.
+        :rtype: float
+        """
+        return self._min_snr
+
+    @property
+    def outer_radius(self) -> Quantity:
+        """
+        Property that returns the outer radius used for the generation of this profile.
+        :return: The outer radius used in the generation of the profile.
+        :rtype: Quantity
+        """
+        return self._outer_rad
 
 
 class GasMass1D(BaseProfile1D):
