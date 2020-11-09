@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/11/2020, 16:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/11/2020, 10:38. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -94,6 +94,10 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
             pix_peak = rt.coord_conv(src.ra_dec, pix)
             source_mask, background_mask = src.get_mask(scale_radius, central_coord=src.ra_dec)
             source_mask = src.get_interloper_mask()
+
+        # TODO Use these to check if a matching profile has already been generated
+        # matching_profs = [p for p in src.get_products("combined_brightness_profile")
+        #                   if p.energy_bounds == (lower, upper) and p.centre == pix_peak]
 
         rad = src.get_radius(scale_radius, kpc)
         # This is because a ValueError can be raised by radial_brightness when there is a problem with the
