@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/11/2020, 17:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 17:00. Copyright (c) David J Turner
 from typing import Tuple
 
 import numpy as np
@@ -7,27 +7,24 @@ from astropy.units import Quantity, UnitConversionError
 from scipy.integrate import trapz, cumtrapz
 
 from ..products.base import BaseProfile1D
+from ..products.phot import RateMap
 
 
 class SurfaceBrightness1D(BaseProfile1D):
-    def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str, inst: str, lo_en: Quantity,
-                 hi_en: Quantity, centre: Quantity, pix_step: int, min_snr: float, outer_rad: Quantity,
-                 radii_err: Quantity = None, values_err: Quantity = None, background: Quantity = None):
+    def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int,
+                 min_snr: float, outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
+                 background: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
+        :param RateMap rt: The RateMap from which this SB profile was generated.
         :param Quantity radii: The radii at which surface brightness has been measured.
         :param Quantity values: The surface brightnesses that have been measured.
-        :param str source_name: The name of the source this profile is associated with.
-        :param str obs_id: The observation which this profile was generated from.
-        :param str inst: The instrument which this profile was generated from.
-        :param Quantity lo_en: The lower energy bound of the ratemap that this profile was generated from.
-        :param Quantity hi_en: The upper energy bound of the ratemap that this profile was generated from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
         :param Quantity background: The background brightness value.
         """
-        super().__init__(radii, values, source_name, obs_id, inst, radii_err, values_err)
+        super().__init__(radii, values, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err)
 
         if type(background) != Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
@@ -36,7 +33,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         self._prof_type = "brightness"
 
         # Setting the energy bounds
-        self._energy_bounds = (lo_en, hi_en)
+        self._energy_bounds = rt.energy_bounds
 
         # Check that the background passed by the user is the same unit as values
         if background is not None and background.unit == values.unit:
