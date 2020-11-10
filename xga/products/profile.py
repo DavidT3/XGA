@@ -1,6 +1,6 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 17:00. Copyright (c) David J Turner
-from typing import Tuple
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 17:08. Copyright (c) David J Turner
+from typing import Tuple, Union
 
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
@@ -28,6 +28,9 @@ class SurfaceBrightness1D(BaseProfile1D):
 
         if type(background) != Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
+
+        # Saves the reference to the RateMap this profile was generated from
+        self._ratemap = rt
 
         # Set the internal type attribute to brightness profile
         self._prof_type = "brightness"
@@ -86,6 +89,59 @@ class SurfaceBrightness1D(BaseProfile1D):
         :rtype: Quantity
         """
         return self._outer_rad
+
+    @property
+    def psf_corrected(self) -> bool:
+        """
+        Tells the user (and XGA), whether the RateMap this brightness profile was generated from has
+        been PSF corrected or not.
+        :return: Boolean flag, True means this object has been PSF corrected, False means it hasn't
+        :rtype: bool
+        """
+        return self._ratemap.psf_corrected
+
+    @property
+    def psf_algorithm(self) -> Union[str, None]:
+        """
+        If the RateMap this brightness profile was generated from has been PSF corrected, this property gives
+        the name of the algorithm used.
+        :return: The name of the algorithm used to correct for PSF effects, or None if there was no PSF correction.
+        :rtype: Union[str, None]
+        """
+        return self._ratemap.psf_algorithm
+
+    @property
+    def psf_bins(self) -> Union[int, None]:
+        """
+        If the RateMap this brightness profile was generated from has been PSF corrected, this property
+        gives the number of bins that the X and Y axes were divided into to generate the PSFGrid.
+        :return: The number of bins in X and Y for which PSFs were generated, or None if the object
+        hasn't been PSF corrected.
+        :rtype: Union[int, None]
+        """
+        return self._ratemap.psf_bins
+
+    @property
+    def psf_iterations(self) -> Union[int, None]:
+        """
+        If the RateMap this brightness profile was generated from has been PSF corrected, this property gives
+        the number of iterations that the algorithm went through.
+        :return: The number of iterations the PSF correction algorithm went through, or None if there has been
+        no PSF correction.
+        :rtype: Union[int, None]
+        """
+        return self._ratemap.psf_iterations
+
+    @property
+    def psf_model(self) -> Union[str, None]:
+        """
+        If the RateMap this brightness profile was generated from has been PSF corrected, this property gives the
+        name of the PSF model used.
+        :return: The name of the PSF model used to correct for PSF effects, or None if there has been no
+        PSF correction.
+        :rtype: Union[str, None]
+        """
+        return self._ratemap.psf_model
 
 
 class GasMass1D(BaseProfile1D):

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/10/2020, 11:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 17:08. Copyright (c) David J Turner
 
 
 import warnings
@@ -407,8 +407,8 @@ class Image(BaseProduct):
     @property
     def psf_bins(self) -> Union[int, None]:
         """
-        If this object has been PSF corrected, this property gives number of bins that the X and Y axes
-        was divided into to generate the PSFGrid.
+        If this object has been PSF corrected, this property gives the number of bins that the X and Y axes
+        were divided into to generate the PSFGrid.
         :return: The number of bins in X and Y for which PSFs were generated, or None if the object
         hasn't been PSF corrected.
         :rtype: Union[int, None]
