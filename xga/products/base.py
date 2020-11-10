@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/11/2020, 16:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 14:02. Copyright (c) David J Turner
 
 
 import inspect
@@ -914,12 +914,12 @@ class BaseProfile1D:
         chains = self.get_chains(model)
         m_info = self.get_model_fit(model)
 
-        print(len(m_info["par_names"]))
-        if figsize is not None:
-            fig, axes = plt.subplots(len(m_info["par_names"]), figsize=(10, 4*len(m_info["par_names"])),
+        if figsize is None:
+            fig, axes = plt.subplots(nrows=len(m_info["par_names"]), figsize=(12, 2*len(m_info["par_names"])),
                                      sharex='col')
         else:
             fig, axes = plt.subplots(len(m_info["par_names"]), figsize=figsize, sharex='col')
+
         for i in range(len(m_info["par_names"])):
             ax = axes[i]
             ax.plot(chains[:, :, i], "k", alpha=0.3)
