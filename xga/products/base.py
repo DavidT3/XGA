@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 14:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 17:21. Copyright (c) David J Turner
 
 
 import inspect
@@ -508,7 +508,7 @@ class BaseProfile1D:
 
     def fit(self, model: str, method: str = "mcmc", priors=None, start_pars=None, model_real=1000,
             model_rad_steps=300, conf_level=90, ml_mcmc_start: bool = True, ml_rand_dev: float = 1e-4,
-            num_walkers: int = 30, num_steps: int = 20000):
+            num_walkers: int = 30, num_steps: int = 20000, progress_bar: bool = True):
         # These are the currently allowed fitting methods
         method = method.lower()
         fit_methods = ["curve_fit", "mcmc"]
@@ -632,7 +632,7 @@ class BaseProfile1D:
             try:
                 # So now we start the sampler, running for the number of steps specified on function call, with
                 #  the starting parameters defined in the if statement above this.
-                sampler.run_mcmc(pos, num_steps, progress=False)
+                sampler.run_mcmc(pos, num_steps, progress=progress_bar)
                 success = True
             except ValueError as bugger:
                 print(bugger)
