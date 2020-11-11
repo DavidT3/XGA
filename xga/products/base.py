@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 14:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 14:16. Copyright (c) David J Turner
 
 
 import inspect
@@ -1078,22 +1078,24 @@ class BaseProfile1D:
                     for art_obj in coll:
                         art_obj.set_visible(False)
 
-        for model in self._good_model_fits:
-            model_func = PROF_TYPE_MODELS[self._prof_type][model]
-            info = self.get_realisation(model)
-            pars = self.get_model_fit(model)["par"]
+        if models:
+            for model in self._good_model_fits:
+                model_func = PROF_TYPE_MODELS[self._prof_type][model]
+                info = self.get_realisation(model)
+                pars = self.get_model_fit(model)["par"]
 
-            mod_line = main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars), label=model)
-            model_colour = mod_line[0].get_color()
-            main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
-                                 where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=model_colour,
-                                 alpha=0.7, interpolate=True)
-            main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=model_colour, linestyle="dashed")
-            main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=model_colour, linestyle="dashed")
+                mod_line = main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars), label=model)
+                model_colour = mod_line[0].get_color()
+                main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
+                                     where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=model_colour,
+                                     alpha=0.7, interpolate=True)
+                main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=model_colour, linestyle="dashed")
+                main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=model_colour, linestyle="dashed")
 
-            # This calculates and plots the residuals between the model and the data on the extra
-            #  axis we added near the beginning of this method
-            res_ax.plot(self.radii.value, model_func(self.radii.value, *pars) - sub_values, 'D', color=model_colour)
+                # This calculates and plots the residuals between the model and the data on the extra
+                #  axis we added near the beginning of this method
+                res_ax.plot(self.radii.value, model_func(self.radii.value, *pars) - sub_values, 'D',
+                            color=model_colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
         x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
