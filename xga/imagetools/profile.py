@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 17:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:01. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -294,6 +294,8 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product
     br_prof = SurfaceBrightness1D(rt, cen_rads, Quantity(br, 'ct/(s*arcmin**2)'), centre, pix_step, min_snr, rad,
                                   rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'), Quantity(bg, 'ct/(s*arcmin**2)'))
+    # Set the success property
+    br_prof.min_snr_succeeded = succeeded
 
     return br_prof, succeeded
 
