@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:43. Copyright (c) David J Turner
 
 
 import inspect
@@ -1008,7 +1008,7 @@ class BaseProfile1D:
                                          "mod_real_mean": model_mean, "mod_real_lower": model_lower,
                                          "mod_real_upper": model_upper}
 
-    def view(self, figsize=(8, 5), xscale="log", yscale="log", xlim=None, ylim=None, models=True):
+    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True):
         # Setting up figure for the plot
         plt.figure(figsize=figsize)
 
