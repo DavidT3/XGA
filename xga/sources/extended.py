@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/10/2020, 18:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:37. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -7,12 +7,10 @@ from typing import Tuple, Union
 from astropy import wcs
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitConversionError, pix, kpc
-from matplotlib import pyplot as plt
-from matplotlib.ticker import ScalarFormatter
 
 from .general import ExtendedSource
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, NoRegionsError
-from ..imagetools import radial_brightness, pizza_brightness
+from ..imagetools import radial_brightness
 from ..products import Spectrum
 from ..sourcetools import ang_to_rad, rad_to_ang
 
@@ -240,83 +238,56 @@ class GalaxyCluster(ExtendedSource):
         psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", just_obj=False)
                         if en_key + "_" in rt[-2]]
 
-        # TODO Decide what to do here
         source_mask, background_mask = self.get_mask(reg_type)
         source_mask = self.get_interloper_mask()
         # Get combined peak - basically the only peak internal methods will use
         pix_peak = comb_rt.coord_conv(self.peak, pix)
         rad = Quantity(self.source_back_regions(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
 
-        # Setup the figure
-        plt.figure(figsize=(8, 5))
-        ax = plt.gca()
-
         # The plotting will be slightly different based on the profile type, also have to call the methods
         #  to generate the profiles as I don't currently store the data.
         if profile_type == "radial":
-            ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
-                                                                             u=self._peak_hi_en.value))
-            sb_profile, success = radial_brightness(comb_rt, source_mask, background_mask, pix_peak, rad,
-                                                    self._redshift, pix_step, kpc, self.cosmo, min_snr=min_snr)
-            # TODO REPLACE ALL THIS PLOTTING STUFF WITH A sb_profile.view() call when I can combine different
-            #  profiles onto one plot
-            prof = plt.errorbar(sb_profile.radii.value, sb_profile.values.value, xerr=sb_profile.radii_err.value,
-                                yerr=sb_profile.values_err.value, fmt='x', capsize=2, label="Emission")
-            plt.plot(sb_profile.radii.value, sb_profile.values.value, color=prof[0].get_color())
+            # This fetches any profiles that might have already been generated to our required specifications
+            prof_prods = self.get_products("combined_brightness_profile")
+            if len(prof_prods) == 1:
+                matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(comb_rt, pix_peak, pix_step,
+                                                                                           min_snr, rad)]
+            else:
+                matching_profs = []
+
+            if len(matching_profs) == 0:
+                sb_profile, success = radial_brightness(comb_rt, source_mask, background_mask, pix_peak, rad,
+                                                        self._redshift, pix_step, kpc, self.cosmo, min_snr=min_snr)
+                self.update_products(sb_profile)
+            else:
+                sb_profile = matching_profs[0]
 
             for psf_comb_rt in psf_comb_rts:
                 p_rt = psf_comb_rt[-1]
                 # If the user wants to use individual peaks, we have to find them here.
                 if not same_peak:
                     pix_peak = self.find_peak(p_rt)[0]
-                psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], source_mask, background_mask, pix_peak,
-                                                            rad, self._redshift, pix_step, kpc, self.cosmo,
-                                                            min_snr=min_snr)
-                prof = plt.errorbar(psf_sb_profile.radii.value, psf_sb_profile.values.value,
-                                    xerr=psf_sb_profile.radii_err.value, yerr=psf_sb_profile.values_err.value,
-                                    fmt='x', capsize=2, label="{m} PSF Corrected".format(m=p_rt.psf_model))
-                plt.plot(psf_sb_profile.radii.value, psf_sb_profile.values.value, color=prof[0].get_color())
 
-                plt.axhline(psf_sb_profile.background.value, color=prof[0].get_color(), linestyle="dashed",
-                            label="{m} PSF Corrected Background".format(m=p_rt.psf_model))
+                if len(prof_prods) == 1:
+                    matching_profs = [p for p in list(prof_prods[0].values()) if
+                                      p.check_match(p_rt, pix_peak, pix_step, min_snr, rad)]
+                else:
+                    matching_profs = []
 
+                if len(matching_profs) == 0:
+                    psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], source_mask, background_mask,
+                                                                pix_peak, rad, self._redshift, pix_step, kpc,
+                                                                self.cosmo, min_snr=min_snr)
+                    self.update_products(psf_sb_profile)
+                else:
+                    psf_sb_profile = matching_profs[0]
+
+                sb_profile += psf_sb_profile
         elif profile_type == "pizza":
-            ax.set_title("{n} - {l}-{u}keV Pizza Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
-                                                                            u=self._peak_hi_en.value))
-            brightness, radii, angles, og_background, inn_rads, out_rads = pizza_brightness(comb_rt, source_mask,
-                                                                                            background_mask, pix_peak,
-                                                                                            rad, num_slices,
-                                                                                            self._redshift, pix_step,
-                                                                                            kpc, self.cosmo)
-            for ang_ind in range(angles.shape[0]):
-                # Setup labels with the angles covered by the profile
-                lab_str = "{0}$^{{\circ}}$-{1}$^{{\circ}}$ Slice Emission".format(*angles[ang_ind, :].value)
-                plt.plot(radii, brightness[:, ang_ind], label=lab_str)
+            raise NotImplementedError("This was implemented but so many things have changed and I haven't "
+                                      "adapted pizza profiles yet")
 
-        # Plot the background level
-        plt.axhline(sb_profile.background.value, color="black", linestyle="dashed", label="Background")
-
-        # This adds small ticks to the axis
-        ax.minorticks_on()
-        # Set the lower limit of the x-axis to 0
-        ax.set_xlim(0,)
-        # Adjusts how the ticks look
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
-        # Choose y-axis log scaling because otherwise you can't really make out the profiles very well
-        ax.set_yscale("log")
-        ax.set_xscale("log")
-        ax.set_xlim(sb_profile.radii.min().value, )
-        ax.xaxis.set_major_formatter(ScalarFormatter())
-
-        # Labels and legends
-        ax.set_ylabel("S$_{b}$ [count s$^{-1}$ arcmin$^{-2}$]")
-        ax.set_xlabel("Radius [kpc]")
-        plt.legend(loc="best")
-        # Removes white space around the plot
-        plt.tight_layout()
-        # Plots the plot
-        plt.show()
-        plt.close('all')
+        sb_profile.view()
 
     def combined_lum_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
         """

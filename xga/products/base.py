@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:37. Copyright (c) David J Turner
 
 
 import inspect
@@ -379,7 +379,7 @@ class BaseAggregateProduct:
     @property
     def sas_errors(self) -> List:
         """
-        Equivelant to the BaseProduct sas_errors property, but reports any errors stored in the component products.
+        Equivelant to the BaseProduct sas_errors property, but reports any SAS errors stored in the component products.
         :return: A list of SAS errors related to component products.
         :rtype: List
         """
@@ -388,6 +388,20 @@ class BaseAggregateProduct:
             prod = self._component_products[p]
             sas_err_list += prod.sas_errors
         return sas_err_list
+
+    @property
+    def errors(self) -> List:
+        """
+        Equivelant to the BaseProduct errors property, but reports any non-SAS errors stored in the
+        component products.
+        :return: A list of non-SAS errors related to component products.
+        :rtype: List
+        """
+        err_list = []
+        for p in self._component_products:
+            prod = self._component_products[p]
+            err_list += prod.errors
+        return err_list
 
     @property
     def unprocessed_stderr(self) -> List:
@@ -1365,18 +1379,24 @@ class BaseAggregateProfile1D:
             else:
                 sub_values = p.values.value
 
+            # TODO Perhaps the label should include more information about PSF correction?
+            if p.type == "brightness_profile" and p.psf_corrected:
+                leg_label = p.src_name + " PSF Corrected"
+            else:
+                leg_label = p.src_name
+
             # Now the actual plotting of the data
             if p.radii_err is not None and p.values_err is None:
                 line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, fmt="x", capsize=2,
-                                        label=p.src_name)
+                                        label=leg_label)
             elif p.radii_err is None and p.values_err is not None:
                 line = main_ax.errorbar(p.radii.value, sub_values, yerr=p.values_err.value, fmt="x", capsize=2,
-                                        label=p.src_name)
+                                        label=leg_label)
             elif p.radii_err is not None and p.values_err is not None:
                 line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, yerr=p.values_err.value,
-                                        fmt="x", capsize=2, label=p.src_name)
+                                        fmt="x", capsize=2, label=leg_label)
             else:
-                line = main_ax.plot(p.radii.value, sub_values, 'x', label=p.src_name)
+                line = main_ax.plot(p.radii.value, sub_values, 'x', label=leg_label)
 
             # If the user only wants the models to be plotted, then this goes through the matplotlib
             #  artist objects that make up the line plot and hides them.
