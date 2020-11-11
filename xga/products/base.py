@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 14:07. Copyright (c) David J Turner
 
 
 import inspect
@@ -1008,75 +1008,141 @@ class BaseProfile1D:
                                          "mod_real_mean": model_mean, "mod_real_lower": model_lower,
                                          "mod_real_upper": model_upper}
 
-    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True):
+    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
+             back_sub: bool = True, just_models: bool = False, custom_title: str = None):
+        """
+        A method that allows us to view the current profile, as well as any models that have been fitted to it,
+        and their residuals.
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+        to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+        to let matplotlib decide by itself.
+        :param str models: Should the fitted models to this profile be plotted, default is True
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool just_models: Should ONLY the fitted models be plotted? Default is False
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        """
+        # Default is to show models, but that flag is set to False here if there are none, otherwise we get
+        #  extra plotted stuff that doesn't make sense
+        if len(self._good_model_fits) == 0:
+            models = False
+            just_models = False
+
         # Setting up figure for the plot
-        plt.figure(figsize=figsize)
-
+        fig = plt.figure(figsize=figsize)
         # Grabbing the axis object and making sure the ticks are set up how we want
-        ax = plt.gca()
-        ax.minorticks_on()
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
-
-        # Taking off any background
-        sub_values = self.values.value - self.background.value
-        if self._radii_err is not None and self._values_err is None:
-            plt.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value, label="Data", fmt="x",
-                         capsize=2)
-        elif self._radii_err is None and self._values_err is not None:
-            plt.errorbar(self.radii.value, sub_values, yerr=self.values_err.value, label="Data", fmt="x",
-                         capsize=2)
-        elif self._radii_err is not None and self._values_err is not None:
-            plt.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value, yerr=self.values_err.value,
-                         label="Data", fmt="x", capsize=2)
-        else:
-            plt.plot(self.radii.value, sub_values, 'x', label="Data")
-
-        # Setup the scale that the user wants to see
-        plt.xscale(xscale)
-        plt.yscale(yscale)
-
-        # If the user has manually set limits then we can use them
-        if xlim is not None:
-            plt.xlim(xlim)
-        if ylim is not None:
-            plt.ylim(ylim)
-
-        # If models have been fitted to this profile (and the user wants them plotted), then this runs through
-        #  and adds them to the figure
+        main_ax = plt.gca()
+        main_ax.minorticks_on()
         if models:
-            for model in self._good_model_fits:
-                model_func = PROF_TYPE_MODELS[self._prof_type][model]
-                info = self._realisations[model]
-                pars = self._good_model_fits[model]["par"]
-                line = plt.plot(info["mod_radii"], model_func(info["mod_radii"], *pars),
-                                label=model + " {}% Conf".format(info["conf_level"]))
-                colour = line[0].get_color()
-                plt.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
-                                 where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=colour,
+            # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
+            res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
+            res_ax.minorticks_on()
+            res_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+            # Adds a zero line for reference, as its ideally where residuals would be
+            res_ax.axhline(0.0, color="black")
+        # Setting some aesthetic parameters for the main plotting axis
+        main_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        # This subtracts the background if the user wants a background subtracted plot
+        if back_sub:
+            sub_values = self.values.value - self.background.value
+        else:
+            sub_values = self.values.value
+
+        # TODO Perhaps the label should include more information about PSF correction?
+        if self.type == "brightness_profile" and self.psf_corrected:
+            leg_label = self.src_name + " PSF Corrected"
+        else:
+            leg_label = self.src_name
+
+        # Now the actual plotting of the data
+        if self.radii_err is not None and self.values_err is None:
+            line = main_ax.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value, fmt="x", capsize=2,
+                                    label=leg_label)
+        elif self.radii_err is None and self.values_err is not None:
+            line = main_ax.errorbar(self.radii.value, sub_values, yerr=self.values_err.value, fmt="x", capsize=2,
+                                    label=leg_label)
+        elif self.radii_err is not None and self.values_err is not None:
+            line = main_ax.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value,
+                                    yerr=self.values_err.value, fmt="x", capsize=2, label=leg_label)
+        else:
+            line = main_ax.plot(self.radii.value, sub_values, 'x', label=leg_label)
+
+        if just_models and models:
+            line[0].set_visible(False)
+            if len(line) != 1:
+                for coll in line[1:]:
+                    for art_obj in coll:
+                        art_obj.set_visible(False)
+
+        for model in self._good_model_fits:
+            model_func = PROF_TYPE_MODELS[self._prof_type][model]
+            info = self.get_realisation(model)
+            pars = self.get_model_fit(model)["par"]
+
+            mod_line = main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars), label=model)
+            model_colour = mod_line[0].get_color()
+            main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
+                                 where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=model_colour,
                                  alpha=0.7, interpolate=True)
-                plt.plot(info["mod_radii"], info["mod_real_lower"], color=colour, linestyle="dashed")
-                plt.plot(info["mod_radii"], info["mod_real_upper"], color=colour, linestyle="dashed")
+            main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=model_colour, linestyle="dashed")
+            main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=model_colour, linestyle="dashed")
+
+            # This calculates and plots the residuals between the model and the data on the extra
+            #  axis we added near the beginning of this method
+            res_ax.plot(self.radii.value, model_func(self.radii.value, *pars) - sub_values, 'D', color=model_colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
         x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
         y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
 
-        # Adding them to the figure
-        plt.xlabel("Radius {}".format(x_unit))
-        if self._background.value == 0:
-            plt.ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+        # Setting the main plot's x label
+        main_ax.set_xlabel("Radius {}".format(x_unit))
+        if self._background.value == 0 or not back_sub:
+            main_ax.set_ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
         else:
             # If background has been subtracted it will be mentioned in the y axis label
-            plt.ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
 
-        if self._obs_id == "combined":
-            plt.title("{s} {l} Profile".format(s=self._src_name, l=PROF_TYPE_YAXIS[self._prof_type]))
+        main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+        # This makes sure legend keys are shown, even if the data is hidden
+        for leg_key in main_leg.legendHandles:
+            leg_key.set_visible(True)
+
+        # If the user has manually set limits then we can use them, only on the main axis because
+        #  we grab those limits from the axes object for the residual axis later
+        if xlim is not None:
+            main_ax.set_xlim(xlim)
+        if ylim is not None:
+            main_ax.set_ylim(ylim)
+
+        # Setup the scale that the user wants to see, again on the main axis
+        main_ax.set_xscale(xscale)
+        main_ax.set_yscale(yscale)
+        if models:
+            # We want the residual x axis limits to be identical to the main axis, as the
+            # points should line up
+            res_ax.set_xlim(main_ax.get_xlim())
+            res_ax.set_xlabel("Radius {}".format(x_unit))
+            res_ax.set_xscale(xscale)
+            # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
+            #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
+            # That way its symmetrical
+            outer_ylim = 1.1 * max([abs(lim) for lim in res_ax.get_ylim()])
+            res_ax.set_ylim(-outer_ylim, outer_ylim)
+            res_ax.set_ylabel("Model - Data")
+
+        # Adds a title to this figure, changes depending on whether model fits are plotted as well
+        if models and custom_title is None:
+            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
+        elif custom_title is None:
+            plt.suptitle("{l} Profile - with models".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.91)
         else:
-            plt.title("{s}-{o}-{i} {l} Profile".format(s=self._src_name, l=PROF_TYPE_YAXIS[self._prof_type],
-                                                       o=self.obs_id, i=self.instrument))
-
-        # Just going to leave matplotlib to decide where the legend should live
-        plt.legend(loc="best")
+            # If the user doesn't like my title, they can supply their own
+            plt.suptitle(custom_title, y=0.91)
 
         # And of course actually showing it
         plt.show()
@@ -1434,7 +1500,7 @@ class BaseAggregateProfile1D:
 
         # Setting the main plot's x label
         main_ax.set_xlabel("Radius {}".format(x_unit))
-        if self._back_avail == 0 or not back_sub:
+        if not self._back_avail or not back_sub:
             main_ax.set_ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
         else:
             # If background has been subtracted it will be mentioned in the y axis label
