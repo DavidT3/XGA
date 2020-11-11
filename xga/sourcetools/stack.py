@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/11/2020, 10:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:02. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -60,11 +60,11 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]
     """
 
-    def construct_profile(src: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity) -> Tuple[Quantity, int]:
+    def construct_profile(src_obj: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity) -> Tuple[Quantity, int]:
         """
         Constructs a brightness profile for the given galaxy cluster, and interpolates to find values
         at the requested radii in units of scale_radius.
-        :param GalaxyCluster src: The GalaxyCluster to construct a profile for.
+        :param GalaxyCluster src_obj: The GalaxyCluster to construct a profile for.
         :param int src_id: An identifier that enables the constructed profile to be placed
         correctly in the results array.
         :param Quantity lower: The lower energy limit to use.
@@ -82,30 +82,40 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
                                                                 n=psf_bins, a=psf_algo, i=psf_iter)
 
         # Retrieving the relevant ratemap object, as well as masks
-        rt = [r[-1] for r in src.get_products("combined_ratemap", just_obj=False) if storage_key in r][0]
+        rt = [r[-1] for r in src_obj.get_products("combined_ratemap", just_obj=False) if storage_key in r][0]
 
         # The user can choose to use the original user passed coordinates, or the X-ray centroid
         if use_peak:
-            pix_peak = rt.coord_conv(src.peak, pix)
-            source_mask, background_mask = src.get_mask(scale_radius, central_coord=src.peak)
+            pix_peak = rt.coord_conv(src_obj.peak, pix)
+            source_mask, background_mask = src_obj.get_mask(scale_radius, central_coord=src_obj.peak)
             # TODO Should I use my source radius mask or just remove interlopers?
-            source_mask = src.get_interloper_mask()
+            source_mask = src_obj.get_interloper_mask()
         else:
-            pix_peak = rt.coord_conv(src.ra_dec, pix)
-            source_mask, background_mask = src.get_mask(scale_radius, central_coord=src.ra_dec)
-            source_mask = src.get_interloper_mask()
+            pix_peak = rt.coord_conv(src_obj.ra_dec, pix)
+            source_mask, background_mask = src_obj.get_mask(scale_radius, central_coord=src_obj.ra_dec)
+            source_mask = src_obj.get_interloper_mask()
 
-        # TODO Use these to check if a matching profile has already been generated
-        # matching_profs = [p for p in src.get_products("combined_brightness_profile")
-        #                   if p.energy_bounds == (lower, upper) and p.centre == pix_peak]
+        rad = src_obj.get_radius(scale_radius, kpc)
 
-        rad = src.get_radius(scale_radius, kpc)
+        # This fetches any profiles that might have already been generated to our required specifications
+        prof_prods = src_obj.get_products("combined_brightness_profile")
+        if len(prof_prods) == 1:
+            matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, pix_peak, pix_step,
+                                                                                       min_snr, rad)]
+        else:
+            matching_profs = []
+
         # This is because a ValueError can be raised by radial_brightness when there is a problem with the
         #  background mask
         try:
-            sb_prof, success = radial_brightness(rt, source_mask, background_mask, pix_peak, rad, src.redshift,
-                                                 pix_step, kpc, src.cosmo, min_snr=min_snr)
-            src.update_products(sb_prof)
+            if len(matching_profs) == 0:
+                sb_prof, success = radial_brightness(rt, source_mask, background_mask, pix_peak, rad, src_obj.redshift,
+                                                     pix_step, kpc, src_obj.cosmo, min_snr=min_snr)
+                src_obj.update_products(sb_prof)
+            elif len(matching_profs) == 1:
+                sb_prof = matching_profs[0]
+            elif len(matching_profs) > 1:
+                raise ValueError("This shouldn't be possible.")
             # Calculates the value of pixel radii in terms of the scale radii
             scaled_radii = (sb_prof.radii / rad).value
             # Interpolating brightness profile values at the radii passed by the user
@@ -114,7 +124,7 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
             # This will mean that the profile is thrown away in a later step
             interp_brightness = np.full(radii.shape, np.NaN)
             # But will also raise a warning so the user knows
-            warn(str(ve).replace("you're looking at", "{s} is".format(s=src.name)).replace(".", "")
+            warn(str(ve).replace("you're looking at", "{s} is".format(s=src_obj.name)).replace(".", "")
                  + " - profile set to NaNs.")
 
         return interp_brightness, src_id
