@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 11:53. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:00. Copyright (c) David J Turner
 
 
 import inspect
@@ -435,7 +435,7 @@ class BaseAggregateProduct:
 
 # TODO Sweep through and docstring up in here
 class BaseProfile1D:
-    def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str,
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None):
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
@@ -473,6 +473,7 @@ class BaseProfile1D:
         self._values = values
         self._radii_err = radii_err
         self._values_err = values_err
+        self._centre = centre
 
         # Just checking that if one of these values is combined, then both are. Doesn't make sense otherwise.
         if (obs_id == "combined" and inst != "combined") or (inst == "combined" and obs_id != "combined"):
@@ -1140,6 +1141,15 @@ class BaseProfile1D:
         :rtype: Quantity
         """
         return self._background
+
+    @property
+    def centre(self) -> Quantity:
+        """
+        Property that returns the central coordinate that the profile was generated from.
+        :return: An astropy quantity of the central coordinate
+        :rtype: Quantity
+        """
+        return self._centre
 
     # This definitely doesn't get a setter, as its basically a proxy for type() return, it will not change
     #  during the life of the object
