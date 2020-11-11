@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 17:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 11:53. Copyright (c) David J Turner
 
 
 import inspect
@@ -238,11 +238,11 @@ class BaseProduct:
         return self._prod_type
 
     @property
-    def errors(self) -> List[dict]:
+    def errors(self) -> List[str]:
         """
         Property getter for non-SAS errors detected during the generation of a product.
-        :return: A list of dictionaries of parsed errors.
-        :rtype: List[dict]
+        :return: A list of errors that aren't related to SAS.
+        :rtype: List[str]
         """
         return self._other_error
 
