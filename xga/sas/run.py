@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/10/2020, 18:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 09:42. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -193,11 +193,16 @@ def sas_call(sas_func):
                 ext_info = " {s} is the associated source, the specific data used is " \
                            "{o}-{i}.".format(s=sources[ind].name, o=product.obs_id, i=product.instrument)
                 if len(product.sas_errors) == 1:
-                    raise SASGenerationError(product.sas_errors[0]
-                                             + ext_info)
+                    raise SASGenerationError(product.sas_errors[0] + ext_info)
                 elif len(product.sas_errors) > 1:
-                    errs = [SASGenerationError(e + ext_info)
-                            for e in product.sas_errors]
+                    errs = [SASGenerationError(e + ext_info) for e in product.sas_errors]
+                    raise Exception(errs)
+                # This is an elif because I designate SAS errors to be 'more important', and the likelihood of there
+                #  being secondary errors AS WELL as SAS errors seems very low
+                elif len(product.errors) == 1:
+                    raise SASGenerationError(product.errors[0] + "-" + ext_info)
+                elif len(product.errors) > 1:
+                    errs = [SASGenerationError(e + "-" + ext_info) for e in product.errors]
                     raise Exception(errs)
 
                 # ccfs aren't actually stored in the source product storage, but they are briefly put into
