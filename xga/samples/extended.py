@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 15:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 14:51. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -53,7 +53,8 @@ class ClusterSample(BaseSample):
             #  super ugly.
             d = dec[ind]
             z = redshift[ind]
-            n = name[ind]
+            # The replace is there because source declaration removes spaces from any passed names,
+            n = name[ind].replace(' ', '')
             # Declaring the BaseSample higher up weeds out those objects that aren't in any XMM observations
             #  So we want to check that the current object name is in the list of objects that have data
             if n in self.names:
