@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 15:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 15:37. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List
@@ -140,7 +140,11 @@ class ExtendedSource(BaseSource):
 
             # Find the peak using the experimental clustering_peak method
             if method == "hierarchical":
-                peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, peak_unit)
+                try:
+                    peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, peak_unit)
+                except ValueError:
+                    raise PeakConvergenceFailedError("The hierarchical clustering peak finder does not "
+                                                     "have enough points to work with.")
             elif method == "simple":
                 peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
                 chosen_coords = []
