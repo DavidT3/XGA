@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/09/2020, 14:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 16:22. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -106,6 +106,7 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     if not isinstance(sources, (list, BaseSample)):
         sources = [sources]
 
+    prep_bar = tqdm(desc="Preparing to generate PSF grids", total=len(sources))
     # Only those sources that don't already have the individual PSF corrected images should be run
     sub_sources = []
     for source in sources:
@@ -122,9 +123,12 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
 
         # If all the PSF corrected images are present then we skip, the correction has already been performed.
         if len(psf_corr_prod) == len(match_images):
+            prep_bar.update(1)
             continue
         else:
             sub_sources.append(source)
+            prep_bar.update(1)
+    prep_bar.close()
 
     # Should have cleaned it so that only those sources that need it will have PSFs generated
     psfgen(sub_sources, bins, psf_model, num_cores=num_cores)
