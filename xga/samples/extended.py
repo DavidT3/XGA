@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 14:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 15:40. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -136,7 +136,7 @@ class ClusterSample(BaseSample):
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
     @property
-    def r200_snr(self) -> np.ndarray:
+    def r200_snrs(self) -> np.ndarray:
         """
         Fetches and returns the R200 signal to noises from the constituent sources.
         :return: The signal to noise ration calculated at the R200.
@@ -151,7 +151,7 @@ class ClusterSample(BaseSample):
         return np.array(snrs)
 
     @property
-    def r500_snr(self) -> np.ndarray:
+    def r500_snrs(self) -> np.ndarray:
         """
         Fetches and returns the R500 signal to noises from the constituent sources.
         :return: The signal to noise ration calculated at the R500.
@@ -166,7 +166,7 @@ class ClusterSample(BaseSample):
         return np.array(snrs)
 
     @property
-    def r2500_snr(self) -> np.ndarray:
+    def r2500_snrs(self) -> np.ndarray:
         """
         Fetches and returns the R2500 signal to noises from the constituent sources.
         :return: The signal to noise ration calculated at the R2500.
