@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/11/2020, 10:11. Copyright (c) David J Turner
 
 
 import warnings
@@ -167,6 +167,16 @@ class Image(BaseProduct):
                              "is the same shape as the original.")
         else:
             self._data = new_im_arr
+
+    @data.deleter
+    def data(self):
+        """
+        Property deleter for data contained in this Image instance, or whatever subclass of the Image class you
+        may be using. The self._data array is removed from memory, and then self._data is explicitly set to None
+        so that self._read_on_demand() will be triggered if you ever want the data from this object again.
+        """
+        del self._data
+        self._data = None
 
     # This one doesn't get a setter, as I require this WCS to not be none in the _read_on_demand method
     @property
@@ -1164,5 +1174,14 @@ class PSFGrid(BaseAggregateProduct):
         :rtype: np.ndarray
         """
         return self._y_bounds
+
+    def unload_data(self):
+        """
+        A convenience method that will iterate through the component PSFs of this object and remove their data from
+        memory using the data property deleter. This ensures that, if the data needs to be accessed again, the call
+        to .data will read in the PSFs and all will be well, hopefully.
+        """
+        for p in self._component_products:
+            del self._component_products[p].data
 
 
