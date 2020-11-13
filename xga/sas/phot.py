@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/11/2020, 10:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/11/2020, 13:00. Copyright (c) David J Turner
 
 import os
 from shutil import rmtree
@@ -369,7 +369,8 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
     if isinstance(sources, NullSource):
         raise NotImplementedError("You cannot currently use PSFGen with a NullSource.")
 
-    psfgen_prep_progress = tqdm(desc='Preparing PSF generation commands', total=len(sources))
+    psfgen_prep_progress = tqdm(desc='Preparing PSF generation commands', total=len(sources),
+                                disable=len(sources) == 0)
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function
     sources_cmds = []
