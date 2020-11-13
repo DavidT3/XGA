@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/11/2020, 10:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/11/2020, 12:52. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -135,7 +135,7 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
         num_cores = 1
 
     corr_prog_message = 'PSF Correcting Observations - Currently {}'
-    corr_progress = tqdm(desc=corr_prog_message.format(sub_sources[0].name), total=len(sub_sources))
+    corr_progress = tqdm(desc=corr_prog_message.format(''), total=len(sub_sources), disable=len(sub_sources) == 0)
     for source in sub_sources:
         source: BaseSource
         # Updates the source name in the message every iteration
