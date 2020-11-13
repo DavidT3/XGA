@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/11/2020, 10:19. Copyright (c) David J Turner
 
 import os
 from shutil import rmtree
@@ -7,6 +7,7 @@ from typing import Union
 
 import numpy as np
 from astropy.units import Quantity, deg
+from tqdm import tqdm
 
 from .misc import cifbuild
 from .run import sas_call
@@ -368,6 +369,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
     if isinstance(sources, NullSource):
         raise NotImplementedError("You cannot currently use PSFGen with a NullSource.")
 
+    psfgen_prep_progress = tqdm(desc='Preparing PSF generation commands', total=len(sources))
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function
     sources_cmds = []
@@ -486,6 +488,9 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
         # once the SAS cmd has run
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="psf"))
+
+        psfgen_prep_progress.update(1)
+    psfgen_prep_progress.close()
 
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
