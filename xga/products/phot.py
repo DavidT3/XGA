@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/11/2020, 10:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/11/2020, 15:28. Copyright (c) David J Turner
 
 
 import warnings
@@ -11,6 +11,7 @@ from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversi
 from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize
 from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
+from matplotlib.patches import Circle
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
@@ -485,7 +486,8 @@ class Image(BaseProduct):
                                        "been PSF corrected.")
 
     def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
-             other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False):
+             other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False,
+             radial_bins_pix: np.ndarray = np.array([])):
         """
         Quick and dirty method to view this image. Absolutely no user configuration is allowed, that feature
         is for other parts of XGA. Produces an image with log-scaling, and using the colour map gnuplot2.
@@ -499,6 +501,8 @@ class Image(BaseProduct):
         :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this method.
         :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
         data are reduced.
+        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
+        only be triggered if a cross_hair coordinate is also specified.
         """
         if mask is not None and mask.shape != self.data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
@@ -549,6 +553,10 @@ class Image(BaseProduct):
             pix_coord = self.coord_conv(cross_hair, pix).value
             plt.axvline(pix_coord[0], color="white", linewidth=0.5)
             plt.axhline(pix_coord[1], color="white", linewidth=0.5)
+
+            for ann_rad in radial_bins_pix:
+                artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1)
+                ax.add_artist(artist)
 
         plt.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
 
