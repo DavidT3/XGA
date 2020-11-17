@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/11/2020, 09:21. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -195,7 +195,8 @@ class GalaxyCluster(ExtendedSource):
             return self.get_results(reg_type, models_with_kt[0], "kT")
 
     def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
-                                same_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0):
+                                same_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
+                                figsize: tuple = (10, 7), xscale: str = 'log', yscale: str = 'log'):
         """
         A method that generates and displays brightness profiles for the current cluster. Brightness profiles
         exclude point sources and either measure the average counts per second within a circular annulus (radial),
@@ -212,6 +213,9 @@ class GalaxyCluster(ExtendedSource):
         :param int pix_step: The width (in pixels) of each annular bin, default is 1.
         :param Union[float, int] min_snr: The minimum signal to noise allowed for each radial bin. This is 0 by
         default, which disables any automatic rebinning.
+        :param tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
         """
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
@@ -287,7 +291,7 @@ class GalaxyCluster(ExtendedSource):
             raise NotImplementedError("This was implemented but so many things have changed and I haven't "
                                       "adapted pizza profiles yet")
 
-        sb_profile.view()
+        sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize)
 
     def combined_lum_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
         """
