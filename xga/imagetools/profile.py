@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 12:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/11/2020, 10:26. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -15,8 +15,7 @@ from ..sourcetools import rad_to_ang
 
 
 def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, shape: tuple,
-                 start_ang: Quantity = Quantity(0, 'deg'),
-                 stop_ang: Quantity = Quantity(360, 'deg')) -> np.ndarray:
+                 start_ang: Quantity = Quantity(0, 'deg'), stop_ang: Quantity = Quantity(360, 'deg')) -> np.ndarray:
     """
     A handy little function to generate annular (or circular) masks in the form of numpy arrays.
     It produces the src_mask for a given shape of image, centered at supplied coordinates, and with inner and
@@ -106,7 +105,8 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
 
 
 def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, pix_step: int = 1,
-              cen_rad_units: UnitBase = arcsec, cosmo=Planck15) -> Tuple[np.ndarray, np.ndarray, Quantity]:
+              cen_rad_units: UnitBase = arcsec, cosmo=Planck15, min_central_pix_rad: int = 3,
+              start_pix_rad: int = 0) -> Tuple[np.ndarray, np.ndarray, Quantity]:
     """
     Will probably only ever be called by an internal brightness calculation, but two different methods
     need it so it gets its own method.
@@ -119,6 +119,9 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     :param UnitBase cen_rad_units: The output units for the centres of the annulli returned by
     this function. The inner and outer radii will always be in pixels.
     :param cosmo: An instance of an astropy cosmology, the default is Planck15.
+    :param int start_pix_rad: The pixel radius at which the innermost annulus starts, default is zero.
+    :param int min_central_pix_rad: The minimum radius of the innermost circular annulus (will only
+    be used if start_pix_rad is 0, otherwise the innermost annulus is not a circle), default is three.
     :return: Returns the inner and outer radii of the annuli (in pixels), and the centres of the annuli
     in cen_rad_units.
     :rtype: Tuple[np.ndarray, np.ndarray, Quantity]
@@ -142,18 +145,33 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
 
     rad = np.ceil(rad)
 
-    # By this point, the rad should be in pixels
-    rads = np.arange(0, rad.value + 1, pix_step).astype(int)
+    # So I'm adding a safety feature here, and ensuring the the central circle is a minimum radius
+    if pix_step < 3 and start_pix_rad == 0:
+        central_circ = np.array([0, min_central_pix_rad], dtype=int)
+        ann_rads = np.arange(min_central_pix_rad+pix_step, rad.value + 1, pix_step).astype(int)
+        rads = np.concatenate([central_circ, ann_rads])
+    else:
+        # By this point, the rad should be in pixels
+        rads = np.arange(start_pix_rad, rad.value + 1, pix_step).astype(int)
+
     inn_rads = rads[:len(rads) - 1]
     out_rads = rads[1:len(rads)]
 
-    cen_rads = pix_rad_to_physical(im_prod, Quantity((inn_rads + out_rads)/2, pix), cen_rad_units, deg_cen, z, cosmo)
+    pix_cen_rads = Quantity((inn_rads + out_rads)/2, pix)
+    cen_rads = pix_rad_to_physical(im_prod, pix_cen_rads, cen_rad_units, deg_cen, z, cosmo)
+
+    # If the innermost radius is zero then the innermost annulus is actually a circle and we don't want
+    #  the central radius to be between it and the next radius, as that wouldn't be strictly accurate
+    if rads[0] == 0:
+        cen_rads[0] = Quantity(0, cen_rad_units)
+
     return inn_rads, out_rads, cen_rads
 
 
 def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, centre: Quantity,
                       rad: Quantity, z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
-                      cosmo=Planck15, min_snr: float = 0.0) -> Tuple[SurfaceBrightness1D, bool]:
+                      cosmo=Planck15, min_snr: float = 0.0, min_central_pix_rad: int = 3,
+                      start_pix_rad: int = 0) -> Tuple[SurfaceBrightness1D, bool]:
     """
     A simple method to calculate the average brightness in circular annuli upto the radius of
     the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
@@ -170,6 +188,9 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     :param cosmo: An astropy cosmology object for source coordinate conversions.
     :param float min_snr: The minimum signal to noise allowed for each bin in the profile. If any point is
     below this threshold the profile will be rebinned. Default is 0.0
+    :param int start_pix_rad: The pixel radius at which the innermost annulus starts, default is zero.
+    :param int min_central_pix_rad: The minimum radius of the innermost circular annulus (will only
+    be used if start_pix_rad is 0, otherwise the innermost annulus is not a circle), default is three.
     :return: The brightness is returned in a flat numpy array, then the radii at the centre of the bins are
     returned in units of kpc, the width of the bins, and finally the average brightness in the background region is
     returned.
@@ -200,7 +221,8 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     pix_cen = rt.coord_conv(centre, pix)
 
     # This sets up the initial annular bin radii, as well as finding the central radii of the bins in the chosen units.
-    inn_rads, out_rads, init_cen_rads = ann_radii(rt, centre, rad, z, pix_step, cen_rad_units, cosmo)
+    inn_rads, out_rads, init_cen_rads = ann_radii(rt, centre, rad, z, pix_step, cen_rad_units, cosmo,
+                                                  min_central_pix_rad, start_pix_rad)
 
     # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
     #  dimension. Helps with broadcasting the annular masks with the region src_mask that gets rid of interlopers
@@ -289,6 +311,8 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     inn_rads = pix_rad_to_physical(rt, Quantity(inn_rads, pix), cen_rad_units, centre, z, cosmo)
     out_rads = pix_rad_to_physical(rt, Quantity(out_rads, pix), cen_rad_units, centre, z, cosmo)
     cen_rads = (inn_rads + out_rads) / 2
+    if inn_rads[0].value == 0:
+        cen_rads[0] = Quantity(0, cen_rads.unit)
     rad_err = (out_rads-inn_rads) / 2
 
     # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product
