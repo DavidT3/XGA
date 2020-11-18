@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 14:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/11/2020, 16:26. Copyright (c) David J Turner
 
 
 import inspect
@@ -59,7 +59,7 @@ class BaseProduct:
         self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
         self._obs_id = obs_id
         self._inst = instrument
-        self.og_cmd = gen_cmd
+        self._og_cmd = gen_cmd
         self._energy_bounds = (None, None)
         self._prod_type = None
         self._src_name = None
@@ -286,6 +286,15 @@ class BaseProduct:
         :rtype: List
         """
         return self._why_unusable
+
+    @property
+    def sas_command(self) -> str:
+        """
+        A property that returns the original SAS command used to generate this object.
+        :return: String containing the command.
+        :rtype: str
+        """
+        return self._og_cmd
 
 
 # TODO Obviously finish this, but also comment and docstring
