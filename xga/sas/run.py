@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/11/2020, 09:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/11/2020, 16:33. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -184,36 +184,43 @@ def sas_call(sas_func):
             pass
 
         # Now we assign products to source objects
+        all_to_raise = []
         for entry in results:
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add this set of products to
             ind = src_lookup[entry]
+            to_raise = []
             for product in results[entry]:
                 product: BaseProduct
                 ext_info = " {s} is the associated source, the specific data used is " \
                            "{o}-{i}.".format(s=sources[ind].name, o=product.obs_id, i=product.instrument)
                 if len(product.sas_errors) == 1:
-                    raise SASGenerationError(product.sas_errors[0] + ext_info)
+                    to_raise.append(SASGenerationError(product.sas_errors[0] + ext_info))
                 elif len(product.sas_errors) > 1:
                     errs = [SASGenerationError(e + ext_info) for e in product.sas_errors]
-                    raise Exception(errs)
-                # This is an elif because I designate SAS errors to be 'more important', and the likelihood of there
-                #  being secondary errors AS WELL as SAS errors seems very low
-                elif len(product.errors) == 1:
-                    raise SASGenerationError(product.errors[0] + "-" + ext_info)
+                    to_raise += errs
+
+                if len(product.errors) == 1:
+                    to_raise.append(SASGenerationError(product.errors[0] + "-" + ext_info))
                 elif len(product.errors) > 1:
                     errs = [SASGenerationError(e + "-" + ext_info) for e in product.errors]
-                    raise Exception(errs)
+                    to_raise += errs
 
                 # ccfs aren't actually stored in the source product storage, but they are briefly put into
                 #  BaseProducts for error parsing etc. So if the product type is None we don't store it
-                if product.type is not None:
+                if product.type is not None and product.usable:  # If not usable don't add
                     # For each product produced for this source, we add it to the storage hierarchy
                     sources[ind].update_products(product)
 
+            if len(to_raise) != 0:
+                all_to_raise.append(to_raise)
         # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
         for error in raised_errors:
             raise error
+
+        # And here are all the errors during SAS generation, if any
+        if len(all_to_raise) != 0:
+            raise SASGenerationError(all_to_raise)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
