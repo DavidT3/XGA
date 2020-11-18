@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/11/2020, 15:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/11/2020, 17:03. Copyright (c) David J Turner
 
 
 import warnings
@@ -8,7 +8,7 @@ from typing import Tuple, List, Union
 import numpy as np
 from astropy import wcs
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError
-from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize
+from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize, BaseStretch
 from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.patches import Circle
@@ -487,10 +487,10 @@ class Image(BaseProduct):
 
     def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
              other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False,
-             radial_bins_pix: np.ndarray = np.array([])):
+             radial_bins_pix: np.ndarray = np.array([]), stretch: BaseStretch = LogStretch()):
         """
         Quick and dirty method to view this image. Absolutely no user configuration is allowed, that feature
-        is for other parts of XGA. Produces an image with log-scaling, and using the colour map gnuplot2.
+        is for other parts of XGA. Produces an image using the colour map gnuplot2.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
         the coordinates.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
@@ -503,6 +503,7 @@ class Image(BaseProduct):
         data are reduced.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
         only be triggered if a cross_hair coordinate is also specified.
+        :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         """
         if mask is not None and mask.shape != self.data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
@@ -525,20 +526,20 @@ class Image(BaseProduct):
         #  and it makes the title ugly
         if self.obs_id != "combined":
             # Set the title with all relevant information about the image object in it
-            plt.title("Log Scaled {n} - {o}{i} {l}-{u}keV {t}".format(n=self.src_name, o=self.obs_id,
-                                                                      i=self.instrument.upper(),
-                                                                      l=self._energy_bounds[0].to("keV").value,
-                                                                      u=self._energy_bounds[1].to("keV").value,
-                                                                      t=self.type))
+            plt.title("{n} - {o}{i} {l}-{u}keV {t}".format(n=self.src_name, o=self.obs_id,
+                                                           i=self.instrument.upper(),
+                                                           l=self._energy_bounds[0].to("keV").value,
+                                                           u=self._energy_bounds[1].to("keV").value,
+                                                           t=self.type))
         else:
-            plt.title("Log Scaled {n} - Combined {l}-{u}keV {t}".format(n=self.src_name,
-                                                                        l=self._energy_bounds[0].to("keV").value,
-                                                                        u=self._energy_bounds[1].to("keV").value,
-                                                                        t=self.type))
+            plt.title("{n} - Combined {l}-{u}keV {t}".format(n=self.src_name,
+                                                             l=self._energy_bounds[0].to("keV").value,
+                                                             u=self._energy_bounds[1].to("keV").value,
+                                                             t=self.type))
 
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in depth way of viewing cluster data eventually
-        norm = ImageNormalize(data=plot_data, interval=MinMaxInterval(), stretch=LogStretch())
+        norm = ImageNormalize(data=plot_data, interval=MinMaxInterval(), stretch=stretch)
         # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
 
         if chosen_points is not None:
@@ -701,9 +702,18 @@ class RateMap(Image):
         # Store that edge mask as an attribute.
         self._edge_mask = comb
 
-        # And another mask for whether on or off the sensor, useful when doing radial profiles on
-        #  objects close to the edge of the detector - otherwise the values get dragged down by all the zeros
+        # TODO Add another attribute that describes how many sensors a particular pixel falls on for combined
+        #  ratemaps
         self._on_sensor_mask = det_map
+        # And another mask for whether on or off the sensor, very simple for individual ObsID-Instrument combos
+        # if self._obs_id != "combined":
+        #     self._on_sensor_mask = det_map
+        # # MUCH more complicated for combined ratemaps however, as what is on one detector might not be on another
+        # else:
+        #     for entry in self.header:
+        #         if "EMSCF" in entry:
+        #             print(self.header[entry])
+        #
 
         # Re-setting some paths to make more sense
         self._path = self._im_path
