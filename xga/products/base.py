@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/11/2020, 16:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/11/2020, 12:27. Copyright (c) David J Turner
 
 
 import inspect
@@ -166,6 +166,11 @@ class BaseProduct:
             # These are impossible to predict the form of, so they won't be parsed
             other_err_lines = [line for line in err_lines if line not in sas_err_lines
                                and line not in sas_warn_lines and line != "" and "warn" not in line]
+            # Adding some advice
+            for e_ind, e in enumerate(other_err_lines):
+                if 'seg' in e.lower() and 'fault' in e.lower():
+                    other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
+                                              'and have a look at where your coordinate lies.'
 
         if len(sas_errs_msgs) > 0:
             self._usable = False
