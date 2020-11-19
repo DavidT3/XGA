@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/11/2020, 17:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/11/2020, 12:18. Copyright (c) David J Turner
 
 
 import warnings
@@ -11,6 +11,7 @@ from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversi
 from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize, BaseStretch
 from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.patches import Circle
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
@@ -485,12 +486,14 @@ class Image(BaseProduct):
             raise NotPSFCorrectedError("You are trying to set the PSF model for an Image that hasn't "
                                        "been PSF corrected.")
 
-    def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
-             other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False,
-             radial_bins_pix: np.ndarray = np.array([]), stretch: BaseStretch = LogStretch()):
+    def get_view(self, ax: Axes, cross_hair: Quantity = None, mask: np.ndarray = None,
+                 chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, zoom_in: bool = False,
+                 manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
+                 radial_bins_pix: np.ndarray = np.array([]), stretch: BaseStretch = LogStretch()) -> Axes:
         """
-        Quick and dirty method to view this image. Absolutely no user configuration is allowed, that feature
-        is for other parts of XGA. Produces an image using the colour map gnuplot2.
+        The method that creates and populates the view axes, separate from actual view so outside methods
+        can add a view to other matplotlib axes.
+        :param Axes ax: The matplotlib axes on which to show the image.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
         the coordinates.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
@@ -498,13 +501,23 @@ class Image(BaseProduct):
         :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
         :param list other_points: A list of numpy arrays of point clusters that weren't chosen by the
         hierarchical peak finder.
-        :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this method.
         :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
         data are reduced.
+        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually set a part
+        of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+        to be applied.
+        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually set a part
+        of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+        to be applied.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
         only be triggered if a cross_hair coordinate is also specified.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
+        :return: A populated figure displaying the view of the data.
+        :rtype: Axes
         """
+
         if mask is not None and mask.shape != self.data.shape:
             raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
                              "({1}).".format(mask.shape, self.data.shape))
@@ -513,11 +526,6 @@ class Image(BaseProduct):
         else:
             plot_data = self.data
 
-        # Create figure object
-        plt.figure(figsize=figsize)
-
-        # Turns off any ticks and tick labels, we don't want them in an image
-        ax = plt.gca()
         ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
         ax.xaxis.set_ticklabels([])
         ax.yaxis.set_ticklabels([])
@@ -526,13 +534,13 @@ class Image(BaseProduct):
         #  and it makes the title ugly
         if self.obs_id != "combined":
             # Set the title with all relevant information about the image object in it
-            plt.title("{n} - {o}{i} {l}-{u}keV {t}".format(n=self.src_name, o=self.obs_id,
+            ax.set_title("{n} - {o}{i} {l}-{u}keV {t}".format(n=self.src_name, o=self.obs_id,
                                                            i=self.instrument.upper(),
                                                            l=self._energy_bounds[0].to("keV").value,
                                                            u=self._energy_bounds[1].to("keV").value,
                                                            t=self.type))
         else:
-            plt.title("{n} - Combined {l}-{u}keV {t}".format(n=self.src_name,
+            ax.set_title("{n} - Combined {l}-{u}keV {t}".format(n=self.src_name,
                                                              l=self._energy_bounds[0].to("keV").value,
                                                              u=self._energy_bounds[1].to("keV").value,
                                                              t=self.type))
@@ -543,32 +551,79 @@ class Image(BaseProduct):
         # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
 
         if chosen_points is not None:
-            plt.plot(chosen_points[:, 0], chosen_points[:, 1], '+', color='black', label="Chosen Point Cluster")
-            plt.legend(loc="best")
+            ax.plot(chosen_points[:, 0], chosen_points[:, 1], '+', color='black', label="Chosen Point Cluster")
+            ax.legend(loc="best")
 
         if other_points is not None:
             for cl in other_points:
-                plt.plot(cl[:, 0], cl[:, 1], 'D')
+                ax.plot(cl[:, 0], cl[:, 1], 'D')
 
         if cross_hair is not None:
             pix_coord = self.coord_conv(cross_hair, pix).value
-            plt.axvline(pix_coord[0], color="white", linewidth=0.5)
-            plt.axhline(pix_coord[1], color="white", linewidth=0.5)
+            ax.axvline(pix_coord[0], color="white", linewidth=0.5)
+            ax.axhline(pix_coord[1], color="white", linewidth=0.5)
 
             for ann_rad in radial_bins_pix:
                 artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1)
                 ax.add_artist(artist)
 
-        plt.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
+        ax.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
 
-        if zoom_in:
+        if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is None:
             # I don't like doing local imports, but this is the easiest way
             from xga.imagetools import data_limits
             x_lims, y_lims = data_limits(plot_data)
-            plt.xlim(x_lims)
-            plt.ylim(y_lims)
+            ax.set_xlim(x_lims)
+            ax.set_ylim(y_lims)
+        elif zoom_in and manual_zoom_xlims is not None and manual_zoom_ylims is not None:
+            ax.set_xlim(manual_zoom_xlims)
+            ax.set_ylim(manual_zoom_ylims)
+        elif zoom_in and manual_zoom_xlims is not None and manual_zoom_ylims is None:
+            ax.set_xlim(manual_zoom_xlims)
+        elif zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is not None:
+            ax.set_ylim(manual_zoom_ylims)
 
-        plt.colorbar()
+        return ax
+
+    def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
+             other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False,
+             manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
+             radial_bins_pix: np.ndarray = np.array([]), stretch: BaseStretch = LogStretch()):
+        """
+        Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
+        and producing figures for publication.
+        :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
+        the coordinates.
+        :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
+        data if they so choose.
+        :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
+        :param list other_points: A list of numpy arrays of point clusters that weren't chosen by the
+        hierarchical peak finder.
+        :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this method.
+        :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
+        data are reduced.
+        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually set a part
+        of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+        to be applied.
+        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually set a part
+        of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+        to be applied.
+        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
+        only be triggered if a cross_hair coordinate is also specified.
+        :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
+        """
+
+        # Create figure object
+        fig = plt.figure(figsize=figsize)
+
+        # Turns off any ticks and tick labels, we don't want them in an image
+        ax = plt.gca()
+
+        ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
+                           manual_zoom_ylims, radial_bins_pix, stretch)
+        plt.colorbar(ax.images[0])
         plt.tight_layout()
         # Display the image
         plt.show()
