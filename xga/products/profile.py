@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/11/2020, 15:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/11/2020, 16:40. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -13,7 +13,7 @@ from ..products.phot import RateMap
 class SurfaceBrightness1D(BaseProfile1D):
     def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int,
                  min_snr: float, outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
-                 background: Quantity = None, pixel_bins: np.ndarray = None):
+                 background: Quantity = None, pixel_bins: np.ndarray = None, ann_areas: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
@@ -28,6 +28,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         :param Quantity values_err: Uncertainties on the values.
         :param Quantity background: The background brightness value.
         :param np.ndarray pixel_bins: An optional argument that provides the pixel bins used to create the profile.
+        :param Quantity ann_area: The area of the annuli.
         """
         super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err)
 
@@ -64,6 +65,9 @@ class SurfaceBrightness1D(BaseProfile1D):
 
         # Storing the pixel bins used to create this particular profile, if passed, None if not.
         self._pix_bins = pixel_bins
+
+        # Storing the annular areas for this particular profile, if passed, None if not.
+        self._areas = ann_areas
 
     @property
     def pix_step(self) -> int:
@@ -177,6 +181,15 @@ class SurfaceBrightness1D(BaseProfile1D):
         :rtype: np.ndarray
         """
         return self._pix_bins
+
+    @property
+    def areas(self) -> Quantity:
+        """
+        Returns the areas of the annuli used to make this profile as an astropy Quantity.
+        :return: Astropy non-scalar quantity containing the areas.
+        :rtype: Quantity
+        """
+        return self._areas
 
     def check_match(self, rt: RateMap, centre: Quantity, pix_step: int, min_snr: float, outer_rad: Quantity) -> bool:
         """

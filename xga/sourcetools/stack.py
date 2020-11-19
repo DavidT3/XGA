@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/11/2020, 12:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/11/2020, 16:40. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -357,7 +357,6 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
             # This populates ones of the axes with a view of the image
             im_ax = rt.get_view(ax_arr[0], pr.centre, inter_mask, radial_bins_pix=pr.pixel_bins, zoom_in=True,
                                 manual_zoom_xlims=custom_xlims, manual_zoom_ylims=custom_ylims)
-            # plt.colorbar(im_ax.images[0])
 
             ax_arr[1].set_xscale("log")
             ax_arr[1].set_yscale("log")
