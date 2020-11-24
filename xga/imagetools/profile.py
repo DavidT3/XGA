@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/11/2020, 16:40. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/11/2020, 16:09. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -8,10 +8,9 @@ import numpy as np
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitBase, pix, deg, arcsec, UnitConversionError
 
-from .misc import pix_deg_scale, pix_rad_to_physical
+from .misc import pix_deg_scale, pix_rad_to_physical, physical_rad_to_pix
 from ..products import Image, RateMap
 from ..products.profile import SurfaceBrightness1D
-from ..sourcetools import rad_to_ang
 
 
 def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, shape: tuple,
@@ -132,16 +131,10 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
 
     # If the radius is passed in a proper distance unit, this will convert it or raise an exception
     #  if it can't
-    if rad.unit.is_equivalent('kpc') and z is None:
-        raise UnitConversionError("Cannot use a radius in kpc without redshift information")
-    elif rad.unit.is_equivalent('kpc') and z is not None:
-        rad = rad_to_ang(rad, z, cosmo)
-
-    # If the radius was passed as an angle, or has just been converted to one from a proper distance unit
-    if rad.unit.is_equivalent('deg'):
-        to_add = Quantity([rad.to('deg').value, 0], 'deg')
-        rad_coord = im_prod.coord_conv(deg_cen+to_add, pix)
-        rad = Quantity(abs((rad_coord - pix_cen).value[0]), 'pix')
+    if rad.unit.is_equivalent('deg') or rad.unit.is_equivalent('kpc'):
+        rad = physical_rad_to_pix(im_prod, rad, deg_cen, z, cosmo)
+    else:
+        raise UnitConversionError('{} is not a recognised distance unit'.format(rad.unit.to_string()))
 
     rad = np.ceil(rad)
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/09/2020, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/11/2020, 16:09. Copyright (c) David J Turner
 
 
 from typing import Tuple, List, Union
@@ -8,8 +8,8 @@ import numpy as np
 from astropy.units import Quantity, pix, deg, UnitConversionError, UnitBase
 from astropy.wcs import WCS
 
-from ..products import Image, RateMap
-from ..sourcetools import ang_to_rad
+from ..products import Image, RateMap, ExpMap
+from ..sourcetools import ang_to_rad, rad_to_ang
 
 
 def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quantity(1, 'arcmin')) -> float:
@@ -50,14 +50,14 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
     return scale
 
 
-def pix_rad_to_physical(im_prod: Union[Image, RateMap], pix_rads: Quantity, out_unit: UnitBase,
+def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantity, out_unit: UnitBase,
                         coord: Quantity, z: Union[float, int] = None, cosmo=None) -> Quantity:
     """
     Pure convenience function to convert a list of pixel radii to whatever unit we might want at the end. Used
     quite a lot in the imagetools.profile functions, which is why it was split off into its own function. Redshift
     and cosmology must be supplied if proper distance units (like kpc) are chosen for out_unit.
     :param Union[Image, RateMap] im_prod: The image/ratemap product for which the conversion is taking place.
-    :param Quantity pix_rads: The array of pixel radii to convert to out_unit.
+    :param Quantity pix_rad: The array of pixel radii to convert to out_unit.
     :param UnitBase out_unit: The desired output unit for the radii.
     :param Quantity coord: The position of the object being analysed.
     :param Union[float, int] z: The redshift of the object (only required for proper distance units like kpc).
@@ -65,10 +65,10 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap], pix_rads: Quantity, out_
     :return: An astropy Quantity with the radii in units of out_unit.
     :rtype: Quantity
     """
-    if pix_rads.unit != pix:
+    if pix_rad.unit != pix:
         raise UnitConversionError("pix_rads must be in units of pixels")
 
-    deg_rads = Quantity(pix_deg_scale(coord, im_prod.radec_wcs) * pix_rads.value, 'deg')
+    deg_rads = Quantity(pix_deg_scale(coord, im_prod.radec_wcs) * pix_rad.value, 'deg')
 
     if out_unit.is_equivalent("kpc") and z is not None and cosmo is not None:
         # Quick convert to kpc with my handy function and then go to whatever unit the user requested
@@ -82,7 +82,7 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap], pix_rads: Quantity, out_
     elif out_unit == pix:
         # Commenting out the sassy warning for now...
         # warn("You're converting pixel radii to pixels...")
-        conv_rads = pix_rads
+        conv_rads = pix_rad
     else:
         conv_rads = None
         raise UnitConversionError("cen_rad_units doesn't appear to be a distance or angular unit.")
@@ -90,7 +90,41 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap], pix_rads: Quantity, out_
     return conv_rads
 
 
-def data_limits(im_prod: Union[Image, RateMap, np.ndarray]) -> Tuple[List[int], List[int]]:
+def physical_rad_to_pix(im_prod: Union[Image, RateMap, ExpMap], physical_rad: Quantity,
+                        coord: Quantity, z: Union[float, int] = None, cosmo=None) -> Quantity:
+    """
+    Another convenience function, this time to convert physical radii to pixels. It can deal with both angular and
+    proper radii, so long as redshift and cosmology information is provided for the conversion from proper radii
+    to pixels
+    :param Union[Image, RateMap, ExpMap] im_prod:
+    :param Quantity physical_rad: The physical radius to be converted to pixels.
+    :param Quantity coord: The position of the object being analysed.
+    :param Union[float, int] z: The redshift of the object (only required for input proper distance units like kpc).
+    :param cosmo: The chosen cosmology for the analysis (only required for input proper distance units like kpc).
+    :return: The converted radii, in an astropy Quantity with pix units.
+    :rtype: Quantity
+    """
+
+    if physical_rad.unit.is_equivalent("kpc") and z is not None and cosmo is not None:
+        conv_rads = rad_to_ang(physical_rad, z, cosmo).to('deg')
+    elif physical_rad.unit.is_equivalent("kpc") and (z is None or cosmo is None):
+        raise ValueError("If you wish to convert to convert from proper distance units such as kpc, you must supply "
+                         "a redshift and cosmology")
+    elif physical_rad.unit.is_equivalent("deg"):
+        conv_rads = physical_rad.to('deg')
+    elif physical_rad.unit == pix:
+        raise UnitConversionError("You are trying to convert from pixel units to pixel units.")
+    else:
+        conv_rads = None
+        raise UnitConversionError("cen_rad_units doesn't appear to be a distance or angular unit.")
+
+    phys_to_pix = 1 / pix_deg_scale(coord, im_prod.radec_wcs)
+    conv_rads = Quantity(conv_rads.value * phys_to_pix, 'pix')
+
+    return conv_rads
+
+
+def data_limits(im_prod: Union[Image, RateMap, ExpMap, np.ndarray]) -> Tuple[List[int], List[int]]:
     """
     A function that finds the pixel coordinates that bound where data is present in
     Image or RateMap object.
