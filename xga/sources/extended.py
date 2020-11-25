@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 11:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 13:42. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -196,7 +196,8 @@ class GalaxyCluster(ExtendedSource):
 
     def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
                                 same_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
-                                figsize: tuple = (10, 7), xscale: str = 'log', yscale: str = 'log'):
+                                figsize: tuple = (10, 7), xscale: str = 'log', yscale: str = 'log',
+                                back_sub: bool = True):
         """
         A method that generates and displays brightness profiles for the current cluster. Brightness profiles
         exclude point sources and either measure the average counts per second within a circular annulus (radial),
@@ -216,6 +217,7 @@ class GalaxyCluster(ExtendedSource):
         :param tuple figsize: The desired size of the figure, the default is (10, 7)
         :param str xscale: The scaling to be applied to the x axis, default is log.
         :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
         """
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
@@ -299,7 +301,7 @@ class GalaxyCluster(ExtendedSource):
             elif r_name == "custom":
                 draw_rads["Custom"] = self.get_radius(r_name, sb_profile.radii_unit)
 
-        sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize, draw_rads=draw_rads)
+        sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize, draw_rads=draw_rads, back_sub=back_sub)
 
     def combined_lum_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
         """
