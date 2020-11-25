@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 15:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 16:23. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1642,10 +1642,11 @@ class BaseSource:
         # Users can pass just an ObsID string, but we then need to convert it to the form
         #  that the rest of the function requires
         if isinstance(to_remove, str):
-            to_remove = {to_remove: self.instruments[to_remove]}
+            to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
 
         if not self._disassociated:
             self._disassociated = True
+
         if len(self._disassociated_obs) == 0:
             self._disassociated_obs = to_remove
         else:
