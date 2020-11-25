@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/11/2020, 16:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 10:10. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -133,6 +133,9 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     #  if it can't
     if rad.unit.is_equivalent('deg') or rad.unit.is_equivalent('kpc'):
         rad = physical_rad_to_pix(im_prod, rad, deg_cen, z, cosmo)
+    elif rad.unit == pix:
+        # If the radius is already in pixels then all is well
+        pass
     else:
         raise UnitConversionError('{} is not a recognised distance unit'.format(rad.unit.to_string()))
 
