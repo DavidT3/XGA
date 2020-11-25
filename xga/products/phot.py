@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/11/2020, 12:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 16:22. Copyright (c) David J Turner
 
 
 import warnings
@@ -532,18 +532,18 @@ class Image(BaseProduct):
 
         # Check if this is a combined product, because if it is then ObsID and instrument are both 'combined'
         #  and it makes the title ugly
-        if self.obs_id != "combined":
-            # Set the title with all relevant information about the image object in it
-            ax.set_title("{n} - {o}{i} {l}-{u}keV {t}".format(n=self.src_name, o=self.obs_id,
-                                                           i=self.instrument.upper(),
-                                                           l=self._energy_bounds[0].to("keV").value,
-                                                           u=self._energy_bounds[1].to("keV").value,
-                                                           t=self.type))
+        if self.obs_id == "combined":
+            ident = 'Combined'
         else:
-            ax.set_title("{n} - Combined {l}-{u}keV {t}".format(n=self.src_name,
-                                                             l=self._energy_bounds[0].to("keV").value,
-                                                             u=self._energy_bounds[1].to("keV").value,
-                                                             t=self.type))
+            ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
+
+        title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident, l=self._energy_bounds[0].to("keV").value,
+                                                  u=self._energy_bounds[1].to("keV").value, t=self.type)
+        # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
+        if self.psf_corrected:
+            title += ' - PSF Corrected'
+
+        ax.set_title(title)
 
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in depth way of viewing cluster data eventually
