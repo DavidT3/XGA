@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/11/2020, 12:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 11:19. Copyright (c) David J Turner
 
 
 import inspect
@@ -1023,7 +1023,7 @@ class BaseProfile1D:
                                          "mod_real_upper": model_upper}
 
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
-             back_sub: bool = True, just_models: bool = False, custom_title: str = None):
+             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {}):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals.
@@ -1038,7 +1038,16 @@ class BaseProfile1D:
         :param bool back_sub: Should the plotted data be background subtracted, default is True.
         :param bool just_models: Should ONLY the fitted models be plotted? Default is False
         :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+        the dictionary key they are stored under is what they will be labelled.
+         e.g. ({'r500': Quantity(), 'r200': Quantity()}
         """
+        # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
+        #  used in this profile)
+        if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
+            raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
+                                      "{}".format(self.radii_unit.to_string()))
+
         # Default is to show models, but that flag is set to False here if there are none, otherwise we get
         #  extra plotted stuff that doesn't make sense
         if len(self._good_model_fits) == 0:
@@ -1159,6 +1168,15 @@ class BaseProfile1D:
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
+
+        # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
+        main_ylims = main_ax.get_ylim()
+        y_mid = (main_ylims[1] - main_ylims[0]) / 2
+        # If the user has passed radii to plot, then we plot them
+        for r_name in draw_rads:
+            main_ax.axvline(draw_rads[r_name].value, linestyle='dashed', color='black')
+            main_ax.text(draw_rads[r_name].value * 1.01, y_mid, r_name, rotation=90, verticalalignment='center',
+                         color='black', fontsize=14)
 
         # And of course actually showing it
         plt.show()
@@ -1420,7 +1438,7 @@ class BaseAggregateProfile1D:
 
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
              ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
-             just_model: bool = False, custom_title: str = None):
+             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -1437,7 +1455,17 @@ class BaseAggregateProfile1D:
         :param bool legend: Should a legend with source names be added to the figure, default is True.
         :param bool just_model: Should only the models, not the data, be plotted. Default is False.
         :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+        the dictionary key they are stored under is what they will be labelled.
+         e.g. ({'r500': Quantity(), 'r200': Quantity()}
         """
+
+        # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
+        #  used in this profile)
+        if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
+            raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
+                                      "{}".format(self.radii_unit.to_string()))
+
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
         # Grabbing the axis object and making sure the ticks are set up how we want
@@ -1563,6 +1591,15 @@ class BaseAggregateProfile1D:
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
+
+        # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
+        main_ylims = main_ax.get_ylim()
+        y_mid = (main_ylims[1] - main_ylims[0]) / 2
+        # If the user has passed radii to plot, then we plot them
+        for r_name in draw_rads:
+            main_ax.axvline(draw_rads[r_name].value, linestyle='dashed', color='black')
+            main_ax.text(draw_rads[r_name].value * 1.01, y_mid, r_name, rotation=90, verticalalignment='center',
+                         color='black', fontsize=14)
 
         # And of course actually showing it
         plt.show()

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/11/2020, 09:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 11:19. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -291,7 +291,15 @@ class GalaxyCluster(ExtendedSource):
             raise NotImplementedError("This was implemented but so many things have changed and I haven't "
                                       "adapted pizza profiles yet")
 
-        sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize)
+        draw_rads = {}
+        for r_name in self._radii:
+            if r_name not in ['search', 'custom']:
+                new_key = "R$_{" + r_name[1:] + "}$"
+                draw_rads[new_key] = self.get_radius(r_name, sb_profile.radii_unit)
+            elif r_name == "custom":
+                draw_rads["Custom"] = self.get_radius(r_name, sb_profile.radii_unit)
+
+        sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize, draw_rads=draw_rads)
 
     def combined_lum_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
         """
