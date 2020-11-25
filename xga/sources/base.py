@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/11/2020, 16:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 15:04. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1076,7 +1076,11 @@ class BaseSource:
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:
-            mask_image = self.get_products("combined_image")[0]
+            comb_images = self.get_products("combined_image")
+            if len(comb_images) != 0:
+                mask_image = comb_images[0]
+            else:
+                raise NoProductAvailableError("There are no combined products available to generate a mask for.")
         else:
             # Just grab the first instrument that comes out the get method, the masks should be the same.
             mask_image = self.get_products("image", obs_id)[0]
@@ -1626,14 +1630,20 @@ class BaseSource:
         """
         return self._disassociated_obs
 
-    def disassociate_obs(self, to_remove: dict):
+    def disassociate_obs(self, to_remove: Union[dict, str]):
         """
         Method that uses the supplied dictionary to safely remove data from the source. This data will no longer
         be used in any analyses, and would typically be removed because it is of poor quality, or doesn't contribute
         enough to justify its presence.
-        :param dict to_remove: A dictionary of observations to remove, in the style of the source.instruments
-        dictionary, with the top level keys being ObsIDs, and the lower levels being instrument names.
+        :param Union[dict, str] to_remove: A dictionary of observations to remove, either in the style of
+        the source.instruments dictionary (with the top level keys being ObsIDs, and the lower levels
+        being instrument names), or a string containing an ObsID.
         """
+        # Users can pass just an ObsID string, but we then need to convert it to the form
+        #  that the rest of the function requires
+        if isinstance(to_remove, str):
+            to_remove = {to_remove: self.instruments[to_remove]}
+
         if not self._disassociated:
             self._disassociated = True
         if len(self._disassociated_obs) == 0:
@@ -1800,17 +1810,21 @@ class BaseSource:
             else:
                 region_radius = self._custom_region_radius.to("deg")
             print("Custom Region Radius - {}".format(region_radius.round(2)))
-            print("Custom Region SNR - {}".format(self.get_snr("custom", self._default_coord).round(2)))
+            if len(self.get_products('combined_image')) != 0:
+                print("Custom Region SNR - {}".format(self.get_snr("custom", self._default_coord).round(2)))
 
         if self._r200 is not None:
             print("R200 - {}".format(self._r200))
-            print("R200 SNR - {}".format(self.get_snr("r200", self._default_coord).round(2)))
+            if len(self.get_products('combined_image')) != 0:
+                print("R200 SNR - {}".format(self.get_snr("r200", self._default_coord).round(2)))
         if self._r500 is not None:
             print("R500 - {}".format(self._r500))
-            print("R500 SNR - {}".format(self.get_snr("r500", self._default_coord).round(2)))
+            if len(self.get_products('combined_image')) != 0:
+                print("R500 SNR - {}".format(self.get_snr("r500", self._default_coord).round(2)))
         if self._r2500 is not None:
-            print("R2500 - {}".format(self._r500))
-            print("R2500 SNR - {}".format(self.get_snr("r2500", self._default_coord).round(2)))
+            print("R2500 - {}".format(self._r2500))
+            if len(self.get_products('combined_image')) != 0:
+                print("R2500 SNR - {}".format(self.get_snr("r2500", self._default_coord).round(2)))
 
         # There's probably a neater way of doing the observables - maybe a formatting function?
         if self._richness is not None and self._richness_err is not None \
