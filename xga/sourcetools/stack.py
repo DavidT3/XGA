@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/11/2020, 16:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 17:24. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -87,14 +87,14 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         # The user can choose to use the original user passed coordinates, or the X-ray centroid
         if use_peak:
             pix_peak = rt.coord_conv(src_obj.peak, pix)
-            source_mask, background_mask = src_obj.get_mask(scale_radius, central_coord=src_obj.peak)
-            # TODO Should I use my source radius mask or just remove interlopers?
-            source_mask = src_obj.get_interloper_mask()
         else:
             pix_peak = rt.coord_conv(src_obj.ra_dec, pix)
-            source_mask, background_mask = src_obj.get_mask(scale_radius, central_coord=src_obj.ra_dec)
-            source_mask = src_obj.get_interloper_mask()
 
+        # We obviously want to remove point sources from the profiles we make, so get the mask that removes
+        #  interlopers
+        int_mask = src_obj.get_interloper_mask()
+
+        # Tells the source object to give us the requested scale radius in units of kpc
         rad = src_obj.get_radius(scale_radius, kpc)
 
         # This fetches any profiles that might have already been generated to our required specifications
@@ -109,8 +109,9 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         #  background mask
         try:
             if len(matching_profs) == 0:
-                sb_prof, success = radial_brightness(rt, source_mask, background_mask, pix_peak, rad, src_obj.redshift,
-                                                     pix_step, kpc, src_obj.cosmo, min_snr=min_snr)
+                sb_prof, success = radial_brightness(rt, pix_peak, rad, float(src_obj.background_radius_factors[0]),
+                                                     float(src_obj.background_radius_factors[1]), int_mask,
+                                                     src_obj.redshift, pix_step, kpc, src_obj.cosmo, min_snr)
                 src_obj.update_products(sb_prof)
             elif len(matching_profs) == 1:
                 sb_prof = matching_profs[0]

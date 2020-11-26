@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 10:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 17:24. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -99,6 +99,10 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     if 0 in inn_rad:
         where_zeros = np.where(inn_rad == 0)[0]
         ann_mask[cen_y, cen_x, where_zeros] = 1
+
+    if ann_mask.shape[-1] == 1:
+        ann_mask = np.squeeze(ann_mask)
+
     # Returns the annular src_mask(s), in the form of a len_y, len_x, N dimension np array
     return ann_mask
 
@@ -164,8 +168,9 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     return inn_rads, out_rads, cen_rads
 
 
-def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, centre: Quantity,
-                      rad: Quantity, z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
+def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_inn_rad_factor: float = 1.05,
+                      back_out_rad_factor: float = 1.5, interloper_mask: np.ndarray = None,
+                      z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
                       cosmo=Planck15, min_snr: float = 0.0, min_central_pix_rad: int = 3,
                       start_pix_rad: int = 0) -> Tuple[SurfaceBrightness1D, bool]:
     """
@@ -173,11 +178,13 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
     earlier, interloper sources should be removed.
     :param RateMap rt: A RateMap object to construct a brightness profile from.
-    :param np.ndarray src_mask: A numpy array that masks out everything but the source, including interlopers.
-    :param np.ndarray back_mask: A numpy array that masks out everything but the background, including interlopers.
     :param Quantity centre: The coordinates for the centre of the brightness profile.
-    :param Quantity rad: The outer radius of the brightness profile (THIS SHOULD BE THE SAME RADIUS AS THE REGION
-    YOUR SRC_MASK IS BASED ON, OTHERWISE YOU'LL GET AN INVALID BACKGROUND MEASUREMENT).
+    :param Quantity outer_rad: The outer radius of the brightness profile.
+    :param float back_inn_rad_factor: This factor is multiplied by the outer pixel radius, which gives the inner
+    radius for the background mask.
+    :param float back_out_rad_factor: This factor is multiplied by the outer pixel radius, which gives the outer
+    radius for the background mask.
+    :param np.ndarray interloper_mask: A numpy array that masks out any interloper sources.
     :param float z: The redshift of the source of interest.
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
     :param BaseUnit cen_rad_units: The desired output units for the central radii of the annuli.
@@ -192,9 +199,11 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     returned.
     :rtype: Tuple[SurfaceBrightness1D, bool]
     """
-    if rt.shape != src_mask.shape:
-        raise ValueError("The shape of the src_mask array ({0}) must be the same as that of im_prod "
-                         "({1}).".format(src_mask.shape, rt.shape))
+    if interloper_mask is not None and rt.shape != interloper_mask.shape:
+        raise ValueError("The shape of the src_mask array {0} must be the same as that of im_prod "
+                         "{1}.".format(interloper_mask.shape, rt.shape))
+    elif interloper_mask is None:
+        interloper_mask = np.ones(rt.shape)
 
     cr_err_map = np.divide(np.sqrt(rt.image.data), rt.expmap.data, out=np.zeros_like(rt.image.data),
                            where=rt.expmap.data != 0)
@@ -203,8 +212,26 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     # Getting this because we want to be able to convert pixel distance into arcminutes for dividing by the area
     to_arcmin = pix_deg_scale(centre, rt.radec_wcs) * 60
 
+    # Just making sure we have the centre in pixel coordinates
+    pix_cen = rt.coord_conv(centre, pix)
+
+    # This sets up the initial annular bin radii, as well as finding the central radii of the bins in the chosen units.
+    inn_rads, out_rads, init_cen_rads = ann_radii(rt, centre, outer_rad, z, pix_step, cen_rad_units, cosmo,
+                                                  min_central_pix_rad, start_pix_rad)
+
+    # These calculate the inner and out pixel radii for the background mask - placed in arrays because the
+    #  annular mask function expects iterable radii. As pixel radii have to be integer for generating a mask,
+    #  I've used ceil.
+    back_inn_rad = np.array([np.ceil(out_rads[-1]*back_inn_rad_factor).astype(int)])
+    back_out_rad = np.array([np.ceil(out_rads[-1]*back_out_rad_factor).astype(int)])
+
+    # Using my annular mask function to make a nice background region, which will be corrected for instrumental
+    #  stuff and interlopers in a second
+    back_mask = annular_mask(pix_cen, back_inn_rad, back_out_rad, rt.shape)
+
     # Adds any intersecting chip gaps into the background region mask
-    corr_back_mask = back_mask * rt.sensor_mask
+    corr_back_mask = back_mask * rt.sensor_mask * interloper_mask
+
     # Calculates the area of the background region in arcmin^2
     back_area = np.sum(corr_back_mask, axis=(0, 1)) * to_arcmin**2
     if back_area == 0:
@@ -213,16 +240,9 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     # Finds the emission per arcmin^2 of the background region (accounting for removed sources and chip gaps)
     bg = np.sum(rt.data * corr_back_mask, axis=(0, 1)) / back_area
 
-    # Just making sure we have the centre in pixel coordinates
-    pix_cen = rt.coord_conv(centre, pix)
-
-    # This sets up the initial annular bin radii, as well as finding the central radii of the bins in the chosen units.
-    inn_rads, out_rads, init_cen_rads = ann_radii(rt, centre, rad, z, pix_step, cen_rad_units, cosmo,
-                                                  min_central_pix_rad, start_pix_rad)
-
     # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
     #  dimension. Helps with broadcasting the annular masks with the region src_mask that gets rid of interlopers
-    masks = annular_mask(pix_cen, inn_rads, out_rads, rt.shape) * src_mask[..., None] * rt.sensor_mask[..., None]
+    masks = annular_mask(pix_cen, inn_rads, out_rads, rt.shape) * interloper_mask[..., None] * rt.sensor_mask[..., None]
     # This calculates the area of each annulus mask
     num_pix = np.sum(masks, axis=(0, 1))
     areas = num_pix * to_arcmin**2
@@ -312,7 +332,7 @@ def radial_brightness(rt: RateMap, src_mask: np.ndarray, back_mask: np.ndarray, 
     rad_err = (final_out_rads-final_inn_rads) / 2
 
     # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product
-    br_prof = SurfaceBrightness1D(rt, cen_rads, Quantity(br, 'ct/(s*arcmin**2)'), centre, pix_step, min_snr, rad,
+    br_prof = SurfaceBrightness1D(rt, cen_rads, Quantity(br, 'ct/(s*arcmin**2)'), centre, pix_step, min_snr, outer_rad,
                                   rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'), Quantity(bg, 'ct/(s*arcmin**2)'),
                                   np.insert(out_rads, 0, inn_rads[0]), Quantity(areas, 'arcmin**2'))
     # Set the success property

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/11/2020, 17:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 17:24. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -132,17 +132,16 @@ def _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins
 
     if use_peak:
         pix_centre = comb_rt.coord_conv(src.peak, pix)
-        source_mask, background_mask = src.get_mask(reg_type, central_coord=src.peak)
     else:
         pix_centre = comb_rt.coord_conv(src.ra_dec, pix)
-        source_mask, background_mask = src.get_mask(reg_type, central_coord=src.ra_dec)
 
-    # This is because I actually only want to mask interloper point sources right now.
-    source_mask = src.get_interloper_mask()
+    # Grabs the mask which will remove interloper sources
+    int_mask = src.get_interloper_mask()
 
-    rad = Quantity(src.source_back_regions(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
-    sb_prof, success = radial_brightness(comb_rt, source_mask, background_mask, pix_centre, rad, src.redshift,
-                                         pix_step, kpc, src.cosmo, min_snr)
+    rad = src.get_radius(reg_type, 'kpc')
+    sb_prof, success = radial_brightness(comb_rt, pix_centre, rad, src.background_radius_factors[0],
+                                         src.background_radius_factors[1], int_mask, src.redshift, pix_step, kpc,
+                                         src.cosmo, min_snr)
 
     if not success:
         warn("Minimum SNR rebinning failed for {}".format(src.name))

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 13:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 17:24. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -195,7 +195,7 @@ class GalaxyCluster(ExtendedSource):
             return self.get_results(reg_type, models_with_kt[0], "kT")
 
     def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
-                                same_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
+                                use_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
                                 figsize: tuple = (10, 7), xscale: str = 'log', yscale: str = 'log',
                                 back_sub: bool = True):
         """
@@ -203,11 +203,13 @@ class GalaxyCluster(ExtendedSource):
         exclude point sources and either measure the average counts per second within a circular annulus (radial),
         or an angular region of a circular annulus (pizza). All points correspond to an annulus of width 1 pixel,
         and this method does NOT do any rebinning to maximise signal to noise.
+        If use peak is selected, the peak coordinate used will depend on the combined ratemap, so would be different
+        for PSF corrected ratemaps to the uncorrected ratemap.
         :param str reg_type: The region in which to view the radial brightness profile.
         :param str profile_type: The type of brightness profile you wish to view, radial or pizza.
         :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
         slice will be 360 / num_slices degrees.
-        :param bool same_peak: If True then the radial profiles (including for PSF corrected ratemaps)
+        :param bool use_peak: If True then the radial profiles (including for PSF corrected ratemaps)
          will all be constructed centered on the peak found for the 'normal' combined ratemap. If False,
          peaks will be found for each individual combined ratemap and profiles will be constructed
          centered on them.
@@ -244,11 +246,16 @@ class GalaxyCluster(ExtendedSource):
         psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", just_obj=False)
                         if en_key + "_" in rt[-2]]
 
-        source_mask, background_mask = self.get_mask(reg_type)
-        source_mask = self.get_interloper_mask()
-        # Get combined peak - basically the only peak internal methods will use
-        pix_peak = comb_rt.coord_conv(self.peak, pix)
-        rad = Quantity(self.source_back_regions(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
+        # Fetch the mask that will remove all interloper sources from the combined ratemap
+        int_mask = self.get_interloper_mask()
+
+        if use_peak:
+            pix_central = comb_rt.coord_conv(self.peak, pix)
+        else:
+            pix_central = comb_rt.coord_conv(self.ra_dec, pix)
+
+        # Read out the radii
+        rad = self.get_radius(reg_type)
 
         # The plotting will be slightly different based on the profile type, also have to call the methods
         #  to generate the profiles as I don't currently store the data.
@@ -256,34 +263,36 @@ class GalaxyCluster(ExtendedSource):
             # This fetches any profiles that might have already been generated to our required specifications
             prof_prods = self.get_products("combined_brightness_profile")
             if len(prof_prods) == 1:
-                matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(comb_rt, pix_peak, pix_step,
-                                                                                           min_snr, rad)]
+                matching_profs = [p for p in list(prof_prods[0].values())
+                                  if p.check_match(comb_rt, pix_central, pix_step, min_snr, rad)]
             else:
                 matching_profs = []
 
             if len(matching_profs) == 0:
-                sb_profile, success = radial_brightness(comb_rt, source_mask, background_mask, pix_peak, rad,
-                                                        self._redshift, pix_step, kpc, self.cosmo, min_snr=min_snr)
+                sb_profile, success = radial_brightness(comb_rt, pix_central, rad, self._back_inn_factor,
+                                                        self._back_out_factor, int_mask, self.redshift, pix_step, kpc,
+                                                        self.cosmo, min_snr)
                 self.update_products(sb_profile)
             else:
                 sb_profile = matching_profs[0]
 
             for psf_comb_rt in psf_comb_rts:
                 p_rt = psf_comb_rt[-1]
-                # If the user wants to use individual peaks, we have to find them here.
-                if not same_peak:
-                    pix_peak = self.find_peak(p_rt)[0]
+                if use_peak:
+                    pix_central = self.find_peak(p_rt)[0]
+                else:
+                    pix_central = comb_rt.coord_conv(self.ra_dec, pix)
 
                 if len(prof_prods) == 1:
-                    matching_profs = [p for p in list(prof_prods[0].values()) if
-                                      p.check_match(p_rt, pix_peak, pix_step, min_snr, rad)]
+                    matching_profs = [p for p in list(prof_prods[0].values())
+                                      if p.check_match(p_rt, pix_central, pix_step, min_snr, rad)]
                 else:
                     matching_profs = []
 
                 if len(matching_profs) == 0:
-                    psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], source_mask, background_mask,
-                                                                pix_peak, rad, self._redshift, pix_step, kpc,
-                                                                self.cosmo, min_snr=min_snr)
+                    psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], pix_central, rad,
+                                                                self._back_inn_factor, self._back_out_factor, int_mask,
+                                                                self.redshift, pix_step, kpc, self.cosmo, min_snr)
                     self.update_products(psf_sb_profile)
                 else:
                     psf_sb_profile = matching_profs[0]
