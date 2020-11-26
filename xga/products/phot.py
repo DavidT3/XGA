@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 16:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 11:43. Copyright (c) David J Turner
 
 
 import warnings
@@ -525,6 +525,11 @@ class Image(BaseProduct):
             plot_data = self.data * mask
         else:
             plot_data = self.data
+
+        # If we're showing a RateMap, then we're gonna apply an edge mask to remove all the artificially brightened
+        #  pixels that we can - it makes the view look better
+        if type(self) == RateMap:
+            plot_data *= self.edge_mask
 
         ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
         ax.xaxis.set_ticklabels([])
