@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 11:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 14:54. Copyright (c) David J Turner
 
 
 import inspect
@@ -1069,17 +1069,15 @@ class BaseProfile1D:
         # Setting some aesthetic parameters for the main plotting axis
         main_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
-        # This subtracts the background if the user wants a background subtracted plot
-        if back_sub:
-            sub_values = self.values.value - self.background.value
-        else:
-            sub_values = self.values.value
-
-        # TODO Perhaps the label should include more information about PSF correction?
         if self.type == "brightness_profile" and self.psf_corrected:
             leg_label = self.src_name + " PSF Corrected"
         else:
             leg_label = self.src_name
+
+        # This subtracts the background if the user wants a background subtracted plot
+        sub_values = self.values.value
+        if back_sub:
+            sub_values -= self.background.value
 
         # Now the actual plotting of the data
         if self.radii_err is not None and self.values_err is None:
@@ -1100,6 +1098,10 @@ class BaseProfile1D:
                 for coll in line[1:]:
                     for art_obj in coll:
                         art_obj.set_visible(False)
+
+        if not back_sub and self.background.value != 0:
+            main_ax.axhline(self.background.value, label=leg_label + ' Background', linestyle='dashed',
+                            color=line[0].get_color())
 
         if models:
             for model in self._good_model_fits:
@@ -1483,17 +1485,15 @@ class BaseAggregateProfile1D:
 
         # Cycles through the component profiles of this aggregate profile, plotting them all
         for p in self._profiles:
-            # This subtracts the background if the user wants a background subtracted plot
-            if back_sub:
-                sub_values = p.values.value - p.background.value
-            else:
-                sub_values = p.values.value
-
-            # TODO Perhaps the label should include more information about PSF correction?
             if p.type == "brightness_profile" and p.psf_corrected:
                 leg_label = p.src_name + " PSF Corrected"
             else:
                 leg_label = p.src_name
+
+            # This subtracts the background if the user wants a background subtracted plot
+            sub_values = p.values.value
+            if back_sub:
+                sub_values -= p.background.value
 
             # Now the actual plotting of the data
             if p.radii_err is not None and p.values_err is None:
@@ -1518,6 +1518,10 @@ class BaseAggregateProfile1D:
                     for coll in line[1:]:
                         for art_obj in coll:
                             art_obj.set_visible(False)
+
+            if not back_sub and p.background.value != 0:
+                main_ax.axhline(p.background.value, label=leg_label + ' Background', linestyle='dashed',
+                                color=line[0].get_color())
 
             # If the user passes a model name, and that model has been fitted to the data, then that
             #  model will be plotted
