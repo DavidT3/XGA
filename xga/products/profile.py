@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/11/2020, 16:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/11/2020, 10:09. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -13,7 +13,8 @@ from ..products.phot import RateMap
 class SurfaceBrightness1D(BaseProfile1D):
     def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int,
                  min_snr: float, outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
-                 background: Quantity = None, pixel_bins: np.ndarray = None, ann_areas: Quantity = None):
+                 background: Quantity = None, pixel_bins: np.ndarray = None, back_pixel_bin: np.ndarray = None,
+                 ann_areas: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
@@ -28,7 +29,9 @@ class SurfaceBrightness1D(BaseProfile1D):
         :param Quantity values_err: Uncertainties on the values.
         :param Quantity background: The background brightness value.
         :param np.ndarray pixel_bins: An optional argument that provides the pixel bins used to create the profile.
-        :param Quantity ann_area: The area of the annuli.
+        :param np.ndarray back_pixel_bin: An optional argument that provides the pixel bin used for the background
+        calculation of this profile.
+        :param Quantity ann_areas: The area of the annuli.
         """
         super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err)
 
@@ -65,6 +68,8 @@ class SurfaceBrightness1D(BaseProfile1D):
 
         # Storing the pixel bins used to create this particular profile, if passed, None if not.
         self._pix_bins = pixel_bins
+        # Storing the pixel bin for the background region
+        self._back_pix_bin = back_pixel_bin
 
         # Storing the annular areas for this particular profile, if passed, None if not.
         self._areas = ann_areas
@@ -177,10 +182,20 @@ class SurfaceBrightness1D(BaseProfile1D):
     def pixel_bins(self) -> np.ndarray:
         """
         The annuli radii used to generate this profile, assuming they were passed on initialisation, otherwise None.
-        :return: Numpy array containing the pixels bins used to measure this radial brightness profile.
+        :return: Numpy array containing the pixel bins used to measure this radial brightness profile.
         :rtype: np.ndarray
         """
         return self._pix_bins
+
+    @property
+    def back_pixel_bin(self) -> np.ndarray:
+        """
+        The annulus used to measure the background for this profile, assuming they were passed on
+        initialisation, otherwise None.
+        :return: Numpy array containing the pixel bin used to measure the background.
+        :rtype: np.ndarray
+        """
+        return self._back_pix_bin
 
     @property
     def areas(self) -> Quantity:
