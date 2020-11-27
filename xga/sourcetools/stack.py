@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 17:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/11/2020, 10:31. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -350,14 +350,15 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
 
             plt.sca(ax_arr[0])
 
-            multiplier = 1.3
+            multiplier = (pr.back_pixel_bin[-1] / pr.pixel_bins[-1])*1.05
             custom_xlims = (pr.centre[0].value - pr.pixel_bins[-1]*multiplier,
                             pr.centre[0].value + pr.pixel_bins[-1]*multiplier)
             custom_ylims = (pr.centre[1].value - pr.pixel_bins[-1]*multiplier,
                             pr.centre[1].value + pr.pixel_bins[-1]*multiplier)
             # This populates ones of the axes with a view of the image
-            im_ax = rt.get_view(ax_arr[0], pr.centre, inter_mask, radial_bins_pix=pr.pixel_bins, zoom_in=True,
-                                manual_zoom_xlims=custom_xlims, manual_zoom_ylims=custom_ylims)
+            im_ax = rt.get_view(ax_arr[0], pr.centre, inter_mask, radial_bins_pix=pr.pixel_bins,
+                                back_bin_pix=pr.back_pixel_bin, zoom_in=True, manual_zoom_xlims=custom_xlims,
+                                manual_zoom_ylims=custom_ylims)
 
             ax_arr[1].set_xscale("log")
             ax_arr[1].set_yscale("log")

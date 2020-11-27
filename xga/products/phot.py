@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 11:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/11/2020, 10:31. Copyright (c) David J Turner
 
 
 import warnings
@@ -489,7 +489,8 @@ class Image(BaseProduct):
     def get_view(self, ax: Axes, cross_hair: Quantity = None, mask: np.ndarray = None,
                  chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, zoom_in: bool = False,
                  manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
-                 radial_bins_pix: np.ndarray = np.array([]), stretch: BaseStretch = LogStretch()) -> Axes:
+                 radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
+                 stretch: BaseStretch = LogStretch()) -> Axes:
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
@@ -513,6 +514,8 @@ class Image(BaseProduct):
         to be applied.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
         only be triggered if a cross_hair coordinate is also specified.
+        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
+        the background value for a given profile, will only be triggered if a cross_hair coordinate is also specified.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
@@ -569,8 +572,16 @@ class Image(BaseProduct):
             ax.axhline(pix_coord[1], color="white", linewidth=0.5)
 
             for ann_rad in radial_bins_pix:
-                artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1)
+                artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1.5)
                 ax.add_artist(artist)
+
+            if back_bin_pix is not None:
+                inn_artist = Circle(pix_coord, back_bin_pix[0], fill=False, ec='white', linewidth=1.6,
+                                    linestyle='dashed')
+                out_artist = Circle(pix_coord, back_bin_pix[1], fill=False, ec='white', linewidth=1.6,
+                                    linestyle='dashed')
+                ax.add_artist(inn_artist)
+                ax.add_artist(out_artist)
 
         ax.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
 
@@ -593,7 +604,8 @@ class Image(BaseProduct):
     def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
              other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False,
              manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
-             radial_bins_pix: np.ndarray = np.array([]), stretch: BaseStretch = LogStretch()):
+             radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
+             stretch: BaseStretch = LogStretch()):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
@@ -617,6 +629,8 @@ class Image(BaseProduct):
         to be applied.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
         only be triggered if a cross_hair coordinate is also specified.
+        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
+        the background value for a given profile, will only be triggered if a cross_hair coordinate is also specified.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         """
 
@@ -627,7 +641,7 @@ class Image(BaseProduct):
         ax = plt.gca()
 
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
-                           manual_zoom_ylims, radial_bins_pix, stretch)
+                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch)
         plt.colorbar(ax.images[0])
         plt.tight_layout()
         # Display the image
