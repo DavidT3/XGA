@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/10/2020, 11:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/11/2020, 10:31. Copyright (c) David J Turner
 
 
 import warnings
@@ -8,9 +8,11 @@ from typing import Tuple, List, Union
 import numpy as np
 from astropy import wcs
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError
-from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize
+from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize, BaseStretch
 from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.patches import Circle
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
@@ -167,6 +169,16 @@ class Image(BaseProduct):
                              "is the same shape as the original.")
         else:
             self._data = new_im_arr
+
+    @data.deleter
+    def data(self):
+        """
+        Property deleter for data contained in this Image instance, or whatever subclass of the Image class you
+        may be using. The self._data array is removed from memory, and then self._data is explicitly set to None
+        so that self._read_on_demand() will be triggered if you ever want the data from this object again.
+        """
+        del self._data
+        self._data = None
 
     # This one doesn't get a setter, as I require this WCS to not be none in the _read_on_demand method
     @property
@@ -407,8 +419,8 @@ class Image(BaseProduct):
     @property
     def psf_bins(self) -> Union[int, None]:
         """
-        If this object has been PSF corrected, this property gives number of bins that the X and Y axes
-        was divided into to generate the PSFGrid.
+        If this object has been PSF corrected, this property gives the number of bins that the X and Y axes
+        were divided into to generate the PSFGrid.
         :return: The number of bins in X and Y for which PSFs were generated, or None if the object
         hasn't been PSF corrected.
         :rtype: Union[int, None]
@@ -474,11 +486,129 @@ class Image(BaseProduct):
             raise NotPSFCorrectedError("You are trying to set the PSF model for an Image that hasn't "
                                        "been PSF corrected.")
 
-    def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
-             other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False):
+    def get_view(self, ax: Axes, cross_hair: Quantity = None, mask: np.ndarray = None,
+                 chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, zoom_in: bool = False,
+                 manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
+                 radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
+                 stretch: BaseStretch = LogStretch()) -> Axes:
         """
-        Quick and dirty method to view this image. Absolutely no user configuration is allowed, that feature
-        is for other parts of XGA. Produces an image with log-scaling, and using the colour map gnuplot2.
+        The method that creates and populates the view axes, separate from actual view so outside methods
+        can add a view to other matplotlib axes.
+        :param Axes ax: The matplotlib axes on which to show the image.
+        :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
+        the coordinates.
+        :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
+        data if they so choose.
+        :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
+        :param list other_points: A list of numpy arrays of point clusters that weren't chosen by the
+        hierarchical peak finder.
+        :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
+        data are reduced.
+        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually set a part
+        of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+        to be applied.
+        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually set a part
+        of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+        to be applied.
+        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
+        only be triggered if a cross_hair coordinate is also specified.
+        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
+        the background value for a given profile, will only be triggered if a cross_hair coordinate is also specified.
+        :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
+        :return: A populated figure displaying the view of the data.
+        :rtype: Axes
+        """
+
+        if mask is not None and mask.shape != self.data.shape:
+            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
+                             "({1}).".format(mask.shape, self.data.shape))
+        elif mask is not None and mask.shape == self.data.shape:
+            plot_data = self.data * mask
+        else:
+            plot_data = self.data
+
+        # If we're showing a RateMap, then we're gonna apply an edge mask to remove all the artificially brightened
+        #  pixels that we can - it makes the view look better
+        if type(self) == RateMap:
+            plot_data *= self.edge_mask
+
+        ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
+        ax.xaxis.set_ticklabels([])
+        ax.yaxis.set_ticklabels([])
+
+        # Check if this is a combined product, because if it is then ObsID and instrument are both 'combined'
+        #  and it makes the title ugly
+        if self.obs_id == "combined":
+            ident = 'Combined'
+        else:
+            ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
+
+        title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident, l=self._energy_bounds[0].to("keV").value,
+                                                  u=self._energy_bounds[1].to("keV").value, t=self.type)
+        # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
+        if self.psf_corrected:
+            title += ' - PSF Corrected'
+
+        ax.set_title(title)
+
+        # As this is a very quick view method, users will not be offered a choice of scaling
+        #  There will be a more in depth way of viewing cluster data eventually
+        norm = ImageNormalize(data=plot_data, interval=MinMaxInterval(), stretch=stretch)
+        # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
+
+        if chosen_points is not None:
+            ax.plot(chosen_points[:, 0], chosen_points[:, 1], '+', color='black', label="Chosen Point Cluster")
+            ax.legend(loc="best")
+
+        if other_points is not None:
+            for cl in other_points:
+                ax.plot(cl[:, 0], cl[:, 1], 'D')
+
+        if cross_hair is not None:
+            pix_coord = self.coord_conv(cross_hair, pix).value
+            ax.axvline(pix_coord[0], color="white", linewidth=0.5)
+            ax.axhline(pix_coord[1], color="white", linewidth=0.5)
+
+            for ann_rad in radial_bins_pix:
+                artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1.5)
+                ax.add_artist(artist)
+
+            if back_bin_pix is not None:
+                inn_artist = Circle(pix_coord, back_bin_pix[0], fill=False, ec='white', linewidth=1.6,
+                                    linestyle='dashed')
+                out_artist = Circle(pix_coord, back_bin_pix[1], fill=False, ec='white', linewidth=1.6,
+                                    linestyle='dashed')
+                ax.add_artist(inn_artist)
+                ax.add_artist(out_artist)
+
+        ax.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
+
+        if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is None:
+            # I don't like doing local imports, but this is the easiest way
+            from xga.imagetools import data_limits
+            x_lims, y_lims = data_limits(plot_data)
+            ax.set_xlim(x_lims)
+            ax.set_ylim(y_lims)
+        elif zoom_in and manual_zoom_xlims is not None and manual_zoom_ylims is not None:
+            ax.set_xlim(manual_zoom_xlims)
+            ax.set_ylim(manual_zoom_ylims)
+        elif zoom_in and manual_zoom_xlims is not None and manual_zoom_ylims is None:
+            ax.set_xlim(manual_zoom_xlims)
+        elif zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is not None:
+            ax.set_ylim(manual_zoom_ylims)
+
+        return ax
+
+    def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
+             other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False,
+             manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
+             radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
+             stretch: BaseStretch = LogStretch()):
+        """
+        Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
+        and producing figures for publication.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
         the coordinates.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
@@ -489,67 +619,30 @@ class Image(BaseProduct):
         :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this method.
         :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
         data are reduced.
+        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually set a part
+        of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+        to be applied.
+        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually set a part
+        of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+        to be applied.
+        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
+        only be triggered if a cross_hair coordinate is also specified.
+        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
+        the background value for a given profile, will only be triggered if a cross_hair coordinate is also specified.
+        :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         """
-        if mask is not None and mask.shape != self.data.shape:
-            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
-                             "({1}).".format(mask.shape, self.data.shape))
-        elif mask is not None and mask.shape == self.data.shape:
-            plot_data = self.data * mask
-        else:
-            plot_data = self.data
 
         # Create figure object
-        plt.figure(figsize=figsize)
+        fig = plt.figure(figsize=figsize)
 
         # Turns off any ticks and tick labels, we don't want them in an image
         ax = plt.gca()
-        ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
-        ax.xaxis.set_ticklabels([])
-        ax.yaxis.set_ticklabels([])
 
-        # Check if this is a combined product, because if it is then ObsID and instrument are both 'combined'
-        #  and it makes the title ugly
-        if self.obs_id != "combined":
-            # Set the title with all relevant information about the image object in it
-            plt.title("Log Scaled {n} - {o}{i} {l}-{u}keV {t}".format(n=self.src_name, o=self.obs_id,
-                                                                      i=self.instrument.upper(),
-                                                                      l=self._energy_bounds[0].to("keV").value,
-                                                                      u=self._energy_bounds[1].to("keV").value,
-                                                                      t=self.type))
-        else:
-            plt.title("Log Scaled {n} - Combined {l}-{u}keV {t}".format(n=self.src_name,
-                                                                        l=self._energy_bounds[0].to("keV").value,
-                                                                        u=self._energy_bounds[1].to("keV").value,
-                                                                        t=self.type))
-
-        # As this is a very quick view method, users will not be offered a choice of scaling
-        #  There will be a more in depth way of viewing cluster data eventually
-        norm = ImageNormalize(data=plot_data, interval=MinMaxInterval(), stretch=LogStretch())
-        # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
-
-        if chosen_points is not None:
-            plt.plot(chosen_points[:, 0], chosen_points[:, 1], '+', color='black', label="Chosen Point Cluster")
-            plt.legend(loc="best")
-
-        if other_points is not None:
-            for cl in other_points:
-                plt.plot(cl[:, 0], cl[:, 1], 'D')
-
-        if cross_hair is not None:
-            pix_coord = self.coord_conv(cross_hair, pix).value
-            plt.axvline(pix_coord[0], color="white", linewidth=0.5)
-            plt.axhline(pix_coord[1], color="white", linewidth=0.5)
-
-        plt.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
-
-        if zoom_in:
-            # I don't like doing local imports, but this is the easiest way
-            from xga.imagetools import data_limits
-            x_lims, y_lims = data_limits(plot_data)
-            plt.xlim(x_lims)
-            plt.ylim(y_lims)
-
-        plt.colorbar()
+        ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
+                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch)
+        plt.colorbar(ax.images[0])
         plt.tight_layout()
         # Display the image
         plt.show()
@@ -683,9 +776,18 @@ class RateMap(Image):
         # Store that edge mask as an attribute.
         self._edge_mask = comb
 
-        # And another mask for whether on or off the sensor, useful when doing radial profiles on
-        #  objects close to the edge of the detector - otherwise the values get dragged down by all the zeros
+        # TODO Add another attribute that describes how many sensors a particular pixel falls on for combined
+        #  ratemaps
         self._on_sensor_mask = det_map
+        # And another mask for whether on or off the sensor, very simple for individual ObsID-Instrument combos
+        # if self._obs_id != "combined":
+        #     self._on_sensor_mask = det_map
+        # # MUCH more complicated for combined ratemaps however, as what is on one detector might not be on another
+        # else:
+        #     for entry in self.header:
+        #         if "EMSCF" in entry:
+        #             print(self.header[entry])
+        #
 
         # Re-setting some paths to make more sense
         self._path = self._im_path
@@ -1164,5 +1266,14 @@ class PSFGrid(BaseAggregateProduct):
         :rtype: np.ndarray
         """
         return self._y_bounds
+
+    def unload_data(self):
+        """
+        A convenience method that will iterate through the component PSFs of this object and remove their data from
+        memory using the data property deleter. This ensures that, if the data needs to be accessed again, the call
+        to .data will read in the PSFs and all will be well, hopefully.
+        """
+        for p in self._component_products:
+            del self._component_products[p].data
 
 

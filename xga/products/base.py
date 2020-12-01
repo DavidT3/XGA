@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 12:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 14:54. Copyright (c) David J Turner
 
 
 import inspect
 import os
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Union
 from warnings import warn
 
 import corner
@@ -59,7 +59,7 @@ class BaseProduct:
         self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
         self._obs_id = obs_id
         self._inst = instrument
-        self.og_cmd = gen_cmd
+        self._og_cmd = gen_cmd
         self._energy_bounds = (None, None)
         self._prod_type = None
         self._src_name = None
@@ -166,6 +166,11 @@ class BaseProduct:
             # These are impossible to predict the form of, so they won't be parsed
             other_err_lines = [line for line in err_lines if line not in sas_err_lines
                                and line not in sas_warn_lines and line != "" and "warn" not in line]
+            # Adding some advice
+            for e_ind, e in enumerate(other_err_lines):
+                if 'seg' in e.lower() and 'fault' in e.lower():
+                    other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
+                                              'and have a look at where your coordinate lies.'
 
         if len(sas_errs_msgs) > 0:
             self._usable = False
@@ -238,11 +243,11 @@ class BaseProduct:
         return self._prod_type
 
     @property
-    def errors(self) -> List[dict]:
+    def errors(self) -> List[str]:
         """
         Property getter for non-SAS errors detected during the generation of a product.
-        :return: A list of dictionaries of parsed errors.
-        :rtype: List[dict]
+        :return: A list of errors that aren't related to SAS.
+        :rtype: List[str]
         """
         return self._other_error
 
@@ -286,6 +291,15 @@ class BaseProduct:
         :rtype: List
         """
         return self._why_unusable
+
+    @property
+    def sas_command(self) -> str:
+        """
+        A property that returns the original SAS command used to generate this object.
+        :return: String containing the command.
+        :rtype: str
+        """
+        return self._og_cmd
 
 
 # TODO Obviously finish this, but also comment and docstring
@@ -379,7 +393,7 @@ class BaseAggregateProduct:
     @property
     def sas_errors(self) -> List:
         """
-        Equivelant to the BaseProduct sas_errors property, but reports any errors stored in the component products.
+        Equivelant to the BaseProduct sas_errors property, but reports any SAS errors stored in the component products.
         :return: A list of SAS errors related to component products.
         :rtype: List
         """
@@ -388,6 +402,20 @@ class BaseAggregateProduct:
             prod = self._component_products[p]
             sas_err_list += prod.sas_errors
         return sas_err_list
+
+    @property
+    def errors(self) -> List:
+        """
+        Equivelant to the BaseProduct errors property, but reports any non-SAS errors stored in the
+        component products.
+        :return: A list of non-SAS errors related to component products.
+        :rtype: List
+        """
+        err_list = []
+        for p in self._component_products:
+            prod = self._component_products[p]
+            err_list += prod.errors
+        return err_list
 
     @property
     def unprocessed_stderr(self) -> List:
@@ -435,7 +463,7 @@ class BaseAggregateProduct:
 
 # TODO Sweep through and docstring up in here
 class BaseProfile1D:
-    def __init__(self, radii: Quantity, values: Quantity, source_name: str, obs_id: str,
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None):
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
@@ -473,6 +501,7 @@ class BaseProfile1D:
         self._values = values
         self._radii_err = radii_err
         self._values_err = values_err
+        self._centre = centre
 
         # Just checking that if one of these values is combined, then both are. Doesn't make sense otherwise.
         if (obs_id == "combined" and inst != "combined") or (inst == "combined" and obs_id != "combined"):
@@ -499,12 +528,16 @@ class BaseProfile1D:
         #  need to be incorporated into the fit and plotting.
         self._background = Quantity(0, self._values.unit)
 
+        # Need to be able to store upper and lower energy bounds for those profiles that
+        #  have them (like brightness profiles for instance)
+        self._energy_bounds = (None, None)
+
         # This is where allowed realisation types are stored, but there are none for the base profile
         self._allowed_real_types = []
 
     def fit(self, model: str, method: str = "mcmc", priors=None, start_pars=None, model_real=1000,
             model_rad_steps=300, conf_level=90, ml_mcmc_start: bool = True, ml_rand_dev: float = 1e-4,
-            num_walkers: int = 30, num_steps: int = 20000):
+            num_walkers: int = 30, num_steps: int = 20000, progress_bar: bool = True):
         # These are the currently allowed fitting methods
         method = method.lower()
         fit_methods = ["curve_fit", "mcmc"]
@@ -572,9 +605,19 @@ class BaseProfile1D:
             # Curve fit is a simple non-linear least squares implementation, its alright but fragile
             try:
                 fit_par, fit_cov = curve_fit(model_func, self._radii.value, self.values.value
-                                             - self._background.value, p0=start_pars, sigma=self._values_err.value)
+                                             - self._background.value, p0=start_pars, sigma=self._values_err.value,
+                                             absolute_sigma=True)
                 # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
                 fit_par_err = np.sqrt(np.diagonal(fit_cov))
+                frac_err = np.divide(fit_par_err, fit_par, where=fit_par != 0)
+                if frac_err.max() > 10:
+                    warn("A parameter uncertainty is more than 10 times larger than the parameter, curve_fit "
+                         "has failed.")
+                    success = False
+                # If there is an infinite value in the covariance matrix, it means curve_fit was
+                #  unable to estimate it properly
+                if np.inf in fit_cov:
+                    success = False
             except RuntimeError:
                 warn("RuntimeError was raised, curve_fit has failed.")
                 success = False
@@ -618,7 +661,7 @@ class BaseProfile1D:
             try:
                 # So now we start the sampler, running for the number of steps specified on function call, with
                 #  the starting parameters defined in the if statement above this.
-                sampler.run_mcmc(pos, num_steps, progress=False)
+                sampler.run_mcmc(pos, num_steps, progress=progress_bar)
                 success = True
             except ValueError as bugger:
                 print(bugger)
@@ -900,12 +943,12 @@ class BaseProfile1D:
         chains = self.get_chains(model)
         m_info = self.get_model_fit(model)
 
-        print(len(m_info["par_names"]))
-        if figsize is not None:
-            fig, axes = plt.subplots(len(m_info["par_names"]), figsize=(10, 4*len(m_info["par_names"])),
+        if figsize is None:
+            fig, axes = plt.subplots(nrows=len(m_info["par_names"]), figsize=(12, 2*len(m_info["par_names"])),
                                      sharex='col')
         else:
             fig, axes = plt.subplots(len(m_info["par_names"]), figsize=figsize, sharex='col')
+
         for i in range(len(m_info["par_names"])):
             ax = axes[i]
             ax.plot(chains[:, :, i], "k", alpha=0.3)
@@ -979,78 +1022,175 @@ class BaseProfile1D:
                                          "mod_real_mean": model_mean, "mod_real_lower": model_lower,
                                          "mod_real_upper": model_upper}
 
-    def view(self, figsize=(8, 5), xscale="log", yscale="log", xlim=None, ylim=None, models=True):
+    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
+             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {}):
+        """
+        A method that allows us to view the current profile, as well as any models that have been fitted to it,
+        and their residuals.
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+        to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+        to let matplotlib decide by itself.
+        :param str models: Should the fitted models to this profile be plotted, default is True
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool just_models: Should ONLY the fitted models be plotted? Default is False
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+        the dictionary key they are stored under is what they will be labelled.
+         e.g. ({'r500': Quantity(), 'r200': Quantity()}
+        """
+        # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
+        #  used in this profile)
+        if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
+            raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
+                                      "{}".format(self.radii_unit.to_string()))
+
+        # Default is to show models, but that flag is set to False here if there are none, otherwise we get
+        #  extra plotted stuff that doesn't make sense
+        if len(self._good_model_fits) == 0:
+            models = False
+            just_models = False
+
         # Setting up figure for the plot
-        plt.figure(figsize=figsize)
-
+        fig = plt.figure(figsize=figsize)
         # Grabbing the axis object and making sure the ticks are set up how we want
-        ax = plt.gca()
-        ax.minorticks_on()
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        main_ax = plt.gca()
+        main_ax.minorticks_on()
+        if models:
+            # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
+            res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
+            res_ax.minorticks_on()
+            res_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+            # Adds a zero line for reference, as its ideally where residuals would be
+            res_ax.axhline(0.0, color="black")
+        # Setting some aesthetic parameters for the main plotting axis
+        main_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
-        # Taking off any background
-        sub_values = self.values.value - self.background.value
-        if self._radii_err is not None and self._values_err is None:
-            plt.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value, label="Data", fmt="x",
-                         capsize=2)
-        elif self._radii_err is None and self._values_err is not None:
-            plt.errorbar(self.radii.value, sub_values, yerr=self.values_err.value, label="Data", fmt="x",
-                         capsize=2)
-        elif self._radii_err is not None and self._values_err is not None:
-            plt.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value, yerr=self.values_err.value,
-                         label="Data", fmt="x", capsize=2)
+        if self.type == "brightness_profile" and self.psf_corrected:
+            leg_label = self.src_name + " PSF Corrected"
         else:
-            plt.plot(self.radii.value, sub_values, 'x', label="Data")
+            leg_label = self.src_name
 
-        # Setup the scale that the user wants to see
-        plt.xscale(xscale)
-        plt.yscale(yscale)
+        # This subtracts the background if the user wants a background subtracted plot
+        sub_values = self.values.value
+        if back_sub:
+            sub_values -= self.background.value
 
-        # If the user has manually set limits then we can use them
-        if xlim is not None:
-            plt.xlim(xlim)
-        if ylim is not None:
-            plt.ylim(ylim)
+        # Now the actual plotting of the data
+        if self.radii_err is not None and self.values_err is None:
+            line = main_ax.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value, fmt="x", capsize=2,
+                                    label=leg_label)
+        elif self.radii_err is None and self.values_err is not None:
+            line = main_ax.errorbar(self.radii.value, sub_values, yerr=self.values_err.value, fmt="x", capsize=2,
+                                    label=leg_label)
+        elif self.radii_err is not None and self.values_err is not None:
+            line = main_ax.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value,
+                                    yerr=self.values_err.value, fmt="x", capsize=2, label=leg_label)
+        else:
+            line = main_ax.plot(self.radii.value, sub_values, 'x', label=leg_label)
 
-        # If models have been fitted to this profile (and the user wants them plotted), then this runs through
-        #  and adds them to the figure
+        if just_models and models:
+            line[0].set_visible(False)
+            if len(line) != 1:
+                for coll in line[1:]:
+                    for art_obj in coll:
+                        art_obj.set_visible(False)
+
+        if not back_sub and self.background.value != 0:
+            main_ax.axhline(self.background.value, label=leg_label + ' Background', linestyle='dashed',
+                            color=line[0].get_color())
+
         if models:
             for model in self._good_model_fits:
                 model_func = PROF_TYPE_MODELS[self._prof_type][model]
-                info = self._realisations[model]
-                pars = self._good_model_fits[model]["par"]
-                line = plt.plot(info["mod_radii"], model_func(info["mod_radii"], *pars),
-                                label=model + " {}% Conf".format(info["conf_level"]))
-                colour = line[0].get_color()
-                plt.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
-                                 where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=colour,
-                                 alpha=0.7, interpolate=True)
-                plt.plot(info["mod_radii"], info["mod_real_lower"], color=colour, linestyle="dashed")
-                plt.plot(info["mod_radii"], info["mod_real_upper"], color=colour, linestyle="dashed")
+                info = self.get_realisation(model)
+                pars = self.get_model_fit(model)["par"]
+
+                mod_line = main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars), label=model)
+                model_colour = mod_line[0].get_color()
+                main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
+                                     where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=model_colour,
+                                     alpha=0.7, interpolate=True)
+                main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=model_colour, linestyle="dashed")
+                main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=model_colour, linestyle="dashed")
+
+                # This calculates and plots the residuals between the model and the data on the extra
+                #  axis we added near the beginning of this method
+                res_ax.plot(self.radii.value, model_func(self.radii.value, *pars) - sub_values, 'D',
+                            color=model_colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
         x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
         y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
 
-        # Adding them to the figure
-        plt.xlabel("Radius {}".format(x_unit))
-        if self._background.value == 0:
-            plt.ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+        # Setting the main plot's x label
+        main_ax.set_xlabel("Radius {}".format(x_unit))
+        if self._background.value == 0 or not back_sub:
+            main_ax.set_ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
         else:
             # If background has been subtracted it will be mentioned in the y axis label
-            plt.ylabel(r"{l} - Bck {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
 
-        if self._obs_id == "combined":
-            plt.title("{s} {l} Profile".format(s=self._src_name, l=PROF_TYPE_YAXIS[self._prof_type]))
+        main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+        # This makes sure legend keys are shown, even if the data is hidden
+        for leg_key in main_leg.legendHandles:
+            leg_key.set_visible(True)
+
+        # If the user has manually set limits then we can use them, only on the main axis because
+        #  we grab those limits from the axes object for the residual axis later
+        if xlim is not None:
+            main_ax.set_xlim(xlim)
+        if ylim is not None:
+            main_ax.set_ylim(ylim)
+
+        # Setup the scale that the user wants to see, again on the main axis
+        main_ax.set_xscale(xscale)
+        main_ax.set_yscale(yscale)
+        if models:
+            # We want the residual x axis limits to be identical to the main axis, as the
+            # points should line up
+            res_ax.set_xlim(main_ax.get_xlim())
+            res_ax.set_xlabel("Radius {}".format(x_unit))
+            res_ax.set_xscale(xscale)
+            # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
+            #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
+            # That way its symmetrical
+            outer_ylim = 1.1 * max([abs(lim) for lim in res_ax.get_ylim()])
+            res_ax.set_ylim(-outer_ylim, outer_ylim)
+            res_ax.set_ylabel("Model - Data")
+
+        # Adds a title to this figure, changes depending on whether model fits are plotted as well
+        if models and custom_title is None:
+            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
+        elif custom_title is None:
+            plt.suptitle("{l} Profile - with models".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.91)
         else:
-            plt.title("{s}-{o}-{i} {l} Profile".format(s=self._src_name, l=PROF_TYPE_YAXIS[self._prof_type],
-                                                       o=self.obs_id, i=self.instrument))
+            # If the user doesn't like my title, they can supply their own
+            plt.suptitle(custom_title, y=0.91)
 
-        # Just going to leave matplotlib to decide where the legend should live
-        plt.legend(loc="best")
+        # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
+        main_ylims = main_ax.get_ylim()
+        y_mid = (main_ylims[1] - main_ylims[0]) / 2
+        # If the user has passed radii to plot, then we plot them
+        for r_name in draw_rads:
+            main_ax.axvline(draw_rads[r_name].value, linestyle='dashed', color='black')
+            main_ax.text(draw_rads[r_name].value * 1.01, y_mid, r_name, rotation=90, verticalalignment='center',
+                         color='black', fontsize=14)
 
         # And of course actually showing it
         plt.show()
+
+    @property
+    def good_model_fits(self) -> List:
+        """
+        A list of the names of models that have been successfully fitted to the profile.
+        :return: A list of model names.
+        :rtype: Dict
+        """
+        return list(self._good_model_fits.keys())
 
     # None of these properties concerning the radii and values are going to have setters, if the user
     #  wants to modify it then they can define a new product.
@@ -1118,16 +1258,25 @@ class BaseProfile1D:
         """
         return self._background
 
+    @property
+    def centre(self) -> Quantity:
+        """
+        Property that returns the central coordinate that the profile was generated from.
+        :return: An astropy quantity of the central coordinate
+        :rtype: Quantity
+        """
+        return self._centre
+
     # This definitely doesn't get a setter, as its basically a proxy for type() return, it will not change
     #  during the life of the object
     @property
-    def prof_type(self) -> str:
+    def type(self) -> str:
         """
         Getter for a string representing the type of profile stored in this object.
         :return: String description of profile.
         :rtype: str
         """
-        return self._prof_type
+        return self._prof_type + "_profile"
 
     @property
     def src_name(self) -> str:
@@ -1168,6 +1317,16 @@ class BaseProfile1D:
         """
         return self._inst
 
+    @property
+    def energy_bounds(self) -> Union[Tuple[Quantity, Quantity], Tuple[None, None]]:
+        """
+        Getter method for the energy_bounds property, which returns the rest frame energy band that this
+        profile was generated from
+        :return: Tuple containing the lower and upper energy limits as Astropy quantities.
+        :rtype: Union[Tuple[Quantity, Quantity], Tuple[None, None]]
+        """
+        return self._energy_bounds
+
     def __len__(self):
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
@@ -1176,7 +1335,291 @@ class BaseProfile1D:
         """
         return len(self._radii)
 
+    def __add__(self, other):
+        to_combine = [self]
+        if type(other) == list:
+            to_combine += other
+        elif isinstance(other, BaseProfile1D):
+            to_combine.append(other)
+        elif isinstance(other, BaseAggregateProfile1D):
+            to_combine += other.profiles
+        else:
+            raise TypeError("You may only add 1D Profiles, 1D Aggregate Profiles, or a list of 1D profiles"
+                            " to this object.")
+        return BaseAggregateProfile1D(to_combine)
 
+
+class BaseAggregateProfile1D:
+    def __init__(self, profiles: List[BaseProfile1D]):
+        # This checks that all types of profiles in the profiles list are the same
+        types = [type(p) for p in profiles]
+        if len(set(types)) != 1:
+            raise TypeError("All component profiles must be of the same type")
+
+        # This checks that all profiles have the same x units
+        x_units = [p.radii_unit for p in profiles]
+        if len(set(x_units)) != 1:
+            raise TypeError("All component profiles must have the same radii units.")
+
+        # THis checks that they all have the same y units. This is likely to be true if they are the same
+        #  type, but you never know
+        y_units = [p.values_unit for p in profiles]
+        if len(set(y_units)) != 1:
+            raise TypeError("All component profiles must have the same value units.")
+
+        # We check to see if all profiles either have a background, or not
+        backs = [p.background.value != 0 for p in profiles]
+        if len(set(backs)) != 1:
+            raise ValueError("All component profiles must have a background, or not have a "
+                             "background. You cannot profiles that do to profiles that don't.")
+        elif backs[0]:
+            # An attribute to tell us whether backgrounds are present in the component profiles
+            self._back_avail = True
+        else:
+            self._back_avail = False
+
+        # Here we check that all energy bounds are the same
+        bounds = [p.energy_bounds for p in profiles]
+        if len(set(bounds)) != 1:
+            raise ValueError("All component profiles must have been generate from the same energy range,"
+                             " otherwise they aren't directly comparable.")
+
+        self._profiles = profiles
+        self._radii_unit = x_units[0]
+        self._values_unit = y_units[0]
+        # Not doing a check that all the prof types are the same, because that should be included in the
+        #  type check on the first line of this init
+        self._prof_type = profiles[0].type.split("_profile")[0]
+        self._energy_bounds = bounds[0]
+
+    @property
+    def radii_unit(self) -> Unit:
+        """
+        Getter for the unit of the radii passed by the user at init.
+        :return: An astropy unit object.
+        :rtype: Unit
+        """
+        return self._radii_unit
+
+    @property
+    def values_unit(self) -> Unit:
+        """
+        Getter for the unit of the values passed by the user at init.
+        :return: An astropy unit object.
+        :rtype: Unit
+        """
+        return self._values_unit
+
+    @property
+    def type(self) -> str:
+        """
+        Getter for a string representing the type of profile stored in this object.
+        :return: String description of profile.
+        :rtype: str
+        """
+        return self._prof_type
+
+    @property
+    def profiles(self) -> List[BaseProfile1D]:
+        """
+        This property is for the constituent profiles that makes up this aggregate profile.
+        :return: A list of the profiles that make up this object.
+        :rtype: List[BaseProfile1D]
+        """
+        return self._profiles
+
+    @property
+    def energy_bounds(self) -> Union[Tuple[Quantity, Quantity], Tuple[None, None]]:
+        """
+        Getter method for the energy_bounds property, which returns the rest frame energy band that
+        the component profiles of this object were generated from.
+        :return: Tuple containing the lower and upper energy limits as Astropy quantities.
+        :rtype: Union[Tuple[Quantity, Quantity], Tuple[None, None]]
+        """
+        return self._energy_bounds
+
+    def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
+             ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
+             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}):
+        """
+        A method that allows us to see all the profiles that make up this aggregate profile, plotted
+        on the same figure.
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+        to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+        to let matplotlib decide by itself.
+        :param str model: The name of the model fit to display, default is None. If the model
+        hasn't been fitted, or it failed, then it won't be displayed.
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool legend: Should a legend with source names be added to the figure, default is True.
+        :param bool just_model: Should only the models, not the data, be plotted. Default is False.
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+        the dictionary key they are stored under is what they will be labelled.
+         e.g. ({'r500': Quantity(), 'r200': Quantity()}
+        """
+
+        # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
+        #  used in this profile)
+        if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
+            raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
+                                      "{}".format(self.radii_unit.to_string()))
+
+        # Setting up figure for the plot
+        fig = plt.figure(figsize=figsize)
+        # Grabbing the axis object and making sure the ticks are set up how we want
+        main_ax = plt.gca()
+        main_ax.minorticks_on()
+        if model is not None:
+            # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
+            res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
+            res_ax.minorticks_on()
+            res_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+            # Adds a zero line for reference, as its ideally where residuals would be
+            res_ax.axhline(0.0, color="black")
+        # Setting some aesthetic parameters for the main plotting axis
+        main_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        # Cycles through the component profiles of this aggregate profile, plotting them all
+        for p in self._profiles:
+            if p.type == "brightness_profile" and p.psf_corrected:
+                leg_label = p.src_name + " PSF Corrected"
+            else:
+                leg_label = p.src_name
+
+            # This subtracts the background if the user wants a background subtracted plot
+            sub_values = p.values.value
+            if back_sub:
+                sub_values -= p.background.value
+
+            # Now the actual plotting of the data
+            if p.radii_err is not None and p.values_err is None:
+                line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, fmt="x", capsize=2,
+                                        label=leg_label)
+            elif p.radii_err is None and p.values_err is not None:
+                line = main_ax.errorbar(p.radii.value, sub_values, yerr=p.values_err.value, fmt="x", capsize=2,
+                                        label=leg_label)
+            elif p.radii_err is not None and p.values_err is not None:
+                line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, yerr=p.values_err.value,
+                                        fmt="x", capsize=2, label=leg_label)
+            else:
+                line = main_ax.plot(p.radii.value, sub_values, 'x', label=leg_label)
+
+            # If the user only wants the models to be plotted, then this goes through the matplotlib
+            #  artist objects that make up the line plot and hides them.
+            # Take this approach because I still want them on the legend, and I want the colour to use
+            #  for the model plot
+            if just_model and model is not None:
+                line[0].set_visible(False)
+                if len(line) != 1:
+                    for coll in line[1:]:
+                        for art_obj in coll:
+                            art_obj.set_visible(False)
+
+            if not back_sub and p.background.value != 0:
+                main_ax.axhline(p.background.value, label=leg_label + ' Background', linestyle='dashed',
+                                color=line[0].get_color())
+
+            # If the user passes a model name, and that model has been fitted to the data, then that
+            #  model will be plotted
+            if model is not None and model in p.good_model_fits:
+                model_func = PROF_TYPE_MODELS[self._prof_type][model]
+                info = p.get_realisation(model)
+                pars = p.get_model_fit(model)["par"]
+
+                colour = line[0].get_color()
+                main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars), color=colour)
+                main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
+                                     where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=colour,
+                                     alpha=0.7, interpolate=True)
+                main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=colour, linestyle="dashed")
+                main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=colour, linestyle="dashed")
+
+                # This calculates and plots the residuals between the model and the data on the extra
+                #  axis we added near the beginning of this method
+                res_ax.plot(p.radii.value, model_func(p.radii.value, *pars)-sub_values, 'D', color=colour)
+
+        # Parsing the astropy units so that if they are double height then the square brackets will adjust size
+        x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
+
+        # Setting the main plot's x label
+        main_ax.set_xlabel("Radius {}".format(x_unit))
+        if not self._back_avail or not back_sub:
+            main_ax.set_ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+        else:
+            # If background has been subtracted it will be mentioned in the y axis label
+            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+
+        # Adds a legend with source names to the side if the user requested it
+        # I let the user decide because there could be quite a few names in it and it could get messy
+        if legend:
+            # TODO I'd like this to dynamically choose the number of columns depending on the number of
+            #  profiles but I got bored figuring how to do it
+            main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+            # This makes sure legend keys are shown, even if the data is hidden
+            for leg_key in main_leg.legendHandles:
+                leg_key.set_visible(True)
+
+        # If the user has manually set limits then we can use them, only on the main axis because
+        #  we grab those limits from the axes object for the residual axis later
+        if xlim is not None:
+            main_ax.set_xlim(xlim)
+        if ylim is not None:
+            main_ax.set_ylim(ylim)
+
+        # Setup the scale that the user wants to see, again on the main axis
+        main_ax.set_xscale(xscale)
+        main_ax.set_yscale(yscale)
+        if model is not None:
+            # We want the residual x axis limits to be identical to the main axis, as the
+            # points should line up
+            res_ax.set_xlim(main_ax.get_xlim())
+            res_ax.set_xlabel("Radius {}".format(x_unit))
+            res_ax.set_xscale(xscale)
+            # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
+            #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
+            # That way its symmetrical
+            outer_ylim = 1.1*max([abs(lim) for lim in res_ax.get_ylim()])
+            res_ax.set_ylim(-outer_ylim, outer_ylim)
+            res_ax.set_ylabel("Model - Data")
+
+        # Adds a title to this figure, changes depending on whether model fits are plotted as well
+        if model is None and custom_title is None:
+            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
+        elif custom_title is None:
+            plt.suptitle("{l} Profiles - {m} fit".format(l=PROF_TYPE_YAXIS[self._prof_type], m=model), y=0.91)
+        else:
+            # If the user doesn't like my title, they can supply their own
+            plt.suptitle(custom_title, y=0.91)
+
+        # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
+        main_ylims = main_ax.get_ylim()
+        y_mid = (main_ylims[1] - main_ylims[0]) / 2
+        # If the user has passed radii to plot, then we plot them
+        for r_name in draw_rads:
+            main_ax.axvline(draw_rads[r_name].value, linestyle='dashed', color='black')
+            main_ax.text(draw_rads[r_name].value * 1.01, y_mid, r_name, rotation=90, verticalalignment='center',
+                         color='black', fontsize=14)
+
+        # And of course actually showing it
+        plt.show()
+
+    def __add__(self, other):
+        to_combine = self.profiles
+        if type(other) == list:
+            to_combine += other
+        elif isinstance(other, BaseProfile1D):
+            to_combine.append(other)
+        elif isinstance(other, BaseAggregateProfile1D):
+            to_combine += other.profiles
+        else:
+            raise TypeError("You may only add 1D Profiles, 1D Aggregate Profiles, or a list of 1D profiles"
+                            " to this object.")
+        return BaseAggregateProfile1D(to_combine)
 
 
 

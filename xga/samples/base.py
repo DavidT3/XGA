@@ -1,7 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 14:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 12:07. Copyright (c) David J Turner
 
-from typing import Union
+from typing import Union, List, Dict
 from warnings import warn
 
 import numpy as np
@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from ..exceptions import NoMatchFoundError
 from ..sources.base import BaseSource
+from ..sourcetools.misc import coord_to_name
 
 
 class BaseSample:
@@ -33,6 +34,9 @@ class BaseSample:
         #  like the PointSample declaration, where names aren't strongly required but there are arguments that
         #  aren't passed to this object and stored by it.
         self._accepted_inds = []
+
+        # A dictionary of the names of sources that could not be declared, and a basic reason why
+        self._failed_sources = {}
 
         # Just checking that, if names are being supplied, then they are all unique
         if name is not None and len(set(name)) != len(name):
@@ -60,8 +64,17 @@ class BaseSample:
                 self._redshifts.append(z)
                 self._accepted_inds.append(ind)
             except NoMatchFoundError:
+                if n is not None:
+                    # We don't be liking spaces in source names
+                    # n = n.replace(" ", "")
+                    pass
+                else:
+                    ra_dec = Quantity(np.array([r, d]), 'deg')
+                    n = coord_to_name(ra_dec)
+
                 warn("Source {n} does not appear to have any XMM data, and will not be included in the "
                      "sample.".format(n=n))
+                self._failed_sources[n] = "NoMatch"
             dec_base.update(1)
         dec_base.close()
 
@@ -125,6 +138,25 @@ class BaseSample:
         :rtype: dict
         """
         return {n: s.instruments for n, s in self._sources.items()}
+
+    @property
+    def failed_names(self) -> List[str]:
+        """
+        Yields the names of those sources that could not be declared for some reason.
+        :return: A list of source names that could not be declared.
+        :rtype: List[str]
+        """
+        return list(self._failed_sources)
+
+    @property
+    def failed_reasons(self) -> Dict[str, str]:
+        """
+        Returns a dictionary containing sources that failed to be declared successfully, and a
+        simple reason why they couldn't be.
+        :return: A dictionary of source names as keys, and reasons as values.
+        :rtype: Dict[str, str]
+        """
+        return self._failed_sources
 
     def check_spectra(self):
         """
@@ -194,13 +226,13 @@ class BaseSample:
         :return: The relevant Source object.
         :rtype: BaseSource
         """
-        if isinstance(key, int):
+        if isinstance(key, (int, np.integer)):
             src = self._sources[self._names[key]]
         elif isinstance(key, str):
             src = self._sources[key]
         else:
             src = None
-            ValueError("Only a source name or integer index may be used to address a sample object")
+            raise ValueError("Only a source name or integer index may be used to address a sample object")
         return src
 
     def __delitem__(self, key: Union[int, str]):
@@ -209,13 +241,13 @@ class BaseSample:
         name of the source.
         :param Union[int, str] key: The index or name of the source to delete.
         """
-        if isinstance(key, int):
+        if isinstance(key, (int, np.integer)):
             del self._sources[self._names[key]]
         elif isinstance(key, str):
             del self._sources[key]
             key = self._names.index(key)
         else:
-            ValueError("Only a source name or integer index may be used to address a sample object")
+            raise ValueError("Only a source name or integer index may be used to address a sample object")
 
         # Now the standard stored values
         del self._names[key]

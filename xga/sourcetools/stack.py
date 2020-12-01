@@ -1,12 +1,12 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 17:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/11/2020, 10:31. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
 from warnings import warn
 
 import numpy as np
-from astropy.units import Quantity, pix
+from astropy.units import Quantity, pix, kpc
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from tqdm import tqdm
@@ -21,12 +21,12 @@ from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
 
 
-def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200", use_peak: bool = True,
+def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_peak: bool = True,
                       pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20), min_snr: float = 0.0,
                       lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                       custom_temps: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES) \
-        -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
     and compared, like for like. This particular function does not fit models, and outputs a mean brightness
@@ -56,20 +56,21 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
     :return: This function returns the average profile, the scaled brightness profiles with the cluster
     changing along the y direction and the bin changing along the x direction, an array of the radii at which the
     brightness was measured (in units of scale_radius), and finally the covariance matrix and normalised
-    covariance matrix.
-    :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]
+    covariance matrix. I also return a list of source names that WERE included in the stack.
+    :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
 
-    def construct_profile(src: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity) -> Tuple[Quantity, int]:
+    def construct_profile(src_obj: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity) -> Tuple[Quantity, int]:
         """
         Constructs a brightness profile for the given galaxy cluster, and interpolates to find values
         at the requested radii in units of scale_radius.
-        :param GalaxyCluster src: The GalaxyCluster to construct a profile for.
+        :param GalaxyCluster src_obj: The GalaxyCluster to construct a profile for.
         :param int src_id: An identifier that enables the constructed profile to be placed
         correctly in the results array.
         :param Quantity lower: The lower energy limit to use.
         :param Quantity upper: The higher energy limit to use.
-        :return: The profile and the cluster identifier.
+        :return: The scaled profile, the cluster identifier, and the original generated
+        surface brightness profile.
         :rtype: Tuple[Quantity, int]
         """
         # The storage key is different based on whether the user wishes to generate profiles from PSF corrected
@@ -81,28 +82,51 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
                                                                 n=psf_bins, a=psf_algo, i=psf_iter)
 
         # Retrieving the relevant ratemap object, as well as masks
-        rt = [r[-1] for r in src.get_products("combined_ratemap", just_obj=False) if storage_key in r][0]
+        rt = [r[-1] for r in src_obj.get_products("combined_ratemap", just_obj=False) if storage_key in r][0]
 
         # The user can choose to use the original user passed coordinates, or the X-ray centroid
         if use_peak:
-            pix_peak = rt.coord_conv(src.peak, pix)
-            source_mask, background_mask = src.get_mask(scale_radius, central_coord=src.peak)
-            # TODO Should I use my source radius mask or just remove interlopers?
-            source_mask = src.get_interloper_mask()
+            pix_peak = rt.coord_conv(src_obj.peak, pix)
         else:
-            pix_peak = rt.coord_conv(src.ra_dec, pix)
-            source_mask, background_mask = src.get_mask(scale_radius, central_coord=src.ra_dec)
-            source_mask = src.get_interloper_mask()
+            pix_peak = rt.coord_conv(src_obj.ra_dec, pix)
 
-        rad = Quantity(src.source_back_regions(scale_radius)[0].to_pixel(rt.radec_wcs).radius, pix)
-        sb_prof, success = radial_brightness(rt, source_mask, background_mask, pix_peak, rad, src.redshift, pix_step,
-                                             pix, src.cosmo, min_snr=min_snr)
+        # We obviously want to remove point sources from the profiles we make, so get the mask that removes
+        #  interlopers
+        int_mask = src_obj.get_interloper_mask()
 
-        # Calculates the value of pixel radii in terms of the scale radii
-        scaled_radii = (sb_prof.radii / rad).value
+        # Tells the source object to give us the requested scale radius in units of kpc
+        rad = src_obj.get_radius(scale_radius, kpc)
 
-        # Interpolating brightness profile values at the radii passed by the user
-        interp_brightness = np.interp(radii, scaled_radii, (sb_prof.values - sb_prof.background).value)
+        # This fetches any profiles that might have already been generated to our required specifications
+        prof_prods = src_obj.get_products("combined_brightness_profile")
+        if len(prof_prods) == 1:
+            matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, pix_peak, pix_step,
+                                                                                       min_snr, rad)]
+        else:
+            matching_profs = []
+
+        # This is because a ValueError can be raised by radial_brightness when there is a problem with the
+        #  background mask
+        try:
+            if len(matching_profs) == 0:
+                sb_prof, success = radial_brightness(rt, pix_peak, rad, float(src_obj.background_radius_factors[0]),
+                                                     float(src_obj.background_radius_factors[1]), int_mask,
+                                                     src_obj.redshift, pix_step, kpc, src_obj.cosmo, min_snr)
+                src_obj.update_products(sb_prof)
+            elif len(matching_profs) == 1:
+                sb_prof = matching_profs[0]
+            elif len(matching_profs) > 1:
+                raise ValueError("This shouldn't be possible.")
+            # Calculates the value of pixel radii in terms of the scale radii
+            scaled_radii = (sb_prof.radii / rad).value
+            # Interpolating brightness profile values at the radii passed by the user
+            interp_brightness = np.interp(radii, scaled_radii, (sb_prof.values - sb_prof.background).value)
+        except ValueError as ve:
+            # This will mean that the profile is thrown away in a later step
+            interp_brightness = np.full(radii.shape, np.NaN)
+            # But will also raise a warning so the user knows
+            warn(str(ve).replace("you're looking at", "{s} is".format(s=src_obj.name)).replace(".", "")
+                 + " - profile set to NaNs.")
 
         return interp_brightness, src_id
 
@@ -200,19 +224,23 @@ def radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius
     cov = np.cov(scaled_luminosity, rowvar=False)
 
     average_profile = np.mean(scaled_luminosity, axis=0)
+    stack_names = []
     for src_ind, src in enumerate(sources):
         if src_ind not in no_nan:
             warn("A NaN value was detected in {}'s brightness profile, and as such it has been excluded from the "
                  "stack.".format(src.name))
-    return average_profile, scaled_luminosity, radii, cov, norm_cov
+        else:
+            stack_names.append(src.name)
+    return average_profile, scaled_luminosity, radii, cov, norm_cov, stack_names
 
 
-def view_radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_radius: str = "r200",
-                           use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
+def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_peak: bool = True,
+                           pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
                            min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
                            psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4,
-                           psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES):
+                           psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
+                           show_images: bool = False, figsize: tuple = (14, 14)):
     """
     A convenience function that calls radial_data_stack and makes plots of the average profile, individual profiles,
     covariance, and normalised covariance matrix.
@@ -237,6 +265,9 @@ def view_radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_r
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use when calculating the brightness profiles, the default is 90%
     of available cores.
+    :param bool show_images: If true then for each source in the stack an image and profile will be displayed
+    side by side, with annuli overlaid on the image.
+    :param tuple figsize: The desired figure size for the plot.
     """
     # Calls the stacking function
     results = radial_data_stack(sources, scale_radius, use_peak, pix_step, radii, min_snr, lo_en, hi_en,
@@ -255,7 +286,7 @@ def view_radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_r
     # TODO This gives a slightly different answer to np.std for some reason
     sd = np.sqrt(np.diagonal(cov))
 
-    fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 14))
+    fig, ax = plt.subplots(nrows=2, ncols=2, figsize=figsize)
 
     ax[0, 0].set_title("Average Profile")
     ax[0, 0].set_xlabel("Radius [{}]".format(scale_radius))
@@ -291,3 +322,57 @@ def view_radial_data_stack(sources: Union[GalaxyCluster, ClusterSample], scale_r
 
     fig.tight_layout()
     plt.show()
+
+    if show_images:
+        for name_ind, name in enumerate(results[5]):
+            cur_src = sources[name]
+            if not psf_corr:
+                storage_key = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+            else:
+                storage_key = "bound_{l}-{u}_{m}_{n}_{a}{i}".format(l=lo_en.value, u=hi_en.value, m=psf_model,
+                                                                    n=psf_bins, a=psf_algo, i=psf_iter)
+
+            rt = cur_src.get_products('combined_ratemap', extra_key=storage_key)[0]
+
+            # The user can choose to use the original user passed coordinates, or the X-ray centroid
+            if use_peak:
+                pix_peak = rt.coord_conv(cur_src.peak, pix)
+            else:
+                pix_peak = rt.coord_conv(cur_src.ra_dec, pix)
+            inter_mask = cur_src.get_interloper_mask()
+            rad = cur_src.get_radius(scale_radius, kpc)
+
+            prof_prods = cur_src.get_products("combined_brightness_profile")
+            matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, pix_peak, pix_step,
+                                                                                       min_snr, rad)]
+            pr = matching_profs[0]
+            fig, ax_arr = plt.subplots(ncols=2, figsize=(figsize[0], figsize[0]*0.5))
+
+            plt.sca(ax_arr[0])
+
+            multiplier = (pr.back_pixel_bin[-1] / pr.pixel_bins[-1])*1.05
+            custom_xlims = (pr.centre[0].value - pr.pixel_bins[-1]*multiplier,
+                            pr.centre[0].value + pr.pixel_bins[-1]*multiplier)
+            custom_ylims = (pr.centre[1].value - pr.pixel_bins[-1]*multiplier,
+                            pr.centre[1].value + pr.pixel_bins[-1]*multiplier)
+            # This populates ones of the axes with a view of the image
+            im_ax = rt.get_view(ax_arr[0], pr.centre, inter_mask, radial_bins_pix=pr.pixel_bins,
+                                back_bin_pix=pr.back_pixel_bin, zoom_in=True, manual_zoom_xlims=custom_xlims,
+                                manual_zoom_ylims=custom_ylims)
+
+            ax_arr[1].set_xscale("log")
+            ax_arr[1].set_yscale("log")
+            ax_arr[1].xaxis.set_major_formatter(ScalarFormatter())
+            ax_arr[1].plot(radii, all_prof[name_ind, :])
+            ax_arr[1].set_xlabel("Radius [{}]".format(scale_radius))
+            ax_arr[1].set_title("{} - Luminosity Profile".format(cur_src.name))
+            ax_arr[1].set_ylabel("L$_x$ [erg$s^{-1}$]")
+
+            plt.tight_layout()
+            plt.show()
+            plt.close('all')
+
+
+
+
+
