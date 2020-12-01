@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/11/2020, 10:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/12/2020, 09:36. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -199,14 +199,73 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     returned.
     :rtype: Tuple[SurfaceBrightness1D, bool]
     """
+
+    def _iterative_profile(annulus_masks: np.ndarray, inner_rads: np.ndarray, outer_rads: np.ndarray) \
+            -> Tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Internal function to calculate and re-bin (ONCE) a surface brightness profile. The profile, along with
+        modified (if rebinned) masks and radii arrays are returned to the user. This can be called once, or iteratively
+        by a loop.
+        :param np.ndarray annulus_masks: 512x512xN numpy array of annular masks, where N is the number of annuli
+        :param np.ndarray inner_rads: The inner radii of the annuli.
+        :param np.ndarray outer_rads: The outer radii of the annuli.
+        :return: Boolean variable that describes whether another re-binning iteration is required, the
+        brightness profile and uncertainties, the modified annular masks, inner radii, outer radii, and annulus areas.
+        :rtype:
+        """
+        # These are annular masks with interloper sources removed, sensor and edge masks applied
+        corr_ann_masks = annulus_masks * interloper_mask[..., None] * rt.sensor_mask[..., None] \
+                         * rt.edge_mask[..., None]
+
+        # This calculates the area of each annulus mask
+        num_pix = np.sum(corr_ann_masks, axis=(0, 1))
+        ann_areas = num_pix * to_arcmin ** 2
+
+        # Applying the annular masks, with interlopers removed, and chip edges
+        masked_countrate_data = corr_ann_masks * rt.data[..., None]
+        masked_countrate_error_data = corr_ann_masks * count_rate_err_map[..., None]
+
+        # Defining the brightness profile with the current annuli
+        bright_profile = np.sum(masked_countrate_data, axis=(0, 1)) / ann_areas
+
+        # And the uncertainties on the profiles. Adding pixels in quadrature
+        bright_profile_errors = np.sqrt(np.sum(masked_countrate_error_data**2, axis=(0, 1))) / ann_areas
+
+        # We want to check if all parts of the profile are above the defined minimum signal to noise
+        snr_prof = bright_profile / countrate_bg_per_area
+
+        # Checking if we are below the minimum signal to noise anywhere
+        below = np.argwhere(snr_prof < min_snr).flatten()
+        if below.shape != (0,) and below[0] != (bright_profile.shape[0] - 1):
+            annulus_masks[:, :, below[0]] = annulus_masks[:, :, below[0]] + annulus_masks[:, :, below[0] + 1]
+            annulus_masks = np.delete(annulus_masks, below[0] + 1, axis=2)
+
+            outer_rads[below[0]] = outer_rads[below[0] + 1]
+            outer_rads = np.delete(outer_rads, below[0] + 1)
+            inner_rads = np.delete(inner_rads, below[0] + 1)
+
+            another_pass = True
+
+        elif below.shape != (0,) and below[0] == (bright_profile.shape[0] - 1):
+            annulus_masks[:, :, below[0] - 1] = annulus_masks[:, :, below[0] - 1] + annulus_masks[:, :, below[0]]
+            annulus_masks = np.delete(annulus_masks, below[0], axis=2)
+
+            outer_rads[below[0] - 1] = outer_rads[below[0]]
+            outer_rads = np.delete(outer_rads, below[0])
+            inner_rads = np.delete(inner_rads, below[0])
+
+            another_pass = True
+
+        else:
+            another_pass = False
+
+        return another_pass, bright_profile, bright_profile_errors, annulus_masks, inner_rads, outer_rads, ann_areas
+
     if interloper_mask is not None and rt.shape != interloper_mask.shape:
         raise ValueError("The shape of the src_mask array {0} must be the same as that of im_prod "
                          "{1}.".format(interloper_mask.shape, rt.shape))
     elif interloper_mask is None:
         interloper_mask = np.ones(rt.shape)
-
-    cr_err_map = np.divide(np.sqrt(rt.image.data), rt.expmap.data, out=np.zeros_like(rt.image.data),
-                           where=rt.expmap.data != 0)
 
     # Returns conversion factor to degrees, so multiplying by 60 goes to arcminutes
     # Getting this because we want to be able to convert pixel distance into arcminutes for dividing by the area
@@ -216,8 +275,8 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     pix_cen = rt.coord_conv(centre, pix)
 
     # This sets up the initial annular bin radii, as well as finding the central radii of the bins in the chosen units.
-    inn_rads, out_rads, init_cen_rads = ann_radii(rt, centre, outer_rad, z, pix_step, cen_rad_units, cosmo,
-                                                  min_central_pix_rad, start_pix_rad)
+    inn_rads, out_rads, cen_rads = ann_radii(rt, centre, outer_rad, z, pix_step, cen_rad_units, cosmo,
+                                             min_central_pix_rad, start_pix_rad)
 
     # These calculate the inner and out pixel radii for the background mask - placed in arrays because the
     #  annular mask function expects iterable radii. As pixel radii have to be integer for generating a mask,
@@ -229,97 +288,55 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     #  stuff and interlopers in a second
     back_mask = annular_mask(pix_cen, back_inn_rad, back_out_rad, rt.shape)
 
-    # Adds any intersecting chip gaps into the background region mask
-    corr_back_mask = back_mask * rt.sensor_mask * interloper_mask
+    # Includes chip gaps, interloper removal, and edge removal (to try and avoid artificially bright pixels)
+    #  in the background mask
+    corr_back_mask = back_mask * rt.sensor_mask * rt.edge_mask * interloper_mask
 
     # Calculates the area of the background region in arcmin^2
-    back_area = np.sum(corr_back_mask, axis=(0, 1)) * to_arcmin**2
+    back_pix = np.sum(corr_back_mask, axis=(0, 1))
+    back_area = back_pix * to_arcmin**2
     if back_area == 0:
         raise ValueError("The background mask combined with the sensor mask is is all zeros, this is probably"
                          " because you're looking at a large cluster at a low redshift.")
-    # Finds the emission per arcmin^2 of the background region (accounting for removed sources and chip gaps)
-    bg = np.sum(rt.data * corr_back_mask, axis=(0, 1)) / back_area
+    # Per pix is the background which has been divided by the number of pixels
+    count_bg_per_pix = np.sum(rt.image.data * corr_back_mask, axis=(0, 1)) / back_pix
+    # This is where the pixels have been converted into an actual area measurement in arcmin units
+    countrate_bg_per_area = np.sum(rt.data * corr_back_mask, axis=(0, 1)) / back_area
+
+    # Defined here so we can use the where argument in np.sqrt
+    err_calc = (rt.image.data - count_bg_per_pix) + 2*count_bg_per_pix
+    # Errors on the raw photon counts
+    count_err_map = np.zeros(rt.shape)
+    # Turning those into count rate errors
+    np.sqrt(err_calc, where=err_calc > 0, out=count_err_map)
+
+    # I divide by a copy of the expmap data array here, otherwise it breaks, and if I'm honest I don't know why...
+    count_rate_err_map = np.divide(count_err_map, rt.expmap.data.copy(), where=rt.expmap.data != 0) * rt.edge_mask
 
     # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
     #  dimension. Helps with broadcasting the annular masks with the region src_mask that gets rid of interlopers
-    masks = annular_mask(pix_cen, inn_rads, out_rads, rt.shape) * interloper_mask[..., None] * rt.sensor_mask[..., None]
-    # This calculates the area of each annulus mask
-    num_pix = np.sum(masks, axis=(0, 1))
-    areas = num_pix * to_arcmin**2
+    ann_masks = annular_mask(pix_cen, inn_rads, out_rads, rt.shape)
 
-    # Creates a 3D array of the masked data
-    masked_data = masks * rt.data[..., None]
-    # Calculates the sum of the pixel count rates for each annular radius, masking out other known sources
-    cr = np.sum(masked_data, axis=(0, 1))
-    cr_errs = np.sqrt(np.sum(masks * cr_err_map[..., None]**2, axis=(0, 1)))
-
-    # Then calculates the actual brightness profile by dividing by the area of each annulus
-    br = cr / areas
-    br_errs = cr_errs / areas
-
-    # Calculates the signal to noise profile, defined as the ratio between brightness profile and background
-    snr_prof = br / bg
-
-    # Finds the elements in the the SNR profile that do not meet the minimum requirements provided by the user
-    #  Flatten it just because I know this will always a be a 1D array and flattening makes it nicer to work with
-    below = np.argwhere(snr_prof < min_snr).flatten()
-
-    # Making copies in case rebinning fails
-    init_br = br.copy()
-    init_br_errs = br_errs.copy()
+    # Make copies of originals in case re-binning fails
     init_inn = inn_rads.copy()
     init_out = out_rads.copy()
 
-    # Our task here is to combine radial bins until the minimum SNR requirements are met for all bins
-    # Using a while loop for this doesn't feel super efficient, but as a first attempt hopefully it'll be fast enough
-    # If the shape of below is (0,) then there are no bins at which the SNR is causing a problem
-    while below.shape != (0,):
-        # This is triggered if the first index where SNR is too low IS NOT the last bin in the profile
-        if below[0] != br.shape[0] - 1:
-            # We deal with and modify the count rates and areas separately as you have to combine bins in the count
-            #  rate and area regimes separately, then calculate brightness by dividing cr by area.
-            cr[below[0]] = cr[below[0]] + cr[below[0] + 1]
-            # ADDING ERRORS IN QUADRATURE FOR NOW, DON'T KNOW IF I'LL KEEP IT LIKE THIS
-            cr_errs[below[0]] = np.sqrt(cr_errs[below[0]]**2 + cr_errs[below[0] + 1]**2)
-            areas[below[0]] = areas[below[0]] + areas[below[0] + 1]
-            # Then the donor bin that was added to the problem bin is deleted
-            cr = np.delete(cr, below[0] + 1)
-            cr_errs = np.delete(cr_errs, below[0] + 1)
-            areas = np.delete(areas, below[0] + 1)
-            # The new outer radius of the problem bin is set to the outer radius of the donor bin
-            out_rads[below[0]] = out_rads[below[0] + 1]
-            # The outer radius entry of the donor bin is deleted
-            out_rads = np.delete(out_rads, below[0] + 1)
-            # The inner radius of the donor bin is deleted as there is only one bin now from problem inner
-            #  to donor outer radii
-            inn_rads = np.delete(inn_rads, below[0] + 1)
-        # This is triggered if the first index where SNR is to low IS the last bin in the profile
-        else:
-            # As this is the last bin in the profile, there is no extra bin in the outward direction to add to our
-            #  problem bin. As such the problem bin is added inwards, to the N-1th bin in the profile
-            cr[below[0] - 1] = cr[below[0] - 1] + cr[below[0]]
-            cr_errs[below[0] - 1] = np.sqrt(cr_errs[below[0] - 1]**2 + cr_errs[below[0]]**2)
-            areas[below[0] - 1] = areas[below[0] - 1] + areas[below[0]]
-            cr = np.delete(cr, below[0])
-            cr_errs = np.delete(cr_errs, below[0])
-            areas = np.delete(areas, below[0])
-            out_rads[below[0] - 1] = out_rads[below[0]]
-            out_rads = np.delete(out_rads, below[0])
-            inn_rads = np.delete(inn_rads, below[0])
-
-        # Calculate the new brightness with our combined count rates and areas
-        br = cr/areas
-        br_errs = cr_errs / areas
-        # Recalculate the SNR profile after the re-binning in this iteration
-        snr_prof = br / bg
-        # Find out which bins are still below the SNR threshold (if any)
-        below = np.argwhere(snr_prof < min_snr).flatten()
+    # This gets switched to false if the signal to noise conditions are not fulfilled
+    calculate_profile = True
+    while calculate_profile:
+        calculate_profile, br_prof, br_errs, ann_masks, inn_rads, \
+            out_rads, areas = _iterative_profile(ann_masks, inn_rads, out_rads)
 
     if len(inn_rads) == 0:
+        # This means that rebinning failed, and the profile couldn't be made greater than the minimum signal to noise
         inn_rads = init_inn
         out_rads = init_out
-        br = init_br
-        br_errs = init_br_errs
+        ann_masks = annular_mask(pix_cen, inn_rads, out_rads, rt.shape)
+        # Set the min_snr to 0 to get an non-rebinned profile
+        min_snr = 0
+        prof_results = _iterative_profile(ann_masks, inn_rads, out_rads)
+        br_prof, br_errs = prof_results[1:3]
+        areas = prof_results[-1]
         succeeded = False
     else:
         succeeded = True
@@ -332,8 +349,9 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     rad_err = (final_out_rads-final_inn_rads) / 2
 
     # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product
-    br_prof = SurfaceBrightness1D(rt, cen_rads, Quantity(br, 'ct/(s*arcmin**2)'), centre, pix_step, min_snr, outer_rad,
-                                  rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'), Quantity(bg, 'ct/(s*arcmin**2)'),
+    br_prof = SurfaceBrightness1D(rt, cen_rads, Quantity(br_prof, 'ct/(s*arcmin**2)'), centre, pix_step, min_snr,
+                                  outer_rad, rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'),
+                                  Quantity(countrate_bg_per_area, 'ct/(s*arcmin**2)'),
                                   np.insert(out_rads, 0, inn_rads[0]), np.concatenate([back_inn_rad, back_out_rad]),
                                   Quantity(areas, 'arcmin**2'))
     # Set the success property
