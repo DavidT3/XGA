@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 17:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/12/2020, 16:14. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -226,7 +226,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
                           psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, model_realisations: int = 500, model_rad_steps: int = 300,
                           conf_level: int = 90, num_cores: int = NUM_CORES, ml_mcmc_start: bool = True,
-                          ml_rand_dev: float = 1e-4, num_walkers: int = 30, num_steps: int = 20000):
+                          ml_rand_dev: float = 1e-4, num_walkers: int = 20, num_steps: int = 20000):
 
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
