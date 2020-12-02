@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 14:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/12/2020, 16:15. Copyright (c) David J Turner
 
 
 import inspect
@@ -537,7 +537,7 @@ class BaseProfile1D:
 
     def fit(self, model: str, method: str = "mcmc", priors=None, start_pars=None, model_real=1000,
             model_rad_steps=300, conf_level=90, ml_mcmc_start: bool = True, ml_rand_dev: float = 1e-4,
-            num_walkers: int = 30, num_steps: int = 20000, progress_bar: bool = True):
+            num_walkers: int = 20, num_steps: int = 20000, progress_bar: bool = True, show_errors: bool = True):
         # These are the currently allowed fitting methods
         method = method.lower()
         fit_methods = ["curve_fit", "mcmc"]
@@ -664,7 +664,8 @@ class BaseProfile1D:
                 sampler.run_mcmc(pos, num_steps, progress=progress_bar)
                 success = True
             except ValueError as bugger:
-                print(bugger)
+                if show_errors:
+                    print(bugger)
                 success = False
 
             if success:
@@ -677,7 +678,8 @@ class BaseProfile1D:
                     cut_off = int(np.ceil(auto_corr.max() / 100) * 100)
                     success = True
                 except (em.autocorr.AutocorrError, ValueError) as bugger:
-                    print(bugger)
+                    if show_errors:
+                        print(bugger)
                     # warn("AutoCorrelationError was raised, MCMC fit has failed. - Perhaps try more steps?")
                     success = False
 
