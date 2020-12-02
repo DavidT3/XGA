@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/12/2020, 16:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/12/2020, 17:17. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -66,7 +66,8 @@ def _stack_setup_checks(sources: ClusterSample, scale_radius: str = "r200", lo_e
 
 
 def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_en: Quantity, hi_en: Quantity,
-                  custom_temps: Quantity) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List]:
+                  custom_temps: Quantity, sim_met: Union[float, List] = 0.3, abund_table: str = 'angr') \
+        -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List]:
     """
     Internal function that was originally split off from radial data stack. Takes the surface brightness profiles
     that have been generated for radii as a fraction of the scale radius. It then calculates the scaling factors and
@@ -80,6 +81,9 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
     in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
     for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+    :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
+    single float to use the same value for all sources, or pass a list to use a different value for each.
+    :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :return: The average profile, all scaled profiles, the covariance matrix, normalised covariance, and names
     of successful profiles.
     :rtype: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List]
@@ -90,13 +94,14 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
     # First must make sure we have generated spectra for all the clusters, as we need the ARFs and RMFs to
     #  simulate spectra and calculate conversion values
     evselect_spectrum(sources, scale_radius)  # Use our standard setting for spectra generation
-    # Use a simple single_temp_apec to fit said spectra, with all the default settings
-    single_temp_apec(sources, reg_type=scale_radius)
 
     # Calculate all the conversion factors
     if custom_temps is not None:
-        cluster_cr_conv(sources, scale_radius, custom_temps)
+        cluster_cr_conv(sources, scale_radius, custom_temps, sim_met, abund_table=abund_table)
     else:
+        # Use a simple single_temp_apec to fit said spectra, but only if we haven't had custom temperatures
+        #  passed in
+        single_temp_apec(sources, reg_type=scale_radius, abund_table=abund_table)
         temps = Quantity([source.get_temperature(scale_radius, "tbabs*apec")[0] for source in sources], 'keV')
         cluster_cr_conv(sources, scale_radius, temps)
 
@@ -199,7 +204,8 @@ def _view_stack(results: Tuple, scale_radius: str, radii: np.ndarray, figsize: T
 def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_peak: bool = True,
                       pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20), min_snr: float = 0.0,
                       lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-                      custom_temps: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+                      custom_temps: Quantity = None, sim_met: Union[float, List] = 0.3,
+                      abund_table: str = 'angr', psf_corr: bool = False, psf_model: str = "ELLBETA",
                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
@@ -221,6 +227,9 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
     in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
     for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+    :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
+    single float to use the same value for all sources, or pass a list to use a different value for each.
+    :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
     :param str psf_model: If PSF corrected, the PSF model used.
     :param int psf_bins: If PSF corrected, the number of bins per side.
@@ -336,7 +345,8 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         onwards.close()
 
     average_profile, scaled_luminosity, cov, norm_cov, stack_names = _create_stack(sb, sources, scale_radius, lo_en,
-                                                                                   hi_en, custom_temps)
+                                                                                   hi_en, custom_temps, sim_met,
+                                                                                   abund_table)
 
     return average_profile, scaled_luminosity, radii, cov, norm_cov, stack_names
 
@@ -345,6 +355,7 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
                            pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
                            min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
+                           sim_met: Union[float, List] = 0.3, abund_table: str = 'angr',
                            psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4,
                            psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
                            show_images: bool = False, figsize: tuple = (14, 14)):
@@ -365,6 +376,9 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
     in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
     for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+    :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
+    single float to use the same value for all sources, or pass a list to use a different value for each.
+    :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
     :param str psf_model: If PSF corrected, the PSF model used.
     :param int psf_bins: If PSF corrected, the number of bins per side.
@@ -378,7 +392,8 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
     """
     # Calls the stacking function
     results = radial_data_stack(sources, scale_radius, use_peak, pix_step, radii, min_snr, lo_en, hi_en,
-                                custom_temps, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, num_cores)
+                                custom_temps, sim_met, abund_table, psf_corr, psf_model, psf_bins, psf_algo,
+                                psf_iter, num_cores)
 
     # Gets the individual scaled profiles from results
     all_prof = results[1]
@@ -441,10 +456,11 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
                        use_peak: bool = True, model_priors: list = None, model_start_pars: list = None,
                        pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20), min_snr: float = 0.0,
                        lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-                       custom_temps: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
-                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
-                       model_realisations: int = 500, conf_level: int = 90, ml_mcmc_start: bool = True,
-                       ml_rand_dev: float = 1e-4, num_walkers: int = 20, num_steps: int = 20000) \
+                       custom_temps: Quantity = None, sim_met: Union[float, List] = 0.3, abund_table: str = 'angr',
+                       psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                       psf_iter: int = 15, num_cores: int = NUM_CORES, model_realisations: int = 500,
+                       conf_level: int = 90, ml_mcmc_start: bool = True, ml_rand_dev: float = 1e-4,
+                       num_walkers: int = 20, num_steps: int = 20000) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates, fits, and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
@@ -471,6 +487,9 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
     in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
     for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+    :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
+    single float to use the same value for all sources, or pass a list to use a different value for each.
+    :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
     :param str psf_model: If PSF corrected, the PSF model used.
     :param int psf_bins: If PSF corrected, the number of bins per side.
@@ -607,7 +626,8 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
         onwards.close()
 
     average_profile, scaled_luminosity, cov, norm_cov, stack_names = _create_stack(sb, sources, scale_radius, lo_en,
-                                                                                   hi_en, custom_temps)
+                                                                                   hi_en, custom_temps, sim_met,
+                                                                                   abund_table)
 
     return average_profile, scaled_luminosity, radii, cov, norm_cov, stack_names
 
@@ -616,7 +636,8 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
                             use_peak: bool = True, model_priors: List = None, model_start_pars: list = None,
                             pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20), min_snr: float = 0.0,
                             lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-                            custom_temps: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+                            custom_temps: Quantity = None, sim_met: Union[float, List] = 0.3,
+                            abund_table: str = 'angr', psf_corr: bool = False, psf_model: str = "ELLBETA",
                             psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
                             model_realisations: int = 500, conf_level: int = 90, ml_mcmc_start: bool = True,
                             ml_rand_dev: float = 1e-4, num_walkers: int = 30, num_steps: int = 20000,
@@ -644,6 +665,9 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
     in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
     for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+    :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
+    single float to use the same value for all sources, or pass a list to use a different value for each.
+    :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
     :param str psf_model: If PSF corrected, the PSF model used.
     :param int psf_bins: If PSF corrected, the number of bins per side.
@@ -665,9 +689,9 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
     """
     # Calls the stacking function
     results = radial_model_stack(sources, model, scale_radius, fit_method, use_peak, model_priors, model_start_pars,
-                                 pix_step, radii, min_snr, lo_en, hi_en, custom_temps, psf_corr, psf_model, psf_bins,
-                                 psf_algo, psf_iter, num_cores, model_realisations, conf_level, ml_mcmc_start,
-                                 ml_rand_dev, num_walkers, num_steps)
+                                 pix_step, radii, min_snr, lo_en, hi_en, custom_temps, sim_met, abund_table, psf_corr,
+                                 psf_model, psf_bins, psf_algo, psf_iter, num_cores, model_realisations, conf_level,
+                                 ml_mcmc_start, ml_rand_dev, num_walkers, num_steps)
 
     # Gets the individual scaled profiles from results
     all_prof = results[1]
