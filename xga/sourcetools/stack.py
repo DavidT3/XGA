@@ -726,7 +726,6 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
             fig, ax_arr = plt.subplots(ncols=3, figsize=(figsize[0], figsize[0] * 0.32))
 
             plt.sca(ax_arr[0])
-
             multiplier = (pr.back_pixel_bin[-1] / pr.pixel_bins[-1]) * 1.05
             custom_xlims = (pr.centre[0].value - pr.pixel_bins[-1] * multiplier,
                             pr.centre[0].value + pr.pixel_bins[-1] * multiplier)
