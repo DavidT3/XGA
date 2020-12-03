@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 12:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 16:19. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -260,7 +260,7 @@ class BaseSource:
         return obs_dict, reg_dict, att_dict, odf_dict
 
     # TODO Maybe allow BaseAggregateProfile1D to be stored in the future
-    # TODO IMPLEMENT STORING PROFILES HERE
+    # TODO Redo how profiles are stored - I was lazy when I implemented it at first
     def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D]):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
