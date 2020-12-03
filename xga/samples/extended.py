@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 15:40. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 11:40. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -9,7 +9,7 @@ from astropy.units import Quantity
 from tqdm import tqdm
 
 from .base import BaseSample
-from ..exceptions import PeakConvergenceFailedError
+from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.psf import rl_psf
 from ..sources.extended import GalaxyCluster
 
@@ -136,7 +136,7 @@ class ClusterSample(BaseSample):
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
     @property
-    def r200_snrs(self) -> np.ndarray:
+    def r200_snr(self) -> np.ndarray:
         """
         Fetches and returns the R200 signal to noises from the constituent sources.
         :return: The signal to noise ration calculated at the R200.
@@ -151,7 +151,7 @@ class ClusterSample(BaseSample):
         return np.array(snrs)
 
     @property
-    def r500_snrs(self) -> np.ndarray:
+    def r500_snr(self) -> np.ndarray:
         """
         Fetches and returns the R500 signal to noises from the constituent sources.
         :return: The signal to noise ration calculated at the R500.
@@ -166,7 +166,7 @@ class ClusterSample(BaseSample):
         return np.array(snrs)
 
     @property
-    def r2500_snrs(self) -> np.ndarray:
+    def r2500_snr(self) -> np.ndarray:
         """
         Fetches and returns the R2500 signal to noises from the constituent sources.
         :return: The signal to noise ration calculated at the R2500.
@@ -180,7 +180,53 @@ class ClusterSample(BaseSample):
                 snrs.append(None)
         return np.array(snrs)
 
+    def Tx(self, reg_type: str, model: str = 'tbabs*apec'):
+        """
+        A get method for temperatures measured for the constituent clusters of this sample. An error will be
+        thrown if temperatures haven't been measured for the given region and model (default is the tbabs*apec model
+        which single_temp_apec fits to cluster spectra). Any clusters for which temperature fits failed will return
+        NaN temperatures.
+        :param str reg_type: The type of region that the fitted spectra were generated from.
+        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
+        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
+        :rtype: Quantity
+        """
+        temps = []
+        for gcs in self._sources.values():
+            try:
+                # Fetch the temperature from a given cluster using the dedicated method
+                gcs_temp = gcs.get_temperature(reg_type, model).value
 
+                # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
+                #  so its set to NaN
+                if gcs_temp[0] == 64:
+                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    warn("A temperature of 64keV was measured for {s}, this is considered a failed fit by "
+                         "XGA".format(s=gcs.name))
+                temps.append(gcs_temp)
 
+            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
+                # If any of the possible errors are thrown, we print the error as a warning and replace
+                #  that entry with a NaN
+                warn(str(err))
+                temps.append(np.array([np.NaN, np.NaN, np.NaN]))
 
+        # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
+        temps = Quantity(np.array(temps), 'keV')
+
+        # We're going to throw an error if all the temperatures are NaN, because obviously something is wrong
+        check_temps = temps[~np.isnan(temps)]
+        if len(check_temps) == 0:
+            raise ValueError("All temperatures appear to be NaN.")
+
+        return temps
+
+    @property
+    def richness(self):
+        pass
+
+    @property
+    def wl_mass(self):
+        pass
 
