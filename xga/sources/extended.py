@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 17:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 11:12. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -192,7 +192,7 @@ class GalaxyCluster(ExtendedSource):
         # For convenience sake, if there is only one model with a kT measurement, I'll allow the model parameter
         #  to be None.
         elif model is None and len(models_with_kt) == 1:
-            return self.get_results(reg_type, models_with_kt[0], "kT")
+            return Quantity(self.get_results(reg_type, models_with_kt[0], "kT"), 'keV')
 
     def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
                                 use_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
