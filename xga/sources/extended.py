@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 11:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 11:16. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
@@ -185,7 +185,7 @@ class GalaxyCluster(ExtendedSource):
         elif model is not None and "kT" in self._fit_results[reg_type][model]:
             # Just going to call the get_results method with specific parameters, to get the result formatted
             #  the same way.
-            return self.get_results(reg_type, model, "kT")
+            return Quantity(self.get_results(reg_type, model, "kT"), 'keV')
         elif model is None and len(models_with_kt) != 1:
             raise ValueError("The model parameter can only be None when there is only one model available"
                              " with a kT measurement.")
