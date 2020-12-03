@@ -1,9 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 11:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 13:01. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, Union
 
+import numpy as np
 from astropy import wcs
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitConversionError, pix, kpc
@@ -141,14 +142,28 @@ class GalaxyCluster(ExtendedSource):
         return self._wl_mass, self._wl_mass_err
 
     @property
-    def richness(self) -> Tuple[Quantity, Quantity]:
+    def richness(self) -> Quantity:
         """
         Gets the richness passed in at initialisation of the source.
-        :return: Two quantities, the richness, and the weak lensing mass error. If the
+        :return: Two floats, the richness, and the richness error. If the
         values were not passed in at initialisation, the returned values will be None.
-        :rtype: Tuple[Quantity, Quantity]
+        :rtype: Quantity
         """
-        return self._richness, self._richness_err
+        if self._richness is not None:
+            r_list = [self._richness]
+        else:
+            r_list = [np.NaN]
+
+        if self._richness_err is None:
+            r_list.append(np.NaN)
+        elif isinstance(self._richness_err, (float, int)):
+            r_list.append(self._richness_err)
+        elif isinstance(self._richness_err, list):
+            r_list += self._richness_err
+        elif isinstance(self._richness_err, np.ndarray):
+            r_list += list(self._richness_err)
+
+        return Quantity(r_list)
 
     # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
     #  justified considering how often the cluster temperature is used in X-ray cluster studies.
