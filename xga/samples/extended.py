@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 15:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 17:10. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -180,48 +180,6 @@ class ClusterSample(BaseSample):
                 snrs.append(None)
         return np.array(snrs)
 
-    def Tx(self, reg_type: str, model: str = 'tbabs*apec'):
-        """
-        A get method for temperatures measured for the constituent clusters of this sample. An error will be
-        thrown if temperatures haven't been measured for the given region and model (default is the tbabs*apec model
-        which single_temp_apec fits to cluster spectra). Any clusters for which temperature fits failed will return
-        NaN temperatures.
-        :param str reg_type: The type of region that the fitted spectra were generated from.
-        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
-        :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
-        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
-        :rtype: Quantity
-        """
-        temps = []
-        for gcs in self._sources.values():
-            try:
-                # Fetch the temperature from a given cluster using the dedicated method
-                gcs_temp = gcs.get_temperature(reg_type, model).value
-
-                # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
-                #  so its set to NaN
-                if gcs_temp[0] == 64:
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
-                    warn("A temperature of 64keV was measured for {s}, this is considered a failed fit by "
-                         "XGA".format(s=gcs.name))
-                temps.append(gcs_temp)
-
-            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
-                # If any of the possible errors are thrown, we print the error as a warning and replace
-                #  that entry with a NaN
-                warn(str(err))
-                temps.append(np.array([np.NaN, np.NaN, np.NaN]))
-
-        # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
-        temps = Quantity(np.array(temps), 'keV')
-
-        # We're going to throw an error if all the temperatures are NaN, because obviously something is wrong
-        check_temps = temps[~np.isnan(temps)]
-        if len(check_temps) == 0:
-            raise ValueError("All temperatures appear to be NaN.")
-
-        return temps
-
     @property
     def richness(self) -> Quantity:
         """
@@ -330,7 +288,87 @@ class ClusterSample(BaseSample):
 
         return Quantity(rads, 'kpc')
 
+    def Tx(self, reg_type: str, model: str = 'tbabs*apec'):
+        """
+        A get method for temperatures measured for the constituent clusters of this sample. An error will be
+        thrown if temperatures haven't been measured for the given region and model (default is the tbabs*apec model
+        which single_temp_apec fits to cluster spectra). Any clusters for which temperature fits failed will return
+        NaN temperatures.
+        :param str reg_type: The type of region that the fitted spectra were generated from.
+        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
+        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
+        :rtype: Quantity
+        """
+        temps = []
+        for gcs in self._sources.values():
+            try:
+                # Fetch the temperature from a given cluster using the dedicated method
+                gcs_temp = gcs.get_temperature(reg_type, model).value
 
+                # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
+                #  so its set to NaN
+                if gcs_temp[0] == 64:
+                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    warn("A temperature of 64keV was measured for {s}, this is considered a failed fit by "
+                         "XGA".format(s=gcs.name))
+                temps.append(gcs_temp)
 
+            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
+                # If any of the possible errors are thrown, we print the error as a warning and replace
+                #  that entry with a NaN
+                warn(str(err))
+                temps.append(np.array([np.NaN, np.NaN, np.NaN]))
 
+        # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
+        temps = Quantity(np.array(temps), 'keV')
+
+        # We're going to throw an error if all the temperatures are NaN, because obviously something is wrong
+        check_temps = temps[~np.isnan(temps)]
+        if len(check_temps) == 0:
+            raise ValueError("All temperatures appear to be NaN.")
+
+        return temps
+
+    def gas_mass(self, rad_name: str, technique: str = 'inv_abel_model', conf_level: int = 90) -> Quantity:
+        """
+        A get method for gas masses measured for the constituent clusters of this sample.
+        :param str rad_name: The name of the radius (e.g. r500) to calculate the gas mass within.
+        :param str technique: The technique used to generate the density profile, default is 'inv_abel_model',
+        which is the superior of the two I have implemented as of 03/12/20.
+        :param int conf_level: The desired confidence level of the uncertainties.
+        :return: An Nx3 array Quantity where N is the number of clusters. First column is the gas mass, second
+        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
+        :rtype: Quantity
+        """
+        gms = []
+
+        # Iterate through all of our Galaxy Clusters
+        for gcs in self._sources.values():
+            dens_profs = gcs.get_products('combined_gas_density_profile')
+            if len(dens_profs) == 0:
+                # If no dens_prof has been run or something goes wrong then NaNs are added
+                gms.append([np.NaN, np.NaN, np.NaN])
+                warn("{s} doesn't have a density profile associated, please look at "
+                     "sourcetools.density.".format(s=gcs.name))
+            elif len(dens_profs) != 0:
+                # This is because I store the profile products in a really dumb way which I'm going to need to
+                #  correct - but for now this will do
+                dens_prof = dens_profs[0][0]
+                # Use the density profiles gas mass method to calculate the one we want
+                gm = dens_prof.gas_mass(technique, gcs.get_radius(rad_name, 'kpc'), conf_level)[0].value
+                gms.append(gm)
+
+            if len(dens_profs) > 1:
+                warn("{s} has multiple density profiles associated with it, and until I upgrade XGA I can't"
+                     " really tell them apart so I'm just taking the first one! I will fix this".format(s=gcs.name))
+
+        gms = np.array(gms)
+
+        # We're going to throw an error if all the gas masses are NaN, because obviously something is wrong
+        check_gms = gms[~np.isnan(gms)]
+        if len(check_gms) == 0:
+            raise ValueError("All gas masses appear to be NaN.")
+
+        return Quantity(gms, 'Msun')
 
