@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 17:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 12:16. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1542,9 +1542,16 @@ class BaseSource:
 
         # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
         if en_key is None:
-            return self._luminosities[reg_type][model]
+            parsed_lums = {}
+            for lum_key in self._luminosities[reg_type][model]:
+                lum_value = self._luminosities[reg_type][model][lum_key]
+                parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
+                parsed_lums[lum_key] = parsed_lum
+            return parsed_lums
         else:
-            return self._luminosities[reg_type][model][en_key]
+            lum_value = self._luminosities[reg_type][model][en_key]
+            parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
+            return parsed_lum
 
     def get_radius(self, r_name: str, out_unit: Union[Unit, str] = 'deg') -> Quantity:
         """
