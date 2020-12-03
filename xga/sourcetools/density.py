@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/12/2020, 16:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 15:54. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -208,7 +208,8 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], reg_type: str = 
         density = (Quantity(num_density, "1/cm^3") * HY_MASS).to("Msun/Mpc^3")
 
         # TODO Figure out how to convert the surface brightness uncertainties
-        dens_prof = GasDensity1D(cen_rad.to("kpc"), density, src.name, "combined", "combined", rad_bins.to("kpc"))
+        dens_prof = GasDensity1D(cen_rad.to("kpc"), density, sb_prof.centre, src.name, "combined", "combined",
+                                 rad_bins.to("kpc"))
         # TODO Add this to the product storage structure of src, when that is supported for profiles
         densities[src.name] = dens_prof
 
@@ -272,7 +273,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
             # Now we convert to an actual mass
             density = (Quantity(num_density, "1/cm^3") * HY_MASS).to("Msun/Mpc^3").T
             mean_dens = np.mean(density, axis=1)
-            dens_prof = GasDensity1D(radii.to("kpc"), mean_dens, src.name, "combined", "combined")
+            dens_prof = GasDensity1D(radii.to("kpc"), mean_dens, sb_prof.centre, src.name, "combined", "combined")
             dens_prof.add_realisation("inv_abel_model", radii.to("kpc"), density)
 
             densities[src.name] = dens_prof
