@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 11:40. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 14:12. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -224,9 +224,29 @@ class ClusterSample(BaseSample):
 
     @property
     def richness(self):
-        pass
+        """
+        Provides the richnesses of the clusters in this sample, if they were passed in on definition.
+        :return: A unitless Quantity object of the richnesses and their error(s).
+        :rtype: Quantity
+        """
+        rs = []
+        for gcs in self._sources.values():
+            rs.append(gcs.richness.value)
+
+        return Quantity(np.array(rs))
 
     @property
     def wl_mass(self):
-        pass
+        """
+        Provides the weak lensing masses of the clusters in this sample, if they were passed in on definition.
+        :return: A Quantity object of the WL masses and their error(s), in whatever units they were when
+        they were passed in originally.
+        :rtype: Quantity
+        """
+        wlm = []
+        for gcs in self._sources.values():
+            wlm.append(gcs.weak_lensing_mass.value)
+            wlm_unit = gcs.weak_lensing_mass.unit
+
+        return Quantity(np.array(wlm), wlm_unit)
 
