@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 14:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 14:17. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -233,7 +233,14 @@ class ClusterSample(BaseSample):
         for gcs in self._sources.values():
             rs.append(gcs.richness.value)
 
-        return Quantity(np.array(rs))
+        rs = np.array(rs)
+
+        # We're going to throw an error if all the richnesses are NaN, because obviously something is wrong
+        check_rs = rs[~np.isnan(rs)]
+        if len(check_rs) == 0:
+            raise ValueError("All richnesses appear to be NaN.")
+
+        return Quantity(rs)
 
     @property
     def wl_mass(self):
@@ -248,5 +255,12 @@ class ClusterSample(BaseSample):
             wlm.append(gcs.weak_lensing_mass.value)
             wlm_unit = gcs.weak_lensing_mass.unit
 
-        return Quantity(np.array(wlm), wlm_unit)
+        wlm = np.array(wlm)
+
+        # We're going to throw an error if all the weak lensing masses are NaN, because obviously something is wrong
+        check_wlm = wlm[~np.isnan(wlm)]
+        if len(check_wlm) == 0:
+            raise ValueError("All weak lensing masses appear to be NaN.")
+
+        return Quantity(wlm, wlm_unit)
 
