@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 16:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 17:04. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1553,12 +1553,12 @@ class BaseSource:
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
-    def get_radius(self, r_name: str, out_unit: Union[Unit, str] = 'deg') -> Quantity:
+    def get_radius(self, rad_name: str, out_unit: Union[Unit, str] = 'deg') -> Quantity:
         """
         Allows a radius associated with this source to be retrieved in specified distance units. Note
         that physical distance units such as kiloparsecs may only be used if the source has
         redshift information.
-        :param str r_name: The name of the desired radius, r200 for instance.
+        :param str rad_name: The name of the desired radius, r200 for instance.
         :param Union[Unit, str] out_unit: An astropy unit, either a Unit instance or a string
         representation. Default is degrees.
         :return: The desired radius in the desired units.
@@ -1569,20 +1569,20 @@ class BaseSource:
             out_unit = Unit(out_unit)
 
         # In case somebody types in R500 rather than r500 for instance.
-        r_name = r_name.lower()
-        if r_name not in self._radii:
-            raise ValueError("There is no {r} radius associated with this object.".format(r=r_name))
+        rad_name = rad_name.lower()
+        if rad_name not in self._radii:
+            raise ValueError("There is no {r} radius associated with this object.".format(r=rad_name))
         elif out_unit.is_equivalent('kpc') and self._redshift is None:
             raise UnitConversionError("You cannot convert to this unit without redshift information.")
 
-        if self._radii[r_name].unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
-            out_rad = self._radii[r_name].to(out_unit)
-        elif self._radii[r_name].unit.is_equivalent('deg') and out_unit.is_equivalent('kpc'):
-            out_rad = ang_to_rad(self._radii[r_name], self._redshift, self._cosmo).to(out_unit)
-        elif self._radii[r_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
-            out_rad = self._radii[r_name].to(out_unit)
-        elif self._radii[r_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
-            out_rad = rad_to_ang(self._radii[r_name], self._redshift, self._cosmo).to(out_unit)
+        if self._radii[rad_name].unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
+            out_rad = self._radii[rad_name].to(out_unit)
+        elif self._radii[rad_name].unit.is_equivalent('deg') and out_unit.is_equivalent('kpc'):
+            out_rad = ang_to_rad(self._radii[rad_name], self._redshift, self._cosmo).to(out_unit)
+        elif self._radii[rad_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
+            out_rad = self._radii[rad_name].to(out_unit)
+        elif self._radii[rad_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
+            out_rad = rad_to_ang(self._radii[rad_name], self._redshift, self._cosmo).to(out_unit)
         else:
             raise UnitConversionError("Cannot understand {} as a distance unit".format(str(out_unit)))
 
