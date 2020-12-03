@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 12:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 12:19. Copyright (c) David J Turner
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -10,7 +10,7 @@ from astropy.units import Quantity
 from numpy import ndarray
 from tqdm import tqdm
 
-from ..exceptions import NoMatchFoundError
+from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
 
@@ -157,6 +157,42 @@ class BaseSample:
         :rtype: Dict[str, str]
         """
         return self._failed_sources
+
+    def Lx(self, reg_type: str, model: str, lo_en: Quantity = Quantity(0.5, 'keV'),
+           hi_en: Quantity = Quantity(2.0, 'keV')):
+        """
+        A get method for luminosities measured for the constituent sources of this sample. An error will be
+        thrown if luminosities haven't been measured for the given region and model, no default model has been
+        set, unlike the Tx method of ClusterSample.
+        :param str reg_type: The type of region that the fitted spectra were generated from.
+        :param str model: The name of the fitted model that you're requesting the
+        luminosities from (e.g. tbabs*apec).
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
+        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
+        :rtype: Quantity
+        """
+        lums = []
+        for src in self._sources.values():
+            try:
+                # Fetch the luminosity from a given source using the dedicated method
+                lums.append(src.get_luminosities(reg_type, model, lo_en, hi_en))
+            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
+                # If any of the possible errors are thrown, we print the error as a warning and replace
+                #  that entry with a NaN
+                warn(str(err))
+                lums.append(np.array([np.NaN, np.NaN, np.NaN]))
+
+        # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
+        lums = Quantity(np.array(lums), 'erg / s')
+
+        # We're going to throw an error if all the luminosities are NaN, because obviously something is wrong
+        check_lums = lums[~np.isnan(lums)]
+        if len(check_lums) == 0:
+            raise ValueError("All luminosities appear to be NaN.")
+
+        return lums
 
     def check_spectra(self):
         """
