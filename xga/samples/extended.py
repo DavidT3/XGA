@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 14:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 15:25. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -223,7 +223,7 @@ class ClusterSample(BaseSample):
         return temps
 
     @property
-    def richness(self):
+    def richness(self) -> Quantity:
         """
         Provides the richnesses of the clusters in this sample, if they were passed in on definition.
         :return: A unitless Quantity object of the richnesses and their error(s).
@@ -243,7 +243,7 @@ class ClusterSample(BaseSample):
         return Quantity(rs)
 
     @property
-    def wl_mass(self):
+    def wl_mass(self) -> Quantity:
         """
         Provides the weak lensing masses of the clusters in this sample, if they were passed in on definition.
         :return: A Quantity object of the WL masses and their error(s), in whatever units they were when
@@ -263,4 +263,74 @@ class ClusterSample(BaseSample):
             raise ValueError("All weak lensing masses appear to be NaN.")
 
         return Quantity(wlm, wlm_unit)
+
+    @property
+    def r200(self) -> Quantity:
+        """
+        Returns all the R200 values passed in on declaration, but in units of kpc.
+        :return: A quantity of R200 values.
+        :rtype: Quantity
+        """
+        rads = []
+        for gcs in self._sources.values():
+            rad = gcs.get_radius('r200', 'kpc')
+            if rad is None:
+                rads.append(np.NaN)
+            else:
+                rads.append(rad.value)
+
+        rads = np.array(rads)
+        check_rads = rads[~np.isnan(rads)]
+        if len(check_rads) == 0:
+            raise ValueError("All R200 values appear to be NaN.")
+
+        return Quantity(rads, 'kpc')
+
+    @property
+    def r500(self) -> Quantity:
+        """
+        Returns all the R500 values passed in on declaration, but in units of kpc.
+        :return: A quantity of R500 values.
+        :rtype: Quantity
+        """
+        rads = []
+        for gcs in self._sources.values():
+            rad = gcs.get_radius('r500', 'kpc')
+            if rad is None:
+                rads.append(np.NaN)
+            else:
+                rads.append(rad.value)
+
+        rads = np.array(rads)
+        check_rads = rads[~np.isnan(rads)]
+        if len(check_rads) == 0:
+            raise ValueError("All R500 values appear to be NaN.")
+
+        return Quantity(rads, 'kpc')
+
+    @property
+    def r2500(self) -> Quantity:
+        """
+        Returns all the R2500 values passed in on declaration, but in units of kpc.
+        :return: A quantity of R2500 values.
+        :rtype: Quantity
+        """
+        rads = []
+        for gcs in self._sources.values():
+            rad = gcs.get_radius('r2500', 'kpc')
+            if rad is None:
+                rads.append(np.NaN)
+            else:
+                rads.append(rad.value)
+
+        rads = np.array(rads)
+        check_rads = rads[~np.isnan(rads)]
+        if len(check_rads) == 0:
+            raise ValueError("All R2500 values appear to be NaN.")
+
+        return Quantity(rads, 'kpc')
+
+
+
+
 
