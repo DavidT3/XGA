@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 16:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/12/2020, 13:21. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -74,6 +74,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], reg_type: str, abu
     # Then we need to grab the temperatures and pass them through to the cluster conversion factor
     #  calculator - this may well change as I intend to let cluster_cr_conv grab temperatures for
     #  itself at some point
+    # TODO STOP THIS KILLING EVERYTHING IF A CLUSTER HAS NO FIT
     temps = Quantity([src.get_temperature(reg_type, "tbabs*apec")[0] for src in sources], 'keV')
     cluster_cr_conv(sources, reg_type, temps, abund_table=abund_table)
 

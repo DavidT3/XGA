@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 17:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/12/2020, 13:21. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -330,11 +330,11 @@ class ClusterSample(BaseSample):
 
         return temps
 
-    def gas_mass(self, rad_name: str, technique: str = 'inv_abel_model', conf_level: int = 90) -> Quantity:
+    def gas_mass(self, rad_name: str, dens_tech: str = 'inv_abel_model', conf_level: int = 90) -> Quantity:
         """
         A get method for gas masses measured for the constituent clusters of this sample.
         :param str rad_name: The name of the radius (e.g. r500) to calculate the gas mass within.
-        :param str technique: The technique used to generate the density profile, default is 'inv_abel_model',
+        :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
         which is the superior of the two I have implemented as of 03/12/20.
         :param int conf_level: The desired confidence level of the uncertainties.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the gas mass, second
@@ -356,7 +356,7 @@ class ClusterSample(BaseSample):
                 #  correct - but for now this will do
                 dens_prof = dens_profs[0][0]
                 # Use the density profiles gas mass method to calculate the one we want
-                gm = dens_prof.gas_mass(technique, gcs.get_radius(rad_name, 'kpc'), conf_level)[0].value
+                gm = dens_prof.gas_mass(dens_tech, gcs.get_radius(rad_name, 'kpc'), conf_level)[0].value
                 gms.append(gm)
 
             if len(dens_profs) > 1:
@@ -371,4 +371,21 @@ class ClusterSample(BaseSample):
             raise ValueError("All gas masses appear to be NaN.")
 
         return Quantity(gms, 'Msun')
+
+    def gm_richness(self, fit_method: str, rad_name: str, dens_tech: str = 'inv_abel_model', conf_level: int = 90):
+        pass
+
+    def gm_Tx(self, fit_method: str):
+        pass
+
+    def Tx_richness(self, fit_method: str):
+        pass
+
+    def Lx_richness(self, fit_method: str):
+        pass
+
+
+
+
+
 
