@@ -1,6 +1,6 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/12/2020, 13:21. Copyright (c) David J Turner
-
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/12/2020, 14:36. Copyright (c) David J Turner
+import inspect
 from types import FunctionType
 from typing import Tuple
 from warnings import warn
@@ -199,15 +199,22 @@ def _generate_relation_plot(model_func: FunctionType, y_values: Quantity, y_errs
 
     # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
     #  However I've noticed specific instances where the units can be made prettier
-    x_unit = x_values.unit.to_string()
-    y_unit = y_values.unit.to_string()
+    x_unit = '[' + x_values.unit.to_string() + ']'
+    y_unit = '[' + y_values.unit.to_string() + ']'
     for og_unit in PRETTY_UNITS:
         x_unit = x_unit.replace(og_unit, PRETTY_UNITS[og_unit])
         y_unit = y_unit.replace(og_unit, PRETTY_UNITS[og_unit])
 
+    # Dimensionless quantities can be fitted too, and this make the axis label look nicer by not having empty
+    #  square brackets
+    if x_unit == '[]':
+        x_unit = ''
+    if y_unit == '[]':
+        y_unit = ''
+
     # I use the passed x and y names
-    plt.xlabel("{xn} [{un}]".format(xn=x_name, un=x_unit), fontsize=12)
-    plt.ylabel("{yn} [{un}]".format(yn=y_name, un=y_unit), fontsize=12)
+    plt.xlabel("{xn} {un}".format(xn=x_name, un=x_unit), fontsize=12)
+    plt.ylabel("{yn} {un}".format(yn=y_name, un=y_unit), fontsize=12)
 
     # The user can also pass a plot title, but if they don't then I construct one automatically
     if plot_title is None:
@@ -220,10 +227,10 @@ def _generate_relation_plot(model_func: FunctionType, y_values: Quantity, y_errs
     y_axis_lims = ax.get_ylim()
 
     # This dynamically changes how tick labels are formatted depending on the values displayed
-    if max(x_axis_lims) < 100:
+    if max(x_axis_lims) < 1000:
         ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
         ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-    if max(y_axis_lims) < 100:
+    if max(y_axis_lims) < 1000:
         ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
         ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
@@ -301,13 +308,42 @@ def scaling_relation_lira():
     raise NotImplementedError("I'm working on it!")
 
 
-def scaling_relation_odr(model_func, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
-                         x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
-                         start_pars: list = None, log_scale: bool = True, y_name: str = 'Y', x_name: str = 'X',
-                         plot_title: str = None, figsize: tuple = (8, 8), data_colour: str = 'black',
-                         model_colour: str = 'grey', grid_on: bool = True, conf_level: int = 90):
+def scaling_relation_odr(model_func, y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
+                         y_norm: Quantity = None, x_norm: Quantity = None, start_pars: list = None,
+                         log_scale: bool = True, y_name: str = 'Y', x_name: str = 'X', plot_title: str = None,
+                         figsize: tuple = (8, 8), data_colour: str = 'black', model_colour: str = 'grey',
+                         grid_on: bool = True, conf_level: int = 90) \
+        -> Tuple[np.ndarray, np.ndarray, Quantity, Quantity, odr.Output]:
+    """
 
-    raise NotImplementedError("I've started this one")
+    :param model_func:
+    :param Quantity y_values: The y data values to fit to.
+    :param Quantity y_errs: The y error values of the data. These should be supplied as either a 1D Quantity with
+    length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
+    :param Quantity x_values: The x data values to fit to.
+    :param Quantity x_errs: The x error values of the data. These should be supplied as either a 1D Quantity with
+    length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
+    :param Quantity y_norm: Quantity to normalise the y data by.
+    :param Quantity x_norm: Quantity to normalise the x data by.
+    :param list start_pars:
+    :param bool log_scale:
+    :param str y_name:
+    :param str x_name:
+    :param str plot_title:
+    :param tuple figsize:
+    :param str data_colour:
+    :param str model_colour:
+    :param bool grid_on:
+    :param int conf_level:
+    :return: The fit parameter and their uncertainties, the x data normalisation, and the y data normalisation. This
+    fit function also returns the orthogonal distance regression output object, which contains all information from
+    the fit.
+    :rtype: Tuple[np.ndarray, np.ndarray, Quantity, Quantity, odr.Output]
+    """
+    if start_pars is None:
+        # Setting up the start_pars, as ODR doesn't have a default value like curve_fit
+        num_par = len(list(inspect.signature(model_func).parameters.keys())) - 1
+        start_pars = np.ones(num_par)
 
     # Standard data preparation
     x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm = _fit_initialise(y_values, y_errs, x_values,
@@ -317,11 +353,30 @@ def scaling_relation_odr(model_func, y_values: Quantity, y_errs: Quantity, x_val
     #  blah(par_vector, x_values), which is completely different to my standard definition of models in this module.
     # I don't want the user to have to define things differently for this fit function, so I'm gonna try and
     #  dynamically redefine function models passed in here...
-    model_func = convert_to_odr_compatible(model_func)
+    converted_model_func = convert_to_odr_compatible(model_func)
 
     # Then we define a scipy odr model
-    odf_model = odr.Model(model_func)
+    odr_model = odr.Model(converted_model_func)
 
+    # And a RealData (which takes the errors as the proper standard deviations of the data)
+    odr_data = odr.RealData(x_fit_data, y_fit_data, x_fit_errs, y_fit_errs)
+
+    # Now we instantiate the ODR class with our model and data. This is currently basically ripped from the example
+    #  given in the scipy ODR documentation
+    odr_obj = odr.ODR(odr_data, odr_model, beta0=start_pars)
+
+    # Actually run the fit, and grab the output
+    fit_results = odr_obj.run()
+
+    # And from here, with this output object, I just read out the parameter values, along with the standard dev
+    fit_par = fit_results.beta
+    fit_par_err = fit_results.sd_beta
+
+    _generate_relation_plot(model_func, y_fit_data, y_fit_errs, x_fit_data, x_fit_errs, y_norm, x_norm, fit_par,
+                            fit_par_err, 'ODR', y_name, x_name, log_scale, plot_title, figsize, data_colour,
+                            model_colour, grid_on, conf_level)
+
+    return fit_par, fit_par_err, x_norm, y_norm, fit_results
 
 
 def scaling_relation_emcee():
