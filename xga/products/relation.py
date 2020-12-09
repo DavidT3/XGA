@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 16:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 16:43. Copyright (c) David J Turner
 
 import numpy as np
 import scipy.odr as odr
@@ -227,6 +227,15 @@ class ScalingRelation:
         :rtype: str
         """
         return self._name
+
+    @name.setter
+    def name(self, new_val: str):
+        """
+        A property setter for the name of the relation, it isn't a crucial quantity and the user may want to change
+        it after declaration has already happened.
+        :param str new_val:
+        """
+        self._name = new_val
 
     @property
     def author(self) -> str:
