@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/12/2020, 14:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 10:27. Copyright (c) David J Turner
 import inspect
 from types import FunctionType
 from typing import Tuple
@@ -12,6 +12,7 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit
 
+from ..exceptions import XGAFunctionConversionError
 from ..models import MODEL_PUBLICATION_NAMES
 from ..models import convert_to_odr_compatible
 
@@ -114,26 +115,27 @@ def _generate_relation_plot(model_func: FunctionType, y_values: Quantity, y_errs
                             data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = True,
                             conf_level: int = 90):
     """
-
-    :param model_func:
-    :param y_values:
-    :param y_errs:
-    :param x_values:
-    :param x_errs:
-    :param y_norm:
-    :param x_norm:
-    :param model_pars:
-    :param model_errs:
-    :param fit_method:
-    :param y_name:
-    :param x_name:
-    :param log_scale:
-    :param plot_title:
-    :param figsize:
-    :param data_colour:
-    :param model_colour:
-    :param grid_on:
-    :param conf_level:
+    This docstring hasn't been filled out because this will likely go into an XGA product object and will have
+    to be re-written.
+    :param FunctionType model_func:
+    :param Quantity y_values:
+    :param Quantity y_errs:
+    :param Quantity x_values:
+    :param Quantity x_errs:
+    :param Quantity y_norm:
+    :param Quantity x_norm:
+    :param np.ndarray model_pars:
+    :param np.ndarray model_errs:
+    :param str fit_method:
+    :param str y_name:
+    :param str x_name:
+    :param bool log_scale:
+    :param str plot_title:
+    :param tuple figsize:
+    :param str data_colour:
+    :param str model_colour:
+    :param bool grid_on:
+    :param int conf_level:
     """
     # Setting up the matplotlib figure
     fig = plt.figure(figsize=figsize)
@@ -259,17 +261,18 @@ def _generate_relation_plot(model_func: FunctionType, y_values: Quantity, y_errs
     plt.show()
 
 
-def scaling_relation_curve_fit(model_func, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
+def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
                                x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
                                start_pars: list = None, log_scale: bool = True, y_name: str = 'Y', x_name: str = 'X',
                                plot_title: str = None, figsize: tuple = (8, 8), data_colour: str = 'black',
                                model_colour: str = 'grey', grid_on: bool = True, conf_level: int = 90) \
         -> Tuple[np.ndarray, np.ndarray, Quantity, Quantity]:
     """
-
-    :param model_func: The function object of the model you wish to fit. PLEASE NOTE, the function must be defined
-    in the style used in xga.models.misc; i.e. powerlaw(x: np.ndarray, k: float, a: float), where the first argument
-    is for x values, and the following arguments are all fit parameters.
+    A function to fit a scaling relation with the scipy non-linear least squares implementation (curve fit), return
+    the fit parameters and their uncertainties, and produce a plot of the data/model fit.
+    :param FunctionType model_func: The function object of the model you wish to fit. PLEASE NOTE, the function must
+    be defined in the style used in xga.models.misc; i.e. powerlaw(x: np.ndarray, k: float, a: float), where
+    the first argument is for x values, and the following arguments are all fit parameters.
     :param Quantity y_values: The y data values to fit to.
     :param Quantity y_errs: The y error values of the data. These should be supplied as either a 1D Quantity with
     length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
@@ -278,16 +281,19 @@ def scaling_relation_curve_fit(model_func, y_values: Quantity, y_errs: Quantity,
     length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity y_norm: Quantity to normalise the y data by.
     :param Quantity x_norm: Quantity to normalise the x data by.
-    :param list start_pars:
-    :param bool log_scale:
-    :param str y_name:
-    :param str x_name:
-    :param str plot_title:
-    :param tuple figsize:
-    :param str data_colour:
-    :param str model_colour:
-    :param bool grid_on:
-    :param int conf_level:
+    :param list start_pars: The start parameters for the curve_fit run, default is None, which means curve_fit
+    will use all ones.
+    :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
+    :param str y_name: The name to be used for the y-axis of the plot (DON'T include the unit, that will be
+    inferred from the astropy Quantity.
+    :param str x_name: The name to be used for the x-axis of the plot (DON'T include the unit, that will be
+    inferred from the astropy Quantity.
+    :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
+    :param tuple figsize: A custom figure size for the plot, default is (8, 8).
+    :param str data_colour: The colour to use for the data points in the plot, default is black.
+    :param str model_colour: The colour to use for the model in the plot, default is grey.
+    :param bool grid_on: If True then a grid will be included on the plot. Default is True.
+    :param int conf_level: The confidence level to use when plotting the model.
     :return: The fit parameter and their uncertainties, the x data normalisation, and the y data normalisation.
     :rtype: Tuple[np.ndarray, np.ndarray, Quantity, Quantity]
     """
@@ -304,19 +310,21 @@ def scaling_relation_curve_fit(model_func, y_values: Quantity, y_errs: Quantity,
     return fit_par, fit_par_err, x_norm, y_norm
 
 
-def scaling_relation_lira():
-    raise NotImplementedError("I'm working on it!")
-
-
-def scaling_relation_odr(model_func, y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
-                         y_norm: Quantity = None, x_norm: Quantity = None, start_pars: list = None,
-                         log_scale: bool = True, y_name: str = 'Y', x_name: str = 'X', plot_title: str = None,
-                         figsize: tuple = (8, 8), data_colour: str = 'black', model_colour: str = 'grey',
-                         grid_on: bool = True, conf_level: int = 90) \
+def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
+                         x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
+                         start_pars: list = None, log_scale: bool = True, y_name: str = 'Y', x_name: str = 'X',
+                         plot_title: str = None, figsize: tuple = (8, 8), data_colour: str = 'black',
+                         model_colour: str = 'grey', grid_on: bool = True, conf_level: int = 90) \
         -> Tuple[np.ndarray, np.ndarray, Quantity, Quantity, odr.Output]:
     """
-
-    :param model_func:
+    A function to fit a scaling relation with the scipy orthogonal distance regression implementation, return
+    the fit parameters and their uncertainties, and produce a plot of the data/model fit.
+    :param FunctionType model_func: The function object of the model you wish to fit. PLEASE NOTE, the function must
+    be defined in the style used in xga.models.misc; i.e. powerlaw(x: np.ndarray, k: float, a: float), where
+    the first argument is for x values, and the following arguments are all fit parameters. The scipy ODR
+    implementation requires functions of a different style, and I try to automatically convert the input function
+    to that style, but to help that please avoid using one letter parameter names in any custom function you might
+    want to use.
     :param Quantity y_values: The y data values to fit to.
     :param Quantity y_errs: The y error values of the data. These should be supplied as either a 1D Quantity with
     length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
@@ -325,16 +333,18 @@ def scaling_relation_odr(model_func, y_values: Quantity, y_errs: Quantity, x_val
     length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity y_norm: Quantity to normalise the y data by.
     :param Quantity x_norm: Quantity to normalise the x data by.
-    :param list start_pars:
-    :param bool log_scale:
-    :param str y_name:
-    :param str x_name:
-    :param str plot_title:
-    :param tuple figsize:
-    :param str data_colour:
-    :param str model_colour:
-    :param bool grid_on:
-    :param int conf_level:
+    :param list start_pars: The start parameters for the ODR run, default is all ones.
+    :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
+    :param str y_name: The name to be used for the y-axis of the plot (DON'T include the unit, that will be
+    inferred from the astropy Quantity.
+    :param str x_name: The name to be used for the x-axis of the plot (DON'T include the unit, that will be
+    inferred from the astropy Quantity.
+    :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
+    :param tuple figsize: A custom figure size for the plot, default is (8, 8).
+    :param str data_colour: The colour to use for the data points in the plot, default is black.
+    :param str model_colour: The colour to use for the model in the plot, default is grey.
+    :param bool grid_on: If True then a grid will be included on the plot. Default is True.
+    :param int conf_level: The confidence level to use when plotting the model.
     :return: The fit parameter and their uncertainties, the x data normalisation, and the y data normalisation. This
     fit function also returns the orthogonal distance regression output object, which contains all information from
     the fit.
@@ -354,6 +364,13 @@ def scaling_relation_odr(model_func, y_values: Quantity, y_errs: Quantity, x_val
     # I don't want the user to have to define things differently for this fit function, so I'm gonna try and
     #  dynamically redefine function models passed in here...
     converted_model_func = convert_to_odr_compatible(model_func)
+
+    # The first thing I want to do is check that the newly converted function gives the same result for a
+    #  simple test as the original model
+    if model_func(5, *start_pars) != converted_model_func(start_pars, 5):
+        raise XGAFunctionConversionError('I attempted to convert the input model function to the standard'
+                                         ' required by ODR, but it is not returning the same value as the '
+                                         'original for this test case.')
 
     # Then we define a scipy odr model
     odr_model = odr.Model(converted_model_func)
@@ -377,6 +394,10 @@ def scaling_relation_odr(model_func, y_values: Quantity, y_errs: Quantity, x_val
                             model_colour, grid_on, conf_level)
 
     return fit_par, fit_par_err, x_norm, y_norm, fit_results
+
+
+def scaling_relation_lira():
+    raise NotImplementedError("I'm working on it!")
 
 
 def scaling_relation_emcee():
