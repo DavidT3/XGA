@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 13:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 17:31. Copyright (c) David J Turner
 import inspect
 from types import FunctionType
 from typing import Tuple
@@ -8,16 +8,12 @@ from warnings import warn
 import numpy as np
 import scipy.odr as odr
 from astropy.units import Quantity, UnitConversionError
-from matplotlib import pyplot as plt
-from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit
 
 from ..exceptions import XGAFunctionConversionError, XGAOptionalDependencyError
-from ..models import MODEL_PUBLICATION_NAMES, convert_to_odr_compatible
+from ..models import convert_to_odr_compatible
 from ..models.misc import power_law
-
-# This is just to make some instances of astropy LaTeX units prettier for plotting
-PRETTY_UNITS = {'solMass': r'M$_{\odot}$', 'erg / s': r"erg s$^{-1}$"}
+from ..products.relation import ScalingRelation
 
 
 def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
@@ -127,168 +123,12 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     return x_fit_data, x_fit_err, y_fit_data, y_fit_err, x_norm, y_norm
 
 
-def _generate_relation_plot(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
-                            x_errs: Quantity, y_norm: Quantity, x_norm: Quantity, model_pars: np.ndarray,
-                            model_errs: np.ndarray, fit_method: str, y_name: str = 'Y', x_name: str = 'X',
-                            log_scale: bool = True, plot_title: str = None, figsize: tuple = (8, 8),
-                            data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = True,
-                            conf_level: int = 90):
-    """
-    This docstring hasn't been filled out because this will likely go into an XGA product object and will have
-    to be re-written.
-    :param FunctionType model_func:
-    :param Quantity y_values:
-    :param Quantity y_errs:
-    :param Quantity x_values:
-    :param Quantity x_errs:
-    :param Quantity y_norm:
-    :param Quantity x_norm:
-    :param np.ndarray model_pars:
-    :param np.ndarray model_errs:
-    :param str fit_method:
-    :param str y_name:
-    :param str x_name:
-    :param bool log_scale:
-    :param str plot_title:
-    :param tuple figsize:
-    :param str data_colour:
-    :param str model_colour:
-    :param bool grid_on:
-    :param int conf_level:
-    """
-    # Setting up the matplotlib figure
-    fig = plt.figure(figsize=figsize)
-    fig.tight_layout()
-    ax = plt.gca()
-
-    if log_scale:
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-
-    # Un-normalise the data for plotting
-    x_values *= x_norm
-    x_errs *= x_norm
-    y_values *= y_norm
-    y_errs *= y_norm
-
-    # Setup the aesthetics of the axis
-    ax.minorticks_on()
-    ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
-
-    # Plot the data, with uncertainties (I only plot the averaged uncertainties if upper and lower uncertainties
-    #  were given by the user).
-    ax.errorbar(x_values.value, y_values.value, xerr=x_errs.value, yerr=y_errs.value, fmt="x", color=data_colour,
-                capsize=2, label="Data")
-
-    # Need to randomly sample from the fitted model
-    model_pars = np.repeat(model_pars[..., None], 300, axis=1).T
-    model_par_errs = np.repeat(model_errs[..., None], 300, axis=1).T
-
-    model_par_dists = np.random.normal(model_pars, model_par_errs)
-
-    # Fractional factor for the amount to go above and below the max and min x values
-    buffer_factor = 0.1
-    # The indices of the maximum and minimum x values
-    max_x_ind = np.argmax(x_values)
-    min_x_ind = np.argmin(x_values)
-
-    model_x = np.linspace((1-buffer_factor)*(x_values[min_x_ind].value - x_errs[min_x_ind].value) / x_norm.value,
-                          (1+buffer_factor)*(x_values[max_x_ind].value + x_errs[max_x_ind].value) / x_norm.value, 100)
-
-    model_xs = np.repeat(model_x[..., None], 300, axis=1)
-
-    upper = 50 + (conf_level / 2)
-    lower = 50 - (conf_level / 2)
-
-    model_realisations = model_func(model_xs, *model_par_dists.T) * y_norm
-    model_mean = np.mean(model_realisations, axis=1)
-    model_lower = np.percentile(model_realisations, lower, axis=1)
-    model_upper = np.percentile(model_realisations, upper, axis=1)
-
-    # I want the name of the function to include in labels and titles, but if its one defined in XGA then
-    #  I can grab the publication version of the name - it'll be prettier
-    mod_name = model_func.__name__
-    for m_name in MODEL_PUBLICATION_NAMES:
-        mod_name = mod_name.replace(m_name, MODEL_PUBLICATION_NAMES[m_name])
-
-    plt.plot(model_x * x_norm.value, model_func(model_x, *model_pars[0, :]) * y_norm.value, color=model_colour,
-             label="{mn} - {cf}% Confidence".format(mn=mod_name, cf=conf_level))
-    plt.plot(model_x * x_norm.value, model_upper, color=model_colour, linestyle="--")
-    plt.plot(model_x * x_norm.value, model_lower, color=model_colour, linestyle="--")
-    ax.fill_between(model_x * x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
-                    facecolor=model_colour, alpha=0.6, interpolate=True)
-
-    # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
-    #  However I've noticed specific instances where the units can be made prettier
-    x_unit = '[' + x_values.unit.to_string() + ']'
-    y_unit = '[' + y_values.unit.to_string() + ']'
-    for og_unit in PRETTY_UNITS:
-        x_unit = x_unit.replace(og_unit, PRETTY_UNITS[og_unit])
-        y_unit = y_unit.replace(og_unit, PRETTY_UNITS[og_unit])
-
-    # Dimensionless quantities can be fitted too, and this make the axis label look nicer by not having empty
-    #  square brackets
-    if x_unit == '[]':
-        x_unit = ''
-    if y_unit == '[]':
-        y_unit = ''
-
-    # I use the passed x and y names
-    plt.xlabel("{xn} {un}".format(xn=x_name, un=x_unit), fontsize=12)
-    plt.ylabel("{yn} {un}".format(yn=y_name, un=y_unit), fontsize=12)
-
-    # The user can also pass a plot title, but if they don't then I construct one automatically
-    if plot_title is None:
-        plot_title = 'Scaling Relation - {mod} fitted with {fm}'.format(mod=mod_name, fm=fit_method)
-
-    plt.title(plot_title, fontsize=13)
-
-    # Use the axis limits quite a lot in this next bit, so read them out into variables
-    x_axis_lims = ax.get_xlim()
-    y_axis_lims = ax.get_ylim()
-
-    # This dynamically changes how tick labels are formatted depending on the values displayed
-    if max(x_axis_lims) < 1000:
-        ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-    if max(y_axis_lims) < 1000:
-        ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-
-    # And this dynamically changes the grid depending on whether a whole order of magnitude is covered or not
-    #  Though as I don't much like the look of the grid the user can disable the grid
-    if grid_on and (max(x_axis_lims) / min(x_axis_lims)) < 10:
-        ax.grid(which='minor', axis='x', linestyle='dotted', color='grey')
-    elif grid_on:
-        ax.grid(which='major', axis='x', linestyle='dotted', color='grey')
-    else:
-        ax.grid(which='both', axis='both', b=False)
-
-    if grid_on and (max(y_axis_lims) / min(y_axis_lims)) < 10:
-        ax.grid(which='minor', axis='y', linestyle='dotted', color='grey')
-    elif grid_on:
-        ax.grid(which='major', axis='y', linestyle='dotted', color='grey')
-    else:
-        ax.grid(which='both', axis='both', b=False)
-
-    # I change the lengths of the tick lines, to make it look nicer (imo)
-    ax.tick_params(length=7)
-    ax.tick_params(which='minor', length=3)
-
-    plt.legend(loc="best")
-    plt.tight_layout()
-    plt.show()
-
-
 def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
                                x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
-                               start_pars: list = None, log_scale: bool = True, y_name: str = 'Y', x_name: str = 'X',
-                               plot_title: str = None, figsize: tuple = (8, 8), data_colour: str = 'black',
-                               model_colour: str = 'grey', grid_on: bool = True, conf_level: int = 90) \
-        -> Tuple[np.ndarray, np.ndarray, Quantity, Quantity]:
+                               start_pars: list = None, y_name: str = 'Y', x_name: str = 'X') -> ScalingRelation:
     """
-    A function to fit a scaling relation with the scipy non-linear least squares implementation (curve fit), return
-    the fit parameters and their uncertainties, and produce a plot of the data/model fit.
+    A function to fit a scaling relation with the scipy non-linear least squares implementation (curve fit), generate
+    an XGA ScalingRelation product, and return it.
     :param FunctionType model_func: The function object of the model you wish to fit. PLEASE NOTE, the function must
     be defined in the style used in xga.models.misc; i.e. powerlaw(x: np.ndarray, k: float, a: float), where
     the first argument is for x values, and the following arguments are all fit parameters.
@@ -302,19 +142,13 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
     :param Quantity x_norm: Quantity to normalise the x data by.
     :param list start_pars: The start parameters for the curve_fit run, default is None, which means curve_fit
     will use all ones.
-    :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
-    :param str y_name: The name to be used for the y-axis of the plot (DON'T include the unit, that will be
-    inferred from the astropy Quantity.
-    :param str x_name: The name to be used for the x-axis of the plot (DON'T include the unit, that will be
-    inferred from the astropy Quantity.
-    :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
-    :param tuple figsize: A custom figure size for the plot, default is (8, 8).
-    :param str data_colour: The colour to use for the data points in the plot, default is black.
-    :param str model_colour: The colour to use for the model in the plot, default is grey.
-    :param bool grid_on: If True then a grid will be included on the plot. Default is True.
-    :param int conf_level: The confidence level to use when plotting the model.
-    :return: The fit parameter and their uncertainties, the x data normalisation, and the y data normalisation.
-    :rtype: Tuple[np.ndarray, np.ndarray, Quantity, Quantity]
+    :param str y_name: The name to be used for the y-axis of the scaling relation (DON'T include the unit, that
+    will be inferred from the astropy Quantity.
+    :param str x_name: The name to be used for the x-axis of the scaling relation (DON'T include the unit, that
+    will be inferred from the astropy Quantity.
+    :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
+    predict method.
+    :rtype: ScalingRelation
     """
     x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm = _fit_initialise(y_values, y_errs, x_values,
                                                                                      x_errs, y_norm, x_norm)
@@ -322,22 +156,19 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
     fit_par, fit_cov = curve_fit(model_func, x_fit_data.value, y_fit_data.value, sigma=y_fit_errs.value,
                                  absolute_sigma=True, p0=start_pars)
     fit_par_err = np.sqrt(np.diagonal(fit_cov))
-    _generate_relation_plot(model_func, y_fit_data, y_fit_errs, x_fit_data, x_fit_errs, y_norm, x_norm, fit_par,
-                            fit_par_err, 'Curve Fit', y_name, x_name, log_scale, plot_title, figsize, data_colour,
-                            model_colour, grid_on, conf_level)
 
-    return fit_par, fit_par_err, x_norm, y_norm
+    sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, 'Curve Fit',
+                         x_fit_data * x_norm, y_fit_data * y_norm, x_fit_errs * x_norm, y_fit_errs * y_norm)
+
+    return sr
 
 
 def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
                          x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
-                         start_pars: list = None, log_scale: bool = True, y_name: str = 'Y', x_name: str = 'X',
-                         plot_title: str = None, figsize: tuple = (8, 8), data_colour: str = 'black',
-                         model_colour: str = 'grey', grid_on: bool = True, conf_level: int = 90) \
-        -> Tuple[np.ndarray, np.ndarray, Quantity, Quantity, odr.Output]:
+                         start_pars: list = None, y_name: str = 'Y', x_name: str = 'X') -> ScalingRelation:
     """
-    A function to fit a scaling relation with the scipy orthogonal distance regression implementation, return
-    the fit parameters and their uncertainties, and produce a plot of the data/model fit.
+    A function to fit a scaling relation with the scipy orthogonal distance regression implementation, generate
+    an XGA ScalingRelation product, and return it.
     :param FunctionType model_func: The function object of the model you wish to fit. PLEASE NOTE, the function must
     be defined in the style used in xga.models.misc; i.e. powerlaw(x: np.ndarray, k: float, a: float), where
     the first argument is for x values, and the following arguments are all fit parameters. The scipy ODR
@@ -353,21 +184,13 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
     :param Quantity y_norm: Quantity to normalise the y data by.
     :param Quantity x_norm: Quantity to normalise the x data by.
     :param list start_pars: The start parameters for the ODR run, default is all ones.
-    :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
-    :param str y_name: The name to be used for the y-axis of the plot (DON'T include the unit, that will be
-    inferred from the astropy Quantity.
-    :param str x_name: The name to be used for the x-axis of the plot (DON'T include the unit, that will be
-    inferred from the astropy Quantity.
-    :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
-    :param tuple figsize: A custom figure size for the plot, default is (8, 8).
-    :param str data_colour: The colour to use for the data points in the plot, default is black.
-    :param str model_colour: The colour to use for the model in the plot, default is grey.
-    :param bool grid_on: If True then a grid will be included on the plot. Default is True.
-    :param int conf_level: The confidence level to use when plotting the model.
-    :return: The fit parameter and their uncertainties, the x data normalisation, and the y data normalisation. This
-    fit function also returns the orthogonal distance regression output object, which contains all information from
-    the fit.
-    :rtype: Tuple[np.ndarray, np.ndarray, Quantity, Quantity, odr.Output]
+    :param str y_name: The name to be used for the y-axis of the scaling relation (DON'T include the unit, that
+    will be inferred from the astropy Quantity.
+    :param str x_name: The name to be used for the x-axis of the scaling relation (DON'T include the unit, that
+    will be inferred from the astropy Quantity.
+    :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
+    predict method.
+    :rtype: ScalingRelation
     """
     if start_pars is None:
         # Setting up the start_pars, as ODR doesn't have a default value like curve_fit
@@ -408,19 +231,15 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
     fit_par = fit_results.beta
     fit_par_err = fit_results.sd_beta
 
-    _generate_relation_plot(model_func, y_fit_data, y_fit_errs, x_fit_data, x_fit_errs, y_norm, x_norm, fit_par,
-                            fit_par_err, 'ODR', y_name, x_name, log_scale, plot_title, figsize, data_colour,
-                            model_colour, grid_on, conf_level)
+    sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, 'ODR', x_fit_data*x_norm,
+                         y_fit_data*y_norm, x_fit_errs*x_norm, y_fit_errs*y_norm, fit_results)
 
-    return fit_par, fit_par_err, x_norm, y_norm, fit_results
+    return sr
 
 
 def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
-                          y_norm: Quantity = None, x_norm: Quantity = None, num_steps: int = 100000,
-                          num_chains: int = 4, num_burn_in: int = 20000, log_scale: bool = True, y_name: str = 'Y',
-                          x_name: str = 'X', plot_title: str = None, figsize: tuple = (8, 8),
-                          data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = True,
-                          conf_level: int = 90):
+                          y_norm: Quantity = None, x_norm: Quantity = None, y_name: str = 'Y', x_name: str = 'X',
+                          num_steps: int = 100000, num_chains: int = 4, num_burn_in: int = 10000) -> ScalingRelation:
     """
     A function to fit a power law scaling relation with the excellent R fitting package LIRA
     (https://doi.org/10.1093/mnras/stv2374), this function requires a valid R installation, along with LIRA (and its
@@ -433,22 +252,17 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity y_norm: Quantity to normalise the y data by.
     :param Quantity x_norm: Quantity to normalise the x data by.
+    :param str y_name: The name to be used for the y-axis of the scaling relation (DON'T include the unit, that
+    will be inferred from the astropy Quantity.
+    :param str x_name: The name to be used for the x-axis of the scaling relation (DON'T include the unit, that
+    will be inferred from the astropy Quantity.
     :param int num_steps: The number of steps to take in each chain.
     :param int num_chains: The number of chains to run.
-    :param int num_burn_in: The number of steps to discard as a burn in period.
-    :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
-    :param str y_name: The name to be used for the y-axis of the plot (DON'T include the unit, that will be
-    inferred from the astropy Quantity.
-    :param str x_name: The name to be used for the x-axis of the plot (DON'T include the unit, that will be
-    inferred from the astropy Quantity.
-    :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
-    :param tuple figsize: A custom figure size for the plot, default is (8, 8).
-    :param str data_colour: The colour to use for the data points in the plot, default is black.
-    :param str model_colour: The colour to use for the model in the plot, default is grey.
-    :param bool grid_on: If True then a grid will be included on the plot. Default is True.
-    :param int conf_level: The confidence level to use when plotting the model.
-    :return: The fit parameter and their uncertainties, the x data normalisation, and the y data normalisation.
-    :rtype: Tuple[np.ndarray, np.ndarray, Quantity, Quantity]
+    :param int num_burn_in: The number of steps to discard as a burn in period. This is also used as the adapt
+    parameter of the LIRA fit.
+    :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
+    predict method.
+    :rtype: ScalingRelation
     """
     # Due to the nature of this function, a wrapper for the LIRA R fitting package, I'm going to try the
     #  necessary imports here, because the external dependencies are likely to only be used in this function
@@ -489,9 +303,9 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
                             print_diagnostic=False)[0][0]
 
     # Read out the alpha parameter chain and convert to a numpy array
-    alpha_par_chain = np.array(chains.rx2['alpha.YIZ'])
-    alpha_par_val = np.mean(np.power(10, alpha_par_chain))
-    alpha_par_err = np.std(np.power(10, alpha_par_chain))
+    alpha_par_chain = np.power(10, np.array(chains.rx2['alpha.YIZ']))
+    alpha_par_val = np.mean(alpha_par_chain)
+    alpha_par_err = np.std(alpha_par_chain)
 
     # Read out the beta parameter chain and convert to a numpy array
     beta_par_chain = np.array(chains.rx2['beta.YIZ'])
@@ -508,11 +322,17 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm = _fit_initialise(y_values, y_errs, x_values,
                                                                                      x_errs, y_norm, x_norm)
 
-    _generate_relation_plot(power_law, y_fit_data, y_fit_errs, x_fit_data, x_fit_errs, y_norm, x_norm, fit_par,
-                            fit_par_err, 'LIRA', y_name, x_name, log_scale, plot_title, figsize, data_colour,
-                            model_colour, grid_on, conf_level)
+    # TODO LIRA DOESN'T ACTUALLY SEEM TO REMOVE ANY STEPS AS BURN IN, FIGURE OUT HOW TO DO THAT AFTER ALL THE
+    #  DIFFERENT SAMPLERS HAVE BEEN COMBINED
 
-    return fit_par, fit_par_err, x_norm, y_norm
+    # I'm re-formatting the chains into a shape that the ScalingRelation class will understand.
+    xga_chains = np.concatenate([beta_par_chain.reshape(len(beta_par_chain), 1),
+                                 alpha_par_chain.reshape(len(alpha_par_chain), 1)], axis=1)
+
+    sr = ScalingRelation(fit_par, fit_par_err, power_law, x_norm, y_norm, x_name, y_name, 'LIRA', x_fit_data * x_norm,
+                         y_fit_data * y_norm, x_fit_errs * x_norm, y_fit_errs * y_norm, chains=xga_chains)
+
+    return sr
 
 
 def scaling_relation_emcee():
