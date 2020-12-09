@@ -1,6 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 16:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 17:26. Copyright (c) David J Turner
 
+import inspect
+
+import corner
 import numpy as np
 import scipy.odr as odr
 from astropy.units import Quantity, Unit, UnitConversionError
@@ -54,8 +57,9 @@ class ScalingRelation:
         the raw, un-normalised data.
         :param odr.Output odr_output: The orthogonal distance regression output object associated with this
         relation's fit, if available and applicable.
-        :param np.ndarray chains: The parameter chains associated with this relation's fit, if available
-        and applicable.
+        :param np.ndarray chains: The parameter chains associated with this relation's fit, if available and
+        applicable. They should be of shape N_stepxN_par, where N_steps is the number of steps (after burn-in
+        is removed), and N_par is the number of parameters in the fit.
         :param str relation_name: A suitable name for this relation.
         :param str relation_author: The author who deserves credit for this relation.
         :param str relation_doi: The DOI of the original paper this relation appeared in.
@@ -127,7 +131,11 @@ class ScalingRelation:
 
         # If the profile was created by XGA and fitted by LIRA or emcee, the user can pass chains. I'll include the
         #  ability to make chain plots and corner plots as well.
-        self._chains = chains
+        if chains is not None and chains.shape[1] != len(self._fit_pars):
+            raise ValueError("The passed chains don't have an 2nd dimension length ({nd}) equal to the number of fit"
+                             " parameters ({np}).".format(nd=chains.shape[1], np=len(self._fit_pars)))
+        else:
+            self._chains = chains
 
         # If the user hasn't passed the name of the relation then I'll generate one from what I know so far
         if relation_name is None:
@@ -138,6 +146,9 @@ class ScalingRelation:
         # For relations from literature especially I need to give credit the author, and the original paper
         self._author = relation_author
         self._doi = relation_doi
+
+        # Just grabbing the parameter names from the model function to plot on the y-axis
+        self._par_names = list(inspect.signature(self._model_func).parameters)[1:]
 
     @property
     def pars(self) -> np.ndarray:
@@ -256,6 +267,45 @@ class ScalingRelation:
         :rtype: str
         """
         return self._doi
+
+    def view_chains(self, figsize: tuple = None):
+        """
+        Simple view method to quickly look at the MCMC chains for a scaling relation fit.
+        :param tuple figsize: Desired size of the figure, if None will be set automatically.
+        """
+        if self._chains is None:
+            raise ValueError('No chains are available for this scaling relation')
+
+        if figsize is None:
+            fig, axes = plt.subplots(nrows=len(self._fit_pars), figsize=(12, 2 * len(self._fit_pars)), sharex='col')
+        else:
+            fig, axes = plt.subplots(len(self._fit_pars), figsize=figsize, sharex='col')
+
+        # Now we iterate through the parameters and plot their chains
+        for i in range(len(self._fit_pars)):
+            ax = axes[i]
+            ax.plot(self._chains[:, i], "k", alpha=0.5)
+            ax.set_xlim(0, self._chains.shape[0])
+            ax.set_ylabel(self._par_names[i])
+            ax.yaxis.set_label_coords(-0.1, 0.5)
+
+        axes[-1].set_xlabel("Step Number")
+        plt.show()
+
+    def view_corner(self, figsize: tuple = (10, 10), conf_level: int = 90):
+        """
+        A convenient view method to examine the corner plot of the parameter posterior distributions.
+        :param Tuple figsize: The desired figure size.
+        :param int conf_level: The confidence level to use when indicating confidence limits on the distributions.
+        """
+        if self._chains is None:
+            raise ValueError('No chains are available for this scaling relation')
+
+        frac_conf_lev = [(50 - (conf_level / 2)) / 100, 0.5, (50 + (conf_level / 2)) / 100]
+        fig = corner.corner(self._chains, labels=self._par_names, figsize=figsize, quantiles=frac_conf_lev,
+                            show_titles=True)
+        plt.suptitle("{n} Scaling Relation - {c}% Confidence".format(n=self._name, c=conf_level), fontsize=14, y=1.02)
+        plt.show()
 
     def predict(self, x_values: Quantity) -> Quantity:
         """
