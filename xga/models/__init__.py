@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 10:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 14:01. Copyright (c) David J Turner
 
 import inspect
 from types import FunctionType
@@ -12,7 +12,9 @@ from .sb import *
 from .temperature import *
 
 # This dictionary is meant to provide pretty versions of model/function names to go in plots
-MODEL_PUBLICATION_NAMES = {'power_law': 'Power Law'}
+MODEL_PUBLICATION_NAMES = {'power_law': 'Power Law', 'straight_line': "Straight Line", "beta_profile": "Beta Profile",
+                           'double_beta_profile': 'Double Beta Profile', 'simple_vikhlinin': 'Simplified Vikhlinin',
+                           }
 
 
 def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β', new_data_name: str = 'x_values') \

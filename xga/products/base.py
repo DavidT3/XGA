@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/12/2020, 16:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 14:01. Copyright (c) David J Turner
 
 
 import inspect
@@ -16,7 +16,7 @@ from scipy.optimize import curve_fit, minimize
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
 from ..models import SB_MODELS, SB_MODELS_STARTS, SB_MODELS_PRIORS, DENS_MODELS, DENS_MODELS_STARTS, TEMP_MODELS, \
-    TEMP_MODELS_STARTS
+    TEMP_MODELS_STARTS, MODEL_PUBLICATION_NAMES
 from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
@@ -1111,7 +1111,8 @@ class BaseProfile1D:
                 info = self.get_realisation(model)
                 pars = self.get_model_fit(model)["par"]
 
-                mod_line = main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars), label=model)
+                mod_line = main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars),
+                                        label=MODEL_PUBLICATION_NAMES[model])
                 model_colour = mod_line[0].get_color()
                 main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
                                      where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=model_colour,
@@ -1593,7 +1594,8 @@ class BaseAggregateProfile1D:
         if model is None and custom_title is None:
             plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
         elif custom_title is None:
-            plt.suptitle("{l} Profiles - {m} fit".format(l=PROF_TYPE_YAXIS[self._prof_type], m=model), y=0.91)
+            plt.suptitle("{l} Profiles - {m} fit".format(l=PROF_TYPE_YAXIS[self._prof_type],
+                                                         m=MODEL_PUBLICATION_NAMES[model]), y=0.91)
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
