@@ -1,20 +1,43 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/12/2020, 13:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 09:50. Copyright (c) David J Turner
+
+from typing import Union
 
 import numpy as np
 
 
-def straight_line(x: np.ndarray, m: float, c: float):
-    return m * x + c
+def straight_line(x_values: Union[np.ndarray, float], gradient: float, intercept: float) -> Union[np.ndarray, float]:
+    """
+    As simple a model as you can get, a straight line. Possible uses include fitting very simple scaling relations.
+    :param Union[np.ndarray, float] x_values: The x_values to retrieve corresponding y values for.
+    :param float gradient: The gradient of the straight line.
+    :param float intercept: The intercept of the straight line.
+    :return: The y values corresponding to the input x values.
+    :rtype: Union[np.ndarray, float]
+    """
+    return (gradient * x_values) + intercept
 
 
-def power_law(x: np.ndarray, k: float, a: float):
-    return np.power(x, k) * a
+def power_law(x_values: Union[np.ndarray, float], slope: float, normalisation: float) -> Union[np.ndarray, float]:
+    """
+    A simple power law model, with slope and normalisation parameters. This is the standard model for fitting cluster
+    scaling relations in XGA.
+    :param Union[np.ndarray, float] x_values: The x_values to retrieve corresponding y values for.
+    :param float slope: The slope parameter of the power law.
+    :param float normalisation: The normalisation parameter of the power law.
+    :return: The y values corresponding to the input x values.
+    :rtype: Union[np.ndarray, float]
+    """
+    return np.power(x_values, slope) * normalisation
 
 
 # So that things like fitting functions can be written generally to support different models
-MISC_MODELS = {}
-MISC_MODELS_STARTS = {}
+MISC_MODELS = {'straight_line': straight_line, 'power_law': power_law}
+# The default start parameters for these models
+MISC_MODELS_STARTS = {'straight_line': [1, 1], 'power_law': [1, 1]}
+# The default priors for these models, for MCMC type fitters. THESE PARTICULAR ONES DON'T HAVE MUCH MEANING, and MCMC
+#  really shouldn't be necessary to fit such simple models.
+MISC_MODELS_PRIORS = {"straight_line": [[0, 100], [0, 100]], "power_law": [[0, 100], [0, 100]]}
 
 
 
