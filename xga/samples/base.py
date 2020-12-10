@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 12:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 16:19. Copyright (c) David J Turner
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -163,7 +163,9 @@ class BaseSample:
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
-        set, unlike the Tx method of ClusterSample.
+        set, unlike the Tx method of ClusterSample. An extra condition that aims to only return 'good' data has
+        been included, so that any Lx measurement with an uncertainty greater than value will be set to NaN, and
+        a warning will be issued.
         :param str reg_type: The type of region that the fitted spectra were generated from.
         :param str model: The name of the fitted model that you're requesting the
         luminosities from (e.g. tbabs*apec).
@@ -177,7 +179,12 @@ class BaseSample:
         for src in self._sources.values():
             try:
                 # Fetch the luminosity from a given source using the dedicated method
-                lums.append(src.get_luminosities(reg_type, model, lo_en, hi_en))
+                lx_val = src.get_luminosities(reg_type, model, lo_en, hi_en)
+                frac_err = lx_val[1:] / lx_val[0]
+                if len(frac_err[frac_err > 1]) == 0:
+                    lums.append(lx_val)
+                else:
+                    raise ValueError("{s} luminosity measurement's uncertainty greater than value.".format(s=src.name))
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
