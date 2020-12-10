@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 10:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 11:03. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -181,6 +181,14 @@ class ScalingRelation:
         """
         return np.concatenate([self._fit_pars.reshape((len(self._fit_pars), 1)),
                                self._fit_par_errs.reshape((len(self._fit_pars), 1))], axis=1)
+
+    @property
+    def model_func(self):
+        """
+        Provides the model function used to fit this relation.
+        :return: The Python function of this relation's model.
+        """
+        return self._model_func
 
     @property
     def x_name(self) -> str:
@@ -626,8 +634,6 @@ class AggregateScalingRelation:
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
              data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90):
-        raise NotImplementedError("I'm writing this at the moment")
-
         """
 
         :param Quantity x_lims:
@@ -639,23 +645,40 @@ class AggregateScalingRelation:
         :param bool grid_on:
         :param int conf_level:
         """
+        raise NotImplementedError("I'm working on this")
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
 
         # This part decides the x_lims of the plot, much the same as in the ScalingRelation view but it works
-        #  on a combined set of x-data from all component scaling relations
-        if x_lims is not None and x_lims.unit.is_equivalent(self.x_unit):
-            x_lims = x_lims.to(self.x_unit).value
-        elif x_lims is not None and not x_lims.unit.is_equivalent(self.x_unit):
+        #  on a combined sets of x-data or combined built in validity ranges, though user limits passed to view
+        #  will still override everything else
+        comb_x_data = np.concatenate([sr.x_data for sr in self._relations])
+
+        # Combining any x_lims defined at init for these relations is slightly more complicated, as if they weren't
+        #  defined then they will be None, so I have different behaviours dependent on how many sets of built in
+        #  x_lims there are
+        existing_x_lims = [sr.x_lims for sr in self._relations if sr.x_lims is not None]
+        if len(existing_x_lims) == 0:
+            comb_x_lims = None
+        elif len(existing_x_lims) == 1:
+            comb_x_lims = existing_x_lims[0]
+        else:
+            comb_x_lims = np.concatenate(existing_x_lims)
+
+        if x_lims is not None and not x_lims.unit.is_equivalent(self.x_unit):
             raise UnitConversionError('Limits on the x-axis ({xl}) must be convertible to the x-axis units of this '
                                       'scaling relation ({xr}).'.format(xl=x_lims.unit.to_string(),
                                                                         xr=self.x_unit.to_string()))
-        elif x_lims is None and len(self._x_data) != 0:
-            max_x_ind = np.argmax(self._x_data)
-            min_x_ind = np.argmin(self._x_data)
-            x_lims = [0.9 * (self._x_data[min_x_ind].value - self._x_err[min_x_ind].value),
-                      1.1 * (self._x_data[max_x_ind].value + self._x_err[max_x_ind].value)]
-        elif x_lims is None and len(self._x_data) == 0:
+        elif x_lims is not None and x_lims.unit.is_equivalent(self.x_unit):
+            x_lims = x_lims.to(self.x_unit).value
+        elif comb_x_lims is not None:
+            x_lims = np.array([comb_x_lims.value.min(), comb_x_lims.value.max()])
+        elif x_lims is None and len(comb_x_data) != 0:
+            max_x_ind = np.argmax(comb_x_data[:, 0])
+            min_x_ind = np.argmin(comb_x_data[:, 0])
+            x_lims = [0.9 * (comb_x_data[min_x_ind, 0].value - comb_x_data[min_x_ind, 1].value),
+                      1.1 * (comb_x_data[max_x_ind, 0].value + comb_x_data[max_x_ind, 1].value)]
+        elif x_lims is None and len(comb_x_data) == 0:
             raise ValueError('There is no data available to infer suitable axis limits from, please pass x limits.')
 
         # Setting up the matplotlib figure
@@ -675,45 +698,43 @@ class AggregateScalingRelation:
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
-        # Plot the data with uncertainties, if any data is present in this scaling relation. If not then
-        #  even though this command is called no data will appear because the x_data and y_data variables
-        #  are empty quantities
-        ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
-                    fmt="x", color=data_colour, capsize=2, label=self._name + " Data")
+        for rel in self._relations:
+            ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
+                        yerr=rel.y_data.value[:, 1], fmt="x", color=data_colour, capsize=2, label=rel.name + " Data")
 
-        # Need to randomly sample from the fitted model
-        num_rand = 300
-        model_pars = np.repeat(self._fit_pars[..., None], num_rand, axis=1).T
-        model_par_errs = np.repeat(self._fit_par_errs[..., None], num_rand, axis=1).T
+            # Need to randomly sample from the fitted model
+            num_rand = 300
+            model_pars = np.repeat(rel.pars[:, 0, None], num_rand, axis=1).T
+            model_par_errs = np.repeat(rel.pars[:, 1, None], num_rand, axis=1).T
 
-        model_par_dists = np.random.normal(model_pars, model_par_errs)
+            model_par_dists = np.random.normal(model_pars, model_par_errs)
 
-        model_x = np.linspace(*(x_lims / self.x_norm.value), 100)
-        model_xs = np.repeat(model_x[..., None], num_rand, axis=1)
+            model_x = np.linspace(*(x_lims / rel.x_norm.value), 100)
+            model_xs = np.repeat(model_x[..., None], num_rand, axis=1)
 
-        upper = 50 + (conf_level / 2)
-        lower = 50 - (conf_level / 2)
+            upper = 50 + (conf_level / 2)
+            lower = 50 - (conf_level / 2)
 
-        model_realisations = self._model_func(model_xs, *model_par_dists.T) * self._y_norm
-        model_mean = np.mean(model_realisations, axis=1)
-        model_lower = np.percentile(model_realisations, lower, axis=1)
-        model_upper = np.percentile(model_realisations, upper, axis=1)
+            model_realisations = self._model_func(model_xs, *model_par_dists.T) * self._y_norm
+            model_mean = np.mean(model_realisations, axis=1)
+            model_lower = np.percentile(model_realisations, lower, axis=1)
+            model_upper = np.percentile(model_realisations, upper, axis=1)
 
-        # I want the name of the function to include in labels and titles, but if its one defined in XGA then
-        #  I can grab the publication version of the name - it'll be prettier
-        mod_name = self._model_func.__name__
-        for m_name in MODEL_PUBLICATION_NAMES:
-            mod_name = mod_name.replace(m_name, MODEL_PUBLICATION_NAMES[m_name])
+            # I want the name of the function to include in labels and titles, but if its one defined in XGA then
+            #  I can grab the publication version of the name - it'll be prettier
+            mod_name = self._model_func.__name__
+            for m_name in MODEL_PUBLICATION_NAMES:
+                mod_name = mod_name.replace(m_name, MODEL_PUBLICATION_NAMES[m_name])
 
-        relation_label = " ".join([self._author, self._year, '-', mod_name,
-                                   "- {cf}% Confidence".format(cf=conf_level)])
-        plt.plot(model_x * self._x_norm.value, self._model_func(model_x, *model_pars[0, :]) * self._y_norm.value,
-                 color=model_colour, label=relation_label)
+            relation_label = " ".join([self._author, self._year, '-', mod_name,
+                                       "- {cf}% Confidence".format(cf=conf_level)])
+            plt.plot(model_x * self._x_norm.value, self._model_func(model_x, *model_pars[0, :]) * self._y_norm.value,
+                     color=model_colour, label=relation_label)
 
-        plt.plot(model_x * self._x_norm.value, model_upper, color=model_colour, linestyle="--")
-        plt.plot(model_x * self._x_norm.value, model_lower, color=model_colour, linestyle="--")
-        ax.fill_between(model_x * self._x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
-                        facecolor=model_colour, alpha=0.6, interpolate=True)
+            plt.plot(model_x * self._x_norm.value, model_upper, color=model_colour, linestyle="--")
+            plt.plot(model_x * self._x_norm.value, model_lower, color=model_colour, linestyle="--")
+            ax.fill_between(model_x * self._x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
+                            facecolor=model_colour, alpha=0.6, interpolate=True)
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
