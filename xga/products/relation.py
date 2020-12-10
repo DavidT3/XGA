@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 10:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 10:29. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -33,8 +33,7 @@ class ScalingRelation:
                  x_name: str, y_name: str, fit_method: str = 'unknown', x_data: Quantity = None,
                  y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None, x_lims: Quantity = None,
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
-                 relation_author: str = 'Turner et al. with XGA', relation_year: str = str(date.today().year),
-                 relation_doi: str = ''):
+                 relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = ''):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -300,8 +299,7 @@ class ScalingRelation:
     @property
     def author(self) -> str:
         """
-        A property getter for the author of the relation, if not from literature it will be the name of the author
-        of XGA.
+        A property getter for the author of the relation, if not from literature it will be XGA.
         :return: String containing the name of the author.
         :rtype: str
         """
@@ -379,6 +377,12 @@ class ScalingRelation:
             raise UnitConversionError('Values of x passed to the predict method ({xp}) must be convertible '
                                       'to the x-axis units of this scaling relation '
                                       '({xr}).'.format(xp=x_values.unit.to_string(), xr=self.x_unit.to_string()))
+
+        # This is a check that all passed x values are within the validity limits of this relation (if the
+        #  user passed those on init) - if they aren't a warning will be issued
+        if self.x_lims is not None and len(x_values[(x_values < self.x_lims[0]) | (x_values > self.x_lims[1])]) != 0:
+            warn("Some of the x values you have passed are outside the validity range of this relation "
+                 "({l}-{h}{u}).".format(l=self.x_lims[0].value, h=self.x_lims[1].value, u=self.x_unit.to_string()))
 
         # Units that are convertible to the x-units of this relation are allowed, so we make sure we convert
         #  to the exact units the fit was done in. This includes dividing by the x_norm value
