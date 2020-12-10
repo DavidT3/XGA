@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 09:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 10:05. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -31,7 +31,7 @@ class ScalingRelation:
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, fit_method: str = 'unknown', x_data: Quantity = None,
-                 y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None,
+                 y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None, x_lims: Quantity = None,
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
                  relation_author: str = 'Turner et al. with XGA', relation_year: str = str(date.today().year),
                  relation_doi: str = ''):
@@ -59,6 +59,9 @@ class ScalingRelation:
         the raw, un-normalised data.
         :param Quantity y_err: The y-errors used to fit this scaling relation, if available. This should be
         the raw, un-normalised data.
+        :param Quantity x_lims: The range of x values in which this relation is valid, default is None. If this
+        information is supplied, please pass it as a Quantity array, with the first element being the lower
+        bound and the second element being the upper bound.
         :param odr.Output odr_output: The orthogonal distance regression output object associated with this
         relation's fit, if available and applicable.
         :param np.ndarray chains: The parameter chains associated with this relation's fit, if available and
@@ -129,6 +132,18 @@ class ScalingRelation:
         else:
             # An empty quantity is defined if there is no data, rather than leaving it as None
             self._y_err = Quantity([], self.y_unit)
+
+        # Need to do a unit check (and I'll allow conversions in this case) on the x limits that may or may not
+        #  have been passed by the user.
+        if x_lims is not None and not x_lims.unit.is_equivalent(self.x_unit):
+            raise UnitConversionError("Limits on the valid x range must be in units ({lu}) that are compatible with "
+                                      "this relation's x units ({ru})".format(lu=x_lims.unit.to_string(),
+                                                                              ru=self.x_unit.to_string()))
+        elif x_lims is not None and x_lims.unit.is_equivalent(self.x_unit):
+            self._x_lims = x_lims.to(self.x_unit)
+        else:
+            # If nothing is passed then its just None
+            self._x_lims = x_lims
 
         # If the profile was created by XGA and fitted with ODR, then the user can pass the output object
         #  from that fitting method - I likely won't do much with it but it will be accessible
@@ -243,6 +258,16 @@ class ScalingRelation:
         """
         num_points = len(self._y_data)
         return np.concatenate([self._y_data.reshape((num_points, 1)), self._y_err.reshape((num_points, 1))], axis=1)
+
+    @property
+    def x_lims(self) -> Quantity:
+        """
+        If the user passed an x range in which the relation is valid on initialisation, then this will
+        return those limits in the same units as the x-axis.
+        :return: A quantity containing upper and lower x limits, or None.
+        :rtype: Quantity
+        """
+        return self._x_lims
 
     @property
     def fit_method(self) -> str:
@@ -379,10 +404,13 @@ class ScalingRelation:
         :param bool grid_on: If True then a grid will be included on the plot. Default is True.
         :param int conf_level: The confidence level to use when plotting the model.
         """
-        # First we check that the passed axis limits are in appropriate units, if they weren't supplied
-        #  then we make our own from the data, if there's no data then we get stroppy
+        # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
+        #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
+        #  if there's no data then we get stroppy
         if x_lims is not None and x_lims.unit.is_equivalent(self.x_unit):
             x_lims = x_lims.to(self.x_unit).value
+        elif self.x_lims is not None:
+            x_lims = self.x_lims.value
         elif x_lims is not None and not x_lims.unit.is_equivalent(self.x_unit):
             raise UnitConversionError('Limits on the x-axis ({xl}) must be convertible to the x-axis units of this '
                                       'scaling relation ({xr}).'.format(xl=x_lims.unit.to_string(),
@@ -545,6 +573,10 @@ class AggregateScalingRelation:
         if len(set(y_units)) != 1:
             raise UnitConversionError("All component scaling relations must have the same y-axis units.")
 
+        # Set some unit attributes for this class just so it takes one call to retrieve them
+        self._x_unit = relations[0].x_unit
+        self._y_unit = relations[0].y_unit
+
         # Making sure that the axis units match is the key check before allowing this class to be instantiated, but
         #  I'm also going to go through and see if the names of the x and y axes are the same and issue warnings if
         #  not
@@ -570,8 +602,178 @@ class AggregateScalingRelation:
         """
         return self._relations
 
-    def view(self):
-        pass
+    @property
+    def x_unit(self) -> Unit:
+        """
+        The astropy unit object relevant to the x-axis of this relation.
+        :return: An Astropy Unit object.
+        :rtype: Unit
+        """
+        return self._x_unit
+
+    @property
+    def y_unit(self) -> Unit:
+        """
+        The astropy unit object relevant to the y-axis of this relation.
+        :return: An Astropy Unit object.
+        :rtype: Unit
+        """
+        return self._y_unit
+
+    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
+             data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90):
+        raise NotImplementedError("I'm writing this at the moment")
+
+        """
+
+        :param Quantity x_lims:
+        :param bool log_scale:
+        :param str plot_title:
+        :param tuple figsize:
+        :param str data_colour:
+        :param str model_colour:
+        :param bool grid_on:
+        :param int conf_level:
+        """
+        # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
+        #  was the easiest way of setting this up so I think the duplication is justified.
+
+        # This part decides the x_lims of the plot, much the same as in the ScalingRelation view but it works
+        #  on a combined set of x-data from all component scaling relations
+        if x_lims is not None and x_lims.unit.is_equivalent(self.x_unit):
+            x_lims = x_lims.to(self.x_unit).value
+        elif x_lims is not None and not x_lims.unit.is_equivalent(self.x_unit):
+            raise UnitConversionError('Limits on the x-axis ({xl}) must be convertible to the x-axis units of this '
+                                      'scaling relation ({xr}).'.format(xl=x_lims.unit.to_string(),
+                                                                        xr=self.x_unit.to_string()))
+        elif x_lims is None and len(self._x_data) != 0:
+            max_x_ind = np.argmax(self._x_data)
+            min_x_ind = np.argmin(self._x_data)
+            x_lims = [0.9 * (self._x_data[min_x_ind].value - self._x_err[min_x_ind].value),
+                      1.1 * (self._x_data[max_x_ind].value + self._x_err[max_x_ind].value)]
+        elif x_lims is None and len(self._x_data) == 0:
+            raise ValueError('There is no data available to infer suitable axis limits from, please pass x limits.')
+
+        # Setting up the matplotlib figure
+        fig = plt.figure(figsize=figsize)
+        fig.tight_layout()
+        ax = plt.gca()
+
+        # Setting the axis limits
+        ax.set_xlim(x_lims)
+
+        # Making the scale log if requested
+        if log_scale:
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+
+        # Setup the aesthetics of the axis
+        ax.minorticks_on()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        # Plot the data with uncertainties, if any data is present in this scaling relation. If not then
+        #  even though this command is called no data will appear because the x_data and y_data variables
+        #  are empty quantities
+        ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
+                    fmt="x", color=data_colour, capsize=2, label=self._name + " Data")
+
+        # Need to randomly sample from the fitted model
+        num_rand = 300
+        model_pars = np.repeat(self._fit_pars[..., None], num_rand, axis=1).T
+        model_par_errs = np.repeat(self._fit_par_errs[..., None], num_rand, axis=1).T
+
+        model_par_dists = np.random.normal(model_pars, model_par_errs)
+
+        model_x = np.linspace(*(x_lims / self.x_norm.value), 100)
+        model_xs = np.repeat(model_x[..., None], num_rand, axis=1)
+
+        upper = 50 + (conf_level / 2)
+        lower = 50 - (conf_level / 2)
+
+        model_realisations = self._model_func(model_xs, *model_par_dists.T) * self._y_norm
+        model_mean = np.mean(model_realisations, axis=1)
+        model_lower = np.percentile(model_realisations, lower, axis=1)
+        model_upper = np.percentile(model_realisations, upper, axis=1)
+
+        # I want the name of the function to include in labels and titles, but if its one defined in XGA then
+        #  I can grab the publication version of the name - it'll be prettier
+        mod_name = self._model_func.__name__
+        for m_name in MODEL_PUBLICATION_NAMES:
+            mod_name = mod_name.replace(m_name, MODEL_PUBLICATION_NAMES[m_name])
+
+        relation_label = " ".join([self._author, self._year, '-', mod_name,
+                                   "- {cf}% Confidence".format(cf=conf_level)])
+        plt.plot(model_x * self._x_norm.value, self._model_func(model_x, *model_pars[0, :]) * self._y_norm.value,
+                 color=model_colour, label=relation_label)
+
+        plt.plot(model_x * self._x_norm.value, model_upper, color=model_colour, linestyle="--")
+        plt.plot(model_x * self._x_norm.value, model_lower, color=model_colour, linestyle="--")
+        ax.fill_between(model_x * self._x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
+                        facecolor=model_colour, alpha=0.6, interpolate=True)
+
+        # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
+        #  However I've noticed specific instances where the units can be made prettier
+        x_unit = '[' + self.x_unit.to_string() + ']'
+        y_unit = '[' + self.y_unit.to_string() + ']'
+        for og_unit in PRETTY_UNITS:
+            x_unit = x_unit.replace(og_unit, PRETTY_UNITS[og_unit])
+            y_unit = y_unit.replace(og_unit, PRETTY_UNITS[og_unit])
+
+        # Dimensionless quantities can be fitted too, and this make the axis label look nicer by not having empty
+        #  square brackets
+        if x_unit == '[]':
+            x_unit = ''
+        if y_unit == '[]':
+            y_unit = ''
+
+        # The scaling relation object knows what its x and y axes are called
+        plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=12)
+        plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=12)
+
+        # The user can also pass a plot title, but if they don't then I construct one automatically
+        if plot_title is None and self._fit_method != 'unknown':
+            plot_title = 'Scaling Relation - {mod} fitted with {fm}'.format(mod=mod_name, fm=self._fit_method)
+        elif plot_title is None and self._fit_method == 'unknown':
+            plot_title = '{n} Scaling Relation'.format(n=self._name)
+
+        plt.title(plot_title, fontsize=13)
+
+        # Use the axis limits quite a lot in this next bit, so read them out into variables
+        x_axis_lims = ax.get_xlim()
+        y_axis_lims = ax.get_ylim()
+
+        # This dynamically changes how tick labels are formatted depending on the values displayed
+        if max(x_axis_lims) < 1000:
+            ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        if max(y_axis_lims) < 1000:
+            ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+        # And this dynamically changes the grid depending on whether a whole order of magnitude is covered or not
+        #  Though as I don't much like the look of the grid it is off by default, and users can enable it if they
+        #  want to.
+        if grid_on and (max(x_axis_lims) / min(x_axis_lims)) < 10:
+            ax.grid(which='minor', axis='x', linestyle='dotted', color='grey')
+        elif grid_on:
+            ax.grid(which='major', axis='x', linestyle='dotted', color='grey')
+        else:
+            ax.grid(which='both', axis='both', b=False)
+
+        if grid_on and (max(y_axis_lims) / min(y_axis_lims)) < 10:
+            ax.grid(which='minor', axis='y', linestyle='dotted', color='grey')
+        elif grid_on:
+            ax.grid(which='major', axis='y', linestyle='dotted', color='grey')
+        else:
+            ax.grid(which='both', axis='both', b=False)
+
+        # I change the lengths of the tick lines, to make it look nicer (imo)
+        ax.tick_params(length=7)
+        ax.tick_params(which='minor', length=3)
+
+        plt.legend(loc="best")
+        plt.tight_layout()
+        plt.show()
 
     def __len__(self) -> int:
         return len(self._relations)
