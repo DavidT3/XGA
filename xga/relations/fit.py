@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 10:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 16:45. Copyright (c) David J Turner
 import inspect
 from types import FunctionType
 from typing import Tuple
@@ -14,6 +14,9 @@ from ..exceptions import XGAFunctionConversionError, XGAOptionalDependencyError
 from ..models import convert_to_odr_compatible
 from ..models.misc import power_law
 from ..products.relation import ScalingRelation
+
+# This is just so the allowed fitting methods can be referenced from one place
+ALLOWED_FIT_METHODS = ["curve_fit", "odr", "lira", "emcee"]
 
 
 def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
