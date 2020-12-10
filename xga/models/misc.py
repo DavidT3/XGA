@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 09:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 14:20. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -18,17 +18,17 @@ def straight_line(x_values: Union[np.ndarray, float], gradient: float, intercept
     return (gradient * x_values) + intercept
 
 
-def power_law(x_values: Union[np.ndarray, float], slope: float, normalisation: float) -> Union[np.ndarray, float]:
+def power_law(x_values: Union[np.ndarray, float], slope: float, norm: float) -> Union[np.ndarray, float]:
     """
     A simple power law model, with slope and normalisation parameters. This is the standard model for fitting cluster
     scaling relations in XGA.
     :param Union[np.ndarray, float] x_values: The x_values to retrieve corresponding y values for.
     :param float slope: The slope parameter of the power law.
-    :param float normalisation: The normalisation parameter of the power law.
+    :param float norm: The normalisation parameter of the power law.
     :return: The y values corresponding to the input x values.
     :rtype: Union[np.ndarray, float]
     """
-    return np.power(x_values, slope) * normalisation
+    return np.power(x_values, slope) * norm
 
 
 # So that things like fitting functions can be written generally to support different models
