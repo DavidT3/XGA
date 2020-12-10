@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/10/2020, 17:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 11:05. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -450,3 +450,50 @@ class XGAInvalidModelError(Exception):
             return '{}'.format(self.message)
         else:
             return 'XGAInvalidModelError has been raised'
+
+
+class XGAFunctionConversionError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when an attempt to convert an XGA model function (or a custom function supplied by the user) to the
+        standard required by scipy's orthogonal distance regression failed.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'XGAFunctionConversionError has been raised'
+
+
+class XGAOptionalDependencyError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when an optional XGA dependency hasn't been installed, but the feature that needs it has been
+        activated.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'XGAOptionalDependencyError has been raised'
+
+
+
+
+
+
+

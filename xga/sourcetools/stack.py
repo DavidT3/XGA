@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/12/2020, 17:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 11:12. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -102,7 +102,7 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
         # Use a simple single_temp_apec to fit said spectra, but only if we haven't had custom temperatures
         #  passed in
         single_temp_apec(sources, reg_type=scale_radius, abund_table=abund_table)
-        temps = Quantity([source.get_temperature(scale_radius, "tbabs*apec")[0] for source in sources], 'keV')
+        temps = Quantity([source.get_temperature(scale_radius, "tbabs*apec")[0].value for source in sources], 'keV')
         cluster_cr_conv(sources, scale_radius, temps)
 
     combined_factors = []

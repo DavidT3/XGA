@@ -1,9 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2020, 17:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 14:07. Copyright (c) David J Turner
 
 import warnings
-from typing import Tuple, Union
+from typing import Union
 
+import numpy as np
 from astropy import wcs
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitConversionError, pix, kpc
@@ -131,24 +132,52 @@ class GalaxyCluster(ExtendedSource):
 
     # Property getters for other observables I've allowed to be passed in.
     @property
-    def weak_lensing_mass(self) -> Tuple[Quantity, Quantity]:
+    def weak_lensing_mass(self) -> Quantity:
         """
         Gets the weak lensing mass passed in at initialisation of the source.
         :return: Two quantities, the weak lensing mass, and the weak lensing mass error in Msun. If the
         values were not passed in at initialisation, the returned values will be None.
-        :rtype: Tuple[Quantity, Quantity]
+        :rtype: Quantity
         """
-        return self._wl_mass, self._wl_mass_err
+        if self._wl_mass is not None:
+            wl_list = [self._wl_mass.value]
+            wl_unit = self._wl_mass.unit
+        else:
+            wl_list = [np.NaN]
+            wl_unit = ''
+
+        if self._wl_mass_err is None:
+            wl_list.append(np.NaN)
+        elif isinstance(self._wl_mass_err, Quantity) and not self._wl_mass_err.isscalar:
+            wl_list += list(self._wl_mass_err.value)
+        elif isinstance(self._wl_mass_err, Quantity) and self._wl_mass_err.isscalar:
+            wl_list.append(self._wl_mass_err.value)
+
+        return Quantity(wl_list, wl_unit)
 
     @property
-    def richness(self) -> Tuple[Quantity, Quantity]:
+    def richness(self) -> Quantity:
         """
         Gets the richness passed in at initialisation of the source.
-        :return: Two quantities, the richness, and the weak lensing mass error. If the
+        :return: Two floats, the richness, and the richness error. If the
         values were not passed in at initialisation, the returned values will be None.
-        :rtype: Tuple[Quantity, Quantity]
+        :rtype: Quantity
         """
-        return self._richness, self._richness_err
+        if self._richness is not None:
+            r_list = [self._richness]
+        else:
+            r_list = [np.NaN]
+
+        if self._richness_err is None:
+            r_list.append(np.NaN)
+        elif isinstance(self._richness_err, (float, int)):
+            r_list.append(self._richness_err)
+        elif isinstance(self._richness_err, list):
+            r_list += self._richness_err
+        elif isinstance(self._richness_err, np.ndarray):
+            r_list += list(self._richness_err)
+
+        return Quantity(r_list)
 
     # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
     #  justified considering how often the cluster temperature is used in X-ray cluster studies.
@@ -185,14 +214,14 @@ class GalaxyCluster(ExtendedSource):
         elif model is not None and "kT" in self._fit_results[reg_type][model]:
             # Just going to call the get_results method with specific parameters, to get the result formatted
             #  the same way.
-            return self.get_results(reg_type, model, "kT")
+            return Quantity(self.get_results(reg_type, model, "kT"), 'keV')
         elif model is None and len(models_with_kt) != 1:
             raise ValueError("The model parameter can only be None when there is only one model available"
                              " with a kT measurement.")
         # For convenience sake, if there is only one model with a kT measurement, I'll allow the model parameter
         #  to be None.
         elif model is None and len(models_with_kt) == 1:
-            return self.get_results(reg_type, models_with_kt[0], "kT")
+            return Quantity(self.get_results(reg_type, models_with_kt[0], "kT"), 'keV')
 
     def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
                                 use_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
