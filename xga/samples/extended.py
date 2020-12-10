@@ -1,7 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/12/2020, 13:21. Copyright (c) David J Turner
-
-from warnings import warn
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 17:46. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -11,6 +9,7 @@ from tqdm import tqdm
 from .base import BaseSample
 from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.psf import rl_psf
+from ..relations.fit import *
 from ..sources.extended import GalaxyCluster
 
 
@@ -372,19 +371,161 @@ class ClusterSample(BaseSample):
 
         return Quantity(gms, 'Msun')
 
-    def gm_richness(self, fit_method: str, rad_name: str, dens_tech: str = 'inv_abel_model', conf_level: int = 90):
-        pass
+    def gm_richness(self, rad_name: str, x_norm: Quantity = Quantity(10), y_norm: Quantity = Quantity(1e+12, 'solMass'),
+                    fit_method: str = 'odr', start_pars: list = None, dens_tech: str = 'inv_abel_model'):
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
 
-    def gm_Tx(self, fit_method: str):
-        pass
+        # Read out the richness values into variables just for convenience sake
+        r_data = self.richness[:, 0]
+        r_errs = self.richness[:, 1]
 
-    def Tx_richness(self, fit_method: str):
-        pass
+        # Read out the mass values, and multiply by the inverse e function for each cluster
+        gm_vals = self.gas_mass(rad_name, dens_tech, conf_level=90) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        gm_data = gm_vals[:, 0]
+        gm_err = gm_vals[:, 1:]
 
-    def Lx_richness(self, fit_method: str):
-        pass
+        if rad_name in ['r200', 'r500', 'r2500']:
+            rn = rad_name[1:]
+        else:
+            rn = rad_name
 
+        y_name = "E(z)$^{-1}$M$_{g," + rn + "}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, gm_data, gm_err, r_data, r_errs, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, gm_data, gm_err, r_data, r_errs, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(gm_data, gm_err, r_data, r_errs, y_norm, x_norm,
+                                              y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
 
+        return scale_rel
+
+    def gm_Tx(self, rad_name: str, x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+12, 'solMass'),
+              fit_method: str = 'odr', start_pars: list = None, dens_tech: str = 'inv_abel_model',
+              model: str = 'tbabs*apec'):
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
+
+        # Read out the temperature values into variables just for convenience sake
+        t_vals = self.Tx(rad_name, model)
+        t_data = t_vals[:, 0]
+        t_errs = t_vals[:, 1:]
+
+        # Read out the mass values, and multiply by the inverse e function for each cluster
+        gm_vals = self.gas_mass(rad_name, dens_tech, conf_level=90) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        gm_data = gm_vals[:, 0]
+        gm_err = gm_vals[:, 1:]
+
+        if rad_name in ['r200', 'r500', 'r2500']:
+            rn = rad_name[1:]
+        else:
+            rn = rad_name
+
+        x_name = r"T$_{x," + rn + '}$'
+        y_name = "E(z)$^{-1}$M$_{g," + rn + "}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, gm_data, gm_err, t_data, t_errs, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name, x_name=x_name)
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, gm_data, gm_err, t_data, t_errs, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=x_name)
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(gm_data, gm_err, t_data, t_errs, y_norm, x_norm,
+                                              y_name=y_name, x_name=x_name)
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
+
+        return scale_rel
+
+    def Lx_richness(self, rad_name: str, x_norm: Quantity = Quantity(10), y_norm: Quantity = Quantity(1e+44, 'erg/s'),
+                    fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec',
+                    lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')):
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
+
+        # Read out the richness values into variables just for convenience sake
+        r_data = self.richness[:, 0]
+        r_errs = self.richness[:, 1]
+
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        lx_vals = self.Lx(rad_name, model, lo_en, hi_en) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        lx_data = lx_vals[:, 0]
+        lx_err = lx_vals[:, 1:]
+
+        if rad_name in ['r200', 'r500', 'r2500']:
+            rn = rad_name[1:]
+        else:
+            rn = rad_name
+        y_name = "E(z)$^{-1}$L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, r_data, r_errs, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name,
+                                                   x_name=r"$\lambda$")
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, lx_data, lx_err, r_data, r_errs, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(lx_data, lx_err, r_data, r_errs, y_norm, x_norm,
+                                              y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
+
+        return scale_rel
+
+    def Lx_Tx(self, rad_name: str, x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+44, 'erg/s'),
+              fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec',
+              lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')):
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
+
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        lx_vals = self.Lx(rad_name, model, lo_en, hi_en) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        lx_data = lx_vals[:, 0]
+        lx_err = lx_vals[:, 1:]
+
+        # Read out the temperature values into variables just for convenience sake
+        t_vals = self.Tx(rad_name, model)
+        t_data = t_vals[:, 0]
+        t_errs = t_vals[:, 1:]
+
+        if rad_name in ['r200', 'r500', 'r2500']:
+            rn = rad_name[1:]
+        else:
+            rn = rad_name
+
+        x_name = r"T$_{x," + rn + '}$'
+        y_name = "E$^{-1}$(z)L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, t_data, t_errs, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name,
+                                                   x_name=x_name)
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, lx_data, lx_err, t_data, t_errs, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=x_name)
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(lx_data, lx_err, t_data, t_errs, y_norm, x_norm,
+                                              y_name=y_name, x_name=x_name)
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
+
+        return scale_rel
 
 
 
