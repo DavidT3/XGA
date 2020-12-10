@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 11:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 15:30. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -10,6 +10,7 @@ import corner
 import numpy as np
 import scipy.odr as odr
 from astropy.units import Quantity, Unit, UnitConversionError
+from cycler import cycler
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
@@ -17,6 +18,8 @@ from ..models import MODEL_PUBLICATION_NAMES
 
 # This is just to make some instances of astropy LaTeX units prettier for plotting
 PRETTY_UNITS = {'solMass': r'M$_{\odot}$', 'erg / s': r"erg s$^{-1}$"}
+# This is the default colour cycle for the AggregateScalingRelation view method
+PRETTY_COLOUR_CYCLE = ['tab:gray', 'tab:blue', 'darkgreen', 'firebrick', 'slateblue', 'goldenrod']
 
 # Given the existing structure of this part of XGA, I would have written a BaseRelation class in xga.products.base,
 #  but I can't think of a reason why individual scaling relations should have their own classes. One general class
@@ -158,7 +161,7 @@ class ScalingRelation:
 
         # If the user hasn't passed the name of the relation then I'll generate one from what I know so far
         if relation_name is None:
-            self._name = self._y_name + '-' + self._x_name
+            self._name = self._y_name + '-' + self._x_name + ' ' + self.fit_method
         else:
             self._name = relation_name
 
@@ -594,10 +597,17 @@ class AggregateScalingRelation:
         #  not
         x_names = [sr.x_name for sr in relations]
         if len(set(x_names)) != 1:
+            self._x_name = " or ".join(list(set(x_names)))
             warn('Not all of these ScalingRelations have the same x-axis names.')
+        else:
+            self._x_name = relations[0].x_name
+
         y_names = [sr.y_name for sr in relations]
         if len(set(y_names)) != 1:
+            self._y_name = " or ".join(list(set(y_names)))
             warn('Not all of these ScalingRelations have the same y-axis names.')
+        else:
+            self._y_name = relations[0].y_name
 
         # This stores the relations as an attribute
         self._relations = relations
@@ -633,21 +643,26 @@ class AggregateScalingRelation:
         return self._y_unit
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
-             data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90):
+             colour_list: list = None, grid_on: bool = False, conf_level: int = 90):
         """
-
-        :param Quantity x_lims:
-        :param bool log_scale:
-        :param str plot_title:
-        :param tuple figsize:
-        :param str data_colour:
-        :param str model_colour:
-        :param bool grid_on:
-        :param int conf_level:
+        A method that produces a high quality plot of the component scaling relations in this
+        AggregateScalingRelation.
+        :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
+        this relation is based upon, if that data is not available an error will be thrown.
+        :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
+        :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
+        :param tuple figsize: A custom figure size for the plot, default is (8, 8).
+        :param list colour_list: A list of matplotlib colours to use as a custom colour cycle.
+        :param bool grid_on: If True then a grid will be included on the plot. Default is True.
+        :param int conf_level: The confidence level to use when plotting the model.
         """
-        raise NotImplementedError("I'm working on this")
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
+
+        # Set up the colour cycle
+        if colour_list is None:
+            colour_list = PRETTY_COLOUR_CYCLE
+        new_col_cycle = cycler(color=colour_list)
 
         # This part decides the x_lims of the plot, much the same as in the ScalingRelation view but it works
         #  on a combined sets of x-data or combined built in validity ranges, though user limits passed to view
@@ -685,6 +700,7 @@ class AggregateScalingRelation:
         fig = plt.figure(figsize=figsize)
         fig.tight_layout()
         ax = plt.gca()
+        ax.set_prop_cycle(new_col_cycle)
 
         # Setting the axis limits
         ax.set_xlim(x_lims)
@@ -699,8 +715,16 @@ class AggregateScalingRelation:
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
         for rel in self._relations:
-            ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
-                        yerr=rel.y_data.value[:, 1], fmt="x", color=data_colour, capsize=2, label=rel.name + " Data")
+            # This is a horrifying bodge, but I do just want the colour out and I can't be bothered to figure out
+            #  how to use the colour cycle object properly
+            if len(rel.x_data.value[:, 0]) == 0:
+                d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
+                                    yerr=rel.y_data.value[:, 1], fmt="x", capsize=2, label='')
+            else:
+                d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
+                                    yerr=rel.y_data.value[:, 1], fmt="x", capsize=2, label=rel.name + " Data")
+
+            d_colour = d_out[0].get_color()
 
             # Need to randomly sample from the fitted model
             num_rand = 300
@@ -715,26 +739,28 @@ class AggregateScalingRelation:
             upper = 50 + (conf_level / 2)
             lower = 50 - (conf_level / 2)
 
-            model_realisations = self._model_func(model_xs, *model_par_dists.T) * self._y_norm
+            model_realisations = rel.model_func(model_xs, *model_par_dists.T) * rel._y_norm
             model_mean = np.mean(model_realisations, axis=1)
             model_lower = np.percentile(model_realisations, lower, axis=1)
             model_upper = np.percentile(model_realisations, upper, axis=1)
 
             # I want the name of the function to include in labels and titles, but if its one defined in XGA then
             #  I can grab the publication version of the name - it'll be prettier
-            mod_name = self._model_func.__name__
+            mod_name = rel.model_func.__name__
             for m_name in MODEL_PUBLICATION_NAMES:
                 mod_name = mod_name.replace(m_name, MODEL_PUBLICATION_NAMES[m_name])
 
-            relation_label = " ".join([self._author, self._year, '-', mod_name,
-                                       "- {cf}% Confidence".format(cf=conf_level)])
-            plt.plot(model_x * self._x_norm.value, self._model_func(model_x, *model_pars[0, :]) * self._y_norm.value,
-                     color=model_colour, label=relation_label)
+            if rel.author != 'XGA':
+                relation_label = " ".join([rel.author, rel.year])
+            else:
+                relation_label = rel.name + ' ' + ' Scaling Relation'
+            plt.plot(model_x * rel.x_norm.value, rel.model_func(model_x, *model_pars[0, :]) * rel.y_norm.value,
+                     color=d_colour, label=relation_label)
 
-            plt.plot(model_x * self._x_norm.value, model_upper, color=model_colour, linestyle="--")
-            plt.plot(model_x * self._x_norm.value, model_lower, color=model_colour, linestyle="--")
-            ax.fill_between(model_x * self._x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
-                            facecolor=model_colour, alpha=0.6, interpolate=True)
+            plt.plot(model_x * rel.x_norm.value, model_upper, color=d_colour, linestyle="--")
+            plt.plot(model_x * rel.x_norm.value, model_lower, color=d_colour, linestyle="--")
+            ax.fill_between(model_x * rel.x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
+                            facecolor=d_colour, alpha=0.6, interpolate=True)
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
@@ -756,10 +782,8 @@ class AggregateScalingRelation:
         plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=12)
 
         # The user can also pass a plot title, but if they don't then I construct one automatically
-        if plot_title is None and self._fit_method != 'unknown':
-            plot_title = 'Scaling Relation - {mod} fitted with {fm}'.format(mod=mod_name, fm=self._fit_method)
-        elif plot_title is None and self._fit_method == 'unknown':
-            plot_title = '{n} Scaling Relation'.format(n=self._name)
+        if plot_title is None:
+            plot_title = 'Scaling Relation Comparison - {c}% Confidence Limits'.format(c=conf_level)
 
         plt.title(plot_title, fontsize=13)
 
