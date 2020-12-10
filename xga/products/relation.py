@@ -1,7 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 17:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 09:30. Copyright (c) David J Turner
 
 import inspect
+from datetime import date
+from typing import List
 
 import corner
 import numpy as np
@@ -30,7 +32,8 @@ class ScalingRelation:
                  x_name: str, y_name: str, fit_method: str = 'unknown', x_data: Quantity = None,
                  y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None,
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
-                 relation_author: str = 'Turner et al. with XGA', relation_doi: str = ''):
+                 relation_author: str = 'Turner et al. with XGA', relation_year: str = str(date.today().year),
+                 relation_doi: str = ''):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -62,6 +65,7 @@ class ScalingRelation:
         is removed), and N_par is the number of parameters in the fit.
         :param str relation_name: A suitable name for this relation.
         :param str relation_author: The author who deserves credit for this relation.
+        :param str relation_year: The year this relation was produced, default is the current year.
         :param str relation_doi: The DOI of the original paper this relation appeared in.
         """
         # These will always be passed in, and are assumed to be in the order required by the model_func that is also
@@ -145,6 +149,7 @@ class ScalingRelation:
 
         # For relations from literature especially I need to give credit the author, and the original paper
         self._author = relation_author
+        self._year = relation_year
         self._doi = relation_doi
 
         # Just grabbing the parameter names from the model function to plot on the y-axis
@@ -259,6 +264,16 @@ class ScalingRelation:
         return self._author
 
     @property
+    def year(self) -> str:
+        """
+        A property getter for the year that the relation was created/published, if not from literature it will be the
+        current year
+        :return: String containing the year of publication/creation.
+        :rtype: str
+        """
+        return self._year
+
+    @property
     def doi(self) -> str:
         """
         A property getter for the doi of the original paper of the relation, if not from literature it will an
@@ -330,7 +345,7 @@ class ScalingRelation:
 
         return predicted_y
 
-    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (8, 8),
+    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
              data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
@@ -408,7 +423,8 @@ class ScalingRelation:
         for m_name in MODEL_PUBLICATION_NAMES:
             mod_name = mod_name.replace(m_name, MODEL_PUBLICATION_NAMES[m_name])
 
-        relation_label = " ".join([self._author, '-', mod_name,  "- {cf}% Confidence".format(cf=conf_level)])
+        relation_label = " ".join([self._author, self._year, '-', mod_name,
+                                   "- {cf}% Confidence".format(cf=conf_level)])
         plt.plot(model_x * self._x_norm.value, self._model_func(model_x, *model_pars[0, :]) * self._y_norm.value,
                  color=model_colour, label=relation_label)
 
@@ -481,11 +497,53 @@ class ScalingRelation:
         plt.tight_layout()
         plt.show()
 
+    def __add__(self, other):
+        to_combine = [self]
+        if type(other) == list:
+            to_combine += other
+        elif isinstance(other, ScalingRelation):
+            to_combine.append(other)
+        elif isinstance(other, AggregateScalingRelation):
+            to_combine += other.relations
+        else:
+            raise TypeError("You may only add ScalingRelations, or a list of ScalingRelations, to this object.")
+        return AggregateScalingRelation(to_combine)
+
 
 class AggregateScalingRelation:
-    def __init__(self):
-        raise NotImplementedError("I'll get to this very soon")
+    """
+    This class is akin to the BaseAggregateProfile class, in that it is the result of a sum of ScalingRelation
+    objects. References to the component objects will be stored within the structure of this class, and it primarily
+    exists to allow plots with multiple relations to be generated.
+    """
+    def __init__(self, relations: List[ScalingRelation]):
+        # There aren't specific classes for different types of relations, but I do need to check that whatever
+        #  relations are being added together have the same x and y units
+        x_units = [sr.x_unit for sr in relations]
+        if len(set(x_units)) != 1:
+            raise UnitConversionError("All component scaling relations must have the same x-axis units.")
+        y_units = [sr.y_unit for sr in relations]
+        if len(set(y_units)) != 1:
+            raise UnitConversionError("All component scaling relations must have the same y-axis units.")
 
+        # Making sure that the axis units match is the key check before allowing this class to be instantiated, but
+        #  I'm also going to go through and see if the names of the x and y axes are the same and issue warnings if
+        #  not
+
+        # This stores the relations as an attribute
+        self._relations = relations
+
+    # The relations are the key attribute of this class, and the mechanism I've set up is that these objects
+    #  are created by adding ScalingRelations together, as such there will be no setter to alter this after
+    #  declaration
+    @property
+    def relations(self) -> List[ScalingRelation]:
+        """
+        This returns the list of ScalingRelation instances that make up this aggregate scaling relation.
+        :return: A list of ScalingRelation instances.
+        :rtype: List[ScalingRelation]
+        """
+        return self._relations
 
 
 
