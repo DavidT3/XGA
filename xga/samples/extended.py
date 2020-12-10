@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 17:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 18:01. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -372,7 +372,20 @@ class ClusterSample(BaseSample):
         return Quantity(gms, 'Msun')
 
     def gm_richness(self, rad_name: str, x_norm: Quantity = Quantity(10), y_norm: Quantity = Quantity(1e+12, 'solMass'),
-                    fit_method: str = 'odr', start_pars: list = None, dens_tech: str = 'inv_abel_model'):
+                    fit_method: str = 'odr', start_pars: list = None, dens_tech: str = 'inv_abel_model') \
+            -> ScalingRelation:
+        """
+        This generates a Gas Mass vs Richness scaling relation for this sample of Galaxy Clusters.
+        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
+        which is the superior of the two I have implemented as of 03/12/20.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
+        """
         # Just make sure fit method is lower case
         fit_method = fit_method.lower()
 
@@ -410,7 +423,20 @@ class ClusterSample(BaseSample):
 
     def gm_Tx(self, rad_name: str, x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+12, 'solMass'),
               fit_method: str = 'odr', start_pars: list = None, dens_tech: str = 'inv_abel_model',
-              model: str = 'tbabs*apec'):
+              model: str = 'tbabs*apec') -> ScalingRelation:
+        """
+        This generates a Gas Mass vs Tx scaling relation for this sample of Galaxy Clusters.
+        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
+        which is the superior of the two I have implemented as of 03/12/20.
+        :param str model: The name of the model that the temperatures were measured with.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
+        """
         # Just make sure fit method is lower case
         fit_method = fit_method.lower()
 
@@ -450,7 +476,20 @@ class ClusterSample(BaseSample):
 
     def Lx_richness(self, rad_name: str, x_norm: Quantity = Quantity(10), y_norm: Quantity = Quantity(1e+44, 'erg/s'),
                     fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec',
-                    lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')):
+                    lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')) -> ScalingRelation:
+        """
+        This generates a Lx vs richness scaling relation for this sample of Galaxy Clusters.
+        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str model: The name of the model that the luminosities were measured with.
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
+        """
         # Just make sure fit method is lower case
         fit_method = fit_method.lower()
 
@@ -488,7 +527,20 @@ class ClusterSample(BaseSample):
 
     def Lx_Tx(self, rad_name: str, x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+44, 'erg/s'),
               fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec',
-              lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')):
+              lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')) -> ScalingRelation:
+        """
+        This generates a Lx vs Tx scaling relation for this sample of Galaxy Clusters.
+        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str model: The name of the model that the luminosities and temperatures were measured with.
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
+        """
         # Just make sure fit method is lower case
         fit_method = fit_method.lower()
 
