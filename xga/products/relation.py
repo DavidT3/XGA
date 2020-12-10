@@ -1,9 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 09:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 09:39. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
 from typing import List
+from warnings import warn
 
 import corner
 import numpy as np
@@ -166,6 +167,24 @@ class ScalingRelation:
         """
         return np.concatenate([self._fit_pars.reshape((len(self._fit_pars), 1)),
                                self._fit_par_errs.reshape((len(self._fit_pars), 1))], axis=1)
+
+    @property
+    def x_name(self) -> str:
+        """
+        A string containing the name of the x-axis of this relation.
+        :return: A Python string containing the name.
+        :rtype: str
+        """
+        return self._x_name
+
+    @property
+    def y_name(self) -> str:
+        """
+        A string containing the name of the x-axis of this relation.
+        :return: A Python string containing the name.
+        :rtype: str
+        """
+        return self._y_name
 
     @property
     def x_norm(self) -> Quantity:
@@ -529,6 +548,12 @@ class AggregateScalingRelation:
         # Making sure that the axis units match is the key check before allowing this class to be instantiated, but
         #  I'm also going to go through and see if the names of the x and y axes are the same and issue warnings if
         #  not
+        x_names = [sr.x_name for sr in relations]
+        if len(set(x_names)) != 1:
+            warn('Not all of these ScalingRelations have the same x-axis names.')
+        y_names = [sr.y_name for sr in relations]
+        if len(set(y_names)) != 1:
+            warn('Not all of these ScalingRelations have the same y-axis names.')
 
         # This stores the relations as an attribute
         self._relations = relations
@@ -544,6 +569,25 @@ class AggregateScalingRelation:
         :rtype: List[ScalingRelation]
         """
         return self._relations
+
+    def view(self):
+        pass
+
+    def __len__(self) -> int:
+        return len(self._relations)
+
+    def __add__(self, other):
+        to_combine = self.relations
+        if type(other) == list:
+            to_combine += other
+        elif isinstance(other, ScalingRelation):
+            to_combine.append(other)
+        elif isinstance(other, AggregateScalingRelation):
+            to_combine += other.relations
+        else:
+            raise TypeError("You may only add ScalingRelations, AggregateScalingRelations, or a "
+                            "list of ScalingRelations.")
+        return AggregateScalingRelation(to_combine)
 
 
 
