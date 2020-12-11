@@ -1,18 +1,18 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/10/2020, 11:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 17:04. Copyright (c) David J Turner
 
 import os
 import warnings
 from copy import deepcopy
 from itertools import product
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Union
 
 import numpy as np
 from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
-from astropy.units import Quantity, UnitBase
+from astropy.units import Quantity, UnitBase, Unit, UnitConversionError
 from fitsio import FITS
 from numpy import ndarray
 from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
@@ -22,8 +22,8 @@ from .. import xga_conf
 from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
-    RateMap, PSFGrid
-from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad
+    RateMap, PSFGrid, BaseProfile1D
+from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
 
@@ -266,7 +266,9 @@ class BaseSource:
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict, odf_dict
 
-    def update_products(self, prod_obj: BaseProduct):
+    # TODO Maybe allow BaseAggregateProfile1D to be stored in the future
+    # TODO Redo how profiles are stored - I was lazy when I implemented it at first
+    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D]):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
         but will overwrite existing products with a warning. Raises errors if the ObsID is not associated
@@ -274,7 +276,7 @@ class BaseSource:
         :param BaseProduct prod_obj: The new product object to be added to the source object.
         """
         # Aggregate products are things like PSF grids and sets of annular spectra.
-        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct)):
+        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D)):
             raise TypeError("Only product objects can be assigned to sources.")
 
         en_bnds = prod_obj.energy_bounds
@@ -325,17 +327,51 @@ class BaseSource:
             # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
             if extra_key not in self._products[obs_id][inst]:
                 self._products[obs_id][inst][extra_key] = {}
-            self._products[obs_id][inst][extra_key][p_type] = prod_obj
+            # Most products will fall into this first conditional
+            if "profile" not in p_type:
+                self._products[obs_id][inst][extra_key][p_type] = prod_obj
+            # Profiles are stored in a list, just because there can be so many giving them all extra keys
+            #  is too much work
+            elif "profile" in p_type and p_type not in self._products[obs_id][inst][extra_key]:
+                self._products[obs_id][inst][extra_key][p_type] = [prod_obj]
+            elif "profile" in p_type and p_type in self._products[obs_id][inst][extra_key]:
+                self._products[obs_id][inst][extra_key][p_type].append(prod_obj)
+
         elif extra_key is None and obs_id != "combined":
-            self._products[obs_id][inst][p_type] = prod_obj
+            if "profile" not in p_type:
+                self._products[obs_id][inst][p_type] = prod_obj
+            # Profiles are stored in a list, just because there can be so many giving them all extra keys
+            #  is too much work
+            elif "profile" in p_type and p_type not in self._products[obs_id][inst]:
+                self._products[obs_id][inst][p_type] = {0: prod_obj}
+            elif "profile" in p_type and p_type in self._products[obs_id][inst]:
+                self._products[obs_id][inst][p_type].update({len(self._products[obs_id][inst][p_type]): prod_obj})
+
         # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
         #  and ObsID = 'combined'
         elif extra_key is not None and obs_id == "combined":
             if extra_key not in self._products[obs_id]:
                 self._products[obs_id][extra_key] = {}
-            self._products[obs_id][extra_key][p_type] = prod_obj
+
+            if "profile" not in p_type:
+                self._products[obs_id][extra_key][p_type] = prod_obj
+            # Profiles are stored in a list, just because there can be so many giving them all extra keys
+            #  is too much work
+            elif "profile" in p_type and p_type not in self._products[obs_id][extra_key]:
+                self._products[obs_id][extra_key][p_type] = {0: prod_obj}
+            elif "profile" in p_type and p_type in self._products[obs_id][extra_key]:
+                self._products[obs_id][extra_key][p_type].update(
+                    {len(self._products[obs_id][extra_key][p_type]): prod_obj})
+
         elif extra_key is None and obs_id == "combined":
-            self._products[obs_id][p_type] = prod_obj
+            if "profile" not in p_type:
+                self._products[obs_id][p_type] = prod_obj
+            # Profiles are stored in a list, just because there can be so many giving them all extra keys
+            #  is too much work
+            elif "profile" in p_type and p_type not in self._products[obs_id]:
+                self._products[obs_id][p_type] = {0: prod_obj}
+            elif "profile" in p_type and p_type in self._products[obs_id]:
+                self._products[obs_id][p_type].update({len(self._products[obs_id][p_type]): prod_obj})
 
         # This is for an image being added, so we look for a matching exposure map. If it exists we can
         #  make a ratemap
@@ -558,42 +594,47 @@ class BaseSource:
                 global_results = fit_data["RESULTS"][0]
                 model = global_results["MODEL"].strip(" ")
 
-                inst_lums = {}
-                for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
-                    sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
-                    # Finds the appropriate matching spectrum object for the current table line
-                    try:
-                        spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1],
-                                                                     just_obj=False)
-                                if reg_type in match and match[-1].usable][0][-1]
-                    except IndexError:
-                        raise NoProductAvailableError("A Spectrum object referenced in a fit file for {n} cannot be "
-                                                      "loaded".format(n=self._name))
+                try:
+                    inst_lums = {}
+                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                        # Finds the appropriate matching spectrum object for the current table line
+                        try:
+                            spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1],
+                                                                         just_obj=False)
+                                    if reg_type in match and match[-1].usable][0][-1]
+                        except IndexError:
+                            raise NoProductAvailableError("A Spectrum object referenced in a fit file for {n} "
+                                                          "cannot be loaded".format(n=self._name))
 
-                    # Adds information from this fit to the spectrum object.
-                    spec.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)])
-                    self.update_products(spec)  # Adds the updated spectrum object back into the source
+                        # Adds information from this fit to the spectrum object.
+                        spec.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)])
+                        self.update_products(spec)  # Adds the updated spectrum object back into the source
 
-                    # The add_fit_data method formats the luminosities nicely, so we grab them back out
-                    #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
-                    processed_lums = spec.get_luminosities(model)
-                    if spec.instrument not in inst_lums:
-                        inst_lums[spec.instrument] = processed_lums
+                        # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                        #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
+                        processed_lums = spec.get_luminosities(model)
+                        if spec.instrument not in inst_lums:
+                            inst_lums[spec.instrument] = processed_lums
 
                     # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
                     #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
                     #  consistent
-                if "pn" in inst_lums:
-                    chosen_lums = inst_lums["pn"]
-                    # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
-                elif "mos2" in inst_lums:
-                    chosen_lums = inst_lums["mos2"]
-                else:
-                    chosen_lums = inst_lums["mos1"]
+                    if "pn" in inst_lums:
+                        chosen_lums = inst_lums["pn"]
+                        # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                    elif "mos2" in inst_lums:
+                        chosen_lums = inst_lums["mos2"]
+                    else:
+                        chosen_lums = inst_lums["mos1"]
 
-                # Push global fit results, luminosities etc. into the corresponding source object.
-                self.add_fit_data(model, reg_type, global_results, chosen_lums)
+                    # Push global fit results, luminosities etc. into the corresponding source object.
+                    self.add_fit_data(model, reg_type, global_results, chosen_lums)
 
+                except OSError:
+                    chosen_lums = {}
+
+                fit_data.close()
         os.chdir(og_dir)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
@@ -977,7 +1018,7 @@ class BaseSource:
         elif reg_type == "region" and obs_id is not None:
             src_reg = self._regions[obs_id]
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise TypeError("There is no {} associated with this source".format(reg_type))
+            raise ValueError("There is no {} associated with this source".format(reg_type))
         elif reg_type != "region" and reg_type in self._radii:
             # We know for certain that the radius will be in degrees, but it has to be converted to degrees
             #  before being stored in the radii attribute
@@ -1049,7 +1090,11 @@ class BaseSource:
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:
-            mask_image = self.get_products("combined_image")[0]
+            comb_images = self.get_products("combined_image")
+            if len(comb_images) != 0:
+                mask_image = comb_images[0]
+            else:
+                raise NoProductAvailableError("There are no combined products available to generate a mask for.")
         else:
             # Just grab the first instrument that comes out the get method, the masks should be the same.
             mask_image = self.get_products("image", obs_id)[0]
@@ -1269,7 +1314,7 @@ class BaseSource:
             source_interlopers = self.within_region(source)
             background_interlopers = self.within_region(back)
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise TypeError("There is no {} associated with this source".format(reg_type))
+            raise ValueError("There is no {} associated with this source".format(reg_type))
         elif reg_type != "region" and reg_type in self._radii:
             source, back = self.source_back_regions(reg_type, obs_id)
             source_interlopers = self.within_region(source)
@@ -1505,9 +1550,51 @@ class BaseSource:
 
         # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
         if en_key is None:
-            return self._luminosities[reg_type][model]
+            parsed_lums = {}
+            for lum_key in self._luminosities[reg_type][model]:
+                lum_value = self._luminosities[reg_type][model][lum_key]
+                parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
+                parsed_lums[lum_key] = parsed_lum
+            return parsed_lums
         else:
-            return self._luminosities[reg_type][model][en_key]
+            lum_value = self._luminosities[reg_type][model][en_key]
+            parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
+            return parsed_lum
+
+    def get_radius(self, rad_name: str, out_unit: Union[Unit, str] = 'deg') -> Quantity:
+        """
+        Allows a radius associated with this source to be retrieved in specified distance units. Note
+        that physical distance units such as kiloparsecs may only be used if the source has
+        redshift information.
+        :param str rad_name: The name of the desired radius, r200 for instance.
+        :param Union[Unit, str] out_unit: An astropy unit, either a Unit instance or a string
+        representation. Default is degrees.
+        :return: The desired radius in the desired units.
+        :rtype: Quantity
+        """
+        # If a string representation was passed, we make it an astropy unit
+        if isinstance(out_unit, str):
+            out_unit = Unit(out_unit)
+
+        # In case somebody types in R500 rather than r500 for instance.
+        rad_name = rad_name.lower()
+        if rad_name not in self._radii:
+            raise ValueError("There is no {r} radius associated with this object.".format(r=rad_name))
+        elif out_unit.is_equivalent('kpc') and self._redshift is None:
+            raise UnitConversionError("You cannot convert to this unit without redshift information.")
+
+        if self._radii[rad_name].unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
+            out_rad = self._radii[rad_name].to(out_unit)
+        elif self._radii[rad_name].unit.is_equivalent('deg') and out_unit.is_equivalent('kpc'):
+            out_rad = ang_to_rad(self._radii[rad_name], self._redshift, self._cosmo).to(out_unit)
+        elif self._radii[rad_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
+            out_rad = self._radii[rad_name].to(out_unit)
+        elif self._radii[rad_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
+            out_rad = rad_to_ang(self._radii[rad_name], self._redshift, self._cosmo).to(out_unit)
+        else:
+            raise UnitConversionError("Cannot understand {} as a distance unit".format(str(out_unit)))
+
+        return out_rad
 
     @property
     def num_pn_obs(self) -> int:
@@ -1564,16 +1651,23 @@ class BaseSource:
         """
         return self._disassociated_obs
 
-    def disassociate_obs(self, to_remove: dict):
+    def disassociate_obs(self, to_remove: Union[dict, str]):
         """
         Method that uses the supplied dictionary to safely remove data from the source. This data will no longer
         be used in any analyses, and would typically be removed because it is of poor quality, or doesn't contribute
         enough to justify its presence.
-        :param dict to_remove: A dictionary of observations to remove, in the style of the source.instruments
-        dictionary, with the top level keys being ObsIDs, and the lower levels being instrument names.
+        :param Union[dict, str] to_remove: A dictionary of observations to remove, either in the style of
+        the source.instruments dictionary (with the top level keys being ObsIDs, and the lower levels
+        being instrument names), or a string containing an ObsID.
         """
+        # Users can pass just an ObsID string, but we then need to convert it to the form
+        #  that the rest of the function requires
+        if isinstance(to_remove, str):
+            to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
+
         if not self._disassociated:
             self._disassociated = True
+
         if len(self._disassociated_obs) == 0:
             self._disassociated_obs = to_remove
         else:
@@ -1640,6 +1734,15 @@ class BaseSource:
         """
         return self._ang_diam_dist
 
+    @property
+    def background_radius_factors(self) -> ndarray:
+        """
+        The factors by which to multiply outer radius by to get inner and outer radii for background regions.
+        :return: An array of the two factors.
+        :rtype: ndarray
+        """
+        return np.array([self._back_inn_factor, self._back_out_factor])
+
     def obs_check(self, reg_type: str, threshold_fraction: float = 0.5) -> Dict:
         """
         This method uses exposure maps and region masks to determine which ObsID/instrument combinations
@@ -1648,8 +1751,8 @@ class BaseSource:
         calculated is less than the threshold fraction, that ObsID-instrument will be included in the returned
         rejection dictionary.
         :param str reg_type: The region type for which to calculate the area intersection.
-        :param float threshold_fraction: Area to full area of region ratio that has to be reached before
-        a specific observation is allowed.
+        :param float threshold_fraction: Area to max area ratios below this value will mean the
+        ObsID-Instrument is rejected.
         :return: A dictionary of ObsID keys on the top level, then instruments a level down, that
         should be rejected according to the criteria supplied to this method.
         :rtype: Dict
@@ -1737,17 +1840,21 @@ class BaseSource:
             else:
                 region_radius = self._custom_region_radius.to("deg")
             print("Custom Region Radius - {}".format(region_radius.round(2)))
-            print("Custom Region SNR - {}".format(self.get_snr("custom", self._default_coord).round(2)))
+            if len(self.get_products('combined_image')) != 0:
+                print("Custom Region SNR - {}".format(self.get_snr("custom", self._default_coord).round(2)))
 
         if self._r200 is not None:
             print("R200 - {}".format(self._r200))
-            print("R200 SNR - {}".format(self.get_snr("r200", self._default_coord).round(2)))
+            if len(self.get_products('combined_image')) != 0:
+                print("R200 SNR - {}".format(self.get_snr("r200", self._default_coord).round(2)))
         if self._r500 is not None:
             print("R500 - {}".format(self._r500))
-            print("R500 SNR - {}".format(self.get_snr("r500", self._default_coord).round(2)))
+            if len(self.get_products('combined_image')) != 0:
+                print("R500 SNR - {}".format(self.get_snr("r500", self._default_coord).round(2)))
         if self._r2500 is not None:
-            print("R2500 - {}".format(self._r500))
-            print("R2500 SNR - {}".format(self.get_snr("r2500", self._default_coord).round(2)))
+            print("R2500 - {}".format(self._r2500))
+            if len(self.get_products('combined_image')) != 0:
+                print("R2500 SNR - {}".format(self.get_snr("r2500", self._default_coord).round(2)))
 
         # There's probably a neater way of doing the observables - maybe a formatting function?
         if self._richness is not None and self._richness_err is not None \

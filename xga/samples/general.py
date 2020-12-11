@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 15:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 12:07. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -61,6 +61,7 @@ class PointSample(BaseSample):
                 self._point_radii.append(pr.value)
             except NoValidObservationsError:
                 failed_names.append(n)
+                self._failed_sources[n] = "CleanedNoMatch"
 
             dec_lb.update(1)
         dec_lb.close()

@@ -1,6 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/09/2020, 16:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 13:47. Copyright (c) David J Turner
 
+import numpy as np
 from astropy.units.quantity import Quantity
 from pandas import DataFrame
 
@@ -8,22 +9,23 @@ from .. import CENSUS, BLACKLIST
 from ..exceptions import NoMatchFoundError
 
 
-def simple_xmm_match(src_ra: float, src_dec: float, half_width: Quantity = Quantity(20.0, 'arcmin')) -> DataFrame:
+def simple_xmm_match(src_ra: float, src_dec: float, distance: Quantity = Quantity(30.0, 'arcmin')) -> DataFrame:
     """
-    Returns ObsIDs within a square of +-half width from the input ra and dec. The default half_width is
-    15 arcminutes, which approximately corresponds to the size of the XMM FOV.
+    Returns ObsIDs within a given distance from the input ra and dec values.
     :param float src_ra: RA coordinate of the source, in degrees.
     :param float src_dec: DEC coordinate of the source, in degrees.
-    :param Quantity half_width: Half width of square to search in..
+    :param Quantity distance: The distance to search for XMM observations within, default should be
+    able to match a source on the edge of an observation to the centre of the observation.
     :return: The ObsID, RA_PNT, and DEC_PNT of matching XMM observations.
     :rtype: DataFrame
     """
-    hw = half_width.to('deg').value
-    matches = CENSUS[(CENSUS["RA_PNT"] <= src_ra+hw) & (CENSUS["RA_PNT"] >= src_ra-hw) &
-                     (CENSUS["DEC_PNT"] <= src_dec+hw) & (CENSUS["DEC_PNT"] >= src_dec-hw)]
+    rad = distance.to('deg').value
+    local_census = CENSUS.copy()
+    local_census["dist"] = np.sqrt((local_census["RA_PNT"] - src_ra)**2
+                                   + (local_census["DEC_PNT"] - src_dec)**2)
+    matches = local_census[local_census["dist"] <= rad]
     matches = matches[~matches["ObsID"].isin(BLACKLIST["ObsID"])]
     if len(matches) == 0:
         raise NoMatchFoundError("No XMM observation found within {a} of ra={r} "
-                                "dec={d}".format(r=round(src_ra, 4), d=round(src_dec, 4), a=half_width))
+                                "dec={d}".format(r=round(src_ra, 4), d=round(src_dec, 4), a=distance))
     return matches
-

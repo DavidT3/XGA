@@ -1,7 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/10/2020, 16:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/12/2020, 13:21. Copyright (c) David J Turner
 
-from typing import Union, List, Tuple, Dict
+from typing import Union, List, Tuple
 from warnings import warn
 
 import numpy as np
@@ -74,6 +74,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], reg_type: str, abu
     # Then we need to grab the temperatures and pass them through to the cluster conversion factor
     #  calculator - this may well change as I intend to let cluster_cr_conv grab temperatures for
     #  itself at some point
+    # TODO STOP THIS KILLING EVERYTHING IF A CLUSTER HAS NO FIT
     temps = Quantity([src.get_temperature(reg_type, "tbabs*apec")[0] for src in sources], 'keV')
     cluster_cr_conv(sources, reg_type, temps, abund_table=abund_table)
 
@@ -132,17 +133,16 @@ def _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins
 
     if use_peak:
         pix_centre = comb_rt.coord_conv(src.peak, pix)
-        source_mask, background_mask = src.get_mask(reg_type, central_coord=src.peak)
     else:
         pix_centre = comb_rt.coord_conv(src.ra_dec, pix)
-        source_mask, background_mask = src.get_mask(reg_type, central_coord=src.ra_dec)
 
-    # This is because I actually only want to mask interloper point sources right now.
-    source_mask = src.get_interloper_mask()
+    # Grabs the mask which will remove interloper sources
+    int_mask = src.get_interloper_mask()
 
-    rad = Quantity(src.source_back_regions(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
-    sb_prof, success = radial_brightness(comb_rt, source_mask, background_mask, pix_centre, rad, src.redshift,
-                                         pix_step, kpc, src.cosmo, min_snr)
+    rad = src.get_radius(reg_type, 'kpc')
+    sb_prof, success = radial_brightness(comb_rt, pix_centre, rad, src.background_radius_factors[0],
+                                         src.background_radius_factors[1], int_mask, src.redshift, pix_step, kpc,
+                                         src.cosmo, min_snr)
 
     if not success:
         warn("Minimum SNR rebinning failed for {}".format(src.name))
@@ -155,7 +155,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], reg_type: str = 
                   pix_step: int = 1, min_snr: Union[int, float] = 0.0, abund_table: str = "angr",
                   lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                   psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                  psf_iter: int = 15, num_cores: int = NUM_CORES) -> Dict[str, GasDensity1D]:
+                  psf_iter: int = 15, num_cores: int = NUM_CORES) -> Union[GalaxyCluster, ClusterSample]:
     """
     This is the most basic method for measuring the baryonic density profile of a Galaxy Cluster, and is not
     recommended for serious use due to the often unstable results from applying numerical inverse abel
@@ -177,19 +177,18 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], reg_type: str = 
     :param str psf_algo: If PSF corrected, the algorithm used.
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
-    :return: A hopefully temporary dictionary of GasDensity1D objects, though at some point hopefully they'll be
-    stored inside the source objects.
-    :rtype: Dict[str: GasDensity1D]
+    :return: A source or sample of sources, with the density profile added to its storage structure.
+    :rtype: Union[GalaxyCluster, ClusterSample]
     """
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors = _dens_setup(sources, reg_type, abund_table, lo_en, hi_en, num_cores=num_cores)
 
-    densities = {}
     dens_prog = tqdm(desc="Inverse Abel transforming data and measuring densities", total=len(sources))
     for src_ind, src in enumerate(sources):
         sb_prof = _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
                           pix_step, min_snr)
+        src.update_products(sb_prof)
 
         # Convert the cen_rad and rad_bins to cm
         cen_rad = sb_prof.radii.to("cm")
@@ -209,14 +208,14 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], reg_type: str = 
         density = (Quantity(num_density, "1/cm^3") * HY_MASS).to("Msun/Mpc^3")
 
         # TODO Figure out how to convert the surface brightness uncertainties
-        dens_prof = GasDensity1D(cen_rad.to("kpc"), density, src.name, "combined", "combined", rad_bins.to("kpc"))
-        # TODO Add this to the product storage structure of src, when that is supported for profiles
-        densities[src.name] = dens_prof
+        dens_prof = GasDensity1D(cen_rad.to("kpc"), density, sb_prof.centre, src.name, "combined", "combined",
+                                 rad_bins.to("kpc"))
+        src.update_products(dens_prof)
 
         dens_prog.update(1)
     dens_prog.close()
 
-    return densities
+    return sources
 
 
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: str, fit_method: str = "mcmc",
@@ -227,22 +226,28 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
                           psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, model_realisations: int = 500, model_rad_steps: int = 300,
                           conf_level: int = 90, num_cores: int = NUM_CORES, ml_mcmc_start: bool = True,
-                          ml_rand_dev: float = 1e-4, num_walkers: int = 30, num_steps: int = 20000):
+                          ml_rand_dev: float = 1e-4, num_walkers: int = 20, num_steps: int = 20000):
 
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors = _dens_setup(sources, reg_type, abund_table, lo_en, hi_en, num_cores=num_cores)
 
-    densities = {}
     dens_prog = tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
                      total=len(sources), position=0)
+    # Just defines whether the MCMC fits (if used) can be allowed to put a progress bar on the screen
+    if len(sources) == 1:
+        prog_bar_allowed = True
+    else:
+        prog_bar_allowed = False
+
     for src_ind, src in enumerate(sources):
         sb_prof = _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
                           pix_step, min_snr)
+        src.update_products(sb_prof)
 
         # Fit the user chosen model to sb_prof
         sb_prof.fit(model, fit_method, model_priors, model_start_pars, model_realisations, model_rad_steps,
-                    conf_level, ml_mcmc_start, ml_rand_dev, num_walkers, num_steps)
+                    conf_level, ml_mcmc_start, ml_rand_dev, num_walkers, num_steps, progress_bar=prog_bar_allowed)
 
         model_r = sb_prof.get_realisation(model)
         if model_r is not None:
@@ -266,14 +271,14 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
             # Now we convert to an actual mass
             density = (Quantity(num_density, "1/cm^3") * HY_MASS).to("Msun/Mpc^3").T
             mean_dens = np.mean(density, axis=1)
-            dens_prof = GasDensity1D(radii.to("kpc"), mean_dens, src.name, "combined", "combined")
+            dens_prof = GasDensity1D(radii.to("kpc"), mean_dens, sb_prof.centre, src.name, "combined", "combined")
             dens_prof.add_realisation("inv_abel_model", radii.to("kpc"), density)
 
-            densities[src.name] = dens_prof
+            src.update_products(dens_prof)
 
         dens_prog.update(1)
     dens_prog.close()
-    return densities
+    return sources
 
 
 

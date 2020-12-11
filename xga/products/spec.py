@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/10/2020, 16:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/11/2020, 16:26. Copyright (c) David J Turner
 
 
 import os
@@ -27,35 +27,35 @@ class Spectrum(BaseProduct):
         if os.path.exists(rmf_path):
             self._rmf = rmf_path
         else:
-            self._rmf = None
+            self._rmf = ''
             self._usable = False
             self._why_unusable.append("RMFPathDoesNotExist")
 
         if os.path.exists(arf_path):
             self._arf = arf_path
         else:
-            self._arf = None
+            self._arf = ''
             self._usable = False
             self._why_unusable.append("ARFPathDoesNotExist")
 
         if os.path.exists(b_path):
             self._back_spec = b_path
         else:
-            self._back_spec = None
+            self._back_spec = ''
             self._usable = False
             self._why_unusable.append("BackSpecPathDoesNotExist")
 
         if os.path.exists(b_rmf_path):
             self._back_rmf = b_rmf_path
         else:
-            self._back_rmf = None
+            self._back_rmf = ''
             self._usable = False
             self._why_unusable.append("BackRMFPathDoesNotExist")
 
         if os.path.exists(b_arf_path):
             self._back_arf = b_arf_path
         else:
-            self._back_arf = None
+            self._back_arf = ''
             self._usable = False
             self._why_unusable.append("BackARFPathDoesNotExist")
 
@@ -65,7 +65,7 @@ class Spectrum(BaseProduct):
         else:
             self._usable = False
             self._why_unusable.append("InvalidRegionType")
-            self._reg_type = None
+            self._reg_type = ''
             raise ValueError("{0} is not a supported region type, please use one of these; "
                              "{1}".format(reg_type, ", ".join(allowed_regs)))
 

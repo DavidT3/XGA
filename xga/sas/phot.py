@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/09/2020, 10:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/11/2020, 14:19. Copyright (c) David J Turner
 
 import os
 from shutil import rmtree
@@ -7,6 +7,7 @@ from typing import Union
 
 import numpy as np
 from astropy.units import Quantity, deg
+from tqdm import tqdm
 
 from .misc import cifbuild
 from .run import sas_call
@@ -21,8 +22,9 @@ from ..utils import energy_to_channel
 
 # TODO Perhaps remove the option to add to the SAS expression
 @sas_call
-def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity, hi_en: Quantity,
-                   add_expr: str = "", num_cores: int = NUM_CORES, disable_progress: bool = False):
+def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.5, 'keV'),
+                   hi_en: Quantity = Quantity(2.0, 'keV'), add_expr: str = "", num_cores: int = NUM_CORES,
+                   disable_progress: bool = False):
     """
     A convenient Python wrapper for a configuration of the SAS evselect command that makes images.
     Images will be generated for every observation associated with every source passed to this function.
@@ -109,8 +111,8 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
 
 
 @sas_call
-def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity, hi_en: Quantity,
-            num_cores: int = NUM_CORES, disable_progress: bool = False):
+def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.5, 'keV'),
+            hi_en: Quantity = Quantity(2.0, 'keV'), num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for the SAS eexpmap command.
     Expmaps will be generated for every observation associated with every source passed to this function.
@@ -212,9 +214,10 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity,
 
 
 @sas_call
-def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quantity, hi_en: Quantity,
-            psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-            psf_iter: int = 15, num_cores: int = NUM_CORES, disable_progress: bool = False):
+def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quantity = Quantity(0.5, 'keV'),
+            hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
+            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
+            disable_progress: bool = False):
     """
     A convenient Python wrapper for the SAS emosaic command. Every image associated with the source,
     that is in the energy band specified by the user, will be added together.
@@ -368,6 +371,8 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
     if isinstance(sources, NullSource):
         raise NotImplementedError("You cannot currently use PSFGen with a NullSource.")
 
+    psfgen_prep_progress = tqdm(desc='Preparing PSF generation commands', total=len(sources),
+                                disable=len(sources) == 0)
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function
     sources_cmds = []
@@ -486,6 +491,9 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
         # once the SAS cmd has run
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="psf"))
+
+        psfgen_prep_progress.update(1)
+    psfgen_prep_progress.close()
 
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.

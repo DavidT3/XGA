@@ -1,18 +1,17 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 14:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 14:07. Copyright (c) David J Turner
 
 import warnings
-from typing import Tuple, Union
+from typing import Union
 
+import numpy as np
 from astropy import wcs
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitConversionError, pix, kpc
-from matplotlib import pyplot as plt
-from matplotlib.ticker import ScalarFormatter
 
 from .general import ExtendedSource
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, NoRegionsError
-from ..imagetools import radial_brightness, pizza_brightness
+from ..imagetools import radial_brightness
 from ..products import Spectrum
 from ..sourcetools import ang_to_rad, rad_to_ang
 
@@ -133,24 +132,52 @@ class GalaxyCluster(ExtendedSource):
 
     # Property getters for other observables I've allowed to be passed in.
     @property
-    def weak_lensing_mass(self) -> Tuple[Quantity, Quantity]:
+    def weak_lensing_mass(self) -> Quantity:
         """
         Gets the weak lensing mass passed in at initialisation of the source.
         :return: Two quantities, the weak lensing mass, and the weak lensing mass error in Msun. If the
         values were not passed in at initialisation, the returned values will be None.
-        :rtype: Tuple[Quantity, Quantity]
+        :rtype: Quantity
         """
-        return self._wl_mass, self._wl_mass_err
+        if self._wl_mass is not None:
+            wl_list = [self._wl_mass.value]
+            wl_unit = self._wl_mass.unit
+        else:
+            wl_list = [np.NaN]
+            wl_unit = ''
+
+        if self._wl_mass_err is None:
+            wl_list.append(np.NaN)
+        elif isinstance(self._wl_mass_err, Quantity) and not self._wl_mass_err.isscalar:
+            wl_list += list(self._wl_mass_err.value)
+        elif isinstance(self._wl_mass_err, Quantity) and self._wl_mass_err.isscalar:
+            wl_list.append(self._wl_mass_err.value)
+
+        return Quantity(wl_list, wl_unit)
 
     @property
-    def richness(self) -> Tuple[Quantity, Quantity]:
+    def richness(self) -> Quantity:
         """
         Gets the richness passed in at initialisation of the source.
-        :return: Two quantities, the richness, and the weak lensing mass error. If the
+        :return: Two floats, the richness, and the richness error. If the
         values were not passed in at initialisation, the returned values will be None.
-        :rtype: Tuple[Quantity, Quantity]
+        :rtype: Quantity
         """
-        return self._richness, self._richness_err
+        if self._richness is not None:
+            r_list = [self._richness]
+        else:
+            r_list = [np.NaN]
+
+        if self._richness_err is None:
+            r_list.append(np.NaN)
+        elif isinstance(self._richness_err, (float, int)):
+            r_list.append(self._richness_err)
+        elif isinstance(self._richness_err, list):
+            r_list += self._richness_err
+        elif isinstance(self._richness_err, np.ndarray):
+            r_list += list(self._richness_err)
+
+        return Quantity(r_list)
 
     # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
     #  justified considering how often the cluster temperature is used in X-ray cluster studies.
@@ -187,33 +214,41 @@ class GalaxyCluster(ExtendedSource):
         elif model is not None and "kT" in self._fit_results[reg_type][model]:
             # Just going to call the get_results method with specific parameters, to get the result formatted
             #  the same way.
-            return self.get_results(reg_type, model, "kT")
+            return Quantity(self.get_results(reg_type, model, "kT"), 'keV')
         elif model is None and len(models_with_kt) != 1:
             raise ValueError("The model parameter can only be None when there is only one model available"
                              " with a kT measurement.")
         # For convenience sake, if there is only one model with a kT measurement, I'll allow the model parameter
         #  to be None.
         elif model is None and len(models_with_kt) == 1:
-            return self.get_results(reg_type, models_with_kt[0], "kT")
+            return Quantity(self.get_results(reg_type, models_with_kt[0], "kT"), 'keV')
 
     def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
-                                same_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0):
+                                use_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
+                                figsize: tuple = (10, 7), xscale: str = 'log', yscale: str = 'log',
+                                back_sub: bool = True):
         """
         A method that generates and displays brightness profiles for the current cluster. Brightness profiles
         exclude point sources and either measure the average counts per second within a circular annulus (radial),
         or an angular region of a circular annulus (pizza). All points correspond to an annulus of width 1 pixel,
         and this method does NOT do any rebinning to maximise signal to noise.
+        If use peak is selected, the peak coordinate used will depend on the combined ratemap, so would be different
+        for PSF corrected ratemaps to the uncorrected ratemap.
         :param str reg_type: The region in which to view the radial brightness profile.
         :param str profile_type: The type of brightness profile you wish to view, radial or pizza.
         :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
         slice will be 360 / num_slices degrees.
-        :param bool same_peak: If True then the radial profiles (including for PSF corrected ratemaps)
+        :param bool use_peak: If True then the radial profiles (including for PSF corrected ratemaps)
          will all be constructed centered on the peak found for the 'normal' combined ratemap. If False,
          peaks will be found for each individual combined ratemap and profiles will be constructed
          centered on them.
         :param int pix_step: The width (in pixels) of each annular bin, default is 1.
         :param Union[float, int] min_snr: The minimum signal to noise allowed for each radial bin. This is 0 by
         default, which disables any automatic rebinning.
+        :param tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
         """
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
@@ -240,83 +275,71 @@ class GalaxyCluster(ExtendedSource):
         psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", just_obj=False)
                         if en_key + "_" in rt[-2]]
 
-        # TODO Decide what to do here
-        source_mask, background_mask = self.get_mask(reg_type)
-        source_mask = self.get_interloper_mask()
-        # Get combined peak - basically the only peak internal methods will use
-        pix_peak = comb_rt.coord_conv(self.peak, pix)
-        rad = Quantity(self.source_back_regions(reg_type)[0].to_pixel(comb_rt.radec_wcs).radius, pix)
+        # Fetch the mask that will remove all interloper sources from the combined ratemap
+        int_mask = self.get_interloper_mask()
 
-        # Setup the figure
-        plt.figure(figsize=(8, 5))
-        ax = plt.gca()
+        if use_peak:
+            pix_central = comb_rt.coord_conv(self.peak, pix)
+        else:
+            pix_central = comb_rt.coord_conv(self.ra_dec, pix)
+
+        # Read out the radii
+        rad = self.get_radius(reg_type)
 
         # The plotting will be slightly different based on the profile type, also have to call the methods
         #  to generate the profiles as I don't currently store the data.
         if profile_type == "radial":
-            ax.set_title("{n} - {l}-{u}keV Radial Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
-                                                                             u=self._peak_hi_en.value))
-            sb_profile, success = radial_brightness(comb_rt, source_mask, background_mask, pix_peak, rad,
-                                                    self._redshift, pix_step, kpc, self.cosmo, min_snr=min_snr)
-            # TODO REPLACE ALL THIS PLOTTING STUFF WITH A sb_profile.view() call when I can combine different
-            #  profiles onto one plot
-            prof = plt.errorbar(sb_profile.radii.value, sb_profile.values.value, xerr=sb_profile.radii_err.value,
-                                yerr=sb_profile.values_err.value, fmt='x', capsize=2, label="Emission")
-            plt.plot(sb_profile.radii.value, sb_profile.values.value, color=prof[0].get_color())
+            # This fetches any profiles that might have already been generated to our required specifications
+            prof_prods = self.get_products("combined_brightness_profile")
+            if len(prof_prods) == 1:
+                matching_profs = [p for p in list(prof_prods[0].values())
+                                  if p.check_match(comb_rt, pix_central, pix_step, min_snr, rad)]
+            else:
+                matching_profs = []
+
+            if len(matching_profs) == 0:
+                sb_profile, success = radial_brightness(comb_rt, pix_central, rad, self._back_inn_factor,
+                                                        self._back_out_factor, int_mask, self.redshift, pix_step, kpc,
+                                                        self.cosmo, min_snr)
+                self.update_products(sb_profile)
+            else:
+                sb_profile = matching_profs[0]
 
             for psf_comb_rt in psf_comb_rts:
                 p_rt = psf_comb_rt[-1]
-                # If the user wants to use individual peaks, we have to find them here.
-                if not same_peak:
-                    pix_peak = self.find_peak(p_rt)[0]
-                psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], source_mask, background_mask, pix_peak,
-                                                            rad, self._redshift, pix_step, kpc, self.cosmo,
-                                                            min_snr=min_snr)
-                prof = plt.errorbar(psf_sb_profile.radii.value, psf_sb_profile.values.value,
-                                    xerr=psf_sb_profile.radii_err.value, yerr=psf_sb_profile.values_err.value,
-                                    fmt='x', capsize=2, label="{m} PSF Corrected".format(m=p_rt.psf_model))
-                plt.plot(psf_sb_profile.radii.value, psf_sb_profile.values.value, color=prof[0].get_color())
+                if use_peak:
+                    pix_central = self.find_peak(p_rt)[0]
+                else:
+                    pix_central = comb_rt.coord_conv(self.ra_dec, pix)
 
-                plt.axhline(psf_sb_profile.background.value, color=prof[0].get_color(), linestyle="dashed",
-                            label="{m} PSF Corrected Background".format(m=p_rt.psf_model))
+                if len(prof_prods) == 1:
+                    matching_profs = [p for p in list(prof_prods[0].values())
+                                      if p.check_match(p_rt, pix_central, pix_step, min_snr, rad)]
+                else:
+                    matching_profs = []
 
+                if len(matching_profs) == 0:
+                    psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], pix_central, rad,
+                                                                self._back_inn_factor, self._back_out_factor, int_mask,
+                                                                self.redshift, pix_step, kpc, self.cosmo, min_snr)
+                    self.update_products(psf_sb_profile)
+                else:
+                    psf_sb_profile = matching_profs[0]
+
+                sb_profile += psf_sb_profile
         elif profile_type == "pizza":
-            ax.set_title("{n} - {l}-{u}keV Pizza Brightness Profile".format(n=self.name, l=self._peak_lo_en.value,
-                                                                            u=self._peak_hi_en.value))
-            brightness, radii, angles, og_background, inn_rads, out_rads = pizza_brightness(comb_rt, source_mask,
-                                                                                            background_mask, pix_peak,
-                                                                                            rad, num_slices,
-                                                                                            self._redshift, pix_step,
-                                                                                            kpc, self.cosmo)
-            for ang_ind in range(angles.shape[0]):
-                # Setup labels with the angles covered by the profile
-                lab_str = "{0}$^{{\circ}}$-{1}$^{{\circ}}$ Slice Emission".format(*angles[ang_ind, :].value)
-                plt.plot(radii, brightness[:, ang_ind], label=lab_str)
+            raise NotImplementedError("This was implemented but so many things have changed and I haven't "
+                                      "adapted pizza profiles yet")
 
-        # Plot the background level
-        plt.axhline(sb_profile.background.value, color="black", linestyle="dashed", label="Background")
+        draw_rads = {}
+        for r_name in self._radii:
+            if r_name not in ['search', 'custom']:
+                new_key = "R$_{" + r_name[1:] + "}$"
+                draw_rads[new_key] = self.get_radius(r_name, sb_profile.radii_unit)
+            elif r_name == "custom":
+                draw_rads["Custom"] = self.get_radius(r_name, sb_profile.radii_unit)
 
-        # This adds small ticks to the axis
-        ax.minorticks_on()
-        # Set the lower limit of the x-axis to 0
-        ax.set_xlim(0,)
-        # Adjusts how the ticks look
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
-        # Choose y-axis log scaling because otherwise you can't really make out the profiles very well
-        ax.set_yscale("log")
-        ax.set_xscale("log")
-        ax.set_xlim(sb_profile.radii.min().value, )
-        ax.xaxis.set_major_formatter(ScalarFormatter())
-
-        # Labels and legends
-        ax.set_ylabel("S$_{b}$ [count s$^{-1}$ arcmin$^{-2}$]")
-        ax.set_xlabel("Radius [kpc]")
-        plt.legend(loc="best")
-        # Removes white space around the plot
-        plt.tight_layout()
-        # Plots the plot
-        plt.show()
-        plt.close('all')
+        sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize, draw_rads=draw_rads, back_sub=back_sub)
 
     def combined_lum_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
         """

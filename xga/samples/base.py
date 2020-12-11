@@ -1,7 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/10/2020, 09:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 16:19. Copyright (c) David J Turner
 
-from typing import Union
+from typing import Union, List, Dict
 from warnings import warn
 
 import numpy as np
@@ -11,7 +11,9 @@ from numpy import ndarray
 from tqdm import tqdm
 
 from ..exceptions import NoMatchFoundError, NoValidObservationsError
+from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..sources.base import BaseSource
+from ..sourcetools.misc import coord_to_name
 
 
 class BaseSample:
@@ -33,6 +35,9 @@ class BaseSample:
         #  like the PointSample declaration, where names aren't strongly required but there are arguments that
         #  aren't passed to this object and stored by it.
         self._accepted_inds = []
+
+        # A dictionary of the names of sources that could not be declared, and a basic reason why
+        self._failed_sources = {}
 
         # Just checking that, if names are being supplied, then they are all unique
         if name is not None and len(set(name)) != len(name):
@@ -60,8 +65,17 @@ class BaseSample:
                 self._redshifts.append(z)
                 self._accepted_inds.append(ind)
             except (NoMatchFoundError, NoValidObservationsError):
+                if n is not None:
+                    # We don't be liking spaces in source names
+                    # n = n.replace(" ", "")
+                    pass
+                else:
+                    ra_dec = Quantity(np.array([r, d]), 'deg')
+                    n = coord_to_name(ra_dec)
+
                 warn("Source {n} does not appear to have any XMM data, and will not be included in the "
                      "sample.".format(n=n))
+                self._failed_sources[n] = "NoMatch"
             dec_base.update(1)
         dec_base.close()
 
@@ -125,6 +139,68 @@ class BaseSample:
         :rtype: dict
         """
         return {n: s.instruments for n, s in self._sources.items()}
+
+    @property
+    def failed_names(self) -> List[str]:
+        """
+        Yields the names of those sources that could not be declared for some reason.
+        :return: A list of source names that could not be declared.
+        :rtype: List[str]
+        """
+        return list(self._failed_sources)
+
+    @property
+    def failed_reasons(self) -> Dict[str, str]:
+        """
+        Returns a dictionary containing sources that failed to be declared successfully, and a
+        simple reason why they couldn't be.
+        :return: A dictionary of source names as keys, and reasons as values.
+        :rtype: Dict[str, str]
+        """
+        return self._failed_sources
+
+    def Lx(self, reg_type: str, model: str, lo_en: Quantity = Quantity(0.5, 'keV'),
+           hi_en: Quantity = Quantity(2.0, 'keV')):
+        """
+        A get method for luminosities measured for the constituent sources of this sample. An error will be
+        thrown if luminosities haven't been measured for the given region and model, no default model has been
+        set, unlike the Tx method of ClusterSample. An extra condition that aims to only return 'good' data has
+        been included, so that any Lx measurement with an uncertainty greater than value will be set to NaN, and
+        a warning will be issued.
+        :param str reg_type: The type of region that the fitted spectra were generated from.
+        :param str model: The name of the fitted model that you're requesting the
+        luminosities from (e.g. tbabs*apec).
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
+        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
+        :rtype: Quantity
+        """
+        lums = []
+        for src in self._sources.values():
+            try:
+                # Fetch the luminosity from a given source using the dedicated method
+                lx_val = src.get_luminosities(reg_type, model, lo_en, hi_en)
+                frac_err = lx_val[1:] / lx_val[0]
+                if len(frac_err[frac_err > 1]) == 0:
+                    lums.append(lx_val)
+                else:
+                    raise ValueError("{s} luminosity measurement's uncertainty greater than value.".format(s=src.name))
+            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
+                # If any of the possible errors are thrown, we print the error as a warning and replace
+                #  that entry with a NaN
+                warn(str(err))
+                lums.append(np.array([np.NaN, np.NaN, np.NaN]))
+
+        # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
+        lums = Quantity(np.array(lums), 'erg / s')
+
+        # We're going to throw an error if all the luminosities are NaN, because obviously something is wrong
+        check_lums = lums[~np.isnan(lums)]
+        if len(check_lums) == 0:
+            raise ValueError("All luminosities appear to be NaN.")
+
+        return lums
 
     def check_spectra(self):
         """
@@ -194,13 +270,13 @@ class BaseSample:
         :return: The relevant Source object.
         :rtype: BaseSource
         """
-        if isinstance(key, int):
+        if isinstance(key, (int, np.integer)):
             src = self._sources[self._names[key]]
         elif isinstance(key, str):
             src = self._sources[key]
         else:
             src = None
-            ValueError("Only a source name or integer index may be used to address a sample object")
+            raise ValueError("Only a source name or integer index may be used to address a sample object")
         return src
 
     def __delitem__(self, key: Union[int, str]):
@@ -209,13 +285,13 @@ class BaseSample:
         name of the source.
         :param Union[int, str] key: The index or name of the source to delete.
         """
-        if isinstance(key, int):
+        if isinstance(key, (int, np.integer)):
             del self._sources[self._names[key]]
         elif isinstance(key, str):
             del self._sources[key]
             key = self._names.index(key)
         else:
-            ValueError("Only a source name or integer index may be used to address a sample object")
+            raise ValueError("Only a source name or integer index may be used to address a sample object")
 
         # Now the standard stored values
         del self._names[key]

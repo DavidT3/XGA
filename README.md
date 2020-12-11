@@ -28,14 +28,26 @@ cd XGA
 python setup.py install
 ```
 
-## External Dependencies
+## Required Dependencies
 XGA depends on two non-Python pieces of software:
 * XMM's Science Analysis System (SAS) - Version 17.0.0, but other versions should be fine.
 * HEASoft's XSPEC - Version 12.10.1, **I can't guarantee later versions will work.**
 
+All required Python modules can be found in requirements.txt, and should be added to your system during the 
+installation of XGA.
+
 Excellent installation guides for [SAS](https://www.cosmos.esa.int/web/xmm-newton/sas-installation) and 
 [HEASoft](https://heasarc.gsfc.nasa.gov/lheasoft/install.html) already exist, so I won't go into that in this readme. 
 XGA will not run without detecting these pieces of software installed on your system.
+
+## Optional Dependencies
+XGA can also make use of external software for some limited tasks, but they are not required to use 
+the module as a whole:
+* The R interpreter.
+* Rpy2 - A Python module that provides an interface with the R language in Python.  
+* LIRA - An R fitting package.
+
+The R interpreter, Rpy2, and LIRA are all necessary only if you wish to use the LIRA scaling relation fitting function.
 
 
 ## Configuring XGA - **THIS SECTION IS VERY IMPORTANT**

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/10/2020, 12:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 18:01. Copyright (c) David J Turner
 
 from typing import Union
 from warnings import warn
@@ -10,8 +10,9 @@ from astropy.units import Quantity
 from tqdm import tqdm
 
 from .base import BaseSample
-from ..exceptions import PeakConvergenceFailedError
+from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.psf import rl_psf
+from ..relations.fit import *
 from ..sources.extended import GalaxyCluster
 
 
@@ -25,24 +26,6 @@ class ClusterSample(BaseSample):
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
                  load_fits: bool = False, clean_obs: bool = True, clean_obs_reg: str = "r200",
                  clean_obs_threshold: float = 0.3, no_prog_bar: bool = False, psf_corr: bool = False):
-
-        # These are various cluster specific attributes to make it easier for people to access them
-        # Radii attributes
-        self._r200s = []
-        self._r200_unit = None
-        self._r500s = []
-        self._r500_unit = None
-        self._r2500s = []
-        self._r2500_unit = None
-        self._customs = []
-        self._custom_unit = None
-
-        # Other attributes
-        self._richnesses = []
-        self._richness_errs = []
-        self._wl_masses = []
-        self._wl_mass_errs = []
-        self._wl_mass_unit = None
 
         # I don't like having this here, but it does avoid a circular import problem
         from xga.sas import evselect_image, eexpmap, emosaic
@@ -72,43 +55,28 @@ class ClusterSample(BaseSample):
             #  super ugly.
             d = dec[ind]
             z = redshift[ind]
-            n = name[ind]
+            # The replace is there because source declaration removes spaces from any passed names,
+            n = name[ind].replace(' ', '')
             # Declaring the BaseSample higher up weeds out those objects that aren't in any XMM observations
             #  So we want to check that the current object name is in the list of objects that have data
             if n in self.names:
                 # I know this code is a bit ugly, but oh well
                 if r200 is not None:
                     r2 = r200[ind]
-                    self._r200s.append(r2.value)
-                    if self._r200_unit is None:
-                        self._r200_unit = r2.unit
                 else:
                     r2 = None
-                    self._r200s.append(r2)
                 if r500 is not None:
                     r5 = r500[ind]
-                    self._r500s.append(r5.value)
-                    if self._r500_unit is None:
-                        self._r500_unit = r5.unit
                 else:
                     r5 = None
-                    self._r500s.append(r5)
                 if r2500 is not None:
                     r25 = r2500[ind]
-                    self._r2500s.append(r25.value)
-                    if self._r2500_unit is None:
-                        self._r2500_unit = r25.unit
                 else:
                     r25 = None
-                    self._r2500s.append(r25)
                 if custom_region_radius is not None:
                     cr = custom_region_radius[ind]
-                    self._customs.append(cr.value)
-                    if self._custom_unit is None:
-                        self._custom_unit = cr.unit
                 else:
                     cr = None
-                    self._customs.append(cr)
 
                 # Here we check the options that are allowed to be None
                 if richness is not None:
@@ -117,22 +85,13 @@ class ClusterSample(BaseSample):
                 else:
                     lam = None
                     lam_err = None
-                # This is like this because lambda is requested as a numpy array, not a quantity
-                self._richnesses.append(lam)
-                self._richness_errs.append(lam_err)
 
                 if wl_mass is not None:
                     wlm = wl_mass[ind]
                     wlm_err = wl_mass_err[ind]
-                    self._wl_masses.append(wlm.value)
-                    self._wl_mass_errs.append(wlm_err.value)
-                    if self._wl_mass_unit is None:
-                        self._wl_mass_unit = wlm.unit
                 else:
                     wlm = None
                     wlm_err = None
-                    self._wl_masses.append(wlm)
-                    self._wl_mass_errs.append(wlm_err)
 
                 # Will definitely load products (the True in this call), because I just made sure I generated a
                 #  bunch to make GalaxyCluster declaration quicker
@@ -179,77 +138,449 @@ class ClusterSample(BaseSample):
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
     @property
-    def r200s(self) -> Union[Quantity, np.ndarray]:
+    def r200_snr(self) -> np.ndarray:
         """
-        Property getter for R200 values of valid clusters - added for the convenience of the user,
-        so they don't have to iterate through the different source objects in the sample.
-        :return: The R200 values of the Galaxy Clusters in this sample.
-        :rtype: Union[Quantity, np.ndarray]
+        Fetches and returns the R200 signal to noises from the constituent sources.
+        :return: The signal to noise ration calculated at the R200.
+        :rtype: np.ndarray
         """
-        if self._r200_unit is None:
-            to_ret = np.array(self._r200s)
-        else:
-            to_ret = Quantity(self._r200s, self._r200_unit)
-        return to_ret
+        snrs = []
+        for s in self:
+            try:
+                snrs.append(s.get_snr("r200"))
+            except ValueError:
+                snrs.append(None)
+        return np.array(snrs)
 
     @property
-    def r500s(self) -> Union[Quantity, np.ndarray]:
+    def r500_snr(self) -> np.ndarray:
         """
-        Property getter for R500 values of valid clusters - added for the convenience of the user,
-        so they don't have to iterate through the different source objects in the sample.
-        :return: The R500 values of the Galaxy Clusters in this sample.
-        :rtype: Union[Quantity, np.ndarray]
+        Fetches and returns the R500 signal to noises from the constituent sources.
+        :return: The signal to noise ration calculated at the R500.
+        :rtype: np.ndarray
         """
-        if self._r500_unit is None:
-            to_ret = np.array(self._r500s)
-        else:
-            to_ret = Quantity(self._r500s, self._r500_unit)
-        return to_ret
+        snrs = []
+        for s in self:
+            try:
+                snrs.append(s.get_snr("r500"))
+            except ValueError:
+                snrs.append(None)
+        return np.array(snrs)
 
     @property
-    def r2500s(self) -> Union[Quantity, np.ndarray]:
+    def r2500_snr(self) -> np.ndarray:
         """
-        Property getter for R2500 values of valid clusters - added for the convenience of the user,
-        so they don't have to iterate through the different source objects in the sample.
-        :return: The R2500 values of the Galaxy Clusters in this sample.
-        :rtype: Union[Quantity, np.ndarray]
+        Fetches and returns the R2500 signal to noises from the constituent sources.
+        :return: The signal to noise ration calculated at the R2500.
+        :rtype: np.ndarray
         """
-        if self._r2500_unit is None:
-            to_ret = np.array(self._r2500s)
-        else:
-            to_ret = Quantity(self._r2500s, self._r2500_unit)
-        return to_ret
+        snrs = []
+        for s in self:
+            try:
+                snrs.append(s.get_snr("r2500"))
+            except ValueError:
+                snrs.append(None)
+        return np.array(snrs)
 
     @property
-    def custom_radii(self) -> Union[Quantity, np.ndarray]:
+    def richness(self) -> Quantity:
         """
-        Property getter for custom radii values of valid clusters - added for the convenience of the user,
-        so they don't have to iterate through the different source objects in the sample.
-        :return: The custom radii values of the Galaxy Clusters in this sample.
-        :rtype: Union[Quantity, np.ndarray]
+        Provides the richnesses of the clusters in this sample, if they were passed in on definition.
+        :return: A unitless Quantity object of the richnesses and their error(s).
+        :rtype: Quantity
         """
-        if self._custom_unit is None:
-            to_ret = np.array(self._customs)
+        rs = []
+        for gcs in self._sources.values():
+            rs.append(gcs.richness.value)
+
+        rs = np.array(rs)
+
+        # We're going to throw an error if all the richnesses are NaN, because obviously something is wrong
+        check_rs = rs[~np.isnan(rs)]
+        if len(check_rs) == 0:
+            raise ValueError("All richnesses appear to be NaN.")
+
+        return Quantity(rs)
+
+    @property
+    def wl_mass(self) -> Quantity:
+        """
+        Provides the weak lensing masses of the clusters in this sample, if they were passed in on definition.
+        :return: A Quantity object of the WL masses and their error(s), in whatever units they were when
+        they were passed in originally.
+        :rtype: Quantity
+        """
+        wlm = []
+        for gcs in self._sources.values():
+            wlm.append(gcs.weak_lensing_mass.value)
+            wlm_unit = gcs.weak_lensing_mass.unit
+
+        wlm = np.array(wlm)
+
+        # We're going to throw an error if all the weak lensing masses are NaN, because obviously something is wrong
+        check_wlm = wlm[~np.isnan(wlm)]
+        if len(check_wlm) == 0:
+            raise ValueError("All weak lensing masses appear to be NaN.")
+
+        return Quantity(wlm, wlm_unit)
+
+    @property
+    def r200(self) -> Quantity:
+        """
+        Returns all the R200 values passed in on declaration, but in units of kpc.
+        :return: A quantity of R200 values.
+        :rtype: Quantity
+        """
+        rads = []
+        for gcs in self._sources.values():
+            rad = gcs.get_radius('r200', 'kpc')
+            if rad is None:
+                rads.append(np.NaN)
+            else:
+                rads.append(rad.value)
+
+        rads = np.array(rads)
+        check_rads = rads[~np.isnan(rads)]
+        if len(check_rads) == 0:
+            raise ValueError("All R200 values appear to be NaN.")
+
+        return Quantity(rads, 'kpc')
+
+    @property
+    def r500(self) -> Quantity:
+        """
+        Returns all the R500 values passed in on declaration, but in units of kpc.
+        :return: A quantity of R500 values.
+        :rtype: Quantity
+        """
+        rads = []
+        for gcs in self._sources.values():
+            rad = gcs.get_radius('r500', 'kpc')
+            if rad is None:
+                rads.append(np.NaN)
+            else:
+                rads.append(rad.value)
+
+        rads = np.array(rads)
+        check_rads = rads[~np.isnan(rads)]
+        if len(check_rads) == 0:
+            raise ValueError("All R500 values appear to be NaN.")
+
+        return Quantity(rads, 'kpc')
+
+    @property
+    def r2500(self) -> Quantity:
+        """
+        Returns all the R2500 values passed in on declaration, but in units of kpc.
+        :return: A quantity of R2500 values.
+        :rtype: Quantity
+        """
+        rads = []
+        for gcs in self._sources.values():
+            rad = gcs.get_radius('r2500', 'kpc')
+            if rad is None:
+                rads.append(np.NaN)
+            else:
+                rads.append(rad.value)
+
+        rads = np.array(rads)
+        check_rads = rads[~np.isnan(rads)]
+        if len(check_rads) == 0:
+            raise ValueError("All R2500 values appear to be NaN.")
+
+        return Quantity(rads, 'kpc')
+
+    def Tx(self, reg_type: str, model: str = 'tbabs*apec'):
+        """
+        A get method for temperatures measured for the constituent clusters of this sample. An error will be
+        thrown if temperatures haven't been measured for the given region and model (default is the tbabs*apec model
+        which single_temp_apec fits to cluster spectra). Any clusters for which temperature fits failed will return
+        NaN temperatures.
+        :param str reg_type: The type of region that the fitted spectra were generated from.
+        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
+        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
+        :rtype: Quantity
+        """
+        temps = []
+        for gcs in self._sources.values():
+            try:
+                # Fetch the temperature from a given cluster using the dedicated method
+                gcs_temp = gcs.get_temperature(reg_type, model).value
+
+                # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
+                #  so its set to NaN
+                if gcs_temp[0] == 64:
+                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    warn("A temperature of 64keV was measured for {s}, this is considered a failed fit by "
+                         "XGA".format(s=gcs.name))
+                temps.append(gcs_temp)
+
+            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
+                # If any of the possible errors are thrown, we print the error as a warning and replace
+                #  that entry with a NaN
+                warn(str(err))
+                temps.append(np.array([np.NaN, np.NaN, np.NaN]))
+
+        # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
+        temps = Quantity(np.array(temps), 'keV')
+
+        # We're going to throw an error if all the temperatures are NaN, because obviously something is wrong
+        check_temps = temps[~np.isnan(temps)]
+        if len(check_temps) == 0:
+            raise ValueError("All temperatures appear to be NaN.")
+
+        return temps
+
+    def gas_mass(self, rad_name: str, dens_tech: str = 'inv_abel_model', conf_level: int = 90) -> Quantity:
+        """
+        A get method for gas masses measured for the constituent clusters of this sample.
+        :param str rad_name: The name of the radius (e.g. r500) to calculate the gas mass within.
+        :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
+        which is the superior of the two I have implemented as of 03/12/20.
+        :param int conf_level: The desired confidence level of the uncertainties.
+        :return: An Nx3 array Quantity where N is the number of clusters. First column is the gas mass, second
+        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
+        :rtype: Quantity
+        """
+        gms = []
+
+        # Iterate through all of our Galaxy Clusters
+        for gcs in self._sources.values():
+            dens_profs = gcs.get_products('combined_gas_density_profile')
+            if len(dens_profs) == 0:
+                # If no dens_prof has been run or something goes wrong then NaNs are added
+                gms.append([np.NaN, np.NaN, np.NaN])
+                warn("{s} doesn't have a density profile associated, please look at "
+                     "sourcetools.density.".format(s=gcs.name))
+            elif len(dens_profs) != 0:
+                # This is because I store the profile products in a really dumb way which I'm going to need to
+                #  correct - but for now this will do
+                dens_prof = dens_profs[0][0]
+                # Use the density profiles gas mass method to calculate the one we want
+                gm = dens_prof.gas_mass(dens_tech, gcs.get_radius(rad_name, 'kpc'), conf_level)[0].value
+                gms.append(gm)
+
+            if len(dens_profs) > 1:
+                warn("{s} has multiple density profiles associated with it, and until I upgrade XGA I can't"
+                     " really tell them apart so I'm just taking the first one! I will fix this".format(s=gcs.name))
+
+        gms = np.array(gms)
+
+        # We're going to throw an error if all the gas masses are NaN, because obviously something is wrong
+        check_gms = gms[~np.isnan(gms)]
+        if len(check_gms) == 0:
+            raise ValueError("All gas masses appear to be NaN.")
+
+        return Quantity(gms, 'Msun')
+
+    def gm_richness(self, rad_name: str, x_norm: Quantity = Quantity(10), y_norm: Quantity = Quantity(1e+12, 'solMass'),
+                    fit_method: str = 'odr', start_pars: list = None, dens_tech: str = 'inv_abel_model') \
+            -> ScalingRelation:
+        """
+        This generates a Gas Mass vs Richness scaling relation for this sample of Galaxy Clusters.
+        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
+        which is the superior of the two I have implemented as of 03/12/20.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
+        """
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
+
+        # Read out the richness values into variables just for convenience sake
+        r_data = self.richness[:, 0]
+        r_errs = self.richness[:, 1]
+
+        # Read out the mass values, and multiply by the inverse e function for each cluster
+        gm_vals = self.gas_mass(rad_name, dens_tech, conf_level=90) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        gm_data = gm_vals[:, 0]
+        gm_err = gm_vals[:, 1:]
+
+        if rad_name in ['r200', 'r500', 'r2500']:
+            rn = rad_name[1:]
         else:
-            to_ret = Quantity(self._customs, self._custom_unit)
-        return to_ret
+            rn = rad_name
 
-    def _del_data(self, key: int):
+        y_name = "E(z)$^{-1}$M$_{g," + rn + "}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, gm_data, gm_err, r_data, r_errs, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, gm_data, gm_err, r_data, r_errs, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(gm_data, gm_err, r_data, r_errs, y_norm, x_norm,
+                                              y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
+
+        return scale_rel
+
+    def gm_Tx(self, rad_name: str, x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+12, 'solMass'),
+              fit_method: str = 'odr', start_pars: list = None, dens_tech: str = 'inv_abel_model',
+              model: str = 'tbabs*apec') -> ScalingRelation:
         """
-        Specific to the ClusterSample class, this deletes the extra data stored during the initialisation
-        of this type of sample.
-        :param int key: The index or name of the source to delete.
+        This generates a Gas Mass vs Tx scaling relation for this sample of Galaxy Clusters.
+        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
+        which is the superior of the two I have implemented as of 03/12/20.
+        :param str model: The name of the model that the temperatures were measured with.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
         """
-        del self._r200s[key]
-        del self._r500s[key]
-        del self._r2500s[key]
-        del self._customs[key]
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
 
-        del self._wl_masses[key]
-        del self._wl_mass_errs[key]
+        # Read out the temperature values into variables just for convenience sake
+        t_vals = self.Tx(rad_name, model)
+        t_data = t_vals[:, 0]
+        t_errs = t_vals[:, 1:]
 
-        del self._richnesses[key]
-        del self._richness_errs[key]
+        # Read out the mass values, and multiply by the inverse e function for each cluster
+        gm_vals = self.gas_mass(rad_name, dens_tech, conf_level=90) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        gm_data = gm_vals[:, 0]
+        gm_err = gm_vals[:, 1:]
+
+        if rad_name in ['r200', 'r500', 'r2500']:
+            rn = rad_name[1:]
+        else:
+            rn = rad_name
+
+        x_name = r"T$_{x," + rn + '}$'
+        y_name = "E(z)$^{-1}$M$_{g," + rn + "}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, gm_data, gm_err, t_data, t_errs, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name, x_name=x_name)
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, gm_data, gm_err, t_data, t_errs, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=x_name)
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(gm_data, gm_err, t_data, t_errs, y_norm, x_norm,
+                                              y_name=y_name, x_name=x_name)
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
+
+        return scale_rel
+
+    def Lx_richness(self, rad_name: str, x_norm: Quantity = Quantity(10), y_norm: Quantity = Quantity(1e+44, 'erg/s'),
+                    fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec',
+                    lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')) -> ScalingRelation:
+        """
+        This generates a Lx vs richness scaling relation for this sample of Galaxy Clusters.
+        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str model: The name of the model that the luminosities were measured with.
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
+        """
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
+
+        # Read out the richness values into variables just for convenience sake
+        r_data = self.richness[:, 0]
+        r_errs = self.richness[:, 1]
+
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        lx_vals = self.Lx(rad_name, model, lo_en, hi_en) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        lx_data = lx_vals[:, 0]
+        lx_err = lx_vals[:, 1:]
+
+        if rad_name in ['r200', 'r500', 'r2500']:
+            rn = rad_name[1:]
+        else:
+            rn = rad_name
+        y_name = "E(z)$^{-1}$L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, r_data, r_errs, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name,
+                                                   x_name=r"$\lambda$")
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, lx_data, lx_err, r_data, r_errs, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(lx_data, lx_err, r_data, r_errs, y_norm, x_norm,
+                                              y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
+
+        return scale_rel
+
+    def Lx_Tx(self, rad_name: str, x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+44, 'erg/s'),
+              fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec',
+              lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')) -> ScalingRelation:
+        """
+        This generates a Lx vs Tx scaling relation for this sample of Galaxy Clusters.
+        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str model: The name of the model that the luminosities and temperatures were measured with.
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
+        """
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
+
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        lx_vals = self.Lx(rad_name, model, lo_en, hi_en) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        lx_data = lx_vals[:, 0]
+        lx_err = lx_vals[:, 1:]
+
+        # Read out the temperature values into variables just for convenience sake
+        t_vals = self.Tx(rad_name, model)
+        t_data = t_vals[:, 0]
+        t_errs = t_vals[:, 1:]
+
+        if rad_name in ['r200', 'r500', 'r2500']:
+            rn = rad_name[1:]
+        else:
+            rn = rad_name
+
+        x_name = r"T$_{x," + rn + '}$'
+        y_name = "E$^{-1}$(z)L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, t_data, t_errs, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name,
+                                                   x_name=x_name)
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, lx_data, lx_err, t_data, t_errs, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=x_name)
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(lx_data, lx_err, t_data, t_errs, y_norm, x_norm,
+                                              y_name=y_name, x_name=x_name)
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
+
+        return scale_rel
 
 
 

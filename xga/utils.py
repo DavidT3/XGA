@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/09/2020, 16:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/11/2020, 16:41. Copyright (c) David J Turner
 
 import json
 import os
@@ -48,9 +48,11 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "mos2_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_expmap.fits",
              "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
 # List of XMM products supported by XGA that are allowed to be energy bound
-ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap"]
+ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap",
+                         "combined_brightness_profile", "combined_gas_density_profile", "combined_gas_mass_profile"]
 # List of all XMM products supported by XGA
-ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid"] + ENERGY_BOUND_PRODUCTS
+ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "brightness_profile",
+                    "gas_density_profile", "gas_mass_profile"] + ENERGY_BOUND_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]
 
 # Here we read in files that list the errors and warnings in SAS
