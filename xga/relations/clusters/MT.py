@@ -49,3 +49,4 @@ arnaud_gm500 = ScalingRelation(np.array([2.10, 4.48]), np.array([0.05, 0.01]), p
                                relation_author='Arnaud et al.', relation_year='2007',
                                relation_doi='10.1051/0004-6361:20078541',
                                relation_name='Gas Mass-Temperature', x_lims=Quantity([1, 12], 'keV'))
+
