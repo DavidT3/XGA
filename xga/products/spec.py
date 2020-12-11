@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/11/2020, 16:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
 
 
 import os
@@ -342,7 +342,7 @@ class Spectrum(BaseProduct):
 
         # Checks that the requested region, model and energy band actually exist
         if len(self._luminosities) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with this source")
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.src_name))
         elif model not in self._luminosities:
             av_mods = ", ".join(self._luminosities.keys())
             raise ModelNotAssociatedError("{0} has not been fitted to this spectrum; "

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 14:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
 
 import warnings
 from typing import Union
@@ -99,7 +99,7 @@ class GalaxyCluster(ExtendedSource):
 
         # Throws an error if a poor choice of region has been made
         elif clean_obs and clean_obs_reg not in self._radii:
-            raise NoRegionsError("{c} is not associated with this source".format(c=clean_obs_reg))
+            raise NoRegionsError("{c} is not associated with {s}".format(c=clean_obs_reg, s=self.name))
 
     # Property getters for the over density radii, they don't get setters as various things are defined on init
     #  that I don't want to call again.
