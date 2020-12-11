@@ -1,8 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 18:01. Copyright (c) David J Turner
-
-from typing import Union
-from warnings import warn
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 14:23. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -563,7 +560,7 @@ class ClusterSample(BaseSample):
             rn = rad_name
 
         x_name = r"T$_{x," + rn + '}$'
-        y_name = "E$^{-1}$(z)L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+        y_name = "E(z)$^{-1}$L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, t_data, t_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name,
