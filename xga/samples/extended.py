@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 14:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 16:41. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -371,7 +371,7 @@ class ClusterSample(BaseSample):
 
         return Quantity(gms, 'Msun')
 
-    def gm_richness(self, rad_name: str, x_norm: Quantity = Quantity(10), y_norm: Quantity = Quantity(1e+12, 'solMass'),
+    def gm_richness(self, rad_name: str, x_norm: Quantity = Quantity(60), y_norm: Quantity = Quantity(1e+12, 'solMass'),
                     fit_method: str = 'odr', start_pars: list = None, dens_tech: str = 'inv_abel_model') \
             -> ScalingRelation:
         """
@@ -474,7 +474,7 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def Lx_richness(self, rad_name: str, x_norm: Quantity = Quantity(10), y_norm: Quantity = Quantity(1e+44, 'erg/s'),
+    def Lx_richness(self, rad_name: str, x_norm: Quantity = Quantity(60), y_norm: Quantity = Quantity(1e+44, 'erg/s'),
                     fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec',
                     lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')) -> ScalingRelation:
         """
