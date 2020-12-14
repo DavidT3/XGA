@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 15:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 17:00. Copyright (c) David J Turner
 
 
 import inspect
@@ -370,7 +370,7 @@ class BaseAggregateProduct:
         return self._prod_type
 
     @property
-    def all_usable(self) -> bool:
+    def usable(self) -> bool:
         """
         Property getter for the boolean variable that tells you whether all component products have been
         found to be usable.
