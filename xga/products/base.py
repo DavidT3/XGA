@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 14:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 15:01. Copyright (c) David J Turner
 
 
 import inspect
@@ -536,8 +536,8 @@ class BaseProfile1D:
         self._allowed_real_types = []
 
     def fit(self, model: str, method: str = "mcmc", priors=None, start_pars=None, model_real=1000,
-            model_rad_steps=300, conf_level=90, ml_mcmc_start: bool = True, ml_rand_dev: float = 1e-4,
-            num_walkers: int = 20, num_steps: int = 20000, progress_bar: bool = True, show_errors: bool = True):
+            model_rad_steps=300, conf_level=90, num_walkers: int = 20, num_steps: int = 20000,
+            progress_bar: bool = True, show_errors: bool = True):
         # These are the currently allowed fitting methods
         method = method.lower()
         fit_methods = ["curve_fit", "mcmc"]
@@ -632,27 +632,33 @@ class BaseProfile1D:
             n_par = len(priors)
             prior_arr = np.array(priors)
 
-            # If this option is set then maximum likelihood estimation is used to get start parameters
-            if ml_mcmc_start:
-                for_max_like = lambda *args: -log_likelihood(*args, model_func)
-                max_like_res = minimize(for_max_like, start_pars, args=(r_dat, v_dat, v_err))
-                # TODO Review whether the small gaussian ball around max likelihood values is the best way to start.
-                pos = max_like_res.x + ml_rand_dev*np.random.randn(num_walkers, n_par)
-            else:
-                # TODO Review whether the random uniform draws are a good idea.
-                pos = np.random.uniform(prior_arr[:, 0], prior_arr[:, 1], size=(num_walkers, n_par))
+            for_max_like = lambda *args: -log_likelihood(*args, model_func)
+            # This finds maximum likelihood parameter values for the model+data
+            max_like_res = minimize(for_max_like, start_pars, args=(r_dat, v_dat, v_err))
 
-            # Making extended upper and lower bound prior arrays
-            lo_bounds = np.repeat(prior_arr[:, 0, None], pos.shape[0], axis=1).T
-            hi_bounds = np.repeat(prior_arr[:, 1, None], pos.shape[0], axis=1).T
-            # With the ml_mcmc_start option, it is possible that the start parameters are outside of the
-            #  range allowed by the the priors. In which case the MCMC fit will get super upset but not actually
-            #  throw an error.
+            # This basically finds the order of magnitude (+1) of each parameter
+            ml_rand_dev = np.power(10, np.floor(np.log10(np.abs(max_like_res.x))))
+
+            # Then that order of magnitude is multiplied by a value drawn from a standard gaussian, and this is what
+            #  we perturb the maximum likelihood values with - so we get random start parameters for all
+            #  of our walkers
+            pos = max_like_res.x + ml_rand_dev*np.random.randn(num_walkers, n_par)
+
+            # It is possible that some of the start parameters we've generated are outside the prior, in which
+            #  case emcee gets quite angry. Just in case I draw random values from the priors of all parameters,
+            #  ready to be substituted in if a start par is outside the allowed range
+            rand_uniform_pos = np.random.uniform(prior_arr[:, 0], prior_arr[:, 1], size=(num_walkers, n_par))
+
+            # It is possible that the start parameters can be outside of the range allowed by the the priors. In which
+            #  case the MCMC fit will get super upset but not actually throw an error.
             start_check_greater = np.greater_equal(pos, prior_arr[:, 0])
             start_check_lower = np.less_equal(pos, prior_arr[:, 1])
-            # So any start values that fall outside the allowed range will be moved to the boundary value
-            pos[~start_check_greater] = lo_bounds[~start_check_greater]
-            pos[~start_check_lower] = hi_bounds[~start_check_lower]
+            # Any true value in this array is a parameter that isn't in the allowed prior range
+            to_replace = ~(start_check_greater & start_check_lower)
+
+            # So any start values that fall outside the allowed range will be swapped out with a value randomly drawn
+            #  from the prior
+            pos[to_replace] = rand_uniform_pos[to_replace]
 
             # This instantiates an Ensemble sampler with the number of walkers specified by the user,
             #  with the log probability as defined in the functions above
