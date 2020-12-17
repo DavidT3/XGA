@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/12/2020, 13:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 15:01. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -225,8 +225,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
                           hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True,
                           psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, model_realisations: int = 500, model_rad_steps: int = 300,
-                          conf_level: int = 90, num_cores: int = NUM_CORES, ml_mcmc_start: bool = True,
-                          ml_rand_dev: float = 1e-4, num_walkers: int = 20, num_steps: int = 20000):
+                          conf_level: int = 90, num_cores: int = NUM_CORES, num_walkers: int = 20,
+                          num_steps: int = 20000):
 
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
@@ -247,7 +247,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
 
         # Fit the user chosen model to sb_prof
         sb_prof.fit(model, fit_method, model_priors, model_start_pars, model_realisations, model_rad_steps,
-                    conf_level, ml_mcmc_start, ml_rand_dev, num_walkers, num_steps, progress_bar=prog_bar_allowed)
+                    conf_level, num_walkers, num_steps, progress_bar=prog_bar_allowed)
 
         model_r = sb_prof.get_realisation(model)
         if model_r is not None:

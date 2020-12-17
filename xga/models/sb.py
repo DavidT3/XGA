@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 10:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 14:08. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -21,7 +21,7 @@ def beta_profile(r_values: Union[np.ndarray, float], beta: float, r_core: float,
     :return: The y values corresponding to the input x values.
     :rtype: Union[np.ndarray, float]
     """
-    return norm * (1 + (r_values ** 2 / r_core ** 2)) ** ((-3 * beta) + 0.5)
+    return norm * np.power((1 + (np.power(r_values / r_core, 2))), ((-3 * beta) + 0.5))
 
 
 def double_beta_profile(r_values: Union[np.ndarray, float], beta_one: float, r_core_one: float, beta_two: float,
@@ -59,8 +59,10 @@ def simple_vikhlinin(r_values: Union[np.ndarray, float], beta: float, r_core: fl
     :return: The y values corresponding to the input x values.
     :rtype: Union[np.ndarray, float]
     """
-    return norm * ((r_values / r_core) ** (-alpha)) * ((1 + (r_values / r_core) ** 2) ** ((-3 * beta) + (alpha / 2))) \
-                * ((1 + (r_values / r_s) ** gamma) ** (-epsilon / gamma))
+    first_expr = np.power(r_values / r_core, -alpha)
+    second_expr = np.power((1 + np.power(r_values / r_core, 2)), ((-3 * beta) + (alpha / 2)))
+    third_expr = np.power(1 + np.power(r_values / r_s, gamma), -epsilon / gamma)
+    return norm * first_expr * second_expr * third_expr
 
 
 # So that things like fitting functions can be written generally to support different models

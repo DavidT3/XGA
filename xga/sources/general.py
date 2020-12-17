@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 15:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List
@@ -244,7 +244,7 @@ class ExtendedSource(BaseSource):
         """
         # Common sense checks, are the obsids/instruments associated with this source etc.
         if obs_id is not None and obs_id not in self.obs_ids:
-            raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
+            raise NotAssociatedError("The ObsID {o} is not associated with {s}.".format(o=obs_id, s=self.name))
         elif obs_id is None and inst is not None:
             raise ValueError("If obs_id is None, inst cannot be None as well.")
         elif obs_id is not None and inst is not None and inst not in self._peaks[obs_id]:

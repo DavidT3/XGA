@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/10/2020, 16:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 12:00. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -16,6 +16,37 @@ from ..samples.base import BaseSample
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
 from ..sources.base import NullSource
 from ..utils import xmm_sky
+
+
+def _spec_setup(sources, reg_type, allowed_bounds, disable_progress):
+    # This function supports passing both individual sources and sets of sources
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
+    # NullSources are not allowed to have spectra, as they can have any observations associated and thus won't
+    #  necessarily overlap
+    if isinstance(sources, NullSource):
+        raise TypeError("You cannot create spectra of a NullSource")
+
+    if not all([type(src) != BaseSource for src in sources]):
+        raise TypeError("You cannot generate spectra from a BaseSource object, really you shouldn't be using "
+                        "them at all, they are mostly useful as a superclass.")
+    elif not all([src.detected for src in sources]):
+        warnings.warn("Not all of these sources have been detected, the spectra generated may not be helpful.")
+    elif reg_type not in allowed_bounds:
+        raise ValueError("The only valid choices for reg_type are:\n {}".format(", ".join(allowed_bounds)))
+    elif reg_type in ["r2500", "r500", "r200"] and not all([type(src) == GalaxyCluster for src in sources]):
+        raise TypeError("You cannot use ExtendedSource classes with {}, "
+                        "they have no overdensity radii.".format(reg_type))
+
+    # Have to make sure that all observations have an up to date cif file.
+    cifbuild(sources, disable_progress=disable_progress)
+
+    return sources
+
+
+def _spec_cmds():
+    pass
 
 
 # TODO Add an option to generate core-excised spectra.
@@ -45,28 +76,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
-    # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
-        sources = [sources]
-
-    # NullSources are not allowed to have spectra, as they can have any observations associated and thus won't
-    #  necessarily overlap
-    if isinstance(sources, NullSource):
-        raise TypeError("You cannot create spectra of a NullSource")
-
-    if not all([type(src) != BaseSource for src in sources]):
-        raise TypeError("You cannot generate spectra from a BaseSource object, really you shouldn't be using "
-                        "them at all, they are mostly useful as a superclass.")
-    elif not all([src.detected for src in sources]):
-        warnings.warn("Not all of these sources have been detected, the spectra generated may not be helpful.")
-    elif reg_type not in allowed_bounds:
-        raise ValueError("The only valid choices for reg_type are:\n {}".format(", ".join(allowed_bounds)))
-    elif reg_type in ["r2500", "r500", "r200"] and not all([type(src) == GalaxyCluster for src in sources]):
-        raise TypeError("You cannot use ExtendedSource classes with {}, "
-                        "they have no overdensity radii.".format(reg_type))
-
-    # Have to make sure that all observations have an up to date cif file.
-    cifbuild(sources, disable_progress=disable_progress)
+    sources = _spec_setup(sources, reg_type, allowed_bounds, disable_progress)
 
     # Define the various SAS commands that need to be populated, for a useful spectrum you also need ARF/RMF
     spec_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; evselect table={e} withspectrumset=yes " \

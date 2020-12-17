@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 15:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 15:14. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -167,7 +167,7 @@ class ScalingRelation:
 
         # For relations from literature especially I need to give credit the author, and the original paper
         self._author = relation_author
-        self._year = relation_year
+        self._year = str(relation_year)
         self._doi = relation_doi
 
         # Just grabbing the parameter names from the model function to plot on the y-axis

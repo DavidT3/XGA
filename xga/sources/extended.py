@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 14:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
 
 import warnings
 from typing import Union
@@ -99,7 +99,7 @@ class GalaxyCluster(ExtendedSource):
 
         # Throws an error if a poor choice of region has been made
         elif clean_obs and clean_obs_reg not in self._radii:
-            raise NoRegionsError("{c} is not associated with this source".format(c=clean_obs_reg))
+            raise NoRegionsError("{c} is not associated with {s}".format(c=clean_obs_reg, s=self.name))
 
     # Property getters for the over density radii, they don't get setters as various things are defined on init
     #  that I don't want to call again.
@@ -195,22 +195,22 @@ class GalaxyCluster(ExtendedSource):
         if reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
         elif len(self._fit_results) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with this source")
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this {s}".format(s=self.name))
         elif reg_type not in self._fit_results:
             av_regs = ", ".join(self._fit_results.keys())
-            raise ModelNotAssociatedError("{0} has no associated XSPEC fit to this source; available regions are "
-                                          "{1}".format(reg_type, av_regs))
+            raise ModelNotAssociatedError("{r} has no associated XSPEC fit to {s}; available regions are "
+                                          "{a}".format(r=reg_type, s=self.name, a=av_regs))
 
         # Find which available models have kT in them
         models_with_kt = [m for m, v in self._fit_results[reg_type].items() if "kT" in v]
 
         if model is not None and model not in self._fit_results[reg_type]:
             av_mods = ", ".join(self._fit_results[reg_type].keys())
-            raise ModelNotAssociatedError("{0} has not been fitted to {1} spectra of this source; available "
-                                          "models are  {2}".format(model, reg_type, av_mods))
+            raise ModelNotAssociatedError("{m} has not been fitted to {r} spectra of {s}; available "
+                                          "models are {a}".format(m=model, r=reg_type, a=av_mods, s=self.name))
         elif model is not None and "kT" not in self._fit_results[reg_type][model]:
-            raise ParameterNotAssociatedError("kT was not a free parameter in the {} fit to this "
-                                              "source.".format(model))
+            raise ParameterNotAssociatedError("kT was not a free parameter in the {m} fit to "
+                                              "{s}.".format(m=model, s=self.name))
         elif model is not None and "kT" in self._fit_results[reg_type][model]:
             # Just going to call the get_results method with specific parameters, to get the result formatted
             #  the same way.

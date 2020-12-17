@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/10/2020, 14:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -173,8 +173,8 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], reg_type: str,
                      if reg_type in match and match[-1].usable]
         # Obviously we can't do a fit if there are no spectra, so throw an error if thats the case
         if len(spec_objs) == 0:
-            raise NoProductAvailableError("There are no matching spectra for this source object, you "
-                                          "need to generate them first!")
+            raise NoProductAvailableError("There are no matching spectra for {s} object, you "
+                                          "need to generate them first!".format(s=source.name))
 
         # Turn spectra paths into TCL style list for substitution into template
         specs = "{" + " ".join([spec[-1].path for spec in spec_objs]) + "}"
@@ -270,8 +270,8 @@ def power_law(sources: Union[BaseSource, BaseSample], reg_type: str, redshifted:
         spec_objs = [match for match in source.get_products("spectrum", extra_key=reg_type) if match.usable]
         # Obviously we can't do a fit if there are no spectra, so throw an error if thats the case
         if len(spec_objs) == 0:
-            raise NoProductAvailableError("There are no matching spectra for this source object, you "
-                                          "need to generate them first!")
+            raise NoProductAvailableError("There are no matching spectra for {s} object, you "
+                                          "need to generate them first!".format(s=source.name))
 
         # Turn spectra paths into TCL style list for substitution into template
         specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"

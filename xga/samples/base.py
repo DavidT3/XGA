@@ -10,6 +10,7 @@ from astropy.units import Quantity
 from numpy import ndarray
 from tqdm import tqdm
 
+from ..exceptions import NoMatchFoundError, NoValidObservationsError
 from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
@@ -63,7 +64,7 @@ class BaseSample:
                 self._ra_decs.append((r, d))
                 self._redshifts.append(z)
                 self._accepted_inds.append(ind)
-            except NoMatchFoundError:
+            except (NoMatchFoundError, NoValidObservationsError):
                 if n is not None:
                     # We don't be liking spaces in source names
                     # n = n.replace(" ", "")

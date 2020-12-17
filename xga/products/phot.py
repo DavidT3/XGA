@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/11/2020, 10:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 17:00. Copyright (c) David J Turner
 
 
 import warnings
@@ -1113,7 +1113,7 @@ class PSF(Image):
         hi_en = Quantity(100, 'keV')
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, raise_properly)
         self._prod_type = "psf"
-        self._psf_centre = Quantity([self.header.get("CRVAL1"), self.header.get("CRVAL2")], deg)
+        self._psf_centre = None
         self._psf_model = psf_model
 
     def get_val(self, at_coord: Quantity) -> float:
@@ -1190,6 +1190,11 @@ class PSF(Image):
         :return: An astropy quantity of the ra and dec that the PSF was generated at.
         :rtype: Quantity
         """
+        if self._psf_centre is None:
+            # I've put this here because if there is an error generating the PSF, and this is in the __init__ as
+            #  it was before, then the file not found error is triggered before the XGA SAS error and then the user
+            #  has no idea whats wrong.
+            self._psf_centre = Quantity([self.header.get("CRVAL1"), self.header.get("CRVAL2")], deg)
         return self._psf_centre
 
     @property
@@ -1208,7 +1213,9 @@ class PSFGrid(BaseAggregateProduct):
                  raise_properly: bool = True):
         super().__init__(file_paths, 'psf', obs_id, instrument)
         self._psf_model = psf_model
-        self._grid_loc = Quantity(np.zeros((bins, bins, 2)), 'deg')
+        # Set none here because if I want positions of PSFs and there has been an error during generation, the user
+        #  will only see the FileNotFoundError not the SAS error
+        self._grid_loc = None
         self._nbins = bins
         self._x_bounds = x_bounds
         self._y_bounds = y_bounds
@@ -1220,7 +1227,6 @@ class PSFGrid(BaseAggregateProduct):
             # The dictionary key the PSF will be stored under - the key corresponds to the numpy y-x
             #  index from which it was generated
             pos = np.unravel_index(f_ind, (bins, bins))
-            self._grid_loc[pos[0], pos[1], :] = interim.ra_dec
             pos_key = "_".join([str(p) for p in pos])
             self._component_products[pos_key] = interim
 
@@ -1266,6 +1272,20 @@ class PSFGrid(BaseAggregateProduct):
         :rtype: np.ndarray
         """
         return self._y_bounds
+
+    @property
+    def grid_locs(self) -> Quantity:
+        """
+        A 3D quantity containing the central position of each PSF in the grid.
+        :return: A 3D Quantity
+        :rtype:
+        """
+        if self._grid_loc is None:
+            for pos in self._component_products:
+                self._grid_loc[pos[0], pos[1], :] = self._component_products.ra_dec
+        return self._grid_loc
+
+
 
     def unload_data(self):
         """

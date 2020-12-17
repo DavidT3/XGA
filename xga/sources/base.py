@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 17:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -58,6 +58,11 @@ class BaseSource:
         self._obs = [o for o in obs if len(instruments[o]) > 0]
         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
 
+        # self._obs can be empty after this cleaning step, so do quick check and raise error if so.
+        if len(self._obs) == 0:
+            raise NoValidObservationsError("{s} has {n} observations ({a}), none of which have the necessary"
+                                           " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
+
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
             on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))["ObsID"].values
@@ -72,6 +77,7 @@ class BaseSource:
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
+        self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
 
         self._cosmo = cosmology
         if redshift is not None:
@@ -256,7 +262,8 @@ class BaseSource:
         # Cleans any observations that don't have at least one instrument associated with them
         obs_dict = {o: v for o, v in obs_dict.items() if len(v) != 0}
         if len(obs_dict) == 0:
-            raise NoValidObservationsError("No matching observations have the necessary files.")
+            raise NoValidObservationsError("{s} has {n} observations ({a}), none of which have the necessary"
+                                           " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict, odf_dict
 
     # TODO Maybe allow BaseAggregateProfile1D to be stored in the future
@@ -851,7 +858,7 @@ class BaseSource:
         :rtype: str
         """
         if obs_id not in self._products:
-            raise NotAssociatedError("{} is not associated with this source".format(obs_id))
+            raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
         else:
             return self._att_files[obs_id]
 
@@ -863,7 +870,7 @@ class BaseSource:
         :rtype: str
         """
         if obs_id not in self._products:
-            raise NotAssociatedError("{} is not associated with this source".format(obs_id))
+            raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
         else:
             return self._odf_paths[obs_id]
 
@@ -977,7 +984,8 @@ class BaseSource:
         if reg_type == "region" and central_coord is not None:
             warnings.warn("You cannot use custom central coordinates with a region from supplied region files")
         # elif reg_type != "region" and central_coord is None:
-        #     warnings.warn("No central coord supplied, using default (peak if use_peak is True), initial coordinates"
+        #     warnings.warn("No central coord supplied, using default (peak if use_peak is True),
+        #     initial coordinates"
         #                   "otherwise.")
 
         if central_coord is None:
@@ -1002,7 +1010,7 @@ class BaseSource:
             raise TypeError("BaseSource class does not have the necessary information "
                             "to select a source region.")
         elif obs_id is not None and obs_id not in self.obs_ids:
-            raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
+            raise NotAssociatedError("The ObsID {o} is not associated with {s}.".format(o=obs_id, s=self.name))
         elif reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
         elif reg_type == "region" and obs_id is None:
@@ -1010,7 +1018,7 @@ class BaseSource:
         elif reg_type == "region" and obs_id is not None:
             src_reg = self._regions[obs_id]
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise ValueError("There is no {} associated with this source".format(reg_type))
+            raise ValueError("There is no {r} associated with {s}".format(r=reg_type, s=self.name))
         elif reg_type != "region" and reg_type in self._radii:
             # We know for certain that the radius will be in degrees, but it has to be converted to degrees
             #  before being stored in the radii attribute
@@ -1298,7 +1306,7 @@ class BaseSource:
             raise TypeError("BaseSource class does not have the necessary information "
                             "to select a source region.")
         elif obs_id not in self.obs_ids:
-            raise NotAssociatedError("The ObsID {} is not associated with this source.".format(obs_id))
+            raise NotAssociatedError("The ObsID {o} is not associated with {s}.".format(o=obs_id, s=self.name))
         elif reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
         elif reg_type == "region":
@@ -1306,7 +1314,7 @@ class BaseSource:
             source_interlopers = self.within_region(source)
             background_interlopers = self.within_region(back)
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise ValueError("There is no {} associated with this source".format(reg_type))
+            raise ValueError("There is no {r} associated with {s}".format(r=reg_type, s=self.name))
         elif reg_type != "region" and reg_type in self._radii:
             source, back = self.source_back_regions(reg_type, obs_id)
             source_interlopers = self.within_region(source)
@@ -1459,19 +1467,19 @@ class BaseSource:
         """
         # Bunch of checks to make sure the requested results actually exist
         if len(self._fit_results) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with this source")
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
         elif reg_type not in self._fit_results:
             av_regs = ", ".join(self._fit_results.keys())
-            raise ModelNotAssociatedError("{0} has no associated XSPEC fit to this source; available regions are "
-                                          "{1}".format(reg_type, av_regs))
+            raise ModelNotAssociatedError("{r} has no associated XSPEC fit to {s}; available regions are "
+                                          "{a}".format(r=reg_type, s=self.name, a=av_regs))
         elif model not in self._fit_results[reg_type]:
             av_mods = ", ".join(self._fit_results[reg_type].keys())
-            raise ModelNotAssociatedError("{0} has not been fitted to {1} spectra of this source; available "
-                                          "models are  {2}".format(model, reg_type, av_mods))
+            raise ModelNotAssociatedError("{m} has not been fitted to {r} spectra of {s}; available "
+                                          "models are  {a}".format(m=model, r=reg_type, s=self.name, a=av_mods))
         elif par is not None and par not in self._fit_results[reg_type][model]:
             av_pars = ", ".join(self._fit_results[reg_type][model].keys())
-            raise ParameterNotAssociatedError("{0} was not a free parameter in the {1} fit to this source, "
-                                              "the options are {2}".format(par, model, av_pars))
+            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to {s}, "
+                                              "the options are {a}".format(p=par, m=model, s=self.name, a=av_pars))
 
         # Read out into variable for readabilities sake
         fit_data = self._fit_results[reg_type][model]
@@ -1524,15 +1532,16 @@ class BaseSource:
 
         # Checks that the requested region, model and energy band actually exist
         if len(self._luminosities) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with this source")
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
         elif reg_type not in self._luminosities:
             av_regs = ", ".join(self._luminosities.keys())
-            raise ModelNotAssociatedError("{0} has no associated XSPEC fit to this source; available regions are "
-                                          "{1}".format(reg_type, av_regs))
+            raise ModelNotAssociatedError("{r} has no associated XSPEC fit to {s}; available regions are "
+                                          "{a}".format(r=reg_type, s=self.name, a=av_regs))
         elif model not in self._luminosities[reg_type]:
             av_mods = ", ".join(self._luminosities[reg_type].keys())
-            raise ModelNotAssociatedError("{0} has not been fitted to {1} spectra of this source; "
-                                          "available models are {2}".format(model, reg_type, av_mods))
+            raise ModelNotAssociatedError("{m} has not been fitted to {r} spectra of {s}; "
+                                          "available models are {a}".format(m=model, r=reg_type, s=self.name,
+                                                                            a=av_mods))
         elif en_key is not None and en_key not in self._luminosities[reg_type][model]:
             av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[reg_type][model].keys()])
             raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
@@ -1739,8 +1748,8 @@ class BaseSource:
         """
         This method uses exposure maps and region masks to determine which ObsID/instrument combinations
         are not contributing to the analysis. It calculates the area intersection of the mask and exposure
-        map, and if (for a given ObsID-Instrument) the ratio of that area to the maximum area calculated
-        is less than the threshold fraction, that ObsID-instrument will be included in the returned
+        map, and if (for a given ObsID-Instrument) the ratio of that area to the full area of the region
+        calculated is less than the threshold fraction, that ObsID-instrument will be included in the returned
         rejection dictionary.
         :param str reg_type: The region type for which to calculate the area intersection.
         :param float threshold_fraction: Area to max area ratios below this value will mean the
@@ -1758,12 +1767,13 @@ class BaseSource:
 
         extra_key = "bound_{l}-{u}".format(l=self._peak_lo_en.to("keV").value, u=self._peak_hi_en.to("keV").value)
 
-        max_area = 0
         area = {o: {} for o in self.obs_ids}
+        full_area = {o: {} for o in self.obs_ids}
         for o in self.obs_ids:
             # Exposure maps of the peak finding energy range for this ObsID
             exp_maps = self.get_products("expmap", o, extra_key=extra_key)
             m = self.get_source_mask(reg_type, o, central_coord=self._default_coord)[0]
+            full_area[o] = m.sum()
 
             for ex in exp_maps:
                 # Grabs exposure map data, then alters it so anything that isn't zero is a one
@@ -1772,22 +1782,20 @@ class BaseSource:
                 # We do this because it then becomes very easy to calculate the intersection area of the mask
                 #  with the XMM chips. Just mask the modified expmap, then sum.
                 area[o][ex.instrument] = (ex_data*m).sum()
-                # Stores the maximum area intersection, this is used in the threshold calculation
-                if area[o][ex.instrument] > max_area:
-                    max_area = area[o][ex.instrument]
 
-        # Just in case the maximum area hasn't changed at all...
-        if max_area == 0:
+        if max(list(full_area.values())) == 0:
             # Everything has to be rejected in this case
             return deepcopy(self._instruments)
             # raise NoMatchFoundError("There doesn't appear to be any intersection between any {r} mask and "
             #                         "the data from the simple match".format(r=reg_type))
 
-        # Now we know the max intersection area for all data, we can accept or reject particular data
         reject_dict = {}
         for o in area:
             for i in area[o]:
-                frac = (area[o][i] / max_area)
+                if full_area[o] != 0:
+                    frac = (area[o][i] / full_area[o])
+                else:
+                    frac = 0
                 if frac <= threshold_fraction and o not in reject_dict:
                     reject_dict[o] = [i]
                 elif frac <= threshold_fraction and o in reject_dict:
@@ -1961,7 +1969,7 @@ class NullSource:
         :rtype: str
         """
         if obs_id not in self._products:
-            raise NotAssociatedError("{} is not associated with this source".format(obs_id))
+            raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
         else:
             return self._att_files[obs_id]
 
@@ -1973,7 +1981,7 @@ class NullSource:
         :rtype: str
         """
         if obs_id not in self._products:
-            raise NotAssociatedError("{} is not associated with this source".format(obs_id))
+            raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
         else:
             return self._odf_paths[obs_id]
 
@@ -2115,7 +2123,7 @@ class NullSource:
             raise UnknownProductError("{p} is not a recognised product type. Allowed product types are "
                                       "{l}".format(p=p_type, l=prod_str))
         elif obs_id not in self._products and obs_id is not None:
-            raise NotAssociatedError("{} is not associated with this source.".format(obs_id))
+            raise NotAssociatedError("{o} is not associated with {s}.".format(o=obs_id, s=self.name))
         elif inst not in XMM_INST and inst is not None:
             raise ValueError("{} is not an allowed instrument".format(inst))
 

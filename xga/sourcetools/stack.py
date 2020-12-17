@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/12/2020, 11:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 15:01. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -459,8 +459,7 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
                        custom_temps: Quantity = None, sim_met: Union[float, List] = 0.3, abund_table: str = 'angr',
                        psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                        psf_iter: int = 15, num_cores: int = NUM_CORES, model_realisations: int = 500,
-                       conf_level: int = 90, ml_mcmc_start: bool = True, ml_rand_dev: float = 1e-4,
-                       num_walkers: int = 20, num_steps: int = 20000) \
+                       conf_level: int = 90, num_walkers: int = 20, num_steps: int = 20000) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates, fits, and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
@@ -499,10 +498,6 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
     of available cores.
     :param int model_realisations: The number of random realisations of a model to generate.
     :param int conf_level: The confidence level at which to measure uncertainties of parameters and profiles.
-    :param bool ml_mcmc_start: If True then maximum likelihood estimation will be used to generate start parameters for
-    MCMC fitting, otherwise they will be randomly drawn from parameter priors
-    :param float ml_rand_dev: The scale of the random deviation around start parameters used for starting the
-    different walkers in the MCMC ensemble sampler.
     :param int num_walkers: The number of walkers in the MCMC ensemble sampler.
     :param int num_steps: The number of steps in the chain that each walker should take.
     :return: This function returns the average profile, the scaled brightness profiles with the cluster
@@ -576,9 +571,8 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
             model_radii = radii * src_obj.get_radius(scale_radius, kpc)
 
             sb_prof.fit(model, progress_bar=False, show_errors=False, method=fit_method, priors=model_priors,
-                        start_pars=model_start_pars, conf_level=conf_level, ml_mcmc_start=ml_mcmc_start,
-                        ml_rand_dev=ml_rand_dev, num_walkers=num_walkers, num_steps=num_steps,
-                        model_real=model_realisations)
+                        start_pars=model_start_pars, conf_level=conf_level, num_walkers=num_walkers,
+                        num_steps=num_steps, model_real=model_realisations)
             try:
                 fitted_model = sb_prof.get_model_fit(model)
                 model_brightness = fitted_model['model_func'](model_radii.value, *fitted_model['par'])

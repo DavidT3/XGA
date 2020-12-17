@@ -76,7 +76,6 @@ class PointSample(BaseSample):
         # I'm not worried about pr never having existed - declaration of a sample will fail
         #  if not data is passed.
         self._pr_unit = pr.unit
-        self._point_radii = self._point_radii
 
         # I've cleaned the observations, and its possible some of the data has been thrown away,
         #  so I should regenerate the mosaic images/expmaps
