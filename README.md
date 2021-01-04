@@ -1,5 +1,7 @@
 <img src="https://github.com/DavidT3/XGA/blob/master/xga/files/long_xga_logo.png" width="300">
 
+[![Documentation Status](https://readthedocs.org/projects/xga/badge/?version=latest)](https://xga.readthedocs.io/en/latest/?badge=latest)
+
 # What is XMM: Generate and Analyse (XGA)?
 
 XGA is a Python package to explore and analyse X-ray sources detected in XMM-Newton observations. When a source is 
