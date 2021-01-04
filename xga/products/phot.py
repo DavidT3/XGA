@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 18:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 18:56. Copyright (c) David J Turner
 
 
 import warnings
@@ -293,9 +293,9 @@ class Image(BaseProduct):
         to perform common coordinate conversions for this product object.
 
         :param coords: The input coordinates quantity to convert, in units of either deg,
-        pix, xmm_sky, or xmm_det (xmm_sky and xmm_det are defined for this module).
+            pix, xmm_sky, or xmm_det (xmm_sky and xmm_det are defined for this module).
         :param output_unit: The astropy unit to convert to, can be either deg, pix, xmm_sky, or
-        xmm_det (xmm_sky and xmm_det are defined for this module).
+            xmm_det (xmm_sky and xmm_det are defined for this module).
         :return: The converted coordinates.
         :rtype: Quantity
         """
@@ -412,7 +412,7 @@ class Image(BaseProduct):
         If this object has been PSF corrected, this property gives the name of the algorithm used.
 
         :return: The name of the algorithm used to correct for PSF effects, or None if the object
-        hasn't been PSF corrected.
+            hasn't been PSF corrected.
         :rtype: Union[str, None]
         """
         return self._psf_correction_algorithm
@@ -436,7 +436,7 @@ class Image(BaseProduct):
         were divided into to generate the PSFGrid.
 
         :return: The number of bins in X and Y for which PSFs were generated, or None if the object
-        hasn't been PSF corrected.
+            hasn't been PSF corrected.
         :rtype: Union[int, None]
         """
         return self._psf_num_bins
@@ -461,7 +461,7 @@ class Image(BaseProduct):
         algorithm went through to create this image.
 
         :return: The number of iterations the PSF correction algorithm went through, or None if the
-        object hasn't been PSF corrected.
+            object hasn't been PSF corrected.
         :rtype: Union[int, None]
         """
         return self._psf_num_iterations
@@ -485,7 +485,7 @@ class Image(BaseProduct):
         If this object has been PSF corrected, this property gives the name of the PSF model used.
 
         :return: The name of the PSF model used to correct for PSF effects, or None if the object
-        hasn't been PSF corrected.
+            hasn't been PSF corrected.
         :rtype: Union[str, None]
         """
         return self._psf_model
@@ -513,26 +513,26 @@ class Image(BaseProduct):
 
         :param Axes ax: The matplotlib axes on which to show the image.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
-        the coordinates.
+            the coordinates.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
-        data if they so choose.
+            data if they so choose.
         :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
         :param list other_points: A list of numpy arrays of point clusters that weren't chosen by the
-        hierarchical peak finder.
+            hierarchical peak finder.
         :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
-        data are reduced.
+            data are reduced.
         :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually set a part
-        of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
-        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
-        to be applied.
+            of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+            to be applied.
         :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually set a part
-        of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
-        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
-        to be applied.
+            of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+            to be applied.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-        only be triggered if a cross_hair coordinate is also specified.
+            only be triggered if a cross_hair coordinate is also specified.
         :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-        the background value for a given profile, will only be triggered if a cross_hair coordinate is also specified.
+            the background value for a given profile, will only be triggered if a cross_hair coordinate is also specified.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
@@ -628,27 +628,27 @@ class Image(BaseProduct):
         and producing figures for publication.
 
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
-        the coordinates.
+            the coordinates.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
-        data if they so choose.
+            data if they so choose.
         :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
         :param list other_points: A list of numpy arrays of point clusters that weren't chosen by the
-        hierarchical peak finder.
+            hierarchical peak finder.
         :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this method.
         :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
-        data are reduced.
+            data are reduced.
         :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually set a part
-        of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
-        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
-        to be applied.
+            of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+            to be applied.
         :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually set a part
-        of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
-        lower limit, second the upper limit. Variable zoom_in must still be true for these limits
-        to be applied.
+            of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+            to be applied.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-        only be triggered if a cross_hair coordinate is also specified.
+            only be triggered if a cross_hair coordinate is also specified.
         :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-        the background value for a given profile, will only be triggered if a cross_hair coordinate is also specified.
+            the background value for a given profile, will only be triggered if a cross_hair coordinate is also specified.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         """
 
@@ -862,11 +862,11 @@ class RateMap(Image):
         that shouldn't be searched (outside of a certain region, or within point sources for instance).
 
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
-        aren't to be searched, and 1 for those that are.
+            aren't to be searched, and 1 for those that are.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
-        the user's mask), in units of out_unit, as specified by the user. Also returned is a boolean flag
-        that tells the caller if the peak is near a chip edge.
+            the user's mask), in units of out_unit, as specified by the user. Also returned is a boolean flag
+            that tells the caller if the peak is near a chip edge.
         :rtype: Tuple[Quantity, bool]
         """
         if mask.shape != self.data.shape:
@@ -906,14 +906,14 @@ class RateMap(Image):
         Should be consistent with simple_peak under ideal circumstances.
 
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
-        aren't to be searched, and 1 for those that are.
+            aren't to be searched, and 1 for those that are.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :param float top_frac: The fraction of the elements (ordered in descending value) that should be used
-        to generate clusters, and thus be considered for the cluster centre.
+            to generate clusters, and thus be considered for the cluster centre.
         :param float max_dist: The maximum distance criterion for the hierarchical clustering algorithm, in pixels.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
-        the user's mask), in units of out_unit, as specified by the user. Finally, the coordinates of the points
-        in the chosen cluster are returned, as is a list of all the coordinates of all the other clusters.
+            the user's mask), in units of out_unit, as specified by the user. Finally, the coordinates of the points
+            in the chosen cluster are returned, as is a list of all the coordinates of all the other clusters.
         :rtype: Tuple[Quantity, bool]
         """
         if mask.shape != self.data.shape:
@@ -992,12 +992,12 @@ class RateMap(Image):
         brightness pixel is found.
 
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
-        aren't to be searched, and 1 for those that are.
+            aren't to be searched, and 1 for those that are.
         :param float redshift: The redshift of the source that we wish to find the X-ray centroid of.
         :param cosmology: An astropy cosmology object.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
-        the user's mask), in units of out_unit, as specified by the user.
+            the user's mask), in units of out_unit, as specified by the user.
         :rtype: Tuple[Quantity, bool]
         """
         def cartesian(arrays):
