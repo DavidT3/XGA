@@ -11,3 +11,4 @@ scipy>=1.4.1
 pyabel>=0.8.3
 corner>=2.1.0
 emcee>=3.0.2
+Sphinx~=3.1.2
