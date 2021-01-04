@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 12:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:25. Copyright (c) David J Turner
 
 
 import inspect
@@ -36,6 +36,7 @@ class BaseProduct:
                  gen_cmd: str, raise_properly: bool = True):
         """
         The initialisation method for the BaseProduct class.
+
         :param str path: The path to where the product file SHOULD be located.
         :param str stdout_str: The stdout from calling the terminal command.
         :param str stderr_str: The stderr from calling the terminal command.
@@ -69,6 +70,7 @@ class BaseProduct:
     def usable(self) -> bool:
         """
         Returns whether this product instance should be considered usable for an analysis.
+
         :return: A boolean flag describing whether this product should be used.
         :rtype: bool
         """
@@ -78,6 +80,7 @@ class BaseProduct:
     def path(self) -> str:
         """
         Property getter for the attribute containing the path to the product.
+
         :return: The product path.
         :rtype: str
         """
@@ -87,6 +90,7 @@ class BaseProduct:
     def path(self, prod_path: str):
         """
         Property setter for the attribute containing the path to the product.
+
         :param str prod_path: The product path.
         """
         if not os.path.exists(prod_path):
@@ -101,17 +105,19 @@ class BaseProduct:
         This method parses the stderr associated with the generation of a product into errors confirmed to have
         come from SAS, and other unidentifiable errors. The SAS errors are returned with the actual error
         name, the error message, and the SAS routine that caused the error.
+
         :return: A list of dictionaries containing parsed, confirmed SAS errors, another containing SAS warnings,
-        and another list of unidentifiable errors that occured in the stderr.
+            and another list of unidentifiable errors that occured in the stderr.
         :rtype: Tuple[List[Dict], List[Dict], List]
         """
         def find_sas(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
             """
             Function to search for and parse SAS errors and warnings.
+
             :param list split_stderr: The stderr string split on line endings.
             :param str err_type: Should this look for errors or warnings?
             :return: Returns the dictionary of parsed errors/warnings, as well as all lines
-            with SAS errors/warnings in.
+                with SAS errors/warnings in.
             :rtype: Tuple[List[dict], List[str]]
             """
             parsed_sas = []
@@ -185,6 +191,7 @@ class BaseProduct:
     def sas_errors(self) -> List[str]:
         """
         Property getter for the confirmed SAS errors associated with a product.
+
         :return: The list of confirmed SAS errors.
         :rtype: List[Dict]
         """
@@ -194,6 +201,7 @@ class BaseProduct:
     def sas_warnings(self) -> List[Dict]:
         """
         Property getter for the confirmed SAS warnings associated with a product.
+
         :return: The list of confirmed SAS warnings.
         :rtype: List[Dict]
         """
@@ -216,6 +224,7 @@ class BaseProduct:
         """
         Property getter for the ObsID of this image. Admittedly this information is implicit in the location
         this object is stored in a source object, but I think it worth storing directly as a property as well.
+
         :return: The XMM ObsID of this image.
         :rtype: str
         """
@@ -227,6 +236,7 @@ class BaseProduct:
         Property getter for the instrument used to take this image. Admittedly this information is implicit
         in the location this object is stored in a source object, but I think it worth storing
         directly as a property as well.
+
         :return: The XMM instrument used to take this image.
         :rtype: str
         """
@@ -237,6 +247,7 @@ class BaseProduct:
         """
         Property getter for the string identifier for the type of product this object is, mostly useful for
         internal methods of source objects.
+
         :return: The string identifier for this type of object.
         :rtype: str
         """
@@ -246,6 +257,7 @@ class BaseProduct:
     def errors(self) -> List[str]:
         """
         Property getter for non-SAS errors detected during the generation of a product.
+
         :return: A list of errors that aren't related to SAS.
         :rtype: List[str]
         """
@@ -257,6 +269,7 @@ class BaseProduct:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that this
         product was generated in.
+
         :return: Tuple containing the lower and upper energy limits as Astropy quantities.
         :rtype: Tuple[Quantity, Quantity]
         """
@@ -267,6 +280,7 @@ class BaseProduct:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
+
         :return: The name of the source object this product is associated with.
         :rtype: str
         """
@@ -278,6 +292,7 @@ class BaseProduct:
         """
         Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user.
+
         :param str name: The name of the source object associated with this product.
         """
         self._src_name = name
@@ -287,6 +302,7 @@ class BaseProduct:
         """
         Whenever the usable flag of a product is set to False (indicating you shouldn't use the product), a string
         indicating the reason is added to a list, which this property returns.
+
         :return: A list of reasons why this product is unusable.
         :rtype: List
         """
@@ -296,6 +312,7 @@ class BaseProduct:
     def sas_command(self) -> str:
         """
         A property that returns the original SAS command used to generate this object.
+
         :return: String containing the command.
         :rtype: str
         """
@@ -323,6 +340,7 @@ class BaseAggregateProduct:
         """
         Method to return the name of the object a product is associated with. The product becomes
         aware of this once it is added to a source object.
+
         :return: The name of the source object this product is associated with.
         :rtype: str
         """
@@ -334,6 +352,7 @@ class BaseAggregateProduct:
         """
         Property setter for the src_name attribute of a product, should only really be called by a source object,
         not by a user.
+
         :param str name: The name of the source object associated with this product.
         """
         self._src_name = name
@@ -343,6 +362,7 @@ class BaseAggregateProduct:
         """
         Property getter for the ObsID of this image. Admittedly this information is implicit in the location
         this object is stored in a source object, but I think it worth storing directly as a property as well.
+
         :return: The XMM ObsID of this image.
         :rtype: str
         """
@@ -354,6 +374,7 @@ class BaseAggregateProduct:
         Property getter for the instrument used to take this image. Admittedly this information is implicit
         in the location this object is stored in a source object, but I think it worth storing
         directly as a property as well.
+
         :return: The XMM instrument used to take this image.
         :rtype: str
         """
@@ -364,6 +385,7 @@ class BaseAggregateProduct:
         """
         Property getter for the string identifier for the type of product this object is, mostly useful for
         internal methods of source objects.
+
         :return: The string identifier for this type of object.
         :rtype: str
         """
@@ -374,6 +396,7 @@ class BaseAggregateProduct:
         """
         Property getter for the boolean variable that tells you whether all component products have been
         found to be usable.
+
         :return: Boolean variable, are all component products usable?
         :rtype: bool
         """
@@ -385,6 +408,7 @@ class BaseAggregateProduct:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that this
         product was generated in, if relevant.
+
         :return: Tuple containing the lower and upper energy limits as Astropy quantities.
         :rtype: Tuple[Quantity, Quantity]
         """
@@ -394,6 +418,7 @@ class BaseAggregateProduct:
     def sas_errors(self) -> List:
         """
         Equivelant to the BaseProduct sas_errors property, but reports any SAS errors stored in the component products.
+
         :return: A list of SAS errors related to component products.
         :rtype: List
         """
@@ -408,6 +433,7 @@ class BaseAggregateProduct:
         """
         Equivelant to the BaseProduct errors property, but reports any non-SAS errors stored in the
         component products.
+
         :return: A list of non-SAS errors related to component products.
         :rtype: List
         """
@@ -422,6 +448,7 @@ class BaseAggregateProduct:
         """
         Equivelant to the BaseProduct sas_errors unprocessed_stderr, but returns a list of all the unprocessed
         standard error outputs.
+
         :return: List of stderr outputs.
         :rtype: List
         """
@@ -434,6 +461,7 @@ class BaseAggregateProduct:
     def __len__(self) -> int:
         """
         The length of an AggregateProduct is the number of component products that makes it up.
+
         :return:
         :rtype: int
         """
@@ -780,10 +808,11 @@ class BaseProfile1D:
         """
         Get method for model realisation data, this includes the array of realisations, the radii at which
         the realisations are generated, the upper and lower bounds, the mean, and the confidence level.
+
         :param str real_type: The type of realisation to be retrieved, most often a model name, or the key
-        associated with a particular function that generated realisations (such as inv_abel_model).
+            associated with a particular function that generated realisations (such as inv_abel_model).
         :return: The realisation dictionary with relevant information in it, or None if no matching
-        realisation exists.
+            realisation exists.
         :rtype: Dict
         """
         if real_type in self._allowed_real_types or real_type in self._good_model_fits:
@@ -794,9 +823,10 @@ class BaseProfile1D:
     def get_model_fit(self, model) -> Dict:
         """
         Get method for parameters of fitted models.
+
         :param model: The name of the model for which to retrieve parameters.
         :return: A dictionary containing the fit parameters, their uncertainties, an instance of the model
-        function, and the initial parameters.
+            function, and the initial parameters.
         :rtype: Dict
         """
         if model not in PROF_TYPE_MODELS[self._prof_type]:
@@ -898,6 +928,7 @@ class BaseProfile1D:
         model (supplied by the user). Checks are applied to the supplied model, to make
         sure that it is valid for the type of profile, that a good fit has actually been
         performed, and that the fit was performed with Emcee and not another method.
+
         :param str model: The name of the model for which to retrieve the sampler.
         :return: The Emcee sampler used to fit the user supplied model - if applicable.
         :rtype: em.EnsembleSampler
@@ -935,6 +966,7 @@ class BaseProfile1D:
         """
         Get method for the flattened samples of an MCMC fit to the user supplied model. get_sampler is
         called to retrieve the sampler object, as well as perform validity checks on the model name.
+
         :param str model: The name of the model for which to retrieve the flat samples.
         :return: The flattened posterior samples, with burn-in discarded, and with thinning applied.
         :rtype: np.ndarray
@@ -947,6 +979,7 @@ class BaseProfile1D:
     def view_chains(self, model: str, figsize: Tuple = None):
         """
         Simple view method to quickly look at the MCMC chains for a given model fit.
+
         :param str model: The name of the model for which to view the MCMC chains.
         :param Tuple figsize: Desired size of the figure, if None will be set automatically.
         """
@@ -972,6 +1005,7 @@ class BaseProfile1D:
     def view_corner(self, model: str, figsize: Tuple = (8, 8)):
         """
         A convenient view method to examine the corner plot of the parameter posterior distributions.
+
         :param str model: The name of the model for which to view the corner plot.
         :param Tuple figsize: The desired figure size.
         """
@@ -990,6 +1024,7 @@ class BaseProfile1D:
         """
         A method to add a realisation generated by some external process (such as the density
         measurement functions).
+
         :param str real_type: The type of realisation being added.
         :param Quantity radii: The radii at which the realisation is generated.
         :param Quantity realisation: The values of the realisation.
@@ -1037,20 +1072,21 @@ class BaseProfile1D:
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals.
+
         :param Tuple figsize: The desired size of the figure, the default is (10, 7)
         :param str xscale: The scaling to be applied to the x axis, default is log.
         :param str yscale: The scaling to be applied to the y axis, default is log.
         :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
-        to let matplotlib decide by itself.
+            to let matplotlib decide by itself.
         :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
-        to let matplotlib decide by itself.
+            to let matplotlib decide by itself.
         :param str models: Should the fitted models to this profile be plotted, default is True
         :param bool back_sub: Should the plotted data be background subtracted, default is True.
         :param bool just_models: Should ONLY the fitted models be plotted? Default is False
         :param str custom_title: A plot title to replace the automatically generated title, default is None.
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
-        the dictionary key they are stored under is what they will be labelled.
-         e.g. ({'r500': Quantity(), 'r200': Quantity()}
+            the dictionary key they are stored under is what they will be labelled.
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}
         """
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
@@ -1198,6 +1234,7 @@ class BaseProfile1D:
     def good_model_fits(self) -> List:
         """
         A list of the names of models that have been successfully fitted to the profile.
+
         :return: A list of model names.
         :rtype: Dict
         """
@@ -1208,7 +1245,8 @@ class BaseProfile1D:
     @property
     def radii(self) -> Quantity:
         """
-        Getter for the radii passed in at init. These radii correspond to radii where the values were measured
+        Getter for the radii passed in at init. These radii correspond to radii where the values were measured.
+
         :return: Astropy quantity array of radii.
         :rtype: Quantity
         """
@@ -1218,6 +1256,7 @@ class BaseProfile1D:
     def radii_err(self) -> Quantity:
         """
         Getter for the uncertainties on the profile radii.
+
         :return: Astropy quantity array of radii uncertainties, or a None value if no radii_err where passed.
         :rtype: Quantity
         """
@@ -1227,6 +1266,7 @@ class BaseProfile1D:
     def radii_unit(self) -> Unit:
         """
         Getter for the unit of the radii passed by the user at init.
+
         :return: An astropy unit object.
         :rtype: Unit
         """
@@ -1236,6 +1276,7 @@ class BaseProfile1D:
     def values(self) -> Quantity:
         """
         Getter for the values passed by user at init.
+
         :return: Astropy quantity array of values.
         :rtype: Quantity
         """
@@ -1245,6 +1286,7 @@ class BaseProfile1D:
     def values_err(self) -> Quantity:
         """
         Getter for uncertainties on the profile values.
+
         :return: Astropy quantity array of values uncertainties, or a None value if no values_err where passed.
         :rtype: Quantity
         """
@@ -1254,6 +1296,7 @@ class BaseProfile1D:
     def values_unit(self) -> Unit:
         """
         Getter for the unit of the values passed by the user at init.
+
         :return: An astropy unit object.
         :rtype: Unit
         """
@@ -1264,6 +1307,7 @@ class BaseProfile1D:
         """
         Getter for the background associated with the profile values. If no background is set this will
         be zero.
+
         :return: Astropy scalar quantity.
         :rtype: Quantity
         """
@@ -1273,6 +1317,7 @@ class BaseProfile1D:
     def centre(self) -> Quantity:
         """
         Property that returns the central coordinate that the profile was generated from.
+
         :return: An astropy quantity of the central coordinate
         :rtype: Quantity
         """
@@ -1284,6 +1329,7 @@ class BaseProfile1D:
     def type(self) -> str:
         """
         Getter for a string representing the type of profile stored in this object.
+
         :return: String description of profile.
         :rtype: str
         """
@@ -1293,6 +1339,7 @@ class BaseProfile1D:
     def src_name(self) -> str:
         """
         Getter for the name attribute of this profile, what source object it was derived from.
+
         :return:
         :rtype: object
         """
@@ -1311,6 +1358,7 @@ class BaseProfile1D:
         Property getter for the ObsID this profile was made from. Admittedly this information is implicit
         in the location this object is stored in a source object, but I think it worth storing directly
         as a property as well.
+
         :return: XMM ObsID string.
         :rtype: str
         """
@@ -1322,6 +1370,7 @@ class BaseProfile1D:
         Property getter for the instrument this profile was made from. Admittedly this information is implicit
         in the location this object is stored in a source object, but I think it worth storing directly
         as a property as well.
+
         directly as a property as well.
         :return: XMM instrument name string.
         :rtype: str
@@ -1333,6 +1382,7 @@ class BaseProfile1D:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that this
         profile was generated from
+
         :return: Tuple containing the lower and upper energy limits as Astropy quantities.
         :rtype: Union[Tuple[Quantity, Quantity], Tuple[None, None]]
         """
@@ -1342,6 +1392,7 @@ class BaseProfile1D:
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
         passed in on init.
+
         :return: The number of bins in this radial profile.
         """
         return len(self._radii)
@@ -1407,6 +1458,7 @@ class BaseAggregateProfile1D:
     def radii_unit(self) -> Unit:
         """
         Getter for the unit of the radii passed by the user at init.
+
         :return: An astropy unit object.
         :rtype: Unit
         """
@@ -1416,6 +1468,7 @@ class BaseAggregateProfile1D:
     def values_unit(self) -> Unit:
         """
         Getter for the unit of the values passed by the user at init.
+
         :return: An astropy unit object.
         :rtype: Unit
         """
@@ -1425,6 +1478,7 @@ class BaseAggregateProfile1D:
     def type(self) -> str:
         """
         Getter for a string representing the type of profile stored in this object.
+
         :return: String description of profile.
         :rtype: str
         """
@@ -1434,6 +1488,7 @@ class BaseAggregateProfile1D:
     def profiles(self) -> List[BaseProfile1D]:
         """
         This property is for the constituent profiles that makes up this aggregate profile.
+
         :return: A list of the profiles that make up this object.
         :rtype: List[BaseProfile1D]
         """
@@ -1444,6 +1499,7 @@ class BaseAggregateProfile1D:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that
         the component profiles of this object were generated from.
+
         :return: Tuple containing the lower and upper energy limits as Astropy quantities.
         :rtype: Union[Tuple[Quantity, Quantity], Tuple[None, None]]
         """
@@ -1455,22 +1511,23 @@ class BaseAggregateProfile1D:
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
+
         :param Tuple figsize: The desired size of the figure, the default is (10, 7)
         :param str xscale: The scaling to be applied to the x axis, default is log.
         :param str yscale: The scaling to be applied to the y axis, default is log.
         :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
-        to let matplotlib decide by itself.
+            to let matplotlib decide by itself.
         :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
-        to let matplotlib decide by itself.
+            to let matplotlib decide by itself.
         :param str model: The name of the model fit to display, default is None. If the model
-        hasn't been fitted, or it failed, then it won't be displayed.
+            hasn't been fitted, or it failed, then it won't be displayed.
         :param bool back_sub: Should the plotted data be background subtracted, default is True.
         :param bool legend: Should a legend with source names be added to the figure, default is True.
         :param bool just_model: Should only the models, not the data, be plotted. Default is False.
         :param str custom_title: A plot title to replace the automatically generated title, default is None.
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
-        the dictionary key they are stored under is what they will be labelled.
-         e.g. ({'r500': Quantity(), 'r200': Quantity()}
+            the dictionary key they are stored under is what they will be labelled.
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
