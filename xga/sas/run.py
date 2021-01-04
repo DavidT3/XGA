@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/11/2020, 16:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 13:38. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -14,10 +14,15 @@ from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
+from ..utils import XGA_MODE
 
-if "SAS_DIR" not in os.environ:
+if "SAS_DIR" not in os.environ and XGA_MODE != 'DOCS':
     raise SASNotFoundError("SAS_DIR environment variable is not set, "
                            "unable to verify SAS is present on system")
+elif "SAS_DIR" not in os.environ and XGA_MODE == 'DOCS':
+    sas_out = ''
+    sas_err = ''
+    SAS_VERSION = '0'
 else:
     # This way, the user can just import the SAS_VERSION from this utils code
     sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()

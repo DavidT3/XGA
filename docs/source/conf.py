@@ -52,6 +52,10 @@ if not os.path.exists(CONFIG_PATH):
     with open(config_file_path, 'w') as cfg:
         cfg.write(''.join(lines))
 
+# I don't like to import in the code itself, but it has to be here so we can be sure a valid config file exists
+from xga import utils
+utils.XGA_MODE = "DOCS"
+
 # -- Project information -----------------------------------------------------
 
 project = 'XMM: Generate and Analyse (XGA)'
