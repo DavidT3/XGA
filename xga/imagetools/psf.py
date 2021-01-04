@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/11/2020, 12:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:38. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -34,15 +34,16 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     to them in isolation, but the edge effects were very obvious. So I settled on convolving the whole
     original image with each PSF, and after it was finished taking the relevant chunks and patchworking
     them into a new array.
+
     :param List[BaseSource] sources: A single source object, or list of source objects.
     :param int iterations: The number of deconvolution iterations performed by the Richardson-Lucy algorithm.
     :param str psf_model: Which model of PSF should be used for this deconvolution. The default is ELLBETA,
-    the best available.
+        the best available.
     :param Quantity lo_en: The lower energy bound of the images to be deconvolved.
     :param Quantity hi_en: The upper energy bound of the images to be deconvolved.
     :param int bins: Number of bins that the X and Y axes will be divided into when generating a PSFGrid.
     :param int num_cores: The number of cores to use (if running locally), the default is set to 90%
-    of available cores in your system.
+        of available cores in your system.
     """
     def rl_step(ind: int, cur_image: np.ndarray, last_image: np.ndarray, rel_psf: np.ndarray) \
             -> Tuple[np.ndarray, int]:
@@ -50,6 +51,7 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
         This performs one iteration of the Richardson-Lucy PSF deconvolution method. Basically copied from
         the skimage implementation, but set up so that we can multiprocess this, as well as do it in steps
         and save each step separately.
+
         :param int ind: The current step, passed through for the callback function.
         :param np.ndarray cur_image: The im_deconv from the last step.
         :param last_image:
@@ -66,6 +68,7 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
         """
         Modifies an existing XMM Newton fits image header, removes some elements, and adds a little extra
         information. The new header is then used for PSF corrected fits image files.
+
         :param og_header: The header from the fits image that has been PSF corrected.
         :return: The new, modified, fits header.
         :rtype: FITSHDR
