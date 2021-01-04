@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 17:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 12:13. Copyright (c) David J Turner
 
 
 import inspect
@@ -683,11 +683,13 @@ class BaseProfile1D:
                     auto_corr = sampler.get_autocorr_time()
                     cut_off = int(np.ceil(auto_corr.max() / 100) * 100)
                     success = True
-                except (em.autocorr.AutocorrError, ValueError) as bugger:
+                except ValueError as bugger:
                     if show_errors:
                         print(bugger)
-                    # warn("AutoCorrelationError was raised, MCMC fit has failed. - Perhaps try more steps?")
                     success = False
+                except em.autocorr.AutocorrError as bugger:
+                    warn(str(bugger))
+                    cut_off = int(0.1 * num_steps)
 
         # Now do some checks after the fit has run, primarily for any infinite values
         if not already_done and method == "curve_fit" and ((np.inf in fit_par or np.inf in fit_par_err)

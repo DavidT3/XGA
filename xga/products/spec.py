@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 12:13. Copyright (c) David J Turner
 
 
 import os
@@ -17,6 +17,12 @@ from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError
 
 
 class Spectrum(BaseProduct):
+    """
+    This class is the XGA product responsible for storing an individual spectrum. Various qualities that can be
+    measured from it (X-ray luminosity for example) can be associated with an instance of this object, as well as
+    conversion factors that can be calculated from XSPEC. If a model has been fitted then the data and model
+    can be viewed.
+    """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
                  reg_type: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  raise_properly: bool = True):
@@ -510,6 +516,11 @@ class Spectrum(BaseProduct):
 
 
 class AnnularSpectra(BaseAggregateProduct):
+    """
+    This class is the XGA product responsible for storing a set of spectra, measured in concentric annuli.
+    Various qualities that can be measured from it (X-ray luminosity for example) can be associated with an instance
+    of this object, as well as conversion factors that can be calculated from XSPEC.
+    """
     def __init__(self, spec_paths: list, rmf_paths: list, arf_paths: list, b_path: str, b_rmf_path: str,
                  b_arf_path: str, inn_radii: Quantity, out_radii: Quantity, obs_id: str, instrument: str,
                  stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
