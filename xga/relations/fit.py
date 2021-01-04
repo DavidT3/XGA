@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 16:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:43. Copyright (c) David J Turner
 import inspect
 from types import FunctionType
 from typing import Tuple
@@ -24,16 +24,17 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
         -> Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity]:
     """
     A handy little function that prepares the data for fitting with the chosen method.
+
     :param Quantity y_values: The y data values to fit to.
     :param Quantity y_errs: The y error values of the data. These should be supplied as either a 1D Quantity with
-    length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
+        length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity x_values: The x data values to fit to.
     :param Quantity x_errs: The x error values of the data. These should be supplied as either a 1D Quantity with
-    length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
+        length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity y_norm: Quantity to normalise the y data by.
     :param Quantity x_norm: Quantity to normalise the x data by.
     :param bool log_data: This parameter controls whether the data is logged before being returned. The
-    default is False as it isn't likely to be used often - its included because LIRA wants logged data.
+        default is False as it isn't likely to be used often - its included because LIRA wants logged data.
     :return: The x data, x errors, y data, and y errors. Also the x_norm, y_norm.
     :rtype: Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity]
     """
@@ -133,28 +134,29 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
     """
     A function to fit a scaling relation with the scipy non-linear least squares implementation (curve fit), generate
     an XGA ScalingRelation product, and return it.
+
     :param FunctionType model_func: The function object of the model you wish to fit. PLEASE NOTE, the function must
-    be defined in the style used in xga.models.misc; i.e. powerlaw(x: np.ndarray, k: float, a: float), where
-    the first argument is for x values, and the following arguments are all fit parameters.
+        be defined in the style used in xga.models.misc; i.e. powerlaw(x: np.ndarray, k: float, a: float), where
+        the first argument is for x values, and the following arguments are all fit parameters.
     :param Quantity y_values: The y data values to fit to.
     :param Quantity y_errs: The y error values of the data. These should be supplied as either a 1D Quantity with
-    length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
+        length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity x_values: The x data values to fit to.
     :param Quantity x_errs: The x error values of the data. These should be supplied as either a 1D Quantity with
-    length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
+        length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity y_norm: Quantity to normalise the y data by.
     :param Quantity x_norm: Quantity to normalise the x data by.
     :param Quantity x_lims: The range of x values in which this relation is valid, default is None. If this
-    information is supplied, please pass it as a Quantity array, with the first element being the lower
-    bound and the second element being the upper bound.
+        information is supplied, please pass it as a Quantity array, with the first element being the lower
+        bound and the second element being the upper bound.
     :param list start_pars: The start parameters for the curve_fit run, default is None, which means curve_fit
-    will use all ones.
+        will use all ones.
     :param str y_name: The name to be used for the y-axis of the scaling relation (DON'T include the unit, that
-    will be inferred from the astropy Quantity.
+        will be inferred from the astropy Quantity.
     :param str x_name: The name to be used for the x-axis of the scaling relation (DON'T include the unit, that
-    will be inferred from the astropy Quantity.
+        will be inferred from the astropy Quantity.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
-    predict method.
+        predict method.
     :rtype: ScalingRelation
     """
     x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm = _fit_initialise(y_values, y_errs, x_values,
@@ -178,30 +180,31 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
     """
     A function to fit a scaling relation with the scipy orthogonal distance regression implementation, generate
     an XGA ScalingRelation product, and return it.
+
     :param FunctionType model_func: The function object of the model you wish to fit. PLEASE NOTE, the function must
-    be defined in the style used in xga.models.misc; i.e. powerlaw(x: np.ndarray, k: float, a: float), where
-    the first argument is for x values, and the following arguments are all fit parameters. The scipy ODR
-    implementation requires functions of a different style, and I try to automatically convert the input function
-    to that style, but to help that please avoid using one letter parameter names in any custom function you might
-    want to use.
+        be defined in the style used in xga.models.misc; i.e. powerlaw(x: np.ndarray, k: float, a: float), where
+        the first argument is for x values, and the following arguments are all fit parameters. The scipy ODR
+        implementation requires functions of a different style, and I try to automatically convert the input function
+        to that style, but to help that please avoid using one letter parameter names in any custom function you might
+        want to use.
     :param Quantity y_values: The y data values to fit to.
     :param Quantity y_errs: The y error values of the data. These should be supplied as either a 1D Quantity with
-    length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
+        length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity x_values: The x data values to fit to.
     :param Quantity x_errs: The x error values of the data. These should be supplied as either a 1D Quantity with
-    length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
+        length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity y_norm: Quantity to normalise the y data by.
     :param Quantity x_norm: Quantity to normalise the x data by.
     :param Quantity x_lims: The range of x values in which this relation is valid, default is None. If this
-    information is supplied, please pass it as a Quantity array, with the first element being the lower
-    bound and the second element being the upper bound.
+        information is supplied, please pass it as a Quantity array, with the first element being the lower
+        bound and the second element being the upper bound.
     :param list start_pars: The start parameters for the ODR run, default is all ones.
     :param str y_name: The name to be used for the y-axis of the scaling relation (DON'T include the unit, that
-    will be inferred from the astropy Quantity.
+        will be inferred from the astropy Quantity.
     :param str x_name: The name to be used for the x-axis of the scaling relation (DON'T include the unit, that
-    will be inferred from the astropy Quantity.
+        will be inferred from the astropy Quantity.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
-    predict method.
+        predict method.
     :rtype: ScalingRelation
     """
     if start_pars is None:
@@ -257,27 +260,28 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     A function to fit a power law scaling relation with the excellent R fitting package LIRA
     (https://doi.org/10.1093/mnras/stv2374), this function requires a valid R installation, along with LIRA (and its
     dependencies such as JAGS), as well as the Python module rpy2.
+
     :param Quantity y_values: The y data values to fit to.
     :param Quantity y_errs: The y error values of the data. These should be supplied as either a 1D Quantity with
-    length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
+        length N (where N is the length of y_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity x_values: The x data values to fit to.
     :param Quantity x_errs: The x error values of the data. These should be supplied as either a 1D Quantity with
-    length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
+        length N (where N is the length of x_values), or an Nx2 Quantity with lower and upper errors.
     :param Quantity y_norm: Quantity to normalise the y data by.
     :param Quantity x_norm: Quantity to normalise the x data by.
     :param Quantity x_lims: The range of x values in which this relation is valid, default is None. If this
-    information is supplied, please pass it as a Quantity array, with the first element being the lower
-    bound and the second element being the upper bound.
+        information is supplied, please pass it as a Quantity array, with the first element being the lower
+        bound and the second element being the upper bound.
     :param str y_name: The name to be used for the y-axis of the scaling relation (DON'T include the unit, that
-    will be inferred from the astropy Quantity.
+        will be inferred from the astropy Quantity.
     :param str x_name: The name to be used for the x-axis of the scaling relation (DON'T include the unit, that
-    will be inferred from the astropy Quantity.
+        will be inferred from the astropy Quantity.
     :param int num_steps: The number of steps to take in each chain.
     :param int num_chains: The number of chains to run.
     :param int num_burn_in: The number of steps to discard as a burn in period. This is also used as the adapt
-    parameter of the LIRA fit.
+        parameter of the LIRA fit.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
-    predict method.
+        predict method.
     :rtype: ScalingRelation
     """
     # Due to the nature of this function, a wrapper for the LIRA R fitting package, I'm going to try the
@@ -353,4 +357,5 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
 
 
 def scaling_relation_emcee():
-    raise NotImplementedError("I'm working on it!")
+    raise NotImplementedError("This fitting method has not yet been implemented, please consider LIRA "
+                              "as an alternative.")
