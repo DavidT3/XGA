@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:58. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -159,6 +159,7 @@ class BaseSource:
     def ra_dec(self) -> Quantity:
         """
         A getter for the original ra and dec entered by the user.
+
         :return: The ra-dec coordinates entered by the user when the source was first defined
         :rtype: Quantity
         """
@@ -168,8 +169,9 @@ class BaseSource:
     def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
+
         :return: A dictionary structure detailing the data products available at initialisation, another
-        dictionary containing paths to region files, and another dictionary containing paths to attitude files.
+            dictionary containing paths to region files, and another dictionary containing paths to attitude files.
         :rtype: Tuple[dict, dict, dict]
         """
         def read_default_products(en_lims: tuple) -> Tuple[str, dict]:
@@ -178,10 +180,11 @@ class BaseSource:
             through the default XMM products defined in the config file, filling in the energy limits and
             checking if the file paths exist. Those that do exist are read into the relevant product object and
             returned.
+
             :param tuple en_lims: A tuple containing a lower and upper energy limit to generate file names for,
-            the first entry should be the lower limit, the second the upper limit.
+                the first entry should be the lower limit, the second the upper limit.
             :return: A dictionary key based on the energy limits for the file paths to be stored under, and the
-            dictionary of file paths.
+                dictionary of file paths.
             :rtype: tuple[str, dict]
             """
             not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key, "attitude_file", "odf_path"]
@@ -273,6 +276,7 @@ class BaseSource:
         Setter method for the products attribute of source objects. Cannot delete existing products,
         but will overwrite existing products with a warning. Raises errors if the ObsID is not associated
         with this source or the instrument is not associated with the ObsID.
+
         :param BaseProduct prod_obj: The new product object to be added to the source object.
         """
         # Aggregate products are things like PSF grids and sets of annular spectra.
@@ -421,6 +425,7 @@ class BaseSource:
         A method specifically for searching an existing XGA output directory for relevant files and loading
         them in as XGA products. This will retrieve images, exposure maps, and spectra; then the source product
         structure is updated. The method also finds previous fit results and loads them in.
+
         :param bool read_fits: Boolean flag that controls whether past fits are read back in or not.
         """
 
@@ -429,6 +434,7 @@ class BaseSource:
             Very simple little function that takes the path to an XGA generated image-like product (so either an
             image or an exposure map), parses the file path and makes an XGA object of the correct type by using
             the exact_type variable.
+
             :param str file_path: Absolute path to an XGA-generated XMM data product.
             :param str exact_type: Either 'image' or 'expmap', the type of product that the file_path leads to.
             :param bool merged: Whether this is a merged file or not.
@@ -475,6 +481,7 @@ class BaseSource:
         def merged_file_check(file_path: str, obs_ids: Tuple, prod_type: str):
             """
             Checks that a passed file name is a merged image or exposure map, and matches the current source.
+
             :param str file_path: The name of the file in consideration
             :param Tuple obs_ids: The ObsIDs associated with this source.
             :param str prod_type: img or expmap, what type of merged product are we looking for?
@@ -642,12 +649,13 @@ class BaseSource:
         """
         This is the getter for the products data structure of Source objects. Passing a 'product type'
         such as 'events' or 'images' will return every matching entry in the products data structure.
+
         :param str p_type: Product type identifier. e.g. image or expmap.
         :param str obs_id: Optionally, a specific obs_id to search can be supplied.
         :param str inst: Optionally, a specific instrument to search can be supplied.
         :param str extra_key: Optionally, an extra key (like an energy bound) can be supplied.
         :param bool just_obj: A boolean flag that controls whether this method returns just the product objects,
-        or the other information that goes with it like ObsID and instrument.
+            or the other information that goes with it like ObsID and instrument.
         :return: List of matching products.
         :rtype: List[BaseProduct]
         """
@@ -656,6 +664,7 @@ class BaseSource:
             A recursive function to go through every layer of a nested list and flatten it all out. It
             doesn't return anything because to make life easier the 'results' are appended to a variable
             in the namespace above this one.
+
             :param list to_unpack: The list that needs unpacking.
             """
             # Must iterate through the given list
@@ -703,12 +712,14 @@ class BaseSource:
         An internal method that reads and parses region files found for observations
         associated with this source. Also computes simple matches to find regions likely
         to be related to the source.
+
         :return: Tuple[dict, dict]
         """
         def dist_from_source(reg):
             """
             Calculates the euclidean distance between the centre of a supplied region, and the
             position of the source.
+
             :param reg: A region object.
             :return: Distance between region centre and source position.
             """
@@ -782,13 +793,14 @@ class BaseSource:
                      extra_info: np.ndarray, stack: bool = False):
         """
         Small function to update the numpy array that makes up the queue of products to be generated.
+
         :param np.ndarray cmd_arr: Array containing SAS commands.
         :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
-        by the cmd array. e.g. image or expmap.
+            by the cmd array. e.g. image or expmap.
         :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
         :param np.ndarray extra_info: Array of extra information dictionaries
         :param stack: Should these commands be executed after a preceding line of commands,
-        or at the same time.
+            or at the same time.
         :return:
         """
         if self.queue is None:
@@ -814,9 +826,10 @@ class BaseSource:
         Calling this indicates that the queue is about to be processed, so this function combines SAS
         commands along columns (command stacks), and returns N SAS commands to be run concurrently,
         where N is the number of columns.
+
         :return: List of strings, where the strings are bash commands to run SAS procedures, another
-        list of strings, where the strings are expected output types for the commands, a list of
-        lists of strings, where the strings are expected output paths for products of the SAS commands.
+            list of strings, where the strings are expected output types for the commands, a list of
+            lists of strings, where the strings are expected output paths for products of the SAS commands.
         :rtype: Tuple[List[str], List[str], List[List[str]]]
         """
         if self.queue is None:
@@ -853,6 +866,7 @@ class BaseSource:
     def get_att_file(self, obs_id: str) -> str:
         """
         Fetches the path to the attitude file for an XMM observation.
+
         :param obs_id: The ObsID to fetch the attitude file for.
         :return: The path to the attitude file.
         :rtype: str
@@ -865,6 +879,7 @@ class BaseSource:
     def get_odf_path(self, obs_id: str) -> str:
         """
         Fetches the path to the odf directory for an XMM observation.
+
         :param obs_id: The ObsID to fetch the ODF path for.
         :return: The path to the ODF path.
         :rtype: str
@@ -878,6 +893,7 @@ class BaseSource:
     def obs_ids(self) -> List[str]:
         """
         Property getter for ObsIDs associated with this source that are confirmed to have events files.
+
         :return: A list of the associated XMM ObsIDs.
         :rtype: List[str]
         """
@@ -888,11 +904,12 @@ class BaseSource:
         A method that looks for matches not just based on position, but also on the type of source
         we want to find. Finding no matches is allowed, but the source will be declared as undetected.
         An error will be thrown if more than one match of the correct type per observation is found.
+
         :param str source_type: Should either be ext or pnt, describes what type of source I
-        should be looking for in the region files.
+            should be looking for in the region files.
         :return: A dictionary containing the matched region for each ObsID + a combined region, another
-        dictionary containing any sources that matched to the coordinates and weren't chosen,
-        and a final dictionary with sources that aren't the target, or in the 2nd dictionary.
+            dictionary containing any sources that matched to the coordinates and weren't chosen,
+            and a final dictionary with sources that aren't the target, or in the 2nd dictionary.
         :rtype: Tuple[Dict, Dict, Dict]
         """
         # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
@@ -959,6 +976,7 @@ class BaseSource:
     def detected(self) -> bool:
         """
         A property getter to return if a match of the correct type has been found.
+
         :return: The detected boolean attribute.
         :rtype: bool
         """
@@ -973,6 +991,7 @@ class BaseSource:
         """
         A method to retrieve source region and background region objects for a given source type with a
         given central coordinate.
+
         :param str reg_type: The type of region which we wish to get from the source.
         :param str obs_id: The ObsID that the region is associated with (if appropriate).
         :param Quantity central_coord: The central coordinate of the region.
@@ -1056,8 +1075,9 @@ class BaseSource:
     def within_region(self, region: SkyRegion) -> List[SkyRegion]:
         """
         This method finds interloper sources that lie within the user supplied region.
+
         :param SkyRegion region: The region in which we wish to search for interloper sources (for instance
-        a source region or background region).
+            a source region or background region).
         :return: A list of regions that lie within the user supplied region.
         :rtype: List[SkyRegion]
         """
@@ -1073,6 +1093,7 @@ class BaseSource:
             -> Tuple[np.ndarray, np.ndarray]:
         """
         Method to retrieve source and background masks for the given region type.
+
         :param str reg_type: The type of region for which to retrieve the mask.
         :param str obs_id: The ObsID that the mask is associated with (if appropriate).
         :param Quantity central_coord: The central coordinate of the region.
@@ -1114,6 +1135,7 @@ class BaseSource:
         """
         Internal method that makes interloper masks in the first place; I allow this because interloper
         masks will never change, so can be safely generated and stored in an init of a source class.
+
         :param Image mask_image: The image for which to create the interloper mask.
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
@@ -1132,6 +1154,7 @@ class BaseSource:
         """
         Returns a mask for a given ObsID (or combined data if no ObsID given) that will remove any sources
         that have not been identified as the source of interest.
+
         :param str obs_id: The ObsID that the mask is associated with (if appropriate).
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
@@ -1162,6 +1185,7 @@ class BaseSource:
             Tuple[np.ndarray, np.ndarray]:
         """
         Method to retrieve source and background masks for the given region type, WITH INTERLOPERS REMOVED.
+
         :param str reg_type: The type of region for which to retrieve the interloper corrected mask.
         :param str obs_id: The ObsID that the mask is associated with (if appropriate).
         :param Quantity central_coord: The central coordinate of the region.
@@ -1185,6 +1209,7 @@ class BaseSource:
         This takes a region type and central coordinate and calculates the signal to noise ratio.
         The background region is constructed using the back_inn_rad_factor and back_out_rad_factor
         values, the defaults of which are 1.05*radius and 1.5*radius respectively.
+
         :param str reg_type: The type of region for which to calculate the signal to noise ratio.
         :param Quantity central_coord: The central coordinate of the region.
         :return: The signal to noise ratio.
@@ -1211,18 +1236,20 @@ class BaseSource:
         Converts region objects into strings that can be used as part of a SAS command; for instance producing
         a spectrum within one region. This method returns both the source region and associated background
         region with nuisance objects drilled out.
+
         :param str reg_type: The type of region to generate a SAS region string for.
         :param str obs_id: The ObsID for which we wish to generate the SAS region string.
         :param str inst: The XMM instrument for which we wish to generate the SAS region string.
         :param UnitBase output_unit: The distance unit used by the output SAS region string.
         :return: A SAS region which will include source emission and exclude nuisance sources, and
-        another SAS region which will include background emission and exclude nuisance sources.
+            another SAS region which will include background emission and exclude nuisance sources.
         :rtype: Tuple[str, str]
         """
         def sas_shape(reg: SkyRegion, im: Image) -> str:
             """
             This will convert the input SkyRegion into an appropriate SAS compatible region string, for use
             with tools such as evselect.
+
             :param SkyRegion reg: The region object to convert into a SAS region.
             :param Image im: An XGA image object for use in unit conversions.
             :return: A SAS region string describing the input SkyRegion
@@ -1347,6 +1374,7 @@ class BaseSource:
     def nH(self) -> Quantity:
         """
         Property getter for neutral hydrogen column attribute.
+
         :return: Neutral hydrogen column surface density.
         :rtype: Quantity
         """
@@ -1356,6 +1384,7 @@ class BaseSource:
     def redshift(self):
         """
         Property getter for the redshift of this source object.
+
         :return: Redshift value
         :rtype: float
         """
@@ -1365,6 +1394,7 @@ class BaseSource:
     def on_axis_obs_ids(self):
         """
         This method returns an array of ObsIDs that this source is approximately on axis in.
+
         :return: ObsIDs for which the source is approximately on axis.
         :rtype: np.ndarray
         """
@@ -1374,6 +1404,7 @@ class BaseSource:
     def cosmo(self) -> Cosmology:
         """
         This method returns whatever cosmology object is associated with this source object.
+
         :return: An astropy cosmology object specified for this source on initialization.
         :rtype: Cosmology
         """
@@ -1384,6 +1415,7 @@ class BaseSource:
     def name(self) -> str:
         """
         The name of the source, either given at initialisation or generated from the user-supplied coordinates.
+
         :return: The name of the source.
         :rtype: str
         """
@@ -1395,6 +1427,7 @@ class BaseSource:
         A method that stores fit results and global information about a the set of spectra in a source object.
         Any variable parameters in the fit are stored in an internal dictionary structure, as are any luminosities
         calculated. Other parameters of interest are store in other internal attributes.
+
         :param str model:
         :param str reg_type:
         :param tab_line:
@@ -1460,6 +1493,7 @@ class BaseSource:
         all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
         of such numpy arrays, with the keys corresponding to parameter names.
+
         :param str reg_type: The type of region that the fitted spectra were generated from.
         :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
         :param str par: The name of the parameter you want a result for.
@@ -1514,9 +1548,10 @@ class BaseSource:
         Either for given energy limits (that must have been specified when the fit was first performed), or
         for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
         the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
+
         :param str reg_type: The type of region that the fitted spectra were generated from.
         :param str model: The name of the fitted model that you're requesting the
-        luminosities from (e.g. tbabs*apec).
+            luminosities from (e.g. tbabs*apec).
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
         :return: The requested luminosity value, and uncertainties.
@@ -1567,9 +1602,10 @@ class BaseSource:
         Allows a radius associated with this source to be retrieved in specified distance units. Note
         that physical distance units such as kiloparsecs may only be used if the source has
         redshift information.
+
         :param str rad_name: The name of the desired radius, r200 for instance.
         :param Union[Unit, str] out_unit: An astropy unit, either a Unit instance or a string
-        representation. Default is degrees.
+            representation. Default is degrees.
         :return: The desired radius in the desired units.
         :rtype: Quantity
         """
@@ -1601,6 +1637,7 @@ class BaseSource:
     def num_pn_obs(self) -> int:
         """
         Getter method that gives the number of PN observations.
+
         :return: Integer number of PN observations associated with this source
         :rtype: int
         """
@@ -1610,6 +1647,7 @@ class BaseSource:
     def num_mos1_obs(self) -> int:
         """
         Getter method that gives the number of MOS1 observations.
+
         :return: Integer number of MOS1 observations associated with this source
         :rtype: int
         """
@@ -1619,6 +1657,7 @@ class BaseSource:
     def num_mos2_obs(self) -> int:
         """
         Getter method that gives the number of MOS2 observations.
+
         :return: Integer number of MOS2 observations associated with this source
         :rtype: int
         """
@@ -1629,6 +1668,7 @@ class BaseSource:
     def instruments(self) -> Dict:
         """
         A property of a source that details which instruments have valid data for which observations.
+
         :return: A dictionary of ObsIDs and their associated valid instruments.
         :rtype: Dict
         """
@@ -1638,6 +1678,7 @@ class BaseSource:
     def disassociated(self) -> bool:
         """
         Property that describes whether this source has had ObsIDs disassociated from it.
+
         :return: A boolean flag, True means that ObsIDs/instruments have been removed, False means they haven't.
         :rtype: bool
         """
@@ -1647,6 +1688,7 @@ class BaseSource:
     def disassociated_obs(self) -> dict:
         """
         Property that details exactly what data has been disassociated from this source, if any.
+
         :return: Dictionary describing which instruments of which ObsIDs have been disassociated from this source.
         :rtype: dict
         """
@@ -1657,9 +1699,10 @@ class BaseSource:
         Method that uses the supplied dictionary to safely remove data from the source. This data will no longer
         be used in any analyses, and would typically be removed because it is of poor quality, or doesn't contribute
         enough to justify its presence.
+
         :param Union[dict, str] to_remove: A dictionary of observations to remove, either in the style of
-        the source.instruments dictionary (with the top level keys being ObsIDs, and the lower levels
-        being instrument names), or a string containing an ObsID.
+            the source.instruments dictionary (with the top level keys being ObsIDs, and the lower levels
+            being instrument names), or a string containing an ObsID.
         """
         # Users can pass just an ObsID string, but we then need to convert it to the form
         #  that the rest of the function requires
@@ -1720,6 +1763,7 @@ class BaseSource:
     def luminosity_distance(self) -> Quantity:
         """
         Tells the user the luminosity distance to the source if a redshift was supplied, if not returns None.
+
         :return: The luminosity distance to the source, calculated using the cosmology associated with this source.
         :rtype: Quantity
         """
@@ -1729,8 +1773,9 @@ class BaseSource:
     def angular_diameter_distance(self) -> Quantity:
         """
         Tells the user the angular diameter distance to the source if a redshift was supplied, if not returns None.
+
         :return: The angular diameter distance to the source, calculated using the cosmology
-        associated with this source.
+            associated with this source.
         :rtype: Quantity
         """
         return self._ang_diam_dist
@@ -1739,6 +1784,7 @@ class BaseSource:
     def background_radius_factors(self) -> ndarray:
         """
         The factors by which to multiply outer radius by to get inner and outer radii for background regions.
+
         :return: An array of the two factors.
         :rtype: ndarray
         """
@@ -1751,11 +1797,12 @@ class BaseSource:
         map, and if (for a given ObsID-Instrument) the ratio of that area to the full area of the region
         calculated is less than the threshold fraction, that ObsID-instrument will be included in the returned
         rejection dictionary.
+
         :param str reg_type: The region type for which to calculate the area intersection.
         :param float threshold_fraction: Area to max area ratios below this value will mean the
-        ObsID-Instrument is rejected.
+            ObsID-Instrument is rejected.
         :return: A dictionary of ObsID keys on the top level, then instruments a level down, that
-        should be rejected according to the criteria supplied to this method.
+            should be rejected according to the criteria supplied to this method.
         :rtype: Dict
         """
         # Again don't particularly want to do this local import, but its just easier
@@ -1883,6 +1930,7 @@ class BaseSource:
         """
         Method to return the length of the products dictionary (which means the number of
         individual ObsIDs associated with this source), when len() is called on an instance of this class.
+
         :return: The integer length of the top level of the _products nested dictionary.
         :rtype: int
         """
@@ -1895,10 +1943,17 @@ class BaseSource:
 # SAS wrappers to work.
 # This does have a lot of straight copied code from BaseSource, but I don't mind in this instance
 class NullSource:
+    """
+    A useful, but very limited, source class. By default this source class will include all ObsIDs present in the
+    XGA census, and as such can be used for bulk generation of SAS products. It can also be made to only include
+    certain ObsIDs.
+    """
     def __init__(self, obs: List[str] = None):
         """
+        The method used to initiate the NullSource class.
 
-        :param obs:
+        :param List obs: An optional list of ObsIDs to include in the NullSource, otherwise all available ObsIDs
+            will be included.
         """
         # To find all census entries with non-na coordinates
         cleaned_census = CENSUS.dropna()
@@ -1964,6 +2019,7 @@ class NullSource:
     def get_att_file(self, obs_id: str) -> str:
         """
         Fetches the path to the attitude file for an XMM observation.
+
         :param obs_id: The ObsID to fetch the attitude file for.
         :return: The path to the attitude file.
         :rtype: str
@@ -1976,6 +2032,7 @@ class NullSource:
     def get_odf_path(self, obs_id: str) -> str:
         """
         Fetches the path to the odf directory for an XMM observation.
+
         :param obs_id: The ObsID to fetch the ODF path for.
         :return: The path to the ODF path.
         :rtype: str
@@ -1989,6 +2046,7 @@ class NullSource:
     def obs_ids(self) -> List[str]:
         """
         Property getter for ObsIDs associated with this source that are confirmed to have events files.
+
         :return: A list of the associated XMM ObsIDs.
         :rtype: List[str]
         """
@@ -1998,6 +2056,7 @@ class NullSource:
     def instruments(self) -> Dict:
         """
         A property of a source that details which instruments have valid data for which observations.
+
         :return: A dictionary of ObsIDs and their associated valid instruments.
         :rtype: Dict
         """
@@ -2007,13 +2066,14 @@ class NullSource:
                      extra_info: np.ndarray, stack: bool = False):
         """
         Small function to update the numpy array that makes up the queue of products to be generated.
+
         :param np.ndarray cmd_arr: Array containing SAS commands.
         :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
-        by the cmd array. e.g. image or expmap.
+            by the cmd array. e.g. image or expmap.
         :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
         :param np.ndarray extra_info: Array of extra information dictionaries
         :param stack: Should these commands be executed after a preceding line of commands,
-        or at the same time.
+            or at the same time.
         :return:
         """
         if self.queue is None:
@@ -2039,9 +2099,10 @@ class NullSource:
         Calling this indicates that the queue is about to be processed, so this function combines SAS
         commands along columns (command stacks), and returns N SAS commands to be run concurrently,
         where N is the number of columns.
+
         :return: List of strings, where the strings are bash commands to run SAS procedures, another
-        list of strings, where the strings are expected output types for the commands, a list of
-        lists of strings, where the strings are expected output paths for products of the SAS commands.
+            list of strings, where the strings are expected output types for the commands, a list of
+            lists of strings, where the strings are expected output paths for products of the SAS commands.
         :rtype: Tuple[List[str], List[str], List[List[str]]]
         """
         if self.queue is None:
@@ -2081,6 +2142,7 @@ class NullSource:
         will expect it to, and as such it doesn't do anything at all. This is because NullSource source could have
         tens of thousands of products associated with them, and are only used to bulk generate basic products
         (images, expmaps etc), I don't want the memory overhead of storing them.
+
         :param BaseProduct prod_obj: The new product object to be added to the source object.
         """
         pass
@@ -2090,12 +2152,13 @@ class NullSource:
         """
         This is the getter for the products data structure of Source objects. Passing a 'product type'
         such as 'events' or 'images' will return every matching entry in the products data structure.
+
         :param str p_type: Product type identifier. e.g. image or expmap.
         :param str obs_id: Optionally, a specific obs_id to search can be supplied.
         :param str inst: Optionally, a specific instrument to search can be supplied.
         :param str extra_key: Optionally, an extra key (like an energy bound) can be supplied.
         :param bool just_obj: A boolean flag that controls whether this method returns just the product objects,
-        or the other information that goes with it like ObsID and instrument.
+            or the other information that goes with it like ObsID and instrument.
         :return: List of matching products.
         :rtype: List[BaseProduct]
         """
@@ -2104,6 +2167,7 @@ class NullSource:
             A recursive function to go through every layer of a nested list and flatten it all out. It
             doesn't return anything because to make life easier the 'results' are appended to a variable
             in the namespace above this one.
+
             :param list to_unpack: The list that needs unpacking.
             """
             # Must iterate through the given list
@@ -2149,6 +2213,7 @@ class NullSource:
     def name(self) -> str:
         """
         The name of the source, either given at initialisation or generated from the user-supplied coordinates.
+
         :return: The name of the source.
         :rtype: str
         """
@@ -2158,6 +2223,7 @@ class NullSource:
     def num_pn_obs(self) -> int:
         """
         Getter method that gives the number of PN observations.
+
         :return: Integer number of PN observations associated with this source
         :rtype: int
         """
@@ -2167,6 +2233,7 @@ class NullSource:
     def num_mos1_obs(self) -> int:
         """
         Getter method that gives the number of MOS1 observations.
+
         :return: Integer number of MOS1 observations associated with this source
         :rtype: int
         """
@@ -2176,6 +2243,7 @@ class NullSource:
     def num_mos2_obs(self) -> int:
         """
         Getter method that gives the number of MOS2 observations.
+
         :return: Integer number of MOS2 observations associated with this source
         :rtype: int
         """
@@ -2197,6 +2265,7 @@ class NullSource:
         """
         Method to return the length of the products dictionary (which means the number of
         individual ObsIDs associated with this source), when len() is called on an instance of this class.
+
         :return: The integer length of the top level of the _products nested dictionary.
         :rtype: int
         """
