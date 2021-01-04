@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 16:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:47. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -138,6 +138,7 @@ class ClusterSample(BaseSample):
     def r200_snr(self) -> np.ndarray:
         """
         Fetches and returns the R200 signal to noises from the constituent sources.
+
         :return: The signal to noise ration calculated at the R200.
         :rtype: np.ndarray
         """
@@ -153,6 +154,7 @@ class ClusterSample(BaseSample):
     def r500_snr(self) -> np.ndarray:
         """
         Fetches and returns the R500 signal to noises from the constituent sources.
+
         :return: The signal to noise ration calculated at the R500.
         :rtype: np.ndarray
         """
@@ -168,6 +170,7 @@ class ClusterSample(BaseSample):
     def r2500_snr(self) -> np.ndarray:
         """
         Fetches and returns the R2500 signal to noises from the constituent sources.
+
         :return: The signal to noise ration calculated at the R2500.
         :rtype: np.ndarray
         """
@@ -183,6 +186,7 @@ class ClusterSample(BaseSample):
     def richness(self) -> Quantity:
         """
         Provides the richnesses of the clusters in this sample, if they were passed in on definition.
+
         :return: A unitless Quantity object of the richnesses and their error(s).
         :rtype: Quantity
         """
@@ -203,6 +207,7 @@ class ClusterSample(BaseSample):
     def wl_mass(self) -> Quantity:
         """
         Provides the weak lensing masses of the clusters in this sample, if they were passed in on definition.
+
         :return: A Quantity object of the WL masses and their error(s), in whatever units they were when
         they were passed in originally.
         :rtype: Quantity
@@ -225,6 +230,7 @@ class ClusterSample(BaseSample):
     def r200(self) -> Quantity:
         """
         Returns all the R200 values passed in on declaration, but in units of kpc.
+
         :return: A quantity of R200 values.
         :rtype: Quantity
         """
@@ -247,6 +253,7 @@ class ClusterSample(BaseSample):
     def r500(self) -> Quantity:
         """
         Returns all the R500 values passed in on declaration, but in units of kpc.
+
         :return: A quantity of R500 values.
         :rtype: Quantity
         """
@@ -269,6 +276,7 @@ class ClusterSample(BaseSample):
     def r2500(self) -> Quantity:
         """
         Returns all the R2500 values passed in on declaration, but in units of kpc.
+
         :return: A quantity of R2500 values.
         :rtype: Quantity
         """
@@ -293,10 +301,11 @@ class ClusterSample(BaseSample):
         thrown if temperatures haven't been measured for the given region and model (default is the tbabs*apec model
         which single_temp_apec fits to cluster spectra). Any clusters for which temperature fits failed will return
         NaN temperatures.
+
         :param str reg_type: The type of region that the fitted spectra were generated from.
         :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
-        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
+            column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
         """
         temps = []
@@ -332,12 +341,13 @@ class ClusterSample(BaseSample):
     def gas_mass(self, rad_name: str, dens_tech: str = 'inv_abel_model', conf_level: int = 90) -> Quantity:
         """
         A get method for gas masses measured for the constituent clusters of this sample.
+
         :param str rad_name: The name of the radius (e.g. r500) to calculate the gas mass within.
         :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
-        which is the superior of the two I have implemented as of 03/12/20.
+            which is the superior of the two I have implemented as of 03/12/20.
         :param int conf_level: The desired confidence level of the uncertainties.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the gas mass, second
-        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
+            column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
         """
         gms = []
@@ -376,13 +386,14 @@ class ClusterSample(BaseSample):
             -> ScalingRelation:
         """
         This generates a Gas Mass vs Richness scaling relation for this sample of Galaxy Clusters.
+
         :param str rad_name: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
         :param str fit_method: The name of the fit method to use to generate the scaling relation.
         :param list start_pars: The start parameters for the fit run.
         :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
-        which is the superior of the two I have implemented as of 03/12/20.
+            which is the superior of the two I have implemented as of 03/12/20.
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
         """
@@ -426,13 +437,14 @@ class ClusterSample(BaseSample):
               model: str = 'tbabs*apec') -> ScalingRelation:
         """
         This generates a Gas Mass vs Tx scaling relation for this sample of Galaxy Clusters.
+
         :param str rad_name: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
         :param str fit_method: The name of the fit method to use to generate the scaling relation.
         :param list start_pars: The start parameters for the fit run.
         :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
-        which is the superior of the two I have implemented as of 03/12/20.
+            which is the superior of the two I have implemented as of 03/12/20.
         :param str model: The name of the model that the temperatures were measured with.
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
@@ -479,6 +491,7 @@ class ClusterSample(BaseSample):
                     lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')) -> ScalingRelation:
         """
         This generates a Lx vs richness scaling relation for this sample of Galaxy Clusters.
+
         :param str rad_name: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
@@ -530,6 +543,7 @@ class ClusterSample(BaseSample):
               lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')) -> ScalingRelation:
         """
         This generates a Lx vs Tx scaling relation for this sample of Galaxy Clusters.
+
         :param str rad_name: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
