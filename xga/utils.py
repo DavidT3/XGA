@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 13:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 15:37. Copyright (c) David J Turner
 
 import json
 import os
@@ -16,10 +16,6 @@ from numpy import nan, floor
 from tqdm import tqdm
 
 from .exceptions import XGAConfigError
-
-# This constant is to tell the rest of the module what mode it is in, the other option at the moment is "DOCS",
-#  which tells certain parts that the documentation is being built, in which case XGA_MODE = "DOCS"
-XGA_MODE = "RUN"
 
 # If XDG_CONFIG_HOME is set, then use that, otherwise use this default config path
 CONFIG_PATH = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))

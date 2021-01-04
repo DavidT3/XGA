@@ -1,7 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 13:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 15:37. Copyright (c) David J Turner
 
 import os
+import warnings
 from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
 from typing import Tuple
@@ -9,20 +10,16 @@ from typing import Tuple
 from tqdm import tqdm
 
 from .. import COMPUTE_MODE
-from ..exceptions import SASNotFoundError, SASGenerationError
+from ..exceptions import SASGenerationError
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
-from ..utils import XGA_MODE
 
-if "SAS_DIR" not in os.environ and XGA_MODE != 'DOCS':
-    raise SASNotFoundError("SAS_DIR environment variable is not set, "
-                           "unable to verify SAS is present on system")
-elif "SAS_DIR" not in os.environ and XGA_MODE == 'DOCS':
-    sas_out = ''
-    sas_err = ''
-    SAS_VERSION = '0'
+if "SAS_DIR" not in os.environ:
+    # raise SASNotFoundError("SAS_DIR environment variable is not set, "
+    #                        "unable to verify SAS is present on system")
+    warnings.warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system")
 else:
     # This way, the user can just import the SAS_VERSION from this utils code
     sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
