@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 15:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 20:04. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -34,11 +34,12 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], reg_type: str, abu
     need the same product checking and setup steps. This function checks that all necessary spectra/fits have
     been generated/run, then uses them to calculate the conversion factors from count-rate/volume to squared
     hydrogen number density.
+
     :param Union[GalaxyCluster, ClusterSample] sources: The source objects/sample object for which the density profile
-    is being found.
+        is being found.
     :param str reg_type: The region type to use for the spectrum, XSPEC temperature fit, and FakeIt run.
     :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and for the
-    electron/hydrogen number density ratio.
+        electron/hydrogen number density ratio.
     :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
     :param Quantity hi_en: The upper energy limit of the combined ratemap used to calculate density.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
@@ -160,18 +161,19 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], reg_type: str = 
     This is the most basic method for measuring the baryonic density profile of a Galaxy Cluster, and is not
     recommended for serious use due to the often unstable results from applying numerical inverse abel
     transforms to data rather than a model.
+
     :param Union[GalaxyCluster, ClusterSample] sources:
     :param str reg_type: The region type to use for the spectrum, XSPEC temperature fit, and FakeIt run.
     :param bool use_peak: If true the measured peak will be used as the central coordinate of the profile.
     :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
     :param Union[int, float] min_snr: The minimum allowed signal to noise for the surface brightness
-    profiles. Default is 0, which disables automatic re-binning.
+        profiles. Default is 0, which disables automatic re-binning.
     :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and for the
-    electron/hydrogen number density ratio.
+        electron/hydrogen number density ratio.
     :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
     :param Quantity hi_en: The upper energy limit of the combined ratemap used to calculate density.
     :param bool psf_corr: Default True, whether PSF corrected ratemaps will be used to make the
-    surface brightness profile, and thus the density (if False density results could be incorrect).
+        surface brightness profile, and thus the density (if False density results could be incorrect).
     :param str psf_model: If PSF corrected, the PSF model used.
     :param int psf_bins: If PSF corrected, the number of bins per side.
     :param str psf_algo: If PSF corrected, the algorithm used.
