@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 17:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 18:44. Copyright (c) David J Turner
 
 
 import warnings
@@ -27,6 +27,7 @@ class Image(BaseProduct):
                  gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
         """
         The initialisation method for the Image class.
+
         :param str path: The path to where the product file SHOULD be located.
         :param str stdout_str: The stdout from calling the terminal command.
         :param str stderr_str: The stderr from calling the terminal command.
@@ -125,6 +126,7 @@ class Image(BaseProduct):
     def shape(self) -> Tuple[int, int]:
         """
         Property getter for the resolution of the image. Standard XGA settings will make this 512x512.
+
         :return: The shape of the numpy array describing the image.
         :rtype: Tuple[int, int]
         """
@@ -141,6 +143,7 @@ class Image(BaseProduct):
         """
         Property getter for the actual image data, in the form of a numpy array. Doesn't include
         any of the other stuff you get in a fits image, thats found in the hdulist property.
+
         :return: A numpy array of shape self.shape containing the image data.
         :rtype: np.ndarray
         """
@@ -155,6 +158,7 @@ class Image(BaseProduct):
         Property setter for the image data. As the fits image is loaded in read-only mode,
         this won't alter the actual file (which is what I was going for), but it does allow
         user alterations to the image data they are analysing.
+
         :param np.ndarray new_im_arr: The new image data.
         """
         # Calling this ensures the image object is read into memory
@@ -186,6 +190,7 @@ class Image(BaseProduct):
         """
         Property getter for the WCS that converts back and forth between pixel values
         and RA-DEC coordinates. This one is the only WCS guaranteed to not-None.
+
         :return: The WCS object for RA and DEC.
         :rtype: wcs.WCS
         """
@@ -201,6 +206,7 @@ class Image(BaseProduct):
         """
         Property getter for the WCS that converts back and forth between pixel values
         and XMM XY Sky coordinates.
+
         :return: The WCS object for XMM X and Y sky coordinates.
         :rtype: wcs.WCS
         """
@@ -216,6 +222,7 @@ class Image(BaseProduct):
         Property setter for the WCS that converts back and forth between pixel values
         and XMM XY Sky coordinates. This WCS is not guaranteed to be set from the image,
         so it is possible to add your own.
+
         :param wcs.WCS input_wcs: The user supplied WCS object to assign to skyxy_wcs property.
         """
         if not isinstance(input_wcs, wcs.WCS):
@@ -235,6 +242,7 @@ class Image(BaseProduct):
         """
         Property getter for the WCS that converts back and forth between pixel values
         and XMM DETXY detector coordinates.
+
         :return: The WCS object for XMM DETX and DETY detector coordinates.
         :rtype: wcs.WCS
         """
@@ -250,6 +258,7 @@ class Image(BaseProduct):
         Property setter for the WCS that converts back and forth between pixel values
         and XMM DETXY detector coordinates. This WCS is not guaranteed to be set from the image,
         so it is possible to add your own.
+
         :param wcs.WCS input_wcs: The user supplied WCS object to assign to detxy_wcs property.
         """
         if not isinstance(input_wcs, wcs.WCS):
@@ -270,6 +279,7 @@ class Image(BaseProduct):
     def header(self) -> FITSHDR:
         """
         Property getter allowing access to the astropy fits header object created when the image was read in.
+
         :return: The header of the primary data table of the image that was read in.
         :rtype: FITSHDR
         """
@@ -281,6 +291,7 @@ class Image(BaseProduct):
         """
         This will use the loaded WCSes, and astropy coordinates (including custom ones defined for this module),
         to perform common coordinate conversions for this product object.
+
         :param coords: The input coordinates quantity to convert, in units of either deg,
         pix, xmm_sky, or xmm_det (xmm_sky and xmm_det are defined for this module).
         :param output_unit: The astropy unit to convert to, can be either deg, pix, xmm_sky, or
@@ -382,6 +393,7 @@ class Image(BaseProduct):
     def psf_corrected(self) -> bool:
         """
         Tells the user (and XGA), whether an Image based object has been PSF corrected or not.
+
         :return: Boolean flag, True means this object has been PSF corrected, False means it hasn't
         :rtype: bool
         """
@@ -398,6 +410,7 @@ class Image(BaseProduct):
     def psf_algorithm(self) -> Union[str, None]:
         """
         If this object has been PSF corrected, this property gives the name of the algorithm used.
+
         :return: The name of the algorithm used to correct for PSF effects, or None if the object
         hasn't been PSF corrected.
         :rtype: Union[str, None]
@@ -421,6 +434,7 @@ class Image(BaseProduct):
         """
         If this object has been PSF corrected, this property gives the number of bins that the X and Y axes
         were divided into to generate the PSFGrid.
+
         :return: The number of bins in X and Y for which PSFs were generated, or None if the object
         hasn't been PSF corrected.
         :rtype: Union[int, None]
@@ -445,6 +459,7 @@ class Image(BaseProduct):
         """
         If this object has been PSF corrected, this property gives the number of iterations that the
         algorithm went through to create this image.
+
         :return: The number of iterations the PSF correction algorithm went through, or None if the
         object hasn't been PSF corrected.
         :rtype: Union[int, None]
@@ -468,6 +483,7 @@ class Image(BaseProduct):
     def psf_model(self) -> Union[str, None]:
         """
         If this object has been PSF corrected, this property gives the name of the PSF model used.
+
         :return: The name of the PSF model used to correct for PSF effects, or None if the object
         hasn't been PSF corrected.
         :rtype: Union[str, None]
@@ -494,6 +510,7 @@ class Image(BaseProduct):
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
+
         :param Axes ax: The matplotlib axes on which to show the image.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
         the coordinates.
@@ -609,6 +626,7 @@ class Image(BaseProduct):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
+
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
         the coordinates.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
@@ -661,6 +679,7 @@ class ExpMap(Image):
         """
         A simple method that converts the given coordinates to pixels, then finds the exposure time
         at those coordinates.
+
         :param Quantity at_coord: A pair of coordinates to find the exposure time for.
         :return: The exposure time at the supplied coordinates.
         :rtype: Quantity
@@ -799,6 +818,7 @@ class RateMap(Image):
     def shape(self) -> Tuple[int, int]:
         """
         Property getter for the resolution of the ratemap. Standard XGA settings will make this 512x512.
+
         :return: The shape of the numpy array describing the ratemap.
         :rtype: Tuple[int, int]
         """
@@ -813,6 +833,7 @@ class RateMap(Image):
         Property getter for ratemap data, overrides the method in the base Image class. This is because
         the ratemap class has a _construct_on_demand method that creates the ratemap data, which needs
         to be called instead of _read_on_demand.
+
         :return: A numpy array of shape self.shape containing the ratemap data.
         :rtype: np.ndarray
         """
@@ -825,6 +846,7 @@ class RateMap(Image):
         """
         A simple method that converts the given coordinates to pixels, then finds the rate (in photons
         per second) and returns it.
+
         :param Quantity at_coord: A pair of coordinates to find the photon rate for.
         :return: The photon rate at the supplied coordinates.
         :rtype: Quantity
@@ -838,6 +860,7 @@ class RateMap(Image):
         Simplest possible way to find the position of the peak of X-ray emission in a ratemap. This method
         takes a mask in the form of a numpy array, which allows the user to mask out parts of the ratemap
         that shouldn't be searched (outside of a certain region, or within point sources for instance).
+
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
         aren't to be searched, and 1 for those that are.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
@@ -881,6 +904,7 @@ class RateMap(Image):
         pixels that might be involved are remnants of poorly removed point sources. So when clusters have
         been formed, we can take the one with the most entries, and find the maximal pixel of that cluster.
         Should be consistent with simple_peak under ideal circumstances.
+
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
         aren't to be searched, and 1 for those that are.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
@@ -966,6 +990,7 @@ class RateMap(Image):
         making it less likely that we accidentally select the peak brightness pixel from a point source remnant or
         something similar. The convolved image is then masked to only look at the area of interest, and the peak
         brightness pixel is found.
+
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
         aren't to be searched, and 1 for those that are.
         :param float redshift: The redshift of the source that we wish to find the X-ray centroid of.
@@ -1036,6 +1061,7 @@ class RateMap(Image):
         """
         Uses the edge mask generated for RateMap objects to determine if the passed coordinates are near
         an edge/chip gap. If the coordinates are within +- 2 pixels of an edge the result will be true.
+
         :param Quantity coord: The coordinates to check.
         :return: A boolean flag as to whether the coordinates are near an edge.
         :rtype: bool
@@ -1059,6 +1085,7 @@ class RateMap(Image):
     def edge_mask(self) -> np.ndarray:
         """
         Returns the edge mask calculated for this RateMap in the form of a numpy array
+
         :return: A boolean numpy array in the same shape as the RateMap.
         :rtype: ndarray
         """
@@ -1071,6 +1098,7 @@ class RateMap(Image):
         """
         Returns the detector map calculated for this RateMap. Values of 1 mean on chip,
         values of 0 mean off chip.
+
         :return: A boolean numpy array in the same shape as the RateMap.
         :rtype: ndarray
         """
@@ -1082,6 +1110,7 @@ class RateMap(Image):
     def expmap_path(self) -> str:
         """
         Similar to the path property, but for the exposure map that went into this ratemap.
+
         :return: The exposure map path.
         :rtype: str
         """
@@ -1091,6 +1120,7 @@ class RateMap(Image):
     def image(self) -> Image:
         """
         This property allows the user to access the input Image object for this ratemap.
+
         :return: The input XGA Image object used to create this ratemap.
         :rtype: Image
         """
@@ -1100,6 +1130,7 @@ class RateMap(Image):
     def expmap(self) -> ExpMap:
         """
         This property allows the user to access the input ExpMap object for this ratemap.
+
         :return: The input XGA ExpMap object used to create this ratemap.
         :rtype: ExpMap
         """
@@ -1120,6 +1151,7 @@ class PSF(Image):
         """
         A simple method that converts the given coordinates to pixels, then finds the exposure time
         at those coordinates.
+
         :param Quantity at_coord: A pair of coordinates to find the exposure time for.
         :return: The exposure time at the supplied coordinates.
         :rtype: Quantity
@@ -1147,6 +1179,7 @@ class PSF(Image):
         and it can't be changed when calling the routine. Thankfully, due to the wonders of WCS, it is possible
         to construct a new array with the same pixel size as a given image. Very important for when we want
         to deconvolve with an image and correct for the PSF.
+
         :param Image im_prod:
         :param Quantity half_side_length:
         :return: The resampled PSF.
@@ -1187,6 +1220,7 @@ class PSF(Image):
     def ra_dec(self) -> Quantity:
         """
         A property that fetches the RA-DEC that the PSF was generated at.
+
         :return: An astropy quantity of the ra and dec that the PSF was generated at.
         :rtype: Quantity
         """
@@ -1201,6 +1235,7 @@ class PSF(Image):
     def model(self) -> str:
         """
         This is the model that was used to generate this PSF.
+
         :return: XMM SAS psfgen model name.
         :rtype: str
         """
@@ -1241,6 +1276,7 @@ class PSFGrid(BaseAggregateProduct):
     def num_bins(self) -> int:
         """
         Getter for the number of bins in X and Y that this PSFGrid has PSF objects for.
+
         :return: The number of bins per side used to generate this PSFGrid
         :rtype: int
         """
@@ -1250,6 +1286,7 @@ class PSFGrid(BaseAggregateProduct):
     def model(self) -> str:
         """
         This is the model that was used to generate the component PSFs in this PSFGrid.
+
         :return: XMM SAS psfgen model name.
         :rtype: str
         """
@@ -1268,6 +1305,7 @@ class PSFGrid(BaseAggregateProduct):
     def y_bounds(self) -> np.ndarray:
         """
         The y lower (column 0) and y upper (column 1) bounds of the PSFGrid bins.
+
         :return: N x 2 numpy array, where N is the total number of PSFGrid bins.
         :rtype: np.ndarray
         """
@@ -1277,6 +1315,7 @@ class PSFGrid(BaseAggregateProduct):
     def grid_locs(self) -> Quantity:
         """
         A 3D quantity containing the central position of each PSF in the grid.
+
         :return: A 3D Quantity
         :rtype:
         """
@@ -1284,8 +1323,6 @@ class PSFGrid(BaseAggregateProduct):
             for pos in self._component_products:
                 self._grid_loc[pos[0], pos[1], :] = self._component_products.ra_dec
         return self._grid_loc
-
-
 
     def unload_data(self):
         """
