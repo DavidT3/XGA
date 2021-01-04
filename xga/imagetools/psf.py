@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
 
 import os
 import warnings
 from multiprocessing.dummy import Pool
-from typing import List, Tuple, Union
+from typing import Tuple, Union
 
 import numpy as np
 from astropy.units import Quantity
@@ -35,7 +35,7 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     original image with each PSF, and after it was finished taking the relevant chunks and patchworking
     them into a new array.
 
-    :param List[BaseSource] sources: A single source object, or list of source objects.
+    :param BaseSource/BaseSample sources: A single source object, or list of source objects.
     :param int iterations: The number of deconvolution iterations performed by the Richardson-Lucy algorithm.
     :param str psf_model: Which model of PSF should be used for this deconvolution. The default is ELLBETA,
         the best available.

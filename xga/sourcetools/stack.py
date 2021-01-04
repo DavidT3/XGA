@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 20:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -83,7 +83,7 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
         in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
         for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
-    :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
+    :param float/List sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
         single float to use the same value for all sources, or pass a list to use a different value for each.
     :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :return: The average profile, all scaled profiles, the covariance matrix, normalised covariance, and names
@@ -224,14 +224,14 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
-    :param Union[int, float] min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
+    :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
         in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be
         used for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
-    :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
+    :param float/List sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
         single float to use the same value for all sources, or pass a list to use a different value for each.
     :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
@@ -375,14 +375,14 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
         for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
-    :param Union[int, float] min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
+    :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
         in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
         for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
-    :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
+    :param float/List sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
         single float to use the same value for all sources, or pass a list to use a different value for each.
     :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
@@ -486,14 +486,14 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
         is None in which case the default start parameters for the selected model are used.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
-    :param Union[int, float] min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
+    :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
         in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
         for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
-    :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
+    :param float/List sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
         single float to use the same value for all sources, or pass a list to use a different value for each.
     :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
@@ -661,14 +661,14 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
         is None in which case the default start parameters for the selected model are used.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
-    :param Union[int, float] min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
+    :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
         0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
         in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
         for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
-    :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
+    :param float/List sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
         single float to use the same value for all sources, or pass a list to use a different value for each.
     :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
