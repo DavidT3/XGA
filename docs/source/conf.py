@@ -12,8 +12,8 @@
 #
 import os
 import sys
-import shutil
 sys.path.insert(0, os.path.abspath('../..'))
+import shutil
 
 
 # -- Extra Setup for XGA -----------------------------------------------------
@@ -53,8 +53,8 @@ if not os.path.exists(config_path):
         cfg.write(''.join(lines))
 
 # I don't like to import in the code itself, but it has to be here so we can be sure a valid config file exists
-from xga import utils
-utils.XGA_MODE = "DOCS"
+# from xga import utils
+# utils.XGA_MODE = "DOCS"
 
 # -- Project information -----------------------------------------------------
 
