@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 15:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 20:11. Copyright (c) David J Turner
 
 import json
 import os
@@ -81,7 +81,8 @@ XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
 
 def xmm_obs_id_test(test_string: str) -> bool:
     """
-    Crude function to try and determine if a string follows the pattern of an XMM ObsID
+    Crude function to try and determine if a string follows the pattern of an XMM ObsID.
+
     :param str test_string: The string we wish to test.
     :return: Whether the string is probably an XMM ObsID or not.
     :rtype: bool
@@ -104,6 +105,7 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
     A function to initialise or update the file that stores which observations are available in the user
     specified XMM data directory, and what their pointing coordinates are.
     CURRENTLY THIS WILL NOT UPDATE TO DEAL WITH OBSID FOLDERS THAT HAVE BEEN DELETED.
+
     :param config: The XGA configuration object.
     :return: ObsIDs and pointing coordinates of available XMM observations.
     :rtype: Tuple[pd.DataFrame, pd.DataFrame]
@@ -183,6 +185,7 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
 def to_list(str_rep_list: str) -> list:
     """
     Convenience function to change a string representation of a Python list into an actual list object.
+
     :param str str_rep_list: String that represents a Python list. e.g. "['0.5', '2.0']"
     :return: The parsed representative string.
     :rtype: list
@@ -195,6 +198,7 @@ def to_list(str_rep_list: str) -> list:
 def energy_to_channel(energy: Quantity) -> int:
     """
     Converts an astropy energy quantity into an XMM channel.
+
     :param energy:
     """
     energy = energy.to("eV").value
@@ -208,6 +212,7 @@ def dict_search(key: str, var: dict) -> list:
     efficient method of searching through a nested dictionary structure for specfic keys
     (and yielding the values associated with them). In this case will extract all of a
     specific product type for a given source.
+
     :param key: The key in the dictionary to search for and extract values.
     :param var: The variable to search, likely to be either a dictionary or a string.
     :return list[list]: Returns information on keys and values
@@ -232,6 +237,7 @@ def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
     A play on the function of the same name in astropy.io.fits, except this one will take a fitsio header object
     as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
     header, and uses their critical values to construct astropy WCS objects.
+
     :return: A list of astropy WCS objects extracted from the input header.
     :rtype: List[WCS]
     """
