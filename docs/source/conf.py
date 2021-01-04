@@ -12,7 +12,45 @@
 #
 import os
 import sys
+import shutil
 sys.path.insert(0, os.path.abspath('../..'))
+
+
+# -- Extra Setup for XGA -----------------------------------------------------
+
+# This is where XGA stores the configuration file when it generates it initially
+config_path = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))
+
+# Generates the directory structure
+# If this is running on a local machine, then this directory may already exist with populated
+#  config and census files, we don't want them to be deleted if that is the case
+if not os.path.exists(CONFIG_PATH):
+    os.makedirs(CONFIG_PATH)
+
+    # This is the absolute path of where the config file should live
+    config_file_path = os.path.join(config_path, 'xga.cfg')
+    census_file_path = os.path.join(config_path, 'census.csv')
+    # Finds the current working directory
+    current_path = os.getcwd()
+    # As this file lives in the docs/source folder, we go two levels up for the absolute path the XGA repo folder
+    xga_path = '/'.join(current_path.split('/')[:-2])
+
+    # The test data includes a mostly complete config file, and census
+    test_cfg_path = os.path.join(xga_path, 'test_data', 'xga.cfg')
+    test_census_path = os.path.join(xga_path, 'test_data', 'census.csv')
+    test_data_path = os.path.join(xga_path, 'test_data')
+
+    # Copy the config and census over to the place they should be on whatever system is building this
+    shutil.copy(test_cfg_path, config_file_path)
+    shutil.copy(test_census_path, census_file_path)
+
+    with open(config_file_path, 'r') as cfg:
+        lines = cfg.readlines()
+
+    lines = [line.replace('root_xmm_dir = ./', 'root_xmm_dir = {}'.format(test_data_path)) for line in lines]
+
+    with open(config_file_path, 'w') as cfg:
+        cfg.write(''.join(lines))
 
 # -- Project information -----------------------------------------------------
 
