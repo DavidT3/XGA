@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -276,7 +276,7 @@ class BaseSample:
         This returns the relevant source when a sample is addressed using the name of a source as the key,
         or using an integer index.
 
-        :param Union[int, str] key: The index or name of the source to fetch.
+        :param int/str key: The index or name of the source to fetch.
         :return: The relevant Source object.
         :rtype: BaseSource
         """
@@ -294,7 +294,7 @@ class BaseSample:
         This deletes a source from the sample, along with all accompanying data, using the index or
         name of the source.
 
-        :param Union[int, str] key: The index or name of the source to delete.
+        :param int/str key: The index or name of the source to delete.
         """
         if isinstance(key, (int, np.integer)):
             del self._sources[self._names[key]]

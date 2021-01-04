@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -277,7 +277,8 @@ class BaseSource:
         but will overwrite existing products with a warning. Raises errors if the ObsID is not associated
         with this source or the instrument is not associated with the ObsID.
 
-        :param BaseProduct prod_obj: The new product object to be added to the source object.
+        :param BaseProduct/BaseAggregateProduct/BaseProfile1D prod_obj: The new product object to be added to
+            the source object.
         """
         # Aggregate products are things like PSF grids and sets of annular spectra.
         if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D)):
@@ -1604,7 +1605,7 @@ class BaseSource:
         redshift information.
 
         :param str rad_name: The name of the desired radius, r200 for instance.
-        :param Union[Unit, str] out_unit: An astropy unit, either a Unit instance or a string
+        :param Unit/str out_unit: An astropy unit, either a Unit instance or a string
             representation. Default is degrees.
         :return: The desired radius in the desired units.
         :rtype: Quantity
@@ -1700,7 +1701,7 @@ class BaseSource:
         be used in any analyses, and would typically be removed because it is of poor quality, or doesn't contribute
         enough to justify its presence.
 
-        :param Union[dict, str] to_remove: A dictionary of observations to remove, either in the style of
+        :param dict/str to_remove: A dictionary of observations to remove, either in the style of
             the source.instruments dictionary (with the top level keys being ObsIDs, and the lower levels
             being instrument names), or a string containing an ObsID.
         """

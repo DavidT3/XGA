@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
 
 import warnings
 from typing import Union
@@ -250,7 +250,7 @@ class GalaxyCluster(ExtendedSource):
             peaks will be found for each individual combined ratemap and profiles will be constructed
             centered on them.
         :param int pix_step: The width (in pixels) of each annular bin, default is 1.
-        :param Union[float, int] min_snr: The minimum signal to noise allowed for each radial bin. This is 0 by
+        :param float/int min_snr: The minimum signal to noise allowed for each radial bin. This is 0 by
             default, which disables any automatic rebinning.
         :param tuple figsize: The desired size of the figure, the default is (10, 7)
         :param str xscale: The scaling to be applied to the x axis, default is log.

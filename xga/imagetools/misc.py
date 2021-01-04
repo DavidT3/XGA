@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
 
 
 from typing import Tuple, List, Union
@@ -132,7 +132,7 @@ def data_limits(im_prod: Union[Image, RateMap, ExpMap, np.ndarray]) -> Tuple[Lis
     A function that finds the pixel coordinates that bound where data is present in
     Image or RateMap object.
 
-    :param Union[Image, RateMap, ndarray] im_prod: An Image, RateMap, or numpy array that you wish to find
+    :param Image/RateMap/ndarray im_prod: An Image, RateMap, or numpy array that you wish to find
         boundary coordinates for.
     :return: Two lists, the first with the x lower and upper bounding coordinates, and the second with
         the y lower and upper bounding coordinates.

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 20:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -35,7 +35,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], reg_type: str, abu
     been generated/run, then uses them to calculate the conversion factors from count-rate/volume to squared
     hydrogen number density.
 
-    :param Union[GalaxyCluster, ClusterSample] sources: The source objects/sample object for which the density profile
+    :param GalaxyCluster/ClusterSample sources: The source objects/sample object for which the density profile
         is being found.
     :param str reg_type: The region type to use for the spectrum, XSPEC temperature fit, and FakeIt run.
     :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and for the
@@ -162,11 +162,11 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], reg_type: str = 
     recommended for serious use due to the often unstable results from applying numerical inverse abel
     transforms to data rather than a model.
 
-    :param Union[GalaxyCluster, ClusterSample] sources:
+    :param GalaxyCluster/ClusterSample sources: The source(s) for which to generate density profiles.
     :param str reg_type: The region type to use for the spectrum, XSPEC temperature fit, and FakeIt run.
     :param bool use_peak: If true the measured peak will be used as the central coordinate of the profile.
     :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
-    :param Union[int, float] min_snr: The minimum allowed signal to noise for the surface brightness
+    :param int/float min_snr: The minimum allowed signal to noise for the surface brightness
         profiles. Default is 0, which disables automatic re-binning.
     :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and for the
         electron/hydrogen number density ratio.
