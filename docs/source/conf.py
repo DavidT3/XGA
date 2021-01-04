@@ -24,8 +24,8 @@ config_path = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser(
 # Generates the directory structure
 # If this is running on a local machine, then this directory may already exist with populated
 #  config and census files, we don't want them to be deleted if that is the case
-if not os.path.exists(CONFIG_PATH):
-    os.makedirs(CONFIG_PATH)
+if not os.path.exists(config_path):
+    os.makedirs(config_path)
 
     # This is the absolute path of where the config file should live
     config_file_path = os.path.join(config_path, 'xga.cfg')
