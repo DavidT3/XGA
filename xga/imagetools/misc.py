@@ -58,11 +58,11 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantit
     quite a lot in the imagetools.profile functions, which is why it was split off into its own function. Redshift
     and cosmology must be supplied if proper distance units (like kpc) are chosen for out_unit.
 
-    :param Union[Image, RateMap] im_prod: The image/ratemap product for which the conversion is taking place.
+    :param Image/RateMap/ExpMap im_prod: The image/ratemap product for which the conversion is taking place.
     :param Quantity pix_rad: The array of pixel radii to convert to out_unit.
     :param UnitBase out_unit: The desired output unit for the radii.
     :param Quantity coord: The position of the object being analysed.
-    :param Union[float, int] z: The redshift of the object (only required for proper distance units like kpc).
+    :param float/int z: The redshift of the object (only required for proper distance units like kpc).
     :param cosmo: The chosen cosmology for the analysis (only required for proper distance units like kpc).
     :return: An astropy Quantity with the radii in units of out_unit.
     :rtype: Quantity
@@ -99,10 +99,10 @@ def physical_rad_to_pix(im_prod: Union[Image, RateMap, ExpMap], physical_rad: Qu
     proper radii, so long as redshift and cosmology information is provided for the conversion from proper radii
     to pixels.
 
-    :param Union[Image, RateMap, ExpMap] im_prod:
+    :param Image/RateMap/ExpMap im_prod:
     :param Quantity physical_rad: The physical radius to be converted to pixels.
     :param Quantity coord: The position of the object being analysed.
-    :param Union[float, int] z: The redshift of the object (only required for input proper distance units like kpc).
+    :param float/int z: The redshift of the object (only required for input proper distance units like kpc).
     :param cosmo: The chosen cosmology for the analysis (only required for input proper distance units like kpc).
     :return: The converted radii, in an astropy Quantity with pix units.
     :rtype: Quantity
