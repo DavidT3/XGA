@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/12/2020, 14:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:41. Copyright (c) David J Turner
 
 import inspect
 from types import FunctionType
@@ -25,6 +25,7 @@ def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β'
     I'd recommend running a check to compare results from the original and converted functions where-ever
     this function is called - I don't completely trust it.
     implementation (an array/list of parameters as the first argument, then the x values as the second argument.)
+
     :param FunctionType model_func: The original model function to be converted.
     :param str new_par_name: The name we want to use for the new list/array of fit parameters.
     :param str new_data_name: The new name we want to use for the x_data.

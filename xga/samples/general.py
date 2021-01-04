@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 12:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:47. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -90,8 +90,9 @@ class PointSample(BaseSample):
     def point_radii(self) -> Quantity:
         """
         Property getter for the radii of the regions used for analysis of the point sources in this sample.
+
         :return: A non-scalar Quantity of the point source radii used for analysis of the point sources in
-        this sample.
+            this sample.
         :rtype: Quantity
         """
         return Quantity(self._point_radii, self._pr_unit)
@@ -100,6 +101,7 @@ class PointSample(BaseSample):
     def point_radii_unit(self) -> Unit:
         """
         Property getter for the unit which the point radii values are stored in.
+
         :return: The unit that the point radii are stored in.
         :rtype: Unit
         """
@@ -109,6 +111,7 @@ class PointSample(BaseSample):
         """
         Specific to the PointSample class, this deletes the extra data stored during the initialisation
         of this type of sample.
+
         :param int key: The index or name of the source to delete.
         """
         del self._point_radii[key]

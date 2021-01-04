@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 15:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:33. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -40,35 +40,36 @@ class ScalingRelation:
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
+
         :param np.ndarray fit_pars: The results of the fit to a model that describes this scaling relation.
         :param np.ndarray fit_par_errs: The uncertainties on the fit results for this scalin relation.
         :param model_func: A Python function of the model which this scaling relation is described by.
-        PLEASE NOTE, the function must be defined in the style used in xga.models.misc;
-        i.e. powerlaw(x: np.ndarray, k: float, a: float), where the first argument is for x values, and the
-        following arguments are all fit parameters.
+            PLEASE NOTE, the function must be defined in the style used in xga.models.misc;
+            i.e. powerlaw(x: np.ndarray, k: float, a: float), where the first argument is for x values, and the
+            following arguments are all fit parameters.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
         :param str x_name: The name to be used for the x-axis of the plot (DON'T include the unit, that will be
-        inferred from an astropy Quantity.
+            inferred from an astropy Quantity.
         :param str y_name: The name to be used for the y-axis of the plot (DON'T include the unit, that will be
-        inferred from an astropy Quantity.
+            inferred from an astropy Quantity.
         :param str fit_method: The method used to fit this data, if known.
         :param Quantity x_data: The x-data used to fit this scaling relation, if available. This should be
-        the raw, un-normalised data.
+            the raw, un-normalised data.
         :param Quantity y_data: The y-data used to fit this scaling relation, if available. This should be
-        the raw, un-normalised data.
+            the raw, un-normalised data.
         :param Quantity x_err: The x-errors used to fit this scaling relation, if available. This should be
-        the raw, un-normalised data.
+            the raw, un-normalised data.
         :param Quantity y_err: The y-errors used to fit this scaling relation, if available. This should be
-        the raw, un-normalised data.
+            the raw, un-normalised data.
         :param Quantity x_lims: The range of x values in which this relation is valid, default is None. If this
-        information is supplied, please pass it as a Quantity array, with the first element being the lower
-        bound and the second element being the upper bound.
+            information is supplied, please pass it as a Quantity array, with the first element being the lower
+            bound and the second element being the upper bound.
         :param odr.Output odr_output: The orthogonal distance regression output object associated with this
-        relation's fit, if available and applicable.
+            relation's fit, if available and applicable.
         :param np.ndarray chains: The parameter chains associated with this relation's fit, if available and
-        applicable. They should be of shape N_stepxN_par, where N_steps is the number of steps (after burn-in
-        is removed), and N_par is the number of parameters in the fit.
+            applicable. They should be of shape N_stepxN_par, where N_steps is the number of steps (after burn-in
+            is removed), and N_par is the number of parameters in the fit.
         :param str relation_name: A suitable name for this relation.
         :param str relation_author: The author who deserves credit for this relation.
         :param str relation_year: The year this relation was produced, default is the current year.
@@ -178,8 +179,9 @@ class ScalingRelation:
         """
         The parameters that describe this scaling relation, along with their uncertainties. They are in the order in
         which they are expected to be passed into the model function.
+
         :return: A numpy array of the fit parameters and their uncertainties, first column are parameters,
-        second column are uncertainties.
+            second column are uncertainties.
         :rtype: np.ndarray
         """
         return np.concatenate([self._fit_pars.reshape((len(self._fit_pars), 1)),
@@ -189,6 +191,7 @@ class ScalingRelation:
     def model_func(self):
         """
         Provides the model function used to fit this relation.
+
         :return: The Python function of this relation's model.
         """
         return self._model_func
@@ -197,6 +200,7 @@ class ScalingRelation:
     def x_name(self) -> str:
         """
         A string containing the name of the x-axis of this relation.
+
         :return: A Python string containing the name.
         :rtype: str
         """
@@ -206,6 +210,7 @@ class ScalingRelation:
     def y_name(self) -> str:
         """
         A string containing the name of the x-axis of this relation.
+
         :return: A Python string containing the name.
         :rtype: str
         """
@@ -215,6 +220,7 @@ class ScalingRelation:
     def x_norm(self) -> Quantity:
         """
         The astropy quantity containing the x-axis normalisation used during fitting.
+
         :return: An astropy quantity object.
         :rtype: Quantity
         """
@@ -224,6 +230,7 @@ class ScalingRelation:
     def y_norm(self) -> Quantity:
         """
         The astropy quantity containing the y-axis normalisation used during fitting.
+
         :return: An astropy quantity object.
         :rtype: Quantity
         """
@@ -233,6 +240,7 @@ class ScalingRelation:
     def x_unit(self) -> Unit:
         """
         The astropy unit object relevant to the x-axis of this relation.
+
         :return: An Astropy Unit object.
         :rtype: Unit
         """
@@ -242,6 +250,7 @@ class ScalingRelation:
     def y_unit(self) -> Unit:
         """
         The astropy unit object relevant to the y-axis of this relation.
+
         :return: An Astropy Unit object.
         :rtype: Unit
         """
@@ -252,6 +261,7 @@ class ScalingRelation:
         """
         An astropy Quantity of the x-data used to fit this relation, or an empty quantity if that data
         is not available. The first column is the data, the second is the uncertainties.
+
         :return: An Astropy Quantity object, containing the data and uncertainties.
         :rtype: Quantity
         """
@@ -263,6 +273,7 @@ class ScalingRelation:
         """
         An astropy Quantity of the y-data used to fit this relation, or an empty quantity if that data
         is not available. The first column is the data, the second is the uncertainties.
+
         :return: An Astropy Quantity object, containing the data and uncertainties.
         :rtype: Quantity
         """
@@ -274,6 +285,7 @@ class ScalingRelation:
         """
         If the user passed an x range in which the relation is valid on initialisation, then this will
         return those limits in the same units as the x-axis.
+
         :return: A quantity containing upper and lower x limits, or None.
         :rtype: Quantity
         """
@@ -283,6 +295,7 @@ class ScalingRelation:
     def fit_method(self) -> str:
         """
         A descriptor for the fit method used to generate this scaling relation.
+
         :return: A string containing the name of the fit method.
         :rtype: str
         """
@@ -293,6 +306,7 @@ class ScalingRelation:
         """
         A property getter for the name of the relation, this may not be unique in cases where no name was
         passed on declaration.
+
         :return: String containing the name of the relation.
         :rtype: str
         """
@@ -303,6 +317,7 @@ class ScalingRelation:
         """
         A property setter for the name of the relation, it isn't a crucial quantity and the user may want to change
         it after declaration has already happened.
+
         :param str new_val:
         """
         self._name = new_val
@@ -311,6 +326,7 @@ class ScalingRelation:
     def author(self) -> str:
         """
         A property getter for the author of the relation, if not from literature it will be XGA.
+
         :return: String containing the name of the author.
         :rtype: str
         """
@@ -320,7 +336,8 @@ class ScalingRelation:
     def year(self) -> str:
         """
         A property getter for the year that the relation was created/published, if not from literature it will be the
-        current year
+        current year.
+
         :return: String containing the year of publication/creation.
         :rtype: str
         """
@@ -331,6 +348,7 @@ class ScalingRelation:
         """
         A property getter for the doi of the original paper of the relation, if not from literature it will an
         empty string.
+
         :return: String containing the doi.
         :rtype: str
         """
@@ -339,6 +357,7 @@ class ScalingRelation:
     def view_chains(self, figsize: tuple = None):
         """
         Simple view method to quickly look at the MCMC chains for a scaling relation fit.
+
         :param tuple figsize: Desired size of the figure, if None will be set automatically.
         """
         if self._chains is None:
@@ -363,6 +382,7 @@ class ScalingRelation:
     def view_corner(self, figsize: tuple = (10, 10), conf_level: int = 90):
         """
         A convenient view method to examine the corner plot of the parameter posterior distributions.
+
         :param Tuple figsize: The desired figure size.
         :param int conf_level: The confidence level to use when indicating confidence limits on the distributions.
         """
@@ -379,6 +399,7 @@ class ScalingRelation:
         """
         This method allows for the prediction of y values from this scaling relation, you just need to pass in an
         appropriate set of x values.
+
         :param Quantity x_values: The x values to predict y values for.
         :return: The predicted y values
         :rtype: Quantity
@@ -409,8 +430,9 @@ class ScalingRelation:
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
+
         :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
-        this relation is based upon, if that data is not available an error will be thrown.
+            this relation is based upon, if that data is not available an error will be thrown.
         :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
         :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
         :param tuple figsize: A custom figure size for the plot, default is (8, 8).
@@ -619,6 +641,7 @@ class AggregateScalingRelation:
     def relations(self) -> List[ScalingRelation]:
         """
         This returns the list of ScalingRelation instances that make up this aggregate scaling relation.
+
         :return: A list of ScalingRelation instances.
         :rtype: List[ScalingRelation]
         """
@@ -628,6 +651,7 @@ class AggregateScalingRelation:
     def x_unit(self) -> Unit:
         """
         The astropy unit object relevant to the x-axis of this relation.
+
         :return: An Astropy Unit object.
         :rtype: Unit
         """
@@ -637,6 +661,7 @@ class AggregateScalingRelation:
     def y_unit(self) -> Unit:
         """
         The astropy unit object relevant to the y-axis of this relation.
+
         :return: An Astropy Unit object.
         :rtype: Unit
         """
@@ -647,8 +672,9 @@ class AggregateScalingRelation:
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
+
         :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
-        this relation is based upon, if that data is not available an error will be thrown.
+            this relation is based upon, if that data is not available an error will be thrown.
         :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
         :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
         :param tuple figsize: A custom figure size for the plot, default is (8, 8).

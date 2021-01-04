@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/11/2020, 10:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:29. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -18,6 +18,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
+
         :param RateMap rt: The RateMap from which this SB profile was generated.
         :param Quantity radii: The radii at which surface brightness has been measured.
         :param Quantity values: The surface brightnesses that have been measured.
@@ -30,7 +31,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         :param Quantity background: The background brightness value.
         :param np.ndarray pixel_bins: An optional argument that provides the pixel bins used to create the profile.
         :param np.ndarray back_pixel_bin: An optional argument that provides the pixel bin used for the background
-        calculation of this profile.
+            calculation of this profile.
         :param Quantity ann_areas: The area of the annuli.
         """
         super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err)
@@ -79,6 +80,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         Property that returns the integer pixel step size used to generate the annuli that
         make up this profile.
+
         :return: The pixel step used to generate the surface brightness profile.
         :rtype: int
         """
@@ -89,6 +91,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         Property that returns minimum signal to noise value that was imposed upon this profile
         during generation.
+
         :return: The minimum signal to noise value used to generate this profile.
         :rtype: float
         """
@@ -98,6 +101,7 @@ class SurfaceBrightness1D(BaseProfile1D):
     def outer_radius(self) -> Quantity:
         """
         Property that returns the outer radius used for the generation of this profile.
+
         :return: The outer radius used in the generation of the profile.
         :rtype: Quantity
         """
@@ -108,6 +112,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         Tells the user (and XGA), whether the RateMap this brightness profile was generated from has
         been PSF corrected or not.
+
         :return: Boolean flag, True means this object has been PSF corrected, False means it hasn't
         :rtype: bool
         """
@@ -118,6 +123,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         If the RateMap this brightness profile was generated from has been PSF corrected, this property gives
         the name of the algorithm used.
+
         :return: The name of the algorithm used to correct for PSF effects, or None if there was no PSF correction.
         :rtype: Union[str, None]
         """
@@ -128,6 +134,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         If the RateMap this brightness profile was generated from has been PSF corrected, this property
         gives the number of bins that the X and Y axes were divided into to generate the PSFGrid.
+
         :return: The number of bins in X and Y for which PSFs were generated, or None if the object
         hasn't been PSF corrected.
         :rtype: Union[int, None]
@@ -139,6 +146,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         If the RateMap this brightness profile was generated from has been PSF corrected, this property gives
         the number of iterations that the algorithm went through.
+
         :return: The number of iterations the PSF correction algorithm went through, or None if there has been
         no PSF correction.
         :rtype: Union[int, None]
@@ -150,6 +158,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         If the RateMap this brightness profile was generated from has been PSF corrected, this property gives the
         name of the PSF model used.
+
         :return: The name of the PSF model used to correct for PSF effects, or None if there has been no
         PSF correction.
         :rtype: Union[str, None]
@@ -161,6 +170,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         If True then the minimum signal to noise re-binning that can be applied to surface brightness profiles by
         some functions was successful, if False then it failed and the profile with no re-binning is stored here.
+
         :return: A boolean flag describing whether re-binning was successful or not.
         :rtype: bool
         """
@@ -172,6 +182,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         A setter for the minimum signal to noise re-binning success flag. If True then the minimum signal to noise
         re-binning that can be applied to surface brightness profiles by some functions was successful, if False
         then it failed and the profile with no re-binning is stored here.
+
         :param bool new_val: The new value of the boolean flag describing whether re-binning was successful or not.
         """
         if not isinstance(new_val, bool):
@@ -182,6 +193,7 @@ class SurfaceBrightness1D(BaseProfile1D):
     def pixel_bins(self) -> np.ndarray:
         """
         The annuli radii used to generate this profile, assuming they were passed on initialisation, otherwise None.
+
         :return: Numpy array containing the pixel bins used to measure this radial brightness profile.
         :rtype: np.ndarray
         """
@@ -192,6 +204,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         The annulus used to measure the background for this profile, assuming they were passed on
         initialisation, otherwise None.
+
         :return: Numpy array containing the pixel bin used to measure the background.
         :rtype: np.ndarray
         """
@@ -201,6 +214,7 @@ class SurfaceBrightness1D(BaseProfile1D):
     def areas(self) -> Quantity:
         """
         Returns the areas of the annuli used to make this profile as an astropy Quantity.
+
         :return: Astropy non-scalar quantity containing the areas.
         :rtype: Quantity
         """
@@ -210,6 +224,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         """
         A method for external use to check whether this profile matches the requested configuration of surface
         brightness profile, put here just because I imagine it'll be used in quite a few places.
+
         :param RateMap rt: The RateMap to compare to this profile.
         :param Quantity centre: The central coordinate to compare to this profile.
         :param int pix_step: The width of each annulus in pixels to compare to this profile.
@@ -235,6 +250,7 @@ class GasMass1D(BaseProfile1D):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
         Clusters.
+
         :param Quantity radii: The radii at which gas mass has been measured.
         :param Quantity values: The gas mass that have been measured.
         :param Quantity centre: The central coordinate the profile was generated from.
@@ -259,6 +275,7 @@ class GasDensity1D(BaseProfile1D):
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
         Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
         and generation of gas mass radial profiles.
+
         :param Quantity radii: The radii at which gas density has been measured.
         :param Quantity values: The gas densities that have been measured.
         :param Quantity centre: The central coordinate the profile was generated from.
@@ -291,11 +308,12 @@ class GasDensity1D(BaseProfile1D):
     def gas_mass(self, real_type: str, outer_rad: Quantity, conf_level: int = 90) -> Tuple[Quantity, Quantity]:
         """
         A method to calculate and return the gas mass (with uncertainties).
+
         :param str real_type: The realisation type to measure the mass from.
         :param Quantity outer_rad: The radius to measure the gas mass out to.
         :param int conf_level: The confidence level for the gas mass uncertainties.
         :return: A Quantity containing three values (mass, -err, +err), and another Quantity containing
-        the entire mass distribution from the whole realisation.
+            the entire mass distribution from the whole realisation.
         :rtype: Tuple[Quantity, Quantity]
         """
         if real_type not in self._realisations:
@@ -356,6 +374,7 @@ class GasDensity1D(BaseProfile1D):
     def gas_mass_profile(self, real_type: str, outer_rad: Quantity, conf_level: int = 90) -> GasMass1D:
         """
         A method to calculate and return a gas mass profile.
+
         :param str real_type: The realisation type to measure the mass profile from.
         :param Quantity outer_rad: The radius to measure the gas mass profile out to.
         :param int conf_level: The confidence level for the gas mass profile uncertainties.

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 15:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 20:04. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -27,9 +27,10 @@ def _stack_setup_checks(sources: ClusterSample, scale_radius: str = "r200", lo_e
     """
     Internal function that was originally split off from radial data stack. This performs checks to make sure passed
     in values are valid for all types of stacking available in this part of XGA.
+
     :param ClusterSample sources: The source objects that will contribute to the stacked brightness profile.
     :param str scale_radius: The over-density radius to scale the cluster radii by, all GalaxyCluster objects must
-    have an entry for this radius.
+        have an entry for this radius.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
@@ -72,20 +73,21 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
     Internal function that was originally split off from radial data stack. Takes the surface brightness profiles
     that have been generated for radii as a fraction of the scale radius. It then calculates the scaling factors and
     combines them into a single stacked profile.
+
     :param np.ndarray sb: The surface brightness data output for all the sources.
     :param ClusterSample sources: The source objects that will contribute to the stacked brightness profile.
     :param str scale_radius: The overdensity radius to scale the cluster radii by, all GalaxyCluster objects must
-    have an entry for this radius.
+        have an entry for this radius.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
-    in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
-    for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+        in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
+        for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
     :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
-    single float to use the same value for all sources, or pass a list to use a different value for each.
+        single float to use the same value for all sources, or pass a list to use a different value for each.
     :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :return: The average profile, all scaled profiles, the covariance matrix, normalised covariance, and names
-    of successful profiles.
+        of successful profiles.
     :rtype: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List]
     """
     # Now, we have all the brightness values at common radii (in units of R200 so scaled properly), now we have
@@ -145,9 +147,10 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
 def _view_stack(results: Tuple, scale_radius: str, radii: np.ndarray, figsize: Tuple):
     """
     Internal function to plot the results of a stack function.
+
     :param Tuple results: The results tuple from a stack function, this is what will be plotted.
     :param str scale_radius: The overdensity radius to scale the cluster radii by, all GalaxyCluster objects must
-    have an entry for this radius.
+        have an entry for this radius.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
     :param tuple figsize: The desired figure size for the plot.
     """
@@ -213,22 +216,23 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
     and compared, like for like. This particular function does not fit models, and outputs a mean brightness
     profile, as well as the scaled stack data and covariance matrices. This is based on the method in
     https://doi.org/10.1093/mnras/stv1366, though modified to work with profiles rather than 2D images.
+
     :param ClusterSample sources: The source objects that will contribute to the stacked brightness profile.
     :param str scale_radius: The overdensity radius to scale the cluster radii by, all GalaxyCluster objects must
-    have an entry for this radius.
+        have an entry for this radius.
     :param bool use_peak: Controls whether the peak position is used as the centre of the brightness profile
-    for each GalaxyCluster object.
+        for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
     :param Union[int, float] min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
-    0, which disables automatic rebinning.
+        0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
-    in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
-    for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+        in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be
+        used for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
     :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
-    single float to use the same value for all sources, or pass a list to use a different value for each.
+        single float to use the same value for all sources, or pass a list to use a different value for each.
     :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
     :param str psf_model: If PSF corrected, the PSF model used.
@@ -236,11 +240,11 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
     :param str psf_algo: If PSF corrected, the algorithm used.
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use when calculating the brightness profiles, the default is 90%
-    of available cores.
+        of available cores.
     :return: This function returns the average profile, the scaled brightness profiles with the cluster
-    changing along the y direction and the bin changing along the x direction, an array of the radii at which the
-    brightness was measured (in units of scale_radius), and finally the covariance matrix and normalised
-    covariance matrix. I also return a list of source names that WERE included in the stack.
+        changing along the y direction and the bin changing along the x direction, an array of the radii at which the
+        brightness was measured (in units of scale_radius), and finally the covariance matrix and normalised
+        covariance matrix. I also return a list of source names that WERE included in the stack.
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
 
@@ -249,13 +253,14 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         """
         Constructs a brightness profile for the given galaxy cluster, and interpolates to find values
         at the requested radii in units of scale_radius.
+
         :param GalaxyCluster src_obj: The GalaxyCluster to construct a profile for.
         :param int src_id: An identifier that enables the constructed profile to be placed
-        correctly in the results array.
+            correctly in the results array.
         :param Quantity lower: The lower energy limit to use.
         :param Quantity upper: The higher energy limit to use.
         :return: The scaled profile, the cluster identifier, and the original generated
-        surface brightness profile.
+            surface brightness profile.
         :rtype: Tuple[Quantity, int]
         """
         # The storage key is different based on whether the user wishes to generate profiles from PSF corrected
@@ -362,22 +367,23 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
     """
     A convenience function that calls radial_data_stack and makes plots of the average profile, individual profiles,
     covariance, and normalised covariance matrix.
+
     :param ClusterSample sources: The source objects that will contribute to the stacked brightness profile.
     :param str scale_radius: The overdensity radius to scale the cluster radii by, all GalaxyCluster objects must
-    have an entry for this radius.
+        have an entry for this radius.
     :param bool use_peak: Controls whether the peak position is used as the centre of the brightness profile
-    for each GalaxyCluster object.
+        for each GalaxyCluster object.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
     :param Union[int, float] min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
-    0, which disables automatic rebinning.
+        0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
-    in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
-    for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+        in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
+        for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
     :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
-    single float to use the same value for all sources, or pass a list to use a different value for each.
+        single float to use the same value for all sources, or pass a list to use a different value for each.
     :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
     :param str psf_model: If PSF corrected, the PSF model used.
@@ -385,9 +391,9 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
     :param str psf_algo: If PSF corrected, the algorithm used.
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use when calculating the brightness profiles, the default is 90%
-    of available cores.
+        of available cores.
     :param bool show_images: If true then for each source in the stack an image and profile will be displayed
-    side by side, with annuli overlaid on the image.
+        side by side, with annuli overlaid on the image.
     :param tuple figsize: The desired figure size for the plot.
     """
     # Calls the stacking function
@@ -466,28 +472,29 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
     and compared, like for like. This function fits models of a user's choice, and then uses the models to retrieve
     brightness values at user-defined radii as a fraction of the scale radius. From that point it functions much
     as radial_data_stack does.
+
     :param ClusterSample sources: The source objects that will contribute to the stacked brightness profile.
     :param str model: The model to fit to the brightness profiles.
     :param str scale_radius: The overdensity radius to scale the cluster radii by, all GalaxyCluster objects must
-    have an entry for this radius.
+        have an entry for this radius.
     :param str fit_method: The method to use when fitting the model to the profile.
     :param bool use_peak: Controls whether the peak position is used as the centre of the brightness profile
-    for each GalaxyCluster object.
+        for each GalaxyCluster object.
     :param list model_priors: A list of priors to use when fitting the model with MCMC, default is None in which
-    case the default priors for the selected model are used.
+        case the default priors for the selected model are used.
     :param list model_start_pars: A list of start parameters to use when fitting with methods like curve_fit, default
-    is None in which case the default start parameters for the selected model are used.
+        is None in which case the default start parameters for the selected model are used.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
     :param Union[int, float] min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
-    0, which disables automatic rebinning.
+        0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
-    in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
-    for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+        in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
+        for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
     :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
-    single float to use the same value for all sources, or pass a list to use a different value for each.
+        single float to use the same value for all sources, or pass a list to use a different value for each.
     :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
     :param str psf_model: If PSF corrected, the PSF model used.
@@ -495,15 +502,15 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
     :param str psf_algo: If PSF corrected, the algorithm used.
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use when calculating the brightness profiles, the default is 90%
-    of available cores.
+        of available cores.
     :param int model_realisations: The number of random realisations of a model to generate.
     :param int conf_level: The confidence level at which to measure uncertainties of parameters and profiles.
     :param int num_walkers: The number of walkers in the MCMC ensemble sampler.
     :param int num_steps: The number of steps in the chain that each walker should take.
     :return: This function returns the average profile, the scaled brightness profiles with the cluster
-    changing along the y direction and the bin changing along the x direction, an array of the radii at which the
-    brightness was measured (in units of scale_radius), and finally the covariance matrix and normalised
-    covariance matrix. I also return a list of source names that WERE included in the stack.
+        changing along the y direction and the bin changing along the x direction, an array of the radii at which the
+        brightness was measured (in units of scale_radius), and finally the covariance matrix and normalised
+        covariance matrix. I also return a list of source names that WERE included in the stack.
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
 
@@ -512,13 +519,14 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
         """
         Constructs a brightness profile for the given galaxy cluster, and interpolates to find values
         at the requested radii in units of scale_radius.
+
         :param GalaxyCluster src_obj: The GalaxyCluster to construct a profile for.
         :param int src_id: An identifier that enables the constructed profile to be placed
-        correctly in the results array.
+            correctly in the results array.
         :param Quantity lower: The lower energy limit to use.
         :param Quantity upper: The higher energy limit to use.
         :return: The scaled profile, the cluster identifier, and the original generated
-        surface brightness profile.
+            surface brightness profile.
         :rtype: Tuple[Quantity, int]
         """
         # The storage key is different based on whether the user wishes to generate profiles from PSF corrected
@@ -639,28 +647,29 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
     """
     A convenience function that calls radial_model_stack and makes plots of the average profile, individual profiles,
     covariance, and normalised covariance matrix.
+
     :param ClusterSample sources: The source objects that will contribute to the stacked brightness profile.
     :param str model: The model to fit to the brightness profiles.
     :param str scale_radius: The overdensity radius to scale the cluster radii by, all GalaxyCluster objects must
-    have an entry for this radius.
+        have an entry for this radius.
     :param str fit_method: The method to use when fitting the model to the profile.
     :param bool use_peak: Controls whether the peak position is used as the centre of the brightness profile
-    for each GalaxyCluster object.
+        for each GalaxyCluster object.
     :param list model_priors: A list of priors to use when fitting the model with MCMC, default is None in which
-    case the default priors for the selected model are used.
+        case the default priors for the selected model are used.
     :param list model_start_pars: A list of start parameters to use when fitting with methods like curve_fit, default
-    is None in which case the default start parameters for the selected model are used.
+        is None in which case the default start parameters for the selected model are used.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
     :param Union[int, float] min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
-    0, which disables automatic rebinning.
+        0, which disables automatic rebinning.
     :param Quantity lo_en: The lower energy limit of the data that goes into the stacked profiles.
     :param Quantity hi_en: The upper energy limit of the data that goes into the stacked profiles.
     :param Quantity custom_temps: Temperatures at which to calculate conversion factors for each cluster
-    in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
-    for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
+        in sources, they will overwrite any temperatures measured by XGA. A single temperature can be passed to be used
+        for all clusters in sources. If None, appropriate temperatures will be retrieved from the source objects.
     :param Union[float, List] sim_met: The metallicity(s) to use when calculating the conversion factor. Pass a
-    single float to use the same value for all sources, or pass a list to use a different value for each.
+        single float to use the same value for all sources, or pass a list to use a different value for each.
     :param str abund_table: The abundance table to use for the temperature fit and conversion factor calculation.
     :param bool psf_corr: If True, PSF corrected ratemaps will be used to make the brightness profile stack.
     :param str psf_model: If PSF corrected, the PSF model used.
@@ -668,17 +677,17 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
     :param str psf_algo: If PSF corrected, the algorithm used.
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use when calculating the brightness profiles, the default is 90%
-    of available cores.
+        of available cores.
     :param int model_realisations: The number of random realisations of a model to generate.
     :param int conf_level: The confidence level at which to measure uncertainties of parameters and profiles.
     :param bool ml_mcmc_start: If True then maximum likelihood estimation will be used to generate start parameters for
-    MCMC fitting, otherwise they will be randomly drawn from parameter priors
+        MCMC fitting, otherwise they will be randomly drawn from parameter priors
     :param float ml_rand_dev: The scale of the random deviation around start parameters used for starting the
-    different walkers in the MCMC ensemble sampler.
+        different walkers in the MCMC ensemble sampler.
     :param int num_walkers: The number of walkers in the MCMC ensemble sampler.
     :param int num_steps: The number of steps in the chain that each walker should take.
     :param bool show_images: If true then for each source in the stack an image and profile will be displayed
-    side by side, with annuli overlaid on the image.
+        side by side, with annuli overlaid on the image.
     :param tuple figsize: The desired figure size for the plot.
     """
     # Calls the stacking function

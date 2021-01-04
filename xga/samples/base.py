@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 16:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:47. Copyright (c) David J Turner
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -10,8 +10,8 @@ from astropy.units import Quantity
 from numpy import ndarray
 from tqdm import tqdm
 
-from ..exceptions import NoMatchFoundError, NoValidObservationsError
 from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..exceptions import NoValidObservationsError
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
 
@@ -85,6 +85,7 @@ class BaseSample:
     def names(self) -> ndarray:
         """
         Property getter for the list of source names in this sample.
+
         :return: List of source names.
         :rtype: list
         """
@@ -94,6 +95,7 @@ class BaseSample:
     def ra_decs(self) -> Quantity:
         """
         Property getter for the list of RA-DEC positions of the sources in this sample.
+
         :return: List of source RA-DEC positions as supplied at sample initialisation.
         :rtype: Quantity
         """
@@ -104,6 +106,7 @@ class BaseSample:
         """
         Property getter for the list of redshift positions of the sources in  this
         sample (if available). If no redshifts were supplied, None will be returned.
+
         :return: List of redshifts.
         :rtype: ndarray
         """
@@ -114,6 +117,7 @@ class BaseSample:
         """
         Property getter for the cosmology defined at initialisation of the sample. This cosmology is what
         is used for all analyses performed on the sample.
+
         :return: The chosen cosmology.
         """
         return self._cosmo
@@ -123,6 +127,7 @@ class BaseSample:
         """
         Property meant to inform the user about the number (and identities) of ObsIDs associated with the sources
         in a given sample.
+
         :return: A dictionary (where the top level keys are the source names) of the ObsIDs associated with the
         individual sources in this sample.
         :rtype: dict
@@ -134,6 +139,7 @@ class BaseSample:
         """
         Property meant to inform the user about the number (and identities) of instruments associated with ObsIDs
         associated with the sources in a given sample.
+
         :return: A dictionary (where the top level keys are the source names) of the instruments associated with
         ObsIDs associated with the individual sources in this sample.
         :rtype: dict
@@ -144,6 +150,7 @@ class BaseSample:
     def failed_names(self) -> List[str]:
         """
         Yields the names of those sources that could not be declared for some reason.
+
         :return: A list of source names that could not be declared.
         :rtype: List[str]
         """
@@ -154,6 +161,7 @@ class BaseSample:
         """
         Returns a dictionary containing sources that failed to be declared successfully, and a
         simple reason why they couldn't be.
+
         :return: A dictionary of source names as keys, and reasons as values.
         :rtype: Dict[str, str]
         """
@@ -167,13 +175,14 @@ class BaseSample:
         set, unlike the Tx method of ClusterSample. An extra condition that aims to only return 'good' data has
         been included, so that any Lx measurement with an uncertainty greater than value will be set to NaN, and
         a warning will be issued.
+
         :param str reg_type: The type of region that the fitted spectra were generated from.
         :param str model: The name of the fitted model that you're requesting the
-        luminosities from (e.g. tbabs*apec).
+            luminosities from (e.g. tbabs*apec).
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
         :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
-        column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
+            column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
         :rtype: Quantity
         """
         lums = []
@@ -236,6 +245,7 @@ class BaseSample:
     def __len__(self):
         """
         The result of using the Python len() command on this sample.
+
         :return: Number of sources in this sample.
         :rtype: int
         """
@@ -244,7 +254,6 @@ class BaseSample:
     def __iter__(self):
         """
         Called when initiating iterating through a BaseSample based object. Resets the counter _n.
-        :return:
         """
         self._n = 0
         return self
@@ -266,6 +275,7 @@ class BaseSample:
         """
         This returns the relevant source when a sample is addressed using the name of a source as the key,
         or using an integer index.
+
         :param Union[int, str] key: The index or name of the source to fetch.
         :return: The relevant Source object.
         :rtype: BaseSource
@@ -283,6 +293,7 @@ class BaseSample:
         """
         This deletes a source from the sample, along with all accompanying data, using the index or
         name of the source.
+
         :param Union[int, str] key: The index or name of the source to delete.
         """
         if isinstance(key, (int, np.integer)):
@@ -307,6 +318,7 @@ class BaseSample:
         """
         This function will be replaced in subclasses that store more information about sources
         in internal attributes.
+
         :param int key: The index or name of the source to delete.
         """
         pass

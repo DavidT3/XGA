@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:58. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List
@@ -116,13 +116,14 @@ class ExtendedSource(BaseSource):
         the user supplied coordinates from source initialisation as a starting point, finds the peak within a 500kpc
         radius, re-centres the region, and iterates until the centroid converges to within 15kpc, or until 20
         20 iterations has been reached.
+
         :param RateMap rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
         :param str method: Which peak finding method to use. Currently either hierarchical or simple can be chosen.
         :param int num_iter: How many iterations should be allowed before the peak is declared as not converged.
         :param UnitBase peak_unit: The unit the peak coordinate is returned in.
         :return: The peak coordinate, a boolean flag as to whether the returned coordinates are near
-         a chip gap/edge, and a boolean flag as to whether the peak converged. It also returns the coordinates
-         of the points within the chosen point cluster, and a list of all point clusters that were not chosen.
+            a chip gap/edge, and a boolean flag as to whether the peak converged. It also returns the coordinates
+            of the points within the chosen point cluster, and a list of all point clusters that were not chosen.
         :rtype: Tuple[Quantity, bool, bool, ndarray, List]
         """
         all_meth = ["hierarchical", "simple"]
@@ -237,6 +238,8 @@ class ExtendedSource(BaseSource):
 
     def get_peaks(self, obs_id: str = None, inst: str = None) -> Quantity:
         """
+        A get method to return the peak of the X-ray emission of this GalaxyCluster.
+
         :param str obs_id: The ObsID to return the X-ray peak coordinates for.
         :param str inst: The instrument to return the X-ray peak coordinates for.
         :return: The X-ray peak coordinates for the input parameters.
@@ -265,6 +268,7 @@ class ExtendedSource(BaseSource):
         """
         A property getter for the combined X-ray peak coordinates. Most analysis will be centered
         on these coordinates.
+
         :return: The X-ray peak coordinates for the combined ratemap.
         :rtype: Quantity
         """
@@ -276,6 +280,7 @@ class ExtendedSource(BaseSource):
     def peak(self, new_peak: Quantity):
         """
         Allows the user to update the peak value used during analyses manually.
+
         :param Quantity new_peak: A new RA-DEC peak coordinate, in degrees.
         """
         if not new_peak.unit.is_equivalent("deg"):
@@ -289,6 +294,7 @@ class ExtendedSource(BaseSource):
     def custom_radius(self) -> Quantity:
         """
         A getter for the custom region that can be defined on initialisation.
+
         :return: The radius (in kpc) of the user defined custom region.
         :rtype: Quantity
         """
@@ -300,9 +306,10 @@ class ExtendedSource(BaseSource):
         This allows you to retrieve the point cluster positions from the hierarchical clustering
         peak finding method run on the combined ratemap. This includes both the chosen cluster and
         all others that were found.
+
         :return: A numpy array of the positions of points of the chosen cluster (not galaxy cluster,
-        a cluster of points). A list of numpy arrays with the same information for all the other clusters
-        that were found
+            a cluster of points). A list of numpy arrays with the same information for all the other clusters
+            that were found
         :rtype: Tuple[ndarray, List[ndarray]]
         """
         return self._chosen_peak_cluster, self._other_peak_clusters
@@ -378,6 +385,7 @@ class PointSource(BaseSource):
         """
         Property getter to access the point_radius declared on initialisation of the source, the radius
         of the region that is used for point source analysis.
+
         :return: The radius of the point source analysis region.
         :rtype: Quantity
         """
@@ -410,6 +418,7 @@ class PointSource(BaseSource):
     def find_peak(self, rt: RateMap, peak_unit: UnitBase = deg) -> Tuple[Quantity, bool]:
         """
         Uses a simple 'brightest pixel' method to measure a peak coordinate for the point source.
+
         :param RateMap rt: The RateMap to measure the peak from.
         :param UnitBase peak_unit: The desired output unit of the peak.
         :return:  The peak, and a boolean flag as to whether the peak is near an edge.
@@ -425,6 +434,7 @@ class PointSource(BaseSource):
     def peak(self) -> Quantity:
         """
         A property getter for the combined X-ray peak coordinates.
+
         :return: The X-ray peak coordinates for the combined ratemap.
         :rtype: Quantity
         """

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:58. Copyright (c) David J Turner
 
 import warnings
 from typing import Union
@@ -107,6 +107,7 @@ class GalaxyCluster(ExtendedSource):
     def r200(self) -> Quantity:
         """
         Getter for the radius at which the average density is 200 times the critical density.
+
         :return: The R200 in kpc.
         :rtype: Quantity
         """
@@ -116,6 +117,7 @@ class GalaxyCluster(ExtendedSource):
     def r500(self) -> Quantity:
         """
         Getter for the radius at which the average density is 500 times the critical density.
+
         :return: The R500 in kpc.
         :rtype: Quantity
         """
@@ -125,6 +127,7 @@ class GalaxyCluster(ExtendedSource):
     def r2500(self) -> Quantity:
         """
         Getter for the radius at which the average density is 2500 times the critical density.
+
         :return: The R2500 in kpc.
         :rtype: Quantity
         """
@@ -135,8 +138,9 @@ class GalaxyCluster(ExtendedSource):
     def weak_lensing_mass(self) -> Quantity:
         """
         Gets the weak lensing mass passed in at initialisation of the source.
+
         :return: Two quantities, the weak lensing mass, and the weak lensing mass error in Msun. If the
-        values were not passed in at initialisation, the returned values will be None.
+            values were not passed in at initialisation, the returned values will be None.
         :rtype: Quantity
         """
         if self._wl_mass is not None:
@@ -159,8 +163,9 @@ class GalaxyCluster(ExtendedSource):
     def richness(self) -> Quantity:
         """
         Gets the richness passed in at initialisation of the source.
-        :return: Two floats, the richness, and the richness error. If the
-        values were not passed in at initialisation, the returned values will be None.
+
+        :return: Two floats, the richness, and the richness error. If the values were not passed in at
+            initialisation, the returned values will be None.
         :rtype: Quantity
         """
         if self._richness is not None:
@@ -186,6 +191,7 @@ class GalaxyCluster(ExtendedSource):
         Convenience method that calls get_results to retrieve temperature measurements. All matching values
         from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
         column 1 is err-, and column 2 is err+).
+
         :param str reg_type: The type of region that the fitted spectra were generated from.
         :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
         :return: The temperature value, and uncertainties.
@@ -234,17 +240,18 @@ class GalaxyCluster(ExtendedSource):
         and this method does NOT do any rebinning to maximise signal to noise.
         If use peak is selected, the peak coordinate used will depend on the combined ratemap, so would be different
         for PSF corrected ratemaps to the uncorrected ratemap.
+
         :param str reg_type: The region in which to view the radial brightness profile.
         :param str profile_type: The type of brightness profile you wish to view, radial or pizza.
         :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
-        slice will be 360 / num_slices degrees.
+            slice will be 360 / num_slices degrees.
         :param bool use_peak: If True then the radial profiles (including for PSF corrected ratemaps)
-         will all be constructed centered on the peak found for the 'normal' combined ratemap. If False,
-         peaks will be found for each individual combined ratemap and profiles will be constructed
-         centered on them.
+            will all be constructed centered on the peak found for the 'normal' combined ratemap. If False,
+            peaks will be found for each individual combined ratemap and profiles will be constructed
+            centered on them.
         :param int pix_step: The width (in pixels) of each annular bin, default is 1.
         :param Union[float, int] min_snr: The minimum signal to noise allowed for each radial bin. This is 0 by
-        default, which disables any automatic rebinning.
+            default, which disables any automatic rebinning.
         :param tuple figsize: The desired size of the figure, the default is (10, 7)
         :param str xscale: The scaling to be applied to the x axis, default is log.
         :param str yscale: The scaling to be applied to the y axis, default is log.
@@ -345,11 +352,12 @@ class GalaxyCluster(ExtendedSource):
         """
         Combines conversion factors calculated for this source with individual instrument-observation
         spectra, into one overall conversion factor.
+
         :param str reg_type: The region type the conversion factor is associated with.
         :param Quantity lo_en: The lower energy limit of the conversion factors.
         :param Quantity hi_en: The upper energy limit of the conversion factors.
         :return: A combined conversion factor that can be applied to a combined ratemap to
-        calculate luminosity.
+            calculate luminosity.
         :rtype: Quantity
         """
         # Grabbing the relevant spectra
@@ -377,12 +385,13 @@ class GalaxyCluster(ExtendedSource):
 
     def combined_norm_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
         """
-        Combines count-rate to normalisation conversion factors associated with this source
+        Combines count-rate to normalisation conversion factors associated with this source.
+
         :param str reg_type: The region type the conversion factor is associated with.
         :param Quantity lo_en: The lower energy limit of the conversion factors.
         :param Quantity hi_en: The upper energy limit of the conversion factors.
         :return: A combined conversion factor that can be applied to a combined ratemap to
-        calculate luminosity.
+            calculate luminosity.
         :rtype: Quantity
         """
         spec = self.get_products("spectrum", extra_key=reg_type)

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/10/2020, 10:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 20:04. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
@@ -14,6 +14,7 @@ from ..exceptions import HeasoftError
 def nh_lookup(coord_pair: Quantity) -> ndarray:
     """
     Uses HEASOFT to lookup hydrogen column density for given coordinates.
+
     :param Quantity coord_pair: An astropy quantity with RA and DEC of interest.
     :return : Average and weighted average nH values (in units of cm^-2)
     :rtype: ndarray
@@ -56,6 +57,7 @@ def nh_lookup(coord_pair: Quantity) -> ndarray:
 def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
     """
     Converts radius in length units to radius on sky in degrees.
+
     :param Quantity rad: Radius for conversion.
     :param Cosmology cosmo: An instance of an astropy cosmology, the default is Planck15.
     :param float z: The _redshift of the source.
@@ -70,6 +72,7 @@ def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
 def ang_to_rad(ang: Quantity, z: float, cosmo=Planck15) -> Quantity:
     """
     The counterpart to rad_to_ang, this converts from an angle to a radius in kpc.
+
     :param Quantity ang: Angle to be converted to radius.
     :param Cosmology cosmo: An instance of an astropy cosmology, the default is Planck15.
     :param float z: The _redshift of the source.
@@ -86,6 +89,7 @@ def name_to_coord(name: str):
     I'd like it to be known that I hate papers and resources that either only give the name of an object
     or its sexagesimal coordinates - however it happens upsettingly often so here we are. This function will
     take a standard format name (e.g. XMMXCS J041853.9+555333.7) and return RA and DEC in degrees.
+
     :param name:
     """
     raise NotImplementedError("I started this and will finish it at some point, but I got bored.")
@@ -113,6 +117,7 @@ def coord_to_name(coord_pair: Quantity, survey: str = None) -> str:
     This was originally just written in the init of BaseSource, but I figured I should split it out
     into its own function really. This will take a coordinate pair, and optional survey name, and spit
     out an object name in the standard format.
+
     :return: Source name based on coordinates.
     :rtype: str
     """

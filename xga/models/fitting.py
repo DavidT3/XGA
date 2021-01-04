@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 14:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:41. Copyright (c) David J Turner
 
 from typing import List
 
@@ -14,8 +14,9 @@ def log_likelihood(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.nd
                    m_func) -> np.ndarray:
     """
     Uses a simple Gaussian likelihood function, returns the logged value.
+
     :param np.ndarray theta: The knowledge we have (think theta in Bayesian parlance) - gets fed
-    into the model we've chosen.
+        into the model we've chosen.
     :param np.ndarray r: The radii at which we have measured profile values.
     :param np.ndarray y: The values we have measured for the profile.
     :param np.ndarray y_err: The uncertainties on the measured profile values.
@@ -32,10 +33,11 @@ def log_uniform_prior(theta: np.ndarray, pr: List) -> float:
     model (either user defined or default), the function checks whether the passed theta values
     sit within those limits. If they do then of course probability is 1, so we return the natural
     log (as this is a log prior), otherwise the probability is 0, so return -infinity.
+
     :param np.ndarray theta: The knowledge we have (think theta in Bayesian parlance) - gets fed
-    into the model we've chosen.
+        into the model we've chosen.
     :param List pr: A list of upper and lower limits for the parameters in theta, the limits of the
-    uniform, uninformative priors.
+        uniform, uninformative priors.
     :return: The log prior value.
     :rtype: float
     """
@@ -55,14 +57,15 @@ def log_prob(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray,
              m_func, pr) -> np.ndarray:
     """
     The combination of the log prior and log likelihood.
+
     :param np.ndarray theta: The knowledge we have (think theta in Bayesian parlance) - gets fed
-    into the model we've chosen.
+        into the model we've chosen.
     :param np.ndarray r: The radii at which we have measured profile values.
     :param np.ndarray y: The values we have measured for the profile.
     :param np.ndarray y_err: The uncertainties on the measured profile values.
     :param m_func: The model function that is being fit to.
     :param List pr: A list of upper and lower limits for the parameters in theta, the limits of the
-    uniform, uninformative priors.
+        uniform, uninformative priors.
     :return: The log probability value.
     :rtype: np.ndarray
     """

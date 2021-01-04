@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/11/2020, 13:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 20:04. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.units.quantity import Quantity
@@ -12,10 +12,11 @@ from ..exceptions import NoMatchFoundError
 def simple_xmm_match(src_ra: float, src_dec: float, distance: Quantity = Quantity(30.0, 'arcmin')) -> DataFrame:
     """
     Returns ObsIDs within a given distance from the input ra and dec values.
+
     :param float src_ra: RA coordinate of the source, in degrees.
     :param float src_dec: DEC coordinate of the source, in degrees.
     :param Quantity distance: The distance to search for XMM observations within, default should be
-    able to match a source on the edge of an observation to the centre of the observation.
+        able to match a source on the edge of an observation to the centre of the observation.
     :return: The ObsID, RA_PNT, and DEC_PNT of matching XMM observations.
     :rtype: DataFrame
     """

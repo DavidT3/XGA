@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 14:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:41. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -13,7 +13,8 @@ def beta_profile(r_values: Union[np.ndarray, float], beta: float, r_core: float,
         -> Union[np.ndarray, float]:
     """
     The famous (among a certain circle) beta profile. This is a projected model so can be used to fit/describe
-    a surface brightness profile of a cluster. Obviously assumes a radial symmetry as it only depends on radius
+    a surface brightness profile of a cluster. Obviously assumes a radial symmetry as it only depends on radius.
+
     :param Union[np.ndarray, float] r_values: The radii to calculate y values for.
     :param Union[float, int] beta: The beta slope parameter of the model.
     :param Union[float, int] r_core: The core radius.
@@ -29,6 +30,7 @@ def double_beta_profile(r_values: Union[np.ndarray, float], beta_one: float, r_c
     """
     A summation of two single beta models. Often thought to deal better with peaky cluster cores that you might
     get from a cool-core cluster.
+
     :param Union[np.ndarray, float] r_values: The radii to calculate y values for.
     :param Union[float, int] beta_one: The beta slope parameter of the first component beta profile.
     :param Union[float, int] r_core_one: The core radius of the first component beta profile.
@@ -48,6 +50,7 @@ def simple_vikhlinin(r_values: Union[np.ndarray, float], beta: float, r_core: fl
     """
     Used relatively recently in https://doi.org/10.1051/0004-6361/201833325 by Ghirardini et al., a
     simplified form of Vikhlinin's full model, which can be found in https://doi.org/10.1086/500288.
+
     :param Union[np.ndarray, float] r_values: The radii to calculate y values for.
     :param float beta: The beta parameter of the model.
     :param float r_core: The core radius of the model.

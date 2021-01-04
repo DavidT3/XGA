@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 14:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:41. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -9,6 +9,7 @@ import numpy as np
 def straight_line(x_values: Union[np.ndarray, float], gradient: float, intercept: float) -> Union[np.ndarray, float]:
     """
     As simple a model as you can get, a straight line. Possible uses include fitting very simple scaling relations.
+
     :param Union[np.ndarray, float] x_values: The x_values to retrieve corresponding y values for.
     :param float gradient: The gradient of the straight line.
     :param float intercept: The intercept of the straight line.
@@ -22,6 +23,7 @@ def power_law(x_values: Union[np.ndarray, float], slope: float, norm: float) -> 
     """
     A simple power law model, with slope and normalisation parameters. This is the standard model for fitting cluster
     scaling relations in XGA.
+
     :param Union[np.ndarray, float] x_values: The x_values to retrieve corresponding y values for.
     :param float slope: The slope parameter of the power law.
     :param float norm: The normalisation parameter of the power law.
