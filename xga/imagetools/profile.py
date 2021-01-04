@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/12/2020, 09:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:38. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -20,8 +20,9 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     It produces the src_mask for a given shape of image, centered at supplied coordinates, and with inner and
     outer radii supplied by the user also. Angular limits can also be supplied to give the src_mask an annular
     dependence. This function should be properly vectorised, and accepts inner and outer radii in
-    the form of arrays.
-    The result will be an len_y, len_x, N dimensional array, where N is equal to the length of inn_rad.
+    the form of arrays. The result will be an len_y, len_x, N dimensional array, where N is equal to
+    the length of inn_rad.
+
     :param Quantity centre: Astropy pix quantity of the form Quantity([x, y], pix).
     :param np.ndarray inn_rad: Pixel radius for the inner part of the annular src_mask.
     :param np.ndarray out_rad: Pixel radius for the outer part of the annular src_mask.
@@ -113,20 +114,21 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     """
     Will probably only ever be called by an internal brightness calculation, but two different methods
     need it so it gets its own method.
+
     :param Image im_prod: An Image or RateMap product object that you wish to calculate annuli for.
     :param Quantity centre: The coordinates of the centre of the set of annuli.
     :param Quantity rad: The outer radius of the set of annuli.
     :param float z: The redshift of the source of interest, required if the output radius units are
-    a proper radius.
+        a proper radius.
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
     :param UnitBase cen_rad_units: The output units for the centres of the annulli returned by
-    this function. The inner and outer radii will always be in pixels.
+        this function. The inner and outer radii will always be in pixels.
     :param cosmo: An instance of an astropy cosmology, the default is Planck15.
     :param int start_pix_rad: The pixel radius at which the innermost annulus starts, default is zero.
     :param int min_central_pix_rad: The minimum radius of the innermost circular annulus (will only
-    be used if start_pix_rad is 0, otherwise the innermost annulus is not a circle), default is three.
+        be used if start_pix_rad is 0, otherwise the innermost annulus is not a circle), default is three.
     :return: Returns the inner and outer radii of the annuli (in pixels), and the centres of the annuli
-    in cen_rad_units.
+        in cen_rad_units.
     :rtype: Tuple[np.ndarray, np.ndarray, Quantity]
     """
     # Quickly get the central coordinates in degrees as well
@@ -177,26 +179,27 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     A simple method to calculate the average brightness in circular annuli upto the radius of
     the chosen region. The annuli are one pixel in width, and as this uses the masks that were generated
     earlier, interloper sources should be removed.
+
     :param RateMap rt: A RateMap object to construct a brightness profile from.
     :param Quantity centre: The coordinates for the centre of the brightness profile.
     :param Quantity outer_rad: The outer radius of the brightness profile.
     :param float back_inn_rad_factor: This factor is multiplied by the outer pixel radius, which gives the inner
-    radius for the background mask.
+        radius for the background mask.
     :param float back_out_rad_factor: This factor is multiplied by the outer pixel radius, which gives the outer
-    radius for the background mask.
+        radius for the background mask.
     :param np.ndarray interloper_mask: A numpy array that masks out any interloper sources.
     :param float z: The redshift of the source of interest.
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
     :param BaseUnit cen_rad_units: The desired output units for the central radii of the annuli.
     :param cosmo: An astropy cosmology object for source coordinate conversions.
     :param float min_snr: The minimum signal to noise allowed for each bin in the profile. If any point is
-    below this threshold the profile will be rebinned. Default is 0.0
+        below this threshold the profile will be rebinned. Default is 0.0
     :param int start_pix_rad: The pixel radius at which the innermost annulus starts, default is zero.
     :param int min_central_pix_rad: The minimum radius of the innermost circular annulus (will only
-    be used if start_pix_rad is 0, otherwise the innermost annulus is not a circle), default is three.
+        be used if start_pix_rad is 0, otherwise the innermost annulus is not a circle), default is three.
     :return: The brightness is returned in a flat numpy array, then the radii at the centre of the bins are
-    returned in units of kpc, the width of the bins, and finally the average brightness in the background region is
-    returned.
+        returned in units of kpc, the width of the bins, and finally the average brightness in the background region is
+        returned.
     :rtype: Tuple[SurfaceBrightness1D, bool]
     """
 
@@ -206,11 +209,12 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         Internal function to calculate and re-bin (ONCE) a surface brightness profile. The profile, along with
         modified (if rebinned) masks and radii arrays are returned to the user. This can be called once, or iteratively
         by a loop.
+
         :param np.ndarray annulus_masks: 512x512xN numpy array of annular masks, where N is the number of annuli
         :param np.ndarray inner_rads: The inner radii of the annuli.
         :param np.ndarray outer_rads: The outer radii of the annuli.
         :return: Boolean variable that describes whether another re-binning iteration is required, the
-        brightness profile and uncertainties, the modified annular masks, inner radii, outer radii, and annulus areas.
+            brightness profile and uncertainties, the modified annular masks, inner radii, outer radii, and annulus areas.
         :rtype:
         """
         # These are annular masks with interloper sources removed, sensor and edge masks applied
@@ -369,21 +373,22 @@ def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray
     A different type of brightness profile that allows you to divide the cluster up azimuthally as
     well as radially. It performs the same calculation as radial_brightness, but for N angular bins,
     and as such returns N separate profiles.
+
     :param Image im_prod: An Image or RateMap object that you wish to construct a brightness profile from.
     :param np.ndarray src_mask: A numpy array that masks out everything but the source, including interlopers.
     :param np.ndarray back_mask: A numpy array that masks out everything but the background, including interlopers.
     :param Quantity centre: The coordinates for the centre of the brightness profile.
     :param Quantity rad: The outer radius of the brightness profile (THIS SHOULD BE THE SAME RADIUS AS THE REGION
-    YOUR SRC_MASK IS BASED ON, OTHERWISE YOU'LL GET AN INVALID BACKGROUND MEASUREMENT).
+        YOUR SRC_MASK IS BASED ON, OTHERWISE YOU'LL GET AN INVALID BACKGROUND MEASUREMENT).
     :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
     :param float z: The redshift of the source of interest.
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
     :param BaseUnit cen_rad_units: The desired output units for the central radii of the annuli.
     :param cosmo: An astropy cosmology object for source coordinate conversions.
-    slice will be 360 / num_slices degrees.
+        slice will be 360 / num_slices degrees.
     :return: The brightness is returned in a numpy array with a column per pizza slice, then the
-    radii at the centre of the bins are returned in units of kpc, then the angle boundaries of each slice,
-    and finally the average brightness in the background region is returned.
+        radii at the centre of the bins are returned in units of kpc, then the angle boundaries of each slice,
+        and finally the average brightness in the background region is returned.
     :rtype: Tuple[ndarray, Quantity, Quantity, np.float64, ndarray, ndarray]
     """
     raise NotImplementedError("The supporting infrastructure to allow pizza profile product objects hasn't been"
