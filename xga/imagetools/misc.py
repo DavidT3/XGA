@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/11/2020, 16:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:36. Copyright (c) David J Turner
 
 
 from typing import Tuple, List, Union
@@ -19,6 +19,7 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
     coordinates to pixel, then calculates the difference between the new and original coordinates in pixel.
     Then small_offset is converted to degrees and  divided by the pixel distance to calculate a pixel to degree
     factor.
+
     :param Quantity coord: The starting coordinates.
     :param WCS input_wcs: The to calculate the pixel to degree scale
     :param Quantity small_offset: The amount you wish to peturb the original coordinates
@@ -56,6 +57,7 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantit
     Pure convenience function to convert a list of pixel radii to whatever unit we might want at the end. Used
     quite a lot in the imagetools.profile functions, which is why it was split off into its own function. Redshift
     and cosmology must be supplied if proper distance units (like kpc) are chosen for out_unit.
+
     :param Union[Image, RateMap] im_prod: The image/ratemap product for which the conversion is taking place.
     :param Quantity pix_rad: The array of pixel radii to convert to out_unit.
     :param UnitBase out_unit: The desired output unit for the radii.
@@ -95,7 +97,8 @@ def physical_rad_to_pix(im_prod: Union[Image, RateMap, ExpMap], physical_rad: Qu
     """
     Another convenience function, this time to convert physical radii to pixels. It can deal with both angular and
     proper radii, so long as redshift and cosmology information is provided for the conversion from proper radii
-    to pixels
+    to pixels.
+
     :param Union[Image, RateMap, ExpMap] im_prod:
     :param Quantity physical_rad: The physical radius to be converted to pixels.
     :param Quantity coord: The position of the object being analysed.
@@ -128,10 +131,11 @@ def data_limits(im_prod: Union[Image, RateMap, ExpMap, np.ndarray]) -> Tuple[Lis
     """
     A function that finds the pixel coordinates that bound where data is present in
     Image or RateMap object.
+
     :param Union[Image, RateMap, ndarray] im_prod: An Image, RateMap, or numpy array that you wish to find
-    boundary coordinates for.
+        boundary coordinates for.
     :return: Two lists, the first with the x lower and upper bounding coordinates, and the second with
-    the y lower and upper bounding coordinates.
+        the y lower and upper bounding coordinates.
     :rtype: Tuple[List[int, int], List[int, int]]
     """
     if isinstance(im_prod, Image):
