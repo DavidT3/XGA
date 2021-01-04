@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 12:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:35. Copyright (c) David J Turner
 
 
 import os
@@ -91,8 +91,9 @@ class Spectrum(BaseProduct):
         """
         An internal method that will 'push' the current class attributes that hold the paths to data products
         (like ARF and RMF) to the relevant spectrum file.
+
         :param str which_spec: A flag that tells the method whether to update the header of
-         the main or background spectrum.
+            the main or background spectrum.
         """
         # This function is meant for internal use only, so I won't check that the passed-in file paths
         #  actually exist. This will have been checked already
@@ -117,6 +118,7 @@ class Spectrum(BaseProduct):
     def path(self) -> str:
         """
         This method returns the path to the spectrum file of this object.
+
         :return: The path to the spectrum file associated with this object.
         :rtype: str
         """
@@ -128,6 +130,7 @@ class Spectrum(BaseProduct):
         This setter updates the path to the spectrum file, and then updates that file with the current values of
         the RMF, ARF, and background spectrum paths. WARNING: This does permanently alter the file, so use your
         own spectrum file with caution.
+
         :param str new_path: The updated path to the spectrum file.
         """
         if os.path.exists(new_path):
@@ -142,6 +145,7 @@ class Spectrum(BaseProduct):
     def rmf(self) -> str:
         """
         This method returns the path to the RMF file of the main spectrum of this object.
+
         :return: The path to the RMF file associated with the main spectrum of this object.
         :rtype: str
         """
@@ -152,6 +156,7 @@ class Spectrum(BaseProduct):
         """
         This setter updates the path to the main RMF file, then writes that change to the actual spectrum file.
         WARNING: This permanently alters the file, use with caution!
+
         :param str new_path: The path to the new RMF file.
         """
         if os.path.exists(new_path):
@@ -165,6 +170,7 @@ class Spectrum(BaseProduct):
     def arf(self) -> str:
         """
         This method returns the path to the ARF file of the main spectrum of this object.
+
         :return: The path to the ARF file associated with the main spectrum of this object.
         :rtype: str
         """
@@ -175,6 +181,7 @@ class Spectrum(BaseProduct):
         """
         This setter updates the path to the main ARF file, then writes that change to the actual spectrum file.
         WARNING: This permanently alters the file, use with caution!
+
         :param str new_path: The path to the new ARF file.
         """
         if os.path.exists(new_path):
@@ -187,6 +194,7 @@ class Spectrum(BaseProduct):
     def background(self) -> str:
         """
         This method returns the path to the background spectrum.
+
         :return: Path of the background spectrum.
         :rtype: str
         """
@@ -198,6 +206,7 @@ class Spectrum(BaseProduct):
         This method is the setter for the background spectrum. It can be used to change the background
         spectrum file associated with this object, and will write that change to the actual spectrum file.
         WARNING: This permanently alters the file, use with caution!
+
         :param str new_path: The path to the new background spectrum.
         """
         if os.path.exists(new_path):
@@ -210,6 +219,7 @@ class Spectrum(BaseProduct):
     def background_rmf(self) -> str:
         """
         This method returns the path to the background spectrum's RMF file.
+
         :return: The path the the background spectrum's RMF.
         :rtype: str
         """
@@ -220,6 +230,7 @@ class Spectrum(BaseProduct):
         """
         This setter method will change the RMF associated with the background spectrum, then write
         that change to the background spectrum file.
+
         :param str new_path: The path to the background spectrum's new RMF.
         """
         if os.path.exists(new_path):
@@ -232,6 +243,7 @@ class Spectrum(BaseProduct):
     def background_arf(self) -> str:
         """
         This method returns the path to the background spectrum's ARF file.
+
         :return: The path the the background spectrum's ARF.
         :rtype: str
         """
@@ -242,6 +254,7 @@ class Spectrum(BaseProduct):
         """
         This setter method will change the ARF associated with the background spectrum, then write
         that change to the background spectrum file.
+
         :param str new_path: The path to the background spectrum's new ARF.
         """
         if os.path.exists(new_path):
@@ -257,6 +270,7 @@ class Spectrum(BaseProduct):
         Getter method for the type of region this spectrum was generated for. e.g. 'region' - which would
         mean it represents the spectrum inside a region specificied by region files, or 'r500' - which
         would mean the radius of a cluster where the mean density is 500 times critical density of the Universe.
+
         :return: The region type this spectrum was generated for
         :rtype: str
         """
@@ -266,6 +280,7 @@ class Spectrum(BaseProduct):
     def exposure(self) -> Quantity:
         """
         Property that returns the spectrum exposure time used by XSPEC.
+
         :return: Spectrum exposure time.
         :rtype: Quantity
         """
@@ -281,11 +296,12 @@ class Spectrum(BaseProduct):
         Method that adds information specific to a spectrum from an XSPEC fit to this object. This includes
         individual spectrum exposure and count rate, as well as calculated luminosities, and plotting
         information for data and model.
+
         :param str model: String representation of the XSPEC model fitted to the data.
         :param tab_line: The line of the SPEC_INFO table produced by xga_extract.tcl that is relevant to this
-        spectrum object.
+            spectrum object.
         :param hdu.table.TableHDU plot_data: The PLOT{N} table in the file produced by xga_extract.tcl that is
-        relevant to this spectrum object.
+            relevant to this spectrum object.
         """
         # This stores the exposure time that XSPEC uses for this specific spectrum.
         if self._exp is None:
@@ -330,12 +346,13 @@ class Spectrum(BaseProduct):
     def get_luminosities(self, model: str, lo_en: Quantity = None, hi_en: Quantity = None):
         """
         Returns the luminosities measured for this spectrum from a given model.
+
         :param model: Name of model to fetch luminosities for.
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
         :return: Luminosity measurement, either for all energy bands, or the one requested with the energy
-        limit parameters. Luminosity measurements are presented as three column numpy arrays, with column 0
-        being the value, column 1 being err-, and column 2 being err+.
+            limit parameters. Luminosity measurements are presented as three column numpy arrays, with column 0
+            being the value, column 1 being err-, and column 2 being err+.
         """
         # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
         #  bounds. If the limits are none then so is the energy key
@@ -368,6 +385,7 @@ class Spectrum(BaseProduct):
     def get_rate(self, model: str) -> Quantity:
         """
         Fetches the count rate for a particular model fitted to this spectrum.
+
         :param model: The model to fetch count rate for.
         :return: Count rate in counts per second.
         :rtype: Quantity
@@ -385,15 +403,16 @@ class Spectrum(BaseProduct):
         """
         Method used to store countrate to luminosity conversion factors derived from fakeit spectra, as well as
         the actual countrate and luminosity measured in case the user wants to create a combined factor for multiple
-        observations
+        observations.
+
         :param np.ndarray lo_ens: A numpy array of string representations of the lower energy bounds for the cntrate
-        and luminosity measurements.
+            and luminosity measurements.
         :param np.ndarray hi_ens: A numpy array of string representations of the upper energy bounds for the cntrate
-        and luminosity measurements.
+            and luminosity measurements.
         :param np.ndarray rates: A numpy array of the rates measured for this arf/rmf combination for the energy
-        ranges specified in lo_ens and hi_end.
+            ranges specified in lo_ens and hi_end.
         :param np.ndarray lums: A numpy array of the luminosities measured for this arf/rmf combination
-        for the energy ranges specified in lo_ens and hi_end.
+            for the energy ranges specified in lo_ens and hi_end.
         :param str model: The name of the model used to calculate this factor.
         """
         for row_ind, lo_en in enumerate(lo_ens):
@@ -417,6 +436,7 @@ class Spectrum(BaseProduct):
         """
         Retrieves a conversion factor between count rate and luminosity for a given energy range, if one
         has been calculated.
+
         :param Quantity lo_en: The lower energy bound for the desired conversion factor.
         :param Quantity hi_en: The upper energy bound for the desired conversion factor.
         :param str model: The model used to generate the desired conversion factor.
@@ -440,6 +460,7 @@ class Spectrum(BaseProduct):
         """
         Very simple method to plot the data/models associated with this Spectrum object,
         between certain energy limits.
+
         :param Quantity lo_en: The lower energy limit from which to plot the spectrum.
         :param Quantity hi_en: The upper energy limit to plot the spectrum to.
         """
@@ -560,6 +581,7 @@ class AnnularSpectra(BaseAggregateProduct):
     def num_annuli(self) -> int:
         """
         A property getter for the number of annular spectra.
+
         :return: The number of annular spectra associated with this product.
         :rtype: int
         """
@@ -569,6 +591,7 @@ class AnnularSpectra(BaseAggregateProduct):
     def rmf(self) -> list:
         """
         This method returns the list of RMF files for the annular spectra associated with this object.
+
         :return: The path to the RMF files associated with the annular spectra of this object.
         :rtype: list
         """
@@ -578,6 +601,7 @@ class AnnularSpectra(BaseAggregateProduct):
     def arf(self) -> list:
         """
         This method returns the list of ARF files for the annular spectra associated with this object.
+
         :return: The path to the ARF files associated with the annular spectra of this object.
         :rtype: list
         """
@@ -587,6 +611,7 @@ class AnnularSpectra(BaseAggregateProduct):
     def background(self) -> str:
         """
         This method returns the path to the background spectrum.
+
         :return: Path of the background spectrum.
         :rtype: str
         """
@@ -596,6 +621,7 @@ class AnnularSpectra(BaseAggregateProduct):
     def background_rmf(self) -> str:
         """
         This method returns the path to the background spectrum's RMF file.
+
         :return: The path the the background spectrum's RMF.
         :rtype: str
         """
@@ -605,6 +631,7 @@ class AnnularSpectra(BaseAggregateProduct):
     def background_arf(self) -> str:
         """
         This method returns the path to the background spectrum's ARF file.
+
         :return: The path the the background spectrum's ARF.
         :rtype: str
         """
