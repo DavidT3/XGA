@@ -8,10 +8,12 @@ The Module
 ----------
 
 XGA has been uploaded to PyPi, so you can simply run:
+
 .. code-block:: console
     pip install xga
 
 Alternatively, to get the current working version from the git repository run:
+
 .. code-block:: console
     git clone https://github.com/DavidT3/XGA
     cd XGA
@@ -21,6 +23,7 @@ Required Dependencies
 ---------------------
 
 XGA depends on two non-Python pieces of software:
+
 * XMM's Science Analysis System (SAS) - Version 17.0.0, but other versions should be fine.
 * HEASoft's XSPEC - Version 12.10.1, **I can't guarantee later versions will work.**
 
@@ -36,12 +39,12 @@ Optional Dependencies
 
 XGA can also make use of external software for some limited tasks, but they are not required to use
 the module as a whole:
+
 * The R interpreter.
 * Rpy2 - A Python module that provides an interface with the R language in Python.
 * LIRA - An R fitting package.
 
 The R interpreter, Rpy2, and LIRA are all necessary only if you wish to use the LIRA scaling relation fitting function.
-
 
 Configuring XGA
 ---------------
@@ -50,6 +53,7 @@ Before XGA can be used you must fill out a configuration file (a completed examp
 `here <https://github.com/DavidT3/XGA/blob/master/docs/example_config/xga.cfg>`_).
 
 Follow these steps to fill out the configuration file:
+
 1. Import XGA to generate the initial, incomplete, configuration file.
 2. Navigate to ~/.config/xga and open xga.cfg in a text editor. The .config directory is usually hidden, so it is
 probably easier to navigate via the terminal.
