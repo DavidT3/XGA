@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 12:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:00. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -60,19 +60,20 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
     observation, will have a spectrum generated using the specified region type as as boundary. It is possible
     to generate both grouped and ungrouped spectra using this function, with the degree of grouping set
     by the min_counts, min_sn, and oversample parameters.
-    :param Union[BaseSource, BaseSample] sources: A single source object, or a sample of sources.
+
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str reg_type: Tells the method what region source you want to use, for instance r500 or r200.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
-    To disable minimum counts set this parameter to None.
+        To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-    To disable minimum signal to noise set this parameter to None.
+        To disable minimum signal to noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
-    ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
     slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to
-    90% of available.
+        90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
