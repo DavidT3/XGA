@@ -1,7 +1,7 @@
 Introduction to XGA
 ===================
 
-``XGA`` is a Python package to explore and analyse X-ray sources detected in XMM-Newton observations. When a source is
+XGA is a Python package to explore and analyse X-ray sources detected in XMM-Newton observations. When a source is
 declared, XGA finds every observation it appears in, and all analysis is performed on all available data.
 It provides an easy to use Python interface with XMM's Science Analysis System (SAS), enabling independent products to be generated in parallel on
 local computers and HPCs. XGA also makes it easy to generate products for samples of objects.
