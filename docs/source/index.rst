@@ -7,17 +7,12 @@ Welcome to XMM: Generate and Analyse (XGA)'s documentation!
 ===========================================================
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Contents:
 
-   xga.sources
-   xga.samples
-   xga.sas
-   xga.xspec
-   xga.products
-   xga.imagetools
-   xga.sourcetools
-   xga.relations
-   xga.models
+   Introduction <intro.rst>
+   Installation <install.rst>
+   Examples <examples.rst>
+   XGA Classes and Functions <xga.rst>
 
 
