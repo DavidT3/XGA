@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:25. Copyright (c) David J Turner
 
 import os
 from shutil import rmtree
@@ -223,6 +223,7 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
     """
     A convenient Python wrapper for the SAS emosaic command. Every image associated with the source,
     that is in the energy band specified by the user, will be added together.
+
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str to_mosaic: The data type to produce a mosaic for, can be either image or expmap.
     :param Quantity lo_en: The lower energy limit for the combined image, in astropy energy units.
