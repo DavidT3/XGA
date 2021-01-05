@@ -1,46 +1,35 @@
-xga.sas package
-===============
+sas
+===
 
-Submodules
-----------
-
-xga.sas.misc module
--------------------
+sas.misc module
+---------------
 
 .. automodule:: xga.sas.misc
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.sas.phot module
--------------------
+sas.phot module
+---------------
 
 .. automodule:: xga.sas.phot
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.sas.run module
-------------------
+sas.run module
+--------------
 
 .. automodule:: xga.sas.run
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.sas.spec module
--------------------
+sas.spec module
+---------------
 
 .. automodule:: xga.sas.spec
    :members:
    :undoc-members:
    :show-inheritance:
 
-
-Module contents
----------------
-
-.. automodule:: xga.sas
-   :members:
-   :undoc-members:
-   :show-inheritance:

@@ -10,20 +10,14 @@ Welcome to XMM: Generate and Analyse (XGA)'s documentation!
    :maxdepth: 1
    :caption: Contents:
 
-   xga.imagetools
-   xga.models
-   xga.products
-   xga.relations
+   xga.sources
    xga.samples
    xga.sas
-   xga.sources
-   xga.sourcetools
-   xga.tests
    xga.xspec
+   xga.products
+   xga.imagetools
+   xga.sourcetools
+   xga.relations
+   xga.models
 
-Indices and tables
-==================
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

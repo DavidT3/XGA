@@ -1,46 +1,35 @@
-xga.sourcetools package
-=======================
+sourcetools
+===========
 
-Submodules
-----------
-
-xga.sourcetools.density module
-------------------------------
+sourcetools.density module
+--------------------------
 
 .. automodule:: xga.sourcetools.density
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.sourcetools.match module
-----------------------------
+sourcetools.match module
+------------------------
 
 .. automodule:: xga.sourcetools.match
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.sourcetools.misc module
----------------------------
+sourcetools.misc module
+-----------------------
 
 .. automodule:: xga.sourcetools.misc
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.sourcetools.stack module
-----------------------------
+sourcetools.stack module
+------------------------
 
 .. automodule:: xga.sourcetools.stack
    :members:
    :undoc-members:
    :show-inheritance:
 
-
-Module contents
----------------
-
-.. automodule:: xga.sourcetools
-   :members:
-   :undoc-members:
-   :show-inheritance:
