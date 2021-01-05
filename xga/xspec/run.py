@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:17. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -110,6 +110,7 @@ def xspec_call(sas_func):
     with the Sun Grid Engine.
     :return:
     """
+
     @wraps(sas_func)
     def wrapper(*args, **kwargs):
         # The first argument of all of these XSPEC functions will be the source object (or a list of),
