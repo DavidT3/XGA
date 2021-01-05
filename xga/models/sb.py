@@ -31,7 +31,7 @@ def double_beta_profile(r_values: Union[np.ndarray, float], beta_one: float, r_c
     A summation of two single beta models. Often thought to deal better with peaky cluster cores that you might
     get from a cool-core cluster.
 
-    :param Union[np.ndarray, float] r_values: The radii to calculate y values for.
+    :param np.ndarray/float r_values: The radii to calculate y values for.
     :param float/int beta_one: The beta slope parameter of the first component beta profile.
     :param float/int r_core_one: The core radius of the first component beta profile.
     :param float/int beta_two:  The beta slope parameter of the second component beta profile.
