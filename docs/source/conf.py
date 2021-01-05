@@ -94,11 +94,15 @@ templates_path = ['_templates']
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = []
+exclude_patterns = ['_build', '**.ipynb_checkpoints']
 
 # This should turn off including typehints in the function signatures in autodoc. That information is already in 
 #  the docstring and can look extremely confusing
 autodoc_typehints = 'none'
+
+# This should make nbsphinx highlight notebooks better
+highlight_language = 'none'
+
 
 # -- Options for HTML output -------------------------------------------------
 
