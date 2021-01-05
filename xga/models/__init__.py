@@ -24,7 +24,6 @@ def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β'
     (i.e. pass x values, then parameters as individual variables), into the form expected by Scipy's ODR.
     I'd recommend running a check to compare results from the original and converted functions where-ever
     this function is called - I don't completely trust it.
-    implementation (an array/list of parameters as the first argument, then the x values as the second argument.)
 
     :param FunctionType model_func: The original model function to be converted.
     :param str new_par_name: The name we want to use for the new list/array of fit parameters.
