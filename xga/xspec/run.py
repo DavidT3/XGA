@@ -32,13 +32,14 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str) \
         -> Tuple[Union[FITS, str], str, bool, list, list]:
     """
     This function is called for the local compute option. It will run the supplied XSPEC script, then check
-    parse the output for errors and check that the expected output file has been created
+    parse the output for errors and check that the expected output file has been created.
+    
     :param str x_script: The path to an XSPEC script to be run.
     :param str out_file: The expected path for the output file of that XSPEC script.
     :param str src: A string representation of the source object that this fit is associated with.
     :param str run_type: A flag that tells this function what type of run this is; e.g. fit or conv_factors.
     :return: FITS object of the results, string repr of the source associated with this fit, boolean variable
-    describing if this fit can be used, list of any errors found, list of any warnings found.
+        describing if this fit can be used, list of any errors found, list of any warnings found.
     :rtype: Tuple[Union[FITS, str], str, bool, list, list]
     """
     cmd = "xspec - {}".format(x_script)
@@ -104,7 +105,7 @@ def xspec_call(sas_func):
     """
     This is used as a decorator for functions that produce XSPEC scripts. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
-    executing the SAS command will change. This supports both simple multi-threading and submission
+    executing the XSPEC commands will change. This supports both simple multi-threading and submission
     with the Sun Grid Engine.
     :return:
     """
