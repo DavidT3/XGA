@@ -112,7 +112,7 @@ html_theme = 'sphinx_rtd_theme'
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
-html_logo = "long_xga_logo.png"
+html_logo = "_static/long_xga_logo.png"
 html_theme_options = {
     'logo_only': True,
     'display_version': False,
