@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:00. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -19,7 +19,8 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], reg_type: str, lum_en:
                   hi_en: Quantity, fit_method: str, abund_table: str) -> Union[List[BaseSource], BaseSample]:
     """
     This performs some checks that are common to all the model fit functions.
-    :param Union[BaseSource, BaseSample] sources:
+
+    :param BaseSource/BaseSample sources:
     :param str reg_type: Tells the method what region's spectrum you want to use, for instance r500 or r200.
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
@@ -27,7 +28,7 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], reg_type: str, lum_en:
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
     :return: Most likely just the passed in sources, but if a single source was passed
-    then a list will be returned.
+        then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
     """
     allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
@@ -77,6 +78,7 @@ def _write_xspec_script(source: BaseSource, reg_type: str, model: str, abund_tab
                         lum_conf: float, redshift: float) -> Tuple[str, str]:
     """
     This writes out a configured XSPEC script, and is common to all fit functions.
+
     :param BaseSource source: The source for which an XSPEC script is being created
     :param str reg_type: Tells the method what region's spectrum you want to use, for instance r500 or r200.
     :param str model: The model being fitted to the data.
@@ -126,7 +128,7 @@ def _write_xspec_script(source: BaseSource, reg_type: str, model: str, abund_tab
 
 
 @xspec_call
-def single_temp_apec(sources: Union[BaseSource, BaseSample], reg_type: str,
+def single_temp_apec(sources: Union[BaseSample, BaseSource], reg_type: str,
                      start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
                      lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
                      freeze_nh: bool = True, freeze_met: bool = True,
@@ -137,7 +139,8 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], reg_type: str,
     This is a convenience function for fitting an absorbed single temperature apec model to an object.
     It would be possible to do the exact same fit using the custom_model function, but as it will
     be a very common fit a dedicated function is in order.
-    :param List[BaseSource] sources: A single source object, or a sample of sources.
+
+    :param BaseSample/BaseSource sources: A single source object, or a sample of sources.
     :param str reg_type: Tells the method what region's spectrum you want to use, for instance r500 or r200.
     :param Quantity start_temp: The initial temperature for the fit.
     :param start_met: The initial metallicity for the fit (in ZSun).
@@ -233,6 +236,7 @@ def power_law(sources: Union[BaseSource, BaseSample], reg_type: str, redshifted:
     """
     This is a convenience function for fitting a tbabs absorbed powerlaw (or zpowerlw if redshifted
     is selected) to source spectra.
+
     :param List[BaseSource] sources: A single source object, or a sample of sources.
     :param str reg_type: Tells the method what region's spectrum you want to use, for instance r500 or r200.
     :param bool redshifted: Whether the powerlaw that includes redshift (zpowerlw) should be used.

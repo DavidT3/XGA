@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/10/2020, 15:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:25. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -24,10 +24,11 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str,
     This function uses the xspec fakeit tool to calculate conversion factors between count rate and
     luminosity for ARFs and RMFs associated with spectra in the given sources. Once complete the conversion
     factors are stored within the relevant XGA spectrum object.
+
     :param GalaxyCluster sources: The GalaxyCluster objects to calculate conversion factors for.
     :param str reg_type: The region type of the spectra to base the conversion factors on.
     :param Quantity sim_temp: The temperature(s) to use for the apec model.
-    :param Union[float, List] sim_met: The metallicity(s) (in solar met) to use for the apec model.
+    :param float/List sim_met: The metallicity(s) (in solar met) to use for the apec model.
     :param Quantity conv_en: The energy limit pairs to calculate conversion factors for.
     :param str abund_table: The name of the XSPEC abundance table to use.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.

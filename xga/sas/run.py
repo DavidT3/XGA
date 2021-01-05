@@ -1,8 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 15:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:17. Copyright (c) David J Turner
 
 import os
 import warnings
+from functools import wraps
 from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
 from typing import Tuple
@@ -87,6 +88,8 @@ def sas_call(sas_func):
     with the Sun Grid Engine.
     :return:
     """
+
+    @wraps(sas_func)
     def wrapper(*args, **kwargs):
         # The first argument of all of these SAS functions will be the source object (or a list of),
         # so rather than return them from the sas function I'll just access them like this.
