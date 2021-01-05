@@ -101,7 +101,7 @@ exclude_patterns = ['_build', '**.ipynb_checkpoints']
 autodoc_typehints = 'none'
 
 # This should make nbsphinx highlight notebooks better
-highlight_language = 'none'
+highlight_language = 'python3'
 
 
 # -- Options for HTML output -------------------------------------------------
