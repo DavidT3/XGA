@@ -10,7 +10,16 @@ Welcome to XMM: Generate and Analyse (XGA)'s documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   API <xga.rst>
+   xga.imagetools
+   xga.models
+   xga.products
+   xga.relations
+   xga.samples
+   xga.sas
+   xga.sources
+   xga.sourcetools
+   xga.tests
+   xga.xspec
 
 Indices and tables
 ==================
