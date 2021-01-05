@@ -1,8 +1,5 @@
-xga.samples package
-===================
-
-Submodules
-----------
+xga.samples
+===========
 
 xga.samples.base module
 -----------------------

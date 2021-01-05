@@ -1,8 +1,5 @@
-xga.relations package
-=====================
-
-Subpackages
------------
+xga.relations
+=============
 
 .. toctree::
    :maxdepth: 4

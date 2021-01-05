@@ -1,8 +1,5 @@
-xga.models package
-==================
-
-Submodules
-----------
+xga.models
+==========
 
 xga.models.density module
 -------------------------

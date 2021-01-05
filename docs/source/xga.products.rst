@@ -1,8 +1,5 @@
-xga.products package
-====================
-
-Submodules
-----------
+xga.products
+============
 
 xga.products.base module
 ------------------------
@@ -52,11 +49,3 @@ xga.products.spec module
    :undoc-members:
    :show-inheritance:
 
-
-Module contents
----------------
-
-.. automodule:: xga.products
-   :members:
-   :undoc-members:
-   :show-inheritance:

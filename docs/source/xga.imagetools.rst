@@ -1,8 +1,5 @@
-xga.imagetools package
-======================
-
-Submodules
-----------
+xga.imagetools
+==============
 
 xga.imagetools.deproj module
 ----------------------------
@@ -37,10 +34,3 @@ xga.imagetools.psf module
    :show-inheritance:
 
 
-Module contents
----------------
-
-.. automodule:: xga.imagetools
-   :members:
-   :undoc-members:
-   :show-inheritance:
