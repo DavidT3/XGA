@@ -4,6 +4,6 @@ Tutorials
 .. toctree::
    :maxdepth: 1
 
-    Basics for Beginners <example_notebooks/general_demo.ipynb>
+    Basics for Beginners <notebooks/general_demo.ipynb>
 
 
