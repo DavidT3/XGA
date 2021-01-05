@@ -96,6 +96,9 @@ templates_path = ['_templates']
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
 
+# This should turn off including typehints in the function signatures in autodoc. That information is already in 
+#  the docstring and can look extremely confusing
+autodoc_typehints = 'none'
 
 # -- Options for HTML output -------------------------------------------------
 
