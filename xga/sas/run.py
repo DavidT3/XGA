@@ -31,6 +31,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     This function is called for the local compute option, and runs the passed command in a Popen shell.
     It then creates an appropriate product object, and passes it back to the callback function of the Pool
     it was called from.
+    
     :param str cmd: SAS command to be executed on the command line.
     :param str p_type: The product type that will be produced by this command.
     :param str p_path: The final output path of the product.
