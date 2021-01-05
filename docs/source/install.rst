@@ -10,11 +10,13 @@ The Module
 XGA has been uploaded to PyPi, so you can simply run:
 
 .. code-block::
+
     pip install xga
 
 Alternatively, to get the current working version from the git repository run:
 
 .. code-block::
+
     git clone https://github.com/DavidT3/XGA
     cd XGA
     python setup.py install
