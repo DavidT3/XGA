@@ -13,6 +13,7 @@ Welcome to XMM: Generate and Analyse (XGA)'s documentation!
    Introduction <intro.rst>
    Installation <install.rst>
    Tutorials <tutorials.rst>
+   Advanced Tutorials <advanced_tutorials.rst>
    Under the Hood <techniques.rst>
    XGA Classes and Functions <xga.rst>
    Getting Support <support.rst>
