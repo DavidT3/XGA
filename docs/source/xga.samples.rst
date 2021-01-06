@@ -9,18 +9,18 @@ samples.base module
    :undoc-members:
    :show-inheritance:
 
-samples.extended module
------------------------
-
-.. automodule:: xga.samples.extended
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 samples.general module
 ----------------------
 
 .. automodule:: xga.samples.general
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+samples.extended module
+-----------------------
+
+.. automodule:: xga.samples.extended
    :members:
    :undoc-members:
    :show-inheritance:
