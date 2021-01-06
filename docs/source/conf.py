@@ -99,6 +99,8 @@ exclude_patterns = ['_build', '**.ipynb_checkpoints']
 # This should turn off including typehints in the function signatures in autodoc. That information is already in 
 #  the docstring and can look extremely confusing
 autodoc_typehints = 'none'
+# This will make sure the classes aren't sorted in alphabetical order
+autodoc_member_order = 'bysource'
 
 # This should make nbsphinx highlight notebooks better
 highlight_language = 'ipython3'
