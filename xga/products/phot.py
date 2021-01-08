@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 18:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/01/2021, 15:25. Copyright (c) David J Turner
 
 
 import warnings
@@ -7,7 +7,7 @@ from typing import Tuple, List, Union
 
 import numpy as np
 from astropy import wcs
-from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError
+from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError, Unit
 from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize, BaseStretch
 from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
@@ -19,7 +19,7 @@ from scipy.signal import fftconvolve
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
 from ..sourcetools import ang_to_rad
-from ..utils import xmm_sky, find_all_wcs
+from ..utils import xmm_sky, xmm_det, find_all_wcs
 
 
 class Image(BaseProduct):
@@ -287,18 +287,26 @@ class Image(BaseProduct):
             self._read_wcs_on_demand()
         return self._header
 
-    def coord_conv(self, coords: Quantity, output_unit: UnitBase) -> Quantity:
+    def coord_conv(self, coords: Quantity, output_unit: Union[Unit, str]) -> Quantity:
         """
         This will use the loaded WCSes, and astropy coordinates (including custom ones defined for this module),
         to perform common coordinate conversions for this product object.
 
-        :param coords: The input coordinates quantity to convert, in units of either deg,
+        :param Quantity coords: The input coordinates quantity to convert, in units of either deg,
             pix, xmm_sky, or xmm_det (xmm_sky and xmm_det are defined for this module).
-        :param output_unit: The astropy unit to convert to, can be either deg, pix, xmm_sky, or
+        :param Unit/str output_unit: The astropy unit to convert to, can be either deg, pix, xmm_sky, or
             xmm_det (xmm_sky and xmm_det are defined for this module).
         :return: The converted coordinates.
         :rtype: Quantity
         """
+        # If a string representation was passed, we make it an astropy unit
+        if isinstance(output_unit, str) and output_unit not in ['xmm_sky', 'xmm_det']:
+            output_unit = Unit(output_unit)
+        elif isinstance(output_unit, str) and output_unit == 'xmm_sky':
+            output_unit = xmm_sky
+        elif isinstance(output_unit, str) and output_unit == 'xmm_det':
+            output_unit = xmm_det
+
         allowed_units = ["deg", "xmm_sky", "xmm_det", "pix"]
         if coords.unit.is_equivalent("deg"):
             coords = coords.to("deg")
