@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2021, 19:42. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -31,7 +31,7 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], reg_type: str, lum_en:
         then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
     """
-    allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
+    allowed_bounds = ["region", "r2500", "r500", "r200", "custom", "point"]
     # This function supports passing both individual sources and samples of sources, but I do require that
     #  the sources object is iterable
     if isinstance(sources, BaseSource):

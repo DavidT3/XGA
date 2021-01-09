@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/01/2021, 14:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2021, 19:42. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -76,7 +76,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
-    allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
+    allowed_bounds = ["region", "r2500", "r500", "r200", "custom", "point"]
     sources = _spec_setup(sources, reg_type, allowed_bounds, disable_progress)
 
     # Define the various SAS commands that need to be populated, for a useful spectrum you also need ARF/RMF

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2021, 19:42. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List
@@ -334,11 +334,11 @@ class PointSource(BaseSource):
         if point_radius is not None and point_radius.unit.is_equivalent("kpc"):
             rad = rad_to_ang(point_radius, self._redshift, self._cosmo).to("deg")
             self._custom_region_radius = rad
-            self._radii["custom"] = self._custom_region_radius
+            self._radii["point"] = self._custom_region_radius
             self._rad_info = True
         elif point_radius is not None and not point_radius.unit.is_equivalent("kpc"):
             self._custom_region_radius = point_radius.to("deg")
-            self._radii["custom"] = self._custom_region_radius
+            self._radii["point"] = self._custom_region_radius
             self._rad_info = True
 
         if self._redshift is not None and point_radius.unit.is_equivalent("kpc"):
@@ -352,7 +352,7 @@ class PointSource(BaseSource):
         # Here we automatically clean the observations, to make sure the point source does actually lie
         #  on the detector and not just near it
         # Use a pretty harsh acceptance fraction
-        reject_dict = self.obs_check("custom", 0.9)
+        reject_dict = self.obs_check("point", 0.9)
         if len(reject_dict) != 0:
             # Use the source method to remove data we've decided isn't worth keeping
             self.disassociate_obs(reject_dict)
