@@ -10,3 +10,5 @@ Planned XGA Features
 * **Source Finder** -
 
 * **More XSPEC Models** - Including a two temperature APEC model, and support for custom user defined models
+
+* **EMCEE scaling relation fitter** -
