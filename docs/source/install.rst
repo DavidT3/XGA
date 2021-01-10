@@ -84,3 +84,10 @@ all the observations it can find (based on your entries in the configuration fil
 lists present, and record the pointing RA and DEC. *This can take a while*, but will only take that long on the first
 run. The module will check the census against your observation directory and see if it needs to be updated on
 every run.
+
+Blacklisting ObsIDs
+-------------------
+
+If you don't wish your analyses to include certain ObsIDs, then you can 'blacklist' them and remove them from all
+consideration, you simply need to add the ObsID to 'blacklist.csv', which is located in the same directory as the
+configuration file. If you need to know where this configuration file is located, import CONFIG_FIlE from xga.utils.
