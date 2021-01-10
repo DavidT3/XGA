@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 20:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2021, 14:20. Copyright (c) David J Turner
 
 from subprocess import Popen, PIPE
 
@@ -16,7 +16,7 @@ def nh_lookup(coord_pair: Quantity) -> ndarray:
     Uses HEASOFT to lookup hydrogen column density for given coordinates.
 
     :param Quantity coord_pair: An astropy quantity with RA and DEC of interest.
-    :return : Average and weighted average nH values (in units of cm^-2)
+    :return: Average and weighted average nH values (in units of cm$^{-2}$)
     :rtype: ndarray
     """
     # Apparently minimal type-checking is the Python way, but for some reason this heasoft command fails if

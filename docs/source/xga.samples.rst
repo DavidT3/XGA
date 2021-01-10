@@ -1,46 +1,34 @@
-xga.samples package
-===================
+samples
+=======
 
-Submodules
-----------
-
-xga.samples.base module
------------------------
+samples.base module
+-------------------
 
 .. automodule:: xga.samples.base
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.samples.extended module
----------------------------
-
-.. automodule:: xga.samples.extended
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-xga.samples.general module
---------------------------
+samples.general module
+----------------------
 
 .. automodule:: xga.samples.general
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.samples.point module
-------------------------
+samples.extended module
+-----------------------
 
-.. automodule:: xga.samples.point
+.. automodule:: xga.samples.extended
    :members:
    :undoc-members:
    :show-inheritance:
 
+samples.point module
+--------------------
 
-Module contents
----------------
-
-.. automodule:: xga.samples
+.. automodule:: xga.samples.point
    :members:
    :undoc-members:
    :show-inheritance:

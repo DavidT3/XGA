@@ -1,62 +1,51 @@
-xga.products package
-====================
+products
+========
 
-Submodules
-----------
-
-xga.products.base module
-------------------------
+products.base module
+--------------------
 
 .. automodule:: xga.products.base
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.products.misc module
-------------------------
+products.misc module
+--------------------
 
 .. automodule:: xga.products.misc
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.products.phot module
-------------------------
+products.phot module
+--------------------
 
 .. automodule:: xga.products.phot
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.products.profile module
----------------------------
+products.profile module
+-----------------------
 
 .. automodule:: xga.products.profile
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.products.relation module
-----------------------------
+products.relation module
+------------------------
 
 .. automodule:: xga.products.relation
    :members:
    :undoc-members:
    :show-inheritance:
 
-xga.products.spec module
-------------------------
+products.spec module
+--------------------
 
 .. automodule:: xga.products.spec
    :members:
    :undoc-members:
    :show-inheritance:
 
-
-Module contents
----------------
-
-.. automodule:: xga.products
-   :members:
-   :undoc-members:
-   :show-inheritance:

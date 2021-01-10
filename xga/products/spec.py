@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:35. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2021, 19:42. Copyright (c) David J Turner
 
 
 import os
@@ -65,7 +65,7 @@ class Spectrum(BaseProduct):
             self._usable = False
             self._why_unusable.append("BackARFPathDoesNotExist")
 
-        allowed_regs = ["region", "r2500", "r500", "r200", "custom", "annular"]
+        allowed_regs = ["region", "r2500", "r500", "r200", "custom", "annular", 'point']
         if reg_type in allowed_regs:
             self._reg_type = reg_type
         else:

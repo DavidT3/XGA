@@ -10,11 +10,12 @@ Welcome to XMM: Generate and Analyse (XGA)'s documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   API <xga.rst>
+   Introduction <intro.rst>
+   Installation <install.rst>
+   Tutorials <tutorials.rst>
+   Advanced Tutorials <advanced_tutorials.rst>
+   Under the Hood <techniques.rst>
+   XGA Classes and Functions <xga.rst>
+   Planned Features <future.rst>
+   Getting Support <support.rst>
 
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

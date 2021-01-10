@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 20:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2021, 21:53. Copyright (c) David J Turner
 
 import json
 import os
@@ -291,7 +291,7 @@ else:
     all_changed = all([xga_conf["XMM_FILES"][key] != XMM_FILES[key] for key in keys_to_check])
     if not all_changed:
         raise XGAConfigError("Some events file paths (or the root_xmm_dir) in the config have not "
-                             "been changed from default")
+                             "been changed from default, please configure {} to match your setup".format(CONFIG_FILE))
     elif not os.path.exists(xga_conf["XMM_FILES"]["root_xmm_dir"]):
         raise FileNotFoundError("That root_xmm_dir does not appear to exist, "
                                 "if it an SFTP mount check the connection.")

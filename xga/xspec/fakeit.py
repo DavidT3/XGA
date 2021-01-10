@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2021, 19:42. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -34,7 +34,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str,
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     """
     # Again these checking stages are basically copied from another function, I'm feeling lazy
-    allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
+    allowed_bounds = ["region", "r2500", "r500", "r200", "custom", "point"]
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2021, 19:42. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1025,7 +1025,7 @@ class BaseSource:
             obs_id = None
 
         # The search radius won't be used by the user, just peak finding solutions
-        allowed_rtype = ["r2500", "r500", "r200", "region", "custom", "search"]
+        allowed_rtype = ["r2500", "r500", "r200", "region", "custom", "search", "point"]
         if type(self) == BaseSource:
             raise TypeError("BaseSource class does not have the necessary information "
                             "to select a source region.")
@@ -1320,7 +1320,7 @@ class BaseSource:
 
             return shape_str
 
-        allowed_rtype = ["r2500", "r500", "r200", "region", "custom"]
+        allowed_rtype = ["r2500", "r500", "r200", "region", "custom", "point"]
 
         if output_unit == xmm_det:
             c_str = "DETX,DETY"
@@ -1382,7 +1382,7 @@ class BaseSource:
         return self._nH
 
     @property
-    def redshift(self):
+    def redshift(self) -> float:
         """
         Property getter for the redshift of this source object.
 
@@ -1392,14 +1392,14 @@ class BaseSource:
         return self._redshift
 
     @property
-    def on_axis_obs_ids(self):
+    def on_axis_obs_ids(self) -> list:
         """
         This method returns an array of ObsIDs that this source is approximately on axis in.
 
         :return: ObsIDs for which the source is approximately on axis.
-        :rtype: np.ndarray
+        :rtype: list
         """
-        return self._obs[self._onaxis]
+        return self._onaxis
 
     @property
     def cosmo(self) -> Cosmology:

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/01/2021, 10:22. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 from .base import BaseSample
 from ..exceptions import NoValidObservationsError
-from ..imagetools.psf import rl_psf
 from ..sources.general import PointSource
 
 
@@ -84,6 +83,8 @@ class PointSample(BaseSample):
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
         if psf_corr:
+            # Trying to see if this stops a circular import issue I've been having
+            from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
     @property

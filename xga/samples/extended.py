@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2021, 16:51. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 from .base import BaseSample
 from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError
-from ..imagetools.psf import rl_psf
 from ..relations.fit import *
 from ..sources.extended import GalaxyCluster
 
@@ -132,6 +131,7 @@ class ClusterSample(BaseSample):
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
         if psf_corr:
+            from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
     @property
@@ -467,8 +467,8 @@ class ClusterSample(BaseSample):
         else:
             rn = rad_name
 
-        x_name = r"T$_{x," + rn + '}$'
-        y_name = "E(z)$^{-1}$M$_{g," + rn + "}$"
+        x_name = r"T$_{\rm{x}," + rn + '}$'
+        y_name = r"E(z)$^{-1}$M$_{\rm{g}," + rn + "}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, gm_data, gm_err, t_data, t_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name, x_name=x_name)
@@ -519,7 +519,7 @@ class ClusterSample(BaseSample):
             rn = rad_name[1:]
         else:
             rn = rad_name
-        y_name = "E(z)$^{-1}$L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+        y_name = r"E(z)$^{-1}$L$_{\rm{x}," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, r_data, r_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name,
@@ -573,8 +573,8 @@ class ClusterSample(BaseSample):
         else:
             rn = rad_name
 
-        x_name = r"T$_{x," + rn + '}$'
-        y_name = "E(z)$^{-1}$L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+        x_name = r"T$_{\rm{x}," + rn + '}$'
+        y_name = r"E(z)$^{-1}$L$_{\rm{x}," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, t_data, t_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name,
