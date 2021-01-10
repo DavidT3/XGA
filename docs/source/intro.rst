@@ -15,4 +15,5 @@ your analysis, as all XMM products and fit results are read into an XGA source s
 This module also supports more complex analyses for specific object types; the easy generation of scaling relations,
 the measurement of gas masses for galaxy clusters, and the PSF correction of images for instance.
 
-
+If wish to contribute to XGA, or have feature suggestions, or any comments at all, then please go to the
+"Getting Support" section and submit an issue on GitHub/send me an email, I'll be happy to hear from you!
