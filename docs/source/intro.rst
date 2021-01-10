@@ -1,12 +1,18 @@
 Introduction to XGA
 ===================
 
-XGA is a Python package to explore and analyse X-ray sources detected in XMM-Newton observations. When a source is
-declared, XGA finds every observation it appears in, and all analysis is performed on all available data.
-It provides an easy to use Python interface with XMM's Science Analysis System (SAS), enabling independent products to be generated in parallel on
-local computers and HPCs. XGA also makes it easy to generate products for samples of objects.
+XGA is a Python module designed to make it easy to analyse X-ray sources that have been observed by the
+XMM-Newton Space telescope. It is based around declaring different types of source and sample objects which
+correspond to real X-ray sources, finding all available data, and then insulating the user from the tedious
+generation and basic analysis of X-ray data products.
 
-XGA also provides a similar interface with the popular X-ray spectrum fitting tool XSPEC, and makes it extremely
-simple to create an XSPEC script for whatever source you are analysing, run that script, and then read the results
-back into Python. The XSPEC interface will also run multiple fits in parallel.
+XGA will generate photometric products and spectra for individual sources, or whole samples, with just a few lines
+of code. It is not a pipeline itself, but pipelines for complex analysis can easily be built on top of it. XGA
+provides an easy to use (and parallelised) Python interface with XMM's Science Analysis System (SAS), as well as
+with XSPEC. A major goal of this module is that you shouldn't need to leave a Python environment at any point during
+your analysis, as all XMM products and fit results are read into an XGA source storage structure.
+
+This module also supports more complex analyses for specific object types; the easy generation of scaling relations,
+the measurement of gas masses for galaxy clusters, and the PSF correction of images for instance.
+
 
