@@ -12,3 +12,6 @@ Planned XGA Features
 * **More XSPEC Models** - Including a two temperature APEC model, and support for custom user defined models
 
 * **EMCEE scaling relation fitter** -
+
+* **Ability to save ScalingRelation objects** -
+
