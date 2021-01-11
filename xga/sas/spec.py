@@ -1,12 +1,13 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/11/2020, 12:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/01/2021, 18:01. Copyright (c) David J Turner
 
 import os
 import warnings
 from shutil import rmtree
-from typing import Union
+from typing import Union, Tuple, List
 
 import numpy as np
+from astropy.units import Quantity
 from tqdm import tqdm
 
 from .misc import cifbuild
@@ -15,10 +16,25 @@ from .. import OUTPUT, NUM_CORES
 from ..samples.base import BaseSample
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
 from ..sources.base import NullSource
-from ..utils import xmm_sky
+from ..utils import xmm_sky, RAD_LABELS
 
 
-def _spec_setup(sources, reg_type, allowed_bounds, disable_progress):
+def _spec_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
+                inner_radius: Union[str, Quantity], disable_progress: bool) \
+        -> Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]:
+    """
+    The preparation and value checking stage for SAS spectrum generation.
+
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
+    :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
+        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')).
+    :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
+        the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
+        default this is zero arcseconds, resulting in a circular spectrum.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
+    :return: The source objects, a list of inner radius quantities,
+    :rtype: Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]
+    """
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
@@ -28,30 +44,86 @@ def _spec_setup(sources, reg_type, allowed_bounds, disable_progress):
     if isinstance(sources, NullSource):
         raise TypeError("You cannot create spectra of a NullSource")
 
+    # Checking that the user hasn't passed BaseSources
     if not all([type(src) != BaseSource for src in sources]):
         raise TypeError("You cannot generate spectra from a BaseSource object, really you shouldn't be using "
                         "them at all, they are mostly useful as a superclass.")
-    elif not all([src.detected for src in sources]):
+
+    # Issuing a warning to the user that one or one sources have not been detected
+    if not all([src.detected for src in sources]):
         warnings.warn("Not all of these sources have been detected, the spectra generated may not be helpful.")
-    elif reg_type not in allowed_bounds:
-        raise ValueError("The only valid choices for reg_type are:\n {}".format(", ".join(allowed_bounds)))
-    elif reg_type in ["r2500", "r500", "r200"] and not all([type(src) == GalaxyCluster for src in sources]):
-        raise TypeError("You cannot use ExtendedSource classes with {}, "
-                        "they have no overdensity radii.".format(reg_type))
+
+    # Checking that inner radii that have been passed into the spectrum generation aren't nonsense
+    if isinstance(inner_radius, str) and inner_radius not in RAD_LABELS:
+        raise ValueError("You have passed a radius name rather than a value for 'inner_radius', but it is "
+                         "not a valid name, please use one of the following:\n {}".format(", ".join(RAD_LABELS)))
+
+    elif isinstance(inner_radius, str) and inner_radius in ["r2500", "r500", "r200"] and \
+            not all([type(src) == GalaxyCluster for src in sources]):
+        raise TypeError("The {} radius is only valid for GalaxyCluster objects".format(inner_radius))
+
+    # One radius can be passed for a whole sample, but this checks to make sure that if there are multiple sources,
+    #  and multiple radii have been passed, there are the same number of sources and radii
+    elif isinstance(inner_radius, Quantity) and len(sources) != 1 and not inner_radius.isscalar \
+            and len(sources) != len(inner_radius):
+        raise ValueError("Your sample has {s} sources, but your inner_radius variable only has {i} entries. Please "
+                         "pass only one inner_radius or the same number as there are "
+                         "sources".format(s=len(sources), i=len(inner_radius)))
+
+    # Checking that outer_radius radii that have been passed into the spectrum generation aren't nonsense
+    if isinstance(outer_radius, str) and outer_radius not in RAD_LABELS:
+        raise ValueError("You have passed a radius name rather than a value for 'outer_radius', but it is "
+                         "not a valid name, please use one of the following:\n {}".format(", ".join(RAD_LABELS)))
+    elif isinstance(outer_radius, str) and outer_radius in ["r2500", "r500", "r200"] and \
+            not all([type(src) == GalaxyCluster for src in sources]):
+        raise TypeError("The {} radius is only valid for GalaxyCluster objects".format(outer_radius))
+    elif isinstance(outer_radius, Quantity) and len(sources) != 1 and not outer_radius.isscalar \
+            and len(sources) != len(outer_radius):
+        raise ValueError("Your sample has {s} sources, but your outer_radius variable only has {o} entries. Please "
+                         "pass only one outer_radius or the same number as there are "
+                         "sources".format(s=len(sources), o=len(outer_radius)))
+
+    # A crude way to store the radii but I'm tired and this will work fine
+    final_inner = []
+    final_outer = []
+    # I need to convert the radii to the same units and compare them, and to make sure they
+    #  are actually in distance units. The distance unit checking is done by convert_radius
+    for s_ind, src in enumerate(sources):
+        # Converts the inner and outer radius for this source into the same unit
+        if isinstance(outer_radius, str):
+            cur_out_rad = src.get_radius(outer_radius, 'arcsec')
+        elif outer_radius.isscalar:
+            cur_out_rad = src.convert_radius(outer_radius, 'arcsec')
+        else:
+            cur_out_rad = src.convert_radius(outer_radius[s_ind], 'arcsec')
+
+        if isinstance(inner_radius, str):
+            cur_inn_rad = src.get_radius(inner_radius, 'arcsec')
+        elif inner_radius.isscalar:
+            cur_inn_rad = src.convert_radius(inner_radius, 'arcsec')
+        else:
+            cur_inn_rad = src.convert_radius(inner_radius[s_ind], 'arcsec')
+
+        # Then we can check to make sure that the outer radius is larger than the inner radius
+        if cur_inn_rad > cur_out_rad:
+            raise ValueError("The inner_radius of {s} is greater than the outer_radius".format(s=src.name))
+        else:
+            final_inner.append(cur_inn_rad)
+            final_outer.append(cur_out_rad)
 
     # Have to make sure that all observations have an up to date cif file.
     cifbuild(sources, disable_progress=disable_progress)
 
-    return sources
+    return sources, final_inner, final_outer
 
 
 def _spec_cmds():
     pass
 
 
-# TODO Add an option to generate core-excised spectra.
 @sas_call
-def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, group_spec: bool = True,
+def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
+                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                       min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
                       num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
@@ -60,8 +132,13 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
     observation, will have a spectrum generated using the specified region type as as boundary. It is possible
     to generate both grouped and ungrouped spectra using this function, with the degree of grouping set
     by the min_counts, min_sn, and oversample parameters.
-    :param Union[BaseSource, BaseSample] sources: A single source object, or a sample of sources.
-    :param str reg_type: Tells the method what region source you want to use, for instance r500 or r200.
+
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
+    :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
+        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')).
+    :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
+        the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
+        default this is zero arcseconds, resulting in a circular spectrum.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
     To disable minimum counts set this parameter to None.
@@ -75,8 +152,10 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
     90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
-    allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
-    sources = _spec_setup(sources, reg_type, allowed_bounds, disable_progress)
+    sources = _spec_setup(sources, outer_radius, inner_radius, disable_progress)
+
+    import sys
+    sys.exit()
 
     # Define the various SAS commands that need to be populated, for a useful spectrum you also need ARF/RMF
     spec_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; evselect table={e} withspectrumset=yes " \
@@ -123,17 +202,17 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
 
             # Got to check if this spectrum already exists
             exists = [match for match in source.get_products("spectrum", obs_id, inst, just_obj=False)
-                      if reg_type in match]
+                      if outer_radius in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
-            if reg_type == "region" and source.source_back_regions("region", obs_id)[0] is None:
+            if outer_radius == "region" and source.source_back_regions("region", obs_id)[0] is None:
                 continue
 
             # This method returns a SAS expression for the source and background regions - excluding interlopers
-            reg, b_reg = source.get_sas_region(reg_type, obs_id, inst, xmm_sky)
+            reg, b_reg = source.get_sas_region(outer_radius, obs_id, inst, xmm_sky)
 
             # Some settings depend on the instrument, XCS uses different patterns for different instruments
             if "pn" in inst:
@@ -156,10 +235,10 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
             evt_list = pack[-1]
             # Sets up the file names of the output files
             dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source_name)
-            spec = "{o}_{i}_{n}_{bt}_spec.fits".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
-            b_spec = "{o}_{i}_{n}_{bt}_backspec.fits".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
-            arf = "{o}_{i}_{n}_{bt}.arf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
-            b_arf = "{o}_{i}_{n}_{bt}_back.arf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
+            spec = "{o}_{i}_{n}_{bt}_spec.fits".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
+            b_spec = "{o}_{i}_{n}_{bt}_backspec.fits".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
+            arf = "{o}_{i}_{n}_{bt}.arf".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
+            b_arf = "{o}_{i}_{n}_{bt}_back.arf".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
             ccf = dest_dir + "ccf.cif"
 
             # Fills out the evselect command to make the main and background spectra
@@ -173,8 +252,8 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
                 rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source_name, bt="universal")
                 b_rmf = rmf
             else:
-                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
-                b_rmf = "{o}_{i}_{n}_{bt}_back.rmf".format(o=obs_id, i=inst, n=source_name, bt=reg_type)
+                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
+                b_rmf = "{o}_{i}_{n}_{bt}_back.rmf".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
 
             if one_rmf and not os.path.exists(dest_dir + rmf):
                 cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
@@ -213,7 +292,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], reg_type: str, gro
             os.makedirs(dest_dir)
 
             final_paths.append(os.path.join(OUTPUT, obs_id, spec))
-            extra_info.append({"reg_type": reg_type, "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
+            extra_info.append({"reg_type": outer_radius, "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
                                "arf_path": os.path.join(OUTPUT, obs_id, arf),
                                "b_spec_path": os.path.join(OUTPUT, obs_id, b_spec),
                                "b_rmf_path": os.path.join(OUTPUT, obs_id, b_rmf),
