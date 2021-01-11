@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/01/2021, 17:05. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1562,6 +1562,39 @@ class BaseSource:
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
+    def convert_radius(self, radius: Quantity, out_unit: Union[Unit, str] = 'deg') -> Quantity:
+        """
+        A simple method to convert radii between different distance units, it automatically checks whether
+        the requested conversion is possible, given available information. For instance it would fail if you
+        requested a conversion from arcseconds to a proper distance if no redshift information were available.
+
+        :param Quantity radius: The radius to convert to a new unit.
+        :param Unit/str out_unit: The unit to convert the input radius to.
+        :return: The converted radius
+        :rtype: Quantity
+        """
+        # If a string representation was passed, we make it an astropy unit
+        if isinstance(out_unit, str):
+            out_unit = Unit(out_unit)
+
+        if out_unit.is_equivalent('kpc') and self._redshift is None:
+            raise UnitConversionError("You cannot convert to this unit without redshift information.")
+
+        print(radius.unit, out_unit)
+
+        if radius.unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
+            out_rad = radius.to(out_unit)
+        elif radius.unit.is_equivalent('deg') and out_unit.is_equivalent('kpc'):
+            out_rad = ang_to_rad(radius, self._redshift, self._cosmo).to(out_unit)
+        elif radius.unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
+            out_rad = radius.to(out_unit)
+        elif radius.unit.is_equivalent('kpc') and out_unit.is_equivalent('deg'):
+            out_rad = rad_to_ang(radius, self._redshift, self._cosmo).to(out_unit)
+        else:
+            raise UnitConversionError("Cannot understand {} as a distance unit".format(str(out_unit)))
+
+        return out_rad
+
     def get_radius(self, rad_name: str, out_unit: Union[Unit, str] = 'deg') -> Quantity:
         """
         Allows a radius associated with this source to be retrieved in specified distance units. Note
@@ -1573,27 +1606,13 @@ class BaseSource:
         :return: The desired radius in the desired units.
         :rtype: Quantity
         """
-        # If a string representation was passed, we make it an astropy unit
-        if isinstance(out_unit, str):
-            out_unit = Unit(out_unit)
 
         # In case somebody types in R500 rather than r500 for instance.
         rad_name = rad_name.lower()
         if rad_name not in self._radii:
             raise ValueError("There is no {r} radius associated with this object.".format(r=rad_name))
-        elif out_unit.is_equivalent('kpc') and self._redshift is None:
-            raise UnitConversionError("You cannot convert to this unit without redshift information.")
 
-        if self._radii[rad_name].unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
-            out_rad = self._radii[rad_name].to(out_unit)
-        elif self._radii[rad_name].unit.is_equivalent('deg') and out_unit.is_equivalent('kpc'):
-            out_rad = ang_to_rad(self._radii[rad_name], self._redshift, self._cosmo).to(out_unit)
-        elif self._radii[rad_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
-            out_rad = self._radii[rad_name].to(out_unit)
-        elif self._radii[rad_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
-            out_rad = rad_to_ang(self._radii[rad_name], self._redshift, self._cosmo).to(out_unit)
-        else:
-            raise UnitConversionError("Cannot understand {} as a distance unit".format(str(out_unit)))
+        out_rad = self.convert_radius(self._radii[rad_name], out_unit)
 
         return out_rad
 
