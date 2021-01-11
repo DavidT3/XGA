@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/11/2020, 16:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/01/2021, 17:06. Copyright (c) David J Turner
 
 import json
 import os
@@ -77,6 +77,9 @@ ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
 # Conversion from Hydrogen number density to electron number density
 NHC = {"angr": 1.199}
 XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
+
+# A centralised constant to define what radius labels are allowed
+RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
 
 
 def xmm_obs_id_test(test_string: str) -> bool:

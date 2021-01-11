@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/01/2021, 17:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/01/2021, 17:06. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1579,8 +1579,6 @@ class BaseSource:
 
         if out_unit.is_equivalent('kpc') and self._redshift is None:
             raise UnitConversionError("You cannot convert to this unit without redshift information.")
-
-        print(radius.unit, out_unit)
 
         if radius.unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
             out_rad = radius.to(out_unit)
