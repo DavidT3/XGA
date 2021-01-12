@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/01/2021, 17:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/01/2021, 09:46. Copyright (c) David J Turner
 
 import json
 import os
@@ -290,8 +290,8 @@ else:
         raise XGAConfigError("Some events file paths (or the root_xmm_dir) in the config have not "
                              "been changed from default")
     elif not os.path.exists(xga_conf["XMM_FILES"]["root_xmm_dir"]):
-        raise FileNotFoundError("That root_xmm_dir does not appear to exist, "
-                                "if it an SFTP mount check the connection.")
+        raise FileNotFoundError("root_xmm_dir={d} does not appear to exist, if it an SFTP mount check the "
+                                "connection.".format(d=xga_conf["XMM_FILES"]["root_xmm_dir"]))
 
     # Now I do the same for the XGA_SETUP section
     keys_to_check = ["xga_save_path"]
