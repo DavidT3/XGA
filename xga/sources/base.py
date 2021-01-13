@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2021, 12:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2021, 14:46. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1429,46 +1429,68 @@ class BaseSource:
 
         return np.array(self._interloper_regions)[int_within]
 
-    def get_annular_sas_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
-                               output_unit: Union[UnitBase, str] = xmm_sky, interloper_regions: np.ndarray = None,
-                               central_coord: Quantity = None) -> str:
+    @staticmethod
+    def _interloper_sas_string(reg: EllipseSkyRegion, im: Image, output_unit: Union[UnitBase, str]) -> str:
         """
-        A method to generate a SAS region string for an arbitrary circular annular region, with interloper sources
-        removed.
+        Converts ellipse sky regions into SAS region strings for use in SAS tasks.
 
-        :param Quantity inner_radius: The inner radius of the region you wish to generate in SAS.
-        :param Quantity outer_radius: The outer radius of the region you wish to generate in SAS.
+        :param EllipseSkyRegion reg: The interloper region to generate a SAS string for
+        :param Image im: The XGA image to use for coordinate conversion.
+        :param UnitBase/str output_unit: The output unit for this SAS region, either xmm_sky or xmm_det.
+        :return: The SAS string region for this interloper
+        :rtype: str
+        """
+
+        if output_unit == xmm_det:
+            c_str = "DETX,DETY"
+            raise NotImplementedError("This coordinate system is not yet supported, and isn't a priority. Please "
+                                      "submit an issue on https://github.com/DavidT3/XGA/issues if you particularly "
+                                      "want this.")
+        elif output_unit == xmm_sky:
+            c_str = "X,Y"
+        else:
+            raise NotImplementedError("Only detector and sky coordinates are currently "
+                                      "supported for generating SAS region strings.")
+
+        cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
+        sky_to_deg = sky_deg_scale(im, cen)
+        conv_cen = im.coord_conv(cen, output_unit)
+        # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
+        #  from degrees to XMM sky coordinates using the factor we calculated in the main function
+        w = reg.width.value / 2 / sky_to_deg
+        # We do the same for the height
+        h = reg.height.value / 2 / sky_to_deg
+        # The rotation angle from the region object is in degrees already
+        shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
+                                                                         cy=conv_cen[1].value, w=w, h=h,
+                                                                         rot=reg.angle.value)
+        return shape_str
+
+    def get_annular_sas_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
+                               output_unit: Union[UnitBase, str] = xmm_sky, rot_angle: Quantity = Quantity(0, 'deg'),
+                               interloper_regions: np.ndarray = None, central_coord: Quantity = None) -> str:
+        """
+        A method to generate a SAS region string for an arbitrary circular or elliptical annular region, with
+        interloper sources removed.
+
+        :param Quantity inner_radius: The inner radius/radii of the region you wish to generate in SAS, if the
+            quantity has multiple elements then an elliptical region will be generated, with the first element
+            being the inner radius on the semi-major axis, and the second on the semi-minor axis.
+        :param Quantity outer_radius: The inner outer_radius/radii of the region you wish to generate in SAS, if the
+            quantity has multiple elements then an elliptical region will be generated, with the first element
+            being the outer radius on the semi-major axis, and the second on the semi-minor axis.
         :param str obs_id: The ObsID of the observation you wish to generate the SAS region for.
         :param str inst: The instrument of the observation you to generate the SAS region for.
         :param UnitBase/str output_unit: The output unit for this SAS region, either xmm_sky or xmm_det.
         :param np.ndarray interloper_regions: The interloper regions to remove from the source region,
             default is None, in which case the function will run self.regions_within_radii.
+        :param Quantity rot_angle: The rotation angle of the source region, default is zero degrees.
         :param Quantity central_coord: The coordinate on which to centre the source region, default is
             None in which case the function will use the default_coord of the source object.
         :return: A string for use in a SAS routine that describes the source region, and the regions
             to cut out of it.
         :rtype: str
         """
-        def interloper_sas_string(reg: EllipseSkyRegion) -> str:
-            """
-            Converts ellipse sky regions into SAS region strings for use in SAS tasks.
-
-            :param EllipseSkyRegion reg: The interloper region to generate a SAS string for
-            :return: The SAS string region for this interloper
-            :rtype: str
-            """
-            cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
-            conv_cen = rel_im.coord_conv(cen, output_unit)
-            # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
-            #  from degrees to XMM sky coordinates using the factor we calculated in the main function
-            w = reg.width.value / 2 / sky_to_deg
-            # We do the same for the height
-            h = reg.height.value / 2 / sky_to_deg
-            # The rotation angle from the region object is in degrees already
-            shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
-                                                                             cy=conv_cen[1].value, w=w, h=h,
-                                                                             rot=reg.angle.value)
-            return shape_str
 
         if central_coord is None:
             central_coord = self._default_coord
@@ -1479,9 +1501,12 @@ class BaseSource:
         outer_radius = self.convert_radius(outer_radius, 'deg')
 
         # Then we can check to make sure that the outer radius is larger than the inner radius
-        if inner_radius >= outer_radius:
-            raise ValueError("A SAS region for {s} cannot have an inner_radius larger than or equal to its "
+        if inner_radius.isscalar and inner_radius >= outer_radius:
+            raise ValueError("A SAS circular region for {s} cannot have an inner_radius larger than or equal to its "
                              "outer_radius".format(s=self.name))
+        elif not inner_radius.isscalar and (inner_radius[0] >= outer_radius[0] or inner_radius[1] >= outer_radius[1]):
+            raise ValueError("A SAS elliptical region for {s} cannot have inner radii larger than or equal to its "
+                             "outer radii".format(s=self.name))
 
         if output_unit == xmm_det:
             c_str = "DETX,DETY"
@@ -1507,16 +1532,28 @@ class BaseSource:
         # If the user doesn't pass any regions, then we have to find them ourselves. I decided to allow this
         #  so that within_radii can just be called once externally for a set of ObsID-instrument combinations,
         #  like in evselect_spectrum for instance.
-        if interloper_regions is None:
+        if interloper_regions is None and inner_radius.isscalar:
             interloper_regions = self.regions_within_radii(inner_radius, outer_radius, deg_central_coord)
+        elif interloper_regions is None and not inner_radius.isscalar:
+            interloper_regions = self.regions_within_radii(min(inner_radius), max(outer_radius), deg_central_coord)
 
         # So now we convert our interloper regions into their SAS equivalents
-        sas_interloper = [interloper_sas_string(i) for i in interloper_regions]
+        sas_interloper = [self._interloper_sas_string(i, rel_im, output_unit) for i in interloper_regions]
 
-        # And we need to define a SAS string for the actual region of interest
-        sas_source_area = "(({t}) IN annulus({cx},{cy},{ri},{ro}))"
-        sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value, cy=xmm_central_coord[1].value,
-                                                 ri=inner_radius.value/sky_to_deg, ro=outer_radius.value/sky_to_deg)
+        if inner_radius.isscalar:
+            # And we need to define a SAS string for the actual region of interest
+            sas_source_area = "(({t}) IN annulus({cx},{cy},{ri},{ro}))"
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
+                                                     cy=xmm_central_coord[1].value, ri=inner_radius.value/sky_to_deg,
+                                                     ro=outer_radius.value/sky_to_deg)
+        else:
+            sas_source_area = "(({t}) IN elliptannulus({cx},{cy},{wi},{hi},{wo},{ho},{rot},{rot}))"
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
+                                                     cy=xmm_central_coord[1].value,
+                                                     wi=inner_radius[0].value/sky_to_deg,
+                                                     hi=inner_radius[1].value/sky_to_deg,
+                                                     wo=outer_radius[0].value/sky_to_deg,
+                                                     ho=outer_radius[1].value/sky_to_deg, rot=rot_angle.to('deg').value)
 
         # Combining the source region with the regions we need to cut out
         if len(sas_interloper) == 0:
