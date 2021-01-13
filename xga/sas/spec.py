@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/01/2021, 18:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2021, 17:27. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -11,16 +11,15 @@ from astropy.units import Quantity
 from tqdm import tqdm
 
 from .misc import cifbuild
-from .run import sas_call
 from .. import OUTPUT, NUM_CORES
 from ..samples.base import BaseSample
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
 from ..sources.base import NullSource
-from ..utils import xmm_sky, RAD_LABELS
+from ..utils import RAD_LABELS
 
 
 def _spec_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                inner_radius: Union[str, Quantity], disable_progress: bool) \
+                inner_radius: Union[str, Quantity], disable_progress: bool, obs_id: str) \
         -> Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]:
     """
     The preparation and value checking stage for SAS spectrum generation.
@@ -32,13 +31,10 @@ def _spec_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str,
         the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
         default this is zero arcseconds, resulting in a circular spectrum.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
+    :param str obs_id: Only used if the 'region' radius name is passed, the ObsID to retrieve the region for.
     :return: The source objects, a list of inner radius quantities,
     :rtype: Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]
     """
-    # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, BaseSource):
-        sources = [sources]
-
     # NullSources are not allowed to have spectra, as they can have any observations associated and thus won't
     #  necessarily overlap
     if isinstance(sources, NullSource):
@@ -90,23 +86,30 @@ def _spec_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str,
     #  are actually in distance units. The distance unit checking is done by convert_radius
     for s_ind, src in enumerate(sources):
         # Converts the inner and outer radius for this source into the same unit
-        if isinstance(outer_radius, str):
-            cur_out_rad = src.get_radius(outer_radius, 'arcsec')
+        if isinstance(outer_radius, str) and outer_radius != 'region':
+            cur_out_rad = src.get_radius(outer_radius, 'deg')
+        elif isinstance(outer_radius, str) and outer_radius == 'region':
+            reg = src.source_back_regions('region', obs_id)[0]
+            cur_out_rad = Quantity([reg.width.to('deg').value/2, reg.height.to('deg').value/2], 'deg')
         elif outer_radius.isscalar:
-            cur_out_rad = src.convert_radius(outer_radius, 'arcsec')
+            cur_out_rad = src.convert_radius(outer_radius, 'deg')
         else:
-            cur_out_rad = src.convert_radius(outer_radius[s_ind], 'arcsec')
+            cur_out_rad = src.convert_radius(outer_radius[s_ind], 'deg')
 
-        if isinstance(inner_radius, str):
-            cur_inn_rad = src.get_radius(inner_radius, 'arcsec')
+        # We need to check that the outer radius isn't region, because for region objects we ignore whatever
+        #  inner radius has been passed and just set it 0
+        if outer_radius == 'region':
+            cur_inn_rad = Quantity([0, 0], 'deg')
+        elif isinstance(inner_radius, str):
+            cur_inn_rad = src.get_radius(inner_radius, 'deg')
         elif inner_radius.isscalar:
-            cur_inn_rad = src.convert_radius(inner_radius, 'arcsec')
+            cur_inn_rad = src.convert_radius(inner_radius, 'deg')
         else:
-            cur_inn_rad = src.convert_radius(inner_radius[s_ind], 'arcsec')
+            cur_inn_rad = src.convert_radius(inner_radius[s_ind], 'deg')
 
         # Then we can check to make sure that the outer radius is larger than the inner radius
-        if cur_inn_rad > cur_out_rad:
-            raise ValueError("The inner_radius of {s} is greater than the outer_radius".format(s=src.name))
+        if outer_radius != 'region' and cur_inn_rad >= cur_out_rad:
+            raise ValueError("The inner_radius of {s} is greater than or equal to the outer_radius".format(s=src.name))
         else:
             final_inner.append(cur_inn_rad)
             final_outer.append(cur_out_rad)
@@ -121,7 +124,8 @@ def _spec_cmds():
     pass
 
 
-@sas_call
+# TODO Restore this decorator, specs won't actually be generated without it
+# @sas_call
 def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                       min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
@@ -135,7 +139,8 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
-        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')).
+        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+        'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
     :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
         the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
         default this is zero arcseconds, resulting in a circular spectrum.
@@ -152,10 +157,12 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
-    sources = _spec_setup(sources, outer_radius, inner_radius, disable_progress)
+    # This function supports passing both individual sources and sets of sources
+    if isinstance(sources, BaseSource):
+        sources = [sources]
 
-    import sys
-    sys.exit()
+    if outer_radius != 'region':
+        sources, inner_radii, outer_radii = _spec_setup(sources, outer_radius, inner_radius, disable_progress, '')
 
     # Define the various SAS commands that need to be populated, for a useful spectrum you also need ARF/RMF
     spec_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; evselect table={e} withspectrumset=yes " \
@@ -182,7 +189,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     # TODO Give myself cause to remove this by speeding up region string generation
     # This progress bar is being placed here because it can take QUITE a while to generate the SAS region strings
     spec_prep = tqdm(desc="Preparing evselect spectrum commands", total=len(sources), disable=disable_progress)
-    for source in sources:
+    for s_ind, source in enumerate(sources):
         # rmfgen and arfgen both take arguments that describe if something is an extended source or not,
         #  so we check the source type
         if isinstance(source, (ExtendedSource, GalaxyCluster)):
@@ -192,6 +199,17 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
         cmds = []
         final_paths = []
         extra_info = []
+
+        if outer_radius != 'region':
+            # Finding interloper regions within the radii we have specified has been put here because it all works in
+            #  degrees and as such only needs to be run once for all the different observations.
+            interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind],
+                                                             source.default_coord)
+            # This finds any regions which
+            back_inter_reg = source.regions_within_radii(outer_radii[s_ind]*source.background_radius_factors[0],
+                                                         outer_radii[s_ind]*source.background_radius_factors[1],
+                                                         source.default_coord)
+
         # Check which event lists are associated with each individual source
         for pack in source.get_products("events", just_obj=False):
             obs_id = pack[0]
@@ -200,19 +218,56 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             if not os.path.exists(OUTPUT + obs_id):
                 os.mkdir(OUTPUT + obs_id)
 
+            # TODO restore all this when new storage system is in place
+
             # Got to check if this spectrum already exists
-            exists = [match for match in source.get_products("spectrum", obs_id, inst, just_obj=False)
-                      if outer_radius in match]
-            if len(exists) == 1 and exists[0][-1].usable:
-                continue
+            # exists = [match for match in source.get_products("spectrum", obs_id, inst, just_obj=False)
+            #           if outer_radius in match]
+            # if len(exists) == 1 and exists[0][-1].usable:
+            #     continue
 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
-            if outer_radius == "region" and source.source_back_regions("region", obs_id)[0] is None:
-                continue
+            # if outer_radius == "region" and source.source_back_regions("region", obs_id)[0] is None:
+            #     continue
+
+            # Because the region will be different for each ObsID, I have to call the setup function here
+            if outer_radius == 'region':
+                interim_source, inner_radii, outer_radii = _spec_setup([source], outer_radius, inner_radius,
+                                                                       disable_progress, obs_id)
+                # Need the reg for central coordinates
+                reg = source.source_back_regions('region', obs_id)[0]
+                reg_cen_coords = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
+                # Pass the largest outer radius here, so we'll look for interlopers in a circle with the radius
+                #  being the largest axis of the ellipse
+                interloper_regions = source.regions_within_radii(inner_radii[0][0], max(outer_radii[0]), reg_cen_coords)
+                back_inter_reg = source.regions_within_radii(max(outer_radii[0]) * source.background_radius_factors[0],
+                                                             max(outer_radii[0]) * source.background_radius_factors[1],
+                                                             reg_cen_coords)
+
+                reg = source.get_annular_sas_region(inner_radii[0], outer_radii[0], obs_id, inst,
+                                                    interloper_regions=interloper_regions, central_coord=reg_cen_coords,
+                                                    rot_angle=reg.angle)
+                b_reg = source.get_annular_sas_region(outer_radii[0] * source.background_radius_factors[0],
+                                                      outer_radii[0] * source.background_radius_factors[1], obs_id,
+                                                      inst, interloper_regions=interloper_regions,
+                                                      central_coord=source.default_coord)
+
+            else:
+                reg = source.get_annular_sas_region(inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
+                                                    interloper_regions=interloper_regions,
+                                                    central_coord=source.default_coord)
+                b_reg = source.get_annular_sas_region(outer_radii[s_ind] * source.background_radius_factors[0],
+                                                      outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
+                                                      inst, interloper_regions=interloper_regions,
+                                                      central_coord=source.default_coord)
+
+            print(b_reg)
+            import sys
+            sys.exit()
 
             # This method returns a SAS expression for the source and background regions - excluding interlopers
-            reg, b_reg = source.get_sas_region(outer_radius, obs_id, inst, xmm_sky)
+            # reg, b_reg = source.get_sas_region(outer_radius, obs_id, inst, xmm_sky)
 
             # Some settings depend on the instrument, XCS uses different patterns for different instruments
             if "pn" in inst:
