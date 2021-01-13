@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/01/2021, 17:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2021, 12:04. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -12,7 +12,7 @@ from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
-from astropy.units import Quantity, UnitBase, Unit, UnitConversionError
+from astropy.units import Quantity, UnitBase, Unit, UnitConversionError, deg
 from fitsio import FITS
 from numpy import ndarray
 from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
@@ -21,6 +21,7 @@ from regions import read_ds9, PixelRegion, CompoundSkyRegion
 from .. import xga_conf
 from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..imagetools.misc import sky_deg_scale
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
     RateMap, PSFGrid, BaseProfile1D
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
@@ -165,6 +166,15 @@ class BaseSource:
         # Easier for it be internally kep as a numpy array, but I want the user to have astropy coordinates
         return Quantity(self._ra_dec, 'deg')
 
+    @property
+    def default_coord(self) -> Quantity:
+        """
+        A getter for the default analysis coordinate of this source.
+        :return: An Astropy quantity containing the default analysis coordinate.
+        :rtype: Quantity
+        """
+        return self._default_coord
+
     def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
@@ -172,6 +182,7 @@ class BaseSource:
         dictionary containing paths to region files, and another dictionary containing paths to attitude files.
         :rtype: Tuple[dict, dict, dict]
         """
+
         def read_default_products(en_lims: tuple) -> Tuple[str, dict]:
             """
             This nested function takes pairs of energy limits defined in the config file and runs
@@ -651,6 +662,7 @@ class BaseSource:
         :return: List of matching products.
         :rtype: List[BaseProduct]
         """
+
         def unpack_list(to_unpack: list):
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
@@ -705,6 +717,7 @@ class BaseSource:
         to be related to the source.
         :return: Tuple[dict, dict]
         """
+
         def dist_from_source(reg):
             """
             Calculates the euclidean distance between the centre of a supplied region, and the
@@ -1219,6 +1232,7 @@ class BaseSource:
         another SAS region which will include background emission and exclude nuisance sources.
         :rtype: Tuple[str, str]
         """
+
         def sas_shape(reg: SkyRegion, im: Image) -> str:
             """
             This will convert the input SkyRegion into an appropriate SAS compatible region string, for use
@@ -1342,6 +1356,175 @@ class BaseSource:
             final_back = back + " &&! " + " &&! ".join(back_interloper)
 
         return final_src, final_back
+
+    def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity,
+                             deg_central_coord: Quantity) -> np.ndarray:
+        """
+        This function finds and returns any interloper regions that have any part of their boundary within
+        the specified radii, centered on the specified central coordinate.
+
+        :param Quantity inner_radius: The inner radius of the area to search for interlopers in.
+        :param Quantity outer_radius: The outer radius of the area to search for interlopers in.
+        :param Quantity deg_central_coord: The central coordinate (IN DEGREES) of the area to search for
+            interlopers in.
+        :return: A numpy array of the interloper regions within the specified area.
+        :rtype: np.ndarray
+        """
+        def perimeter_points(reg_cen_x: float, reg_cen_y: float, reg_major_rad: float, reg_minor_rad: float,
+                             rotation: float) -> np.ndarray:
+            """
+            An internal function to generate thirty x-y positions on the boundary of a particular region.
+
+            :param float reg_cen_x: The x position of the centre of the region, in degrees.
+            :param float reg_cen_y: The y position of the centre of the region, in degrees
+            :param float reg_major_rad: The semi-major axis of the region, in degrees.
+            :param float reg_minor_rad: The semi-minor axis of the region, in degrees.
+            :param float rotation: The rotation of the region, in radians.
+            :return: An array of thirty x-y coordinates on the boundary of the region.
+            :rtype: np.ndarray
+            """
+            # Just the numpy array of angles (in radians) to find the x-y points of
+            angs = np.linspace(0, 2 * np.pi, 30)
+
+            # This is just the parametric equation of an ellipse - I only include the displacement to the
+            #  central coordinates of the region AFTER it has been rotated
+            x = reg_major_rad * np.cos(angs)
+            y = reg_minor_rad * np.sin(angs)
+
+            # Sets of the rotation matrix
+            rot_mat = np.array([[np.cos(rotation), -1 * np.sin(rotation)], [np.sin(rotation), np.cos(rotation)]])
+
+            # Just rotates the edge coordinates to match the known rotation of this particular region
+            edge_coords = (rot_mat @ np.vstack([x, y])).T
+
+            # Now I re-centre the region
+            edge_coords[:, 0] += reg_cen_x
+            edge_coords[:, 1] += reg_cen_y
+
+            return edge_coords
+
+        if deg_central_coord.unit != deg:
+            raise UnitConversionError("The central coordinate must be in degrees for this function.")
+
+        inner_radius = self.convert_radius(inner_radius, 'deg')
+        outer_radius = self.convert_radius(outer_radius, 'deg')
+
+        # Then we can check to make sure that the outer radius is larger than the inner radius
+        if inner_radius >= outer_radius:
+            raise ValueError("A SAS region for {s} cannot have an inner_radius larger than or equal to its "
+                             "outer_radius".format(s=self.name))
+
+        # I think my last attempt at this type of function was made really slow by something to with the regions
+        #  module, so I'm going to try and move away from that here
+        # This is horrible I know, but it basically generates points on the boundary of each interloper, and then
+        #  calculates their distance from the central coordinate. So you end up with an Nx30 (because 30 is
+        #  how many points I generate) and N is the number of potential interlopers
+        int_dists = np.array([np.sqrt(np.sum((perimeter_points(r.center.ra.value, r.center.dec.value, r.width.value,
+                                                               r.height.value, r.angle.to('rad').value)
+                                              - deg_central_coord.value) ** 2, axis=1))
+                              for r in self._interloper_regions])
+
+        # Finds which of the possible interlopers have any part of their boundary within the annulus in consideration
+        int_within = np.unique(np.where((int_dists < outer_radius.value) & (int_dists > inner_radius.value))[0])
+
+        return np.array(self._interloper_regions)[int_within]
+
+    def get_annular_sas_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
+                               output_unit: Union[UnitBase, str] = xmm_sky, interloper_regions: np.ndarray = None,
+                               central_coord: Quantity = None) -> str:
+        """
+        A method to generate a SAS region string for an arbitrary circular annular region, with interloper sources
+        removed.
+
+        :param Quantity inner_radius: The inner radius of the region you wish to generate in SAS.
+        :param Quantity outer_radius: The outer radius of the region you wish to generate in SAS.
+        :param str obs_id: The ObsID of the observation you wish to generate the SAS region for.
+        :param str inst: The instrument of the observation you to generate the SAS region for.
+        :param UnitBase/str output_unit: The output unit for this SAS region, either xmm_sky or xmm_det.
+        :param np.ndarray interloper_regions: The interloper regions to remove from the source region,
+            default is None, in which case the function will run self.regions_within_radii.
+        :param Quantity central_coord: The coordinate on which to centre the source region, default is
+            None in which case the function will use the default_coord of the source object.
+        :return: A string for use in a SAS routine that describes the source region, and the regions
+            to cut out of it.
+        :rtype: str
+        """
+        def interloper_sas_string(reg: EllipseSkyRegion) -> str:
+            """
+            Converts ellipse sky regions into SAS region strings for use in SAS tasks.
+
+            :param EllipseSkyRegion reg: The interloper region to generate a SAS string for
+            :return: The SAS string region for this interloper
+            :rtype: str
+            """
+            cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
+            conv_cen = rel_im.coord_conv(cen, output_unit)
+            # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
+            #  from degrees to XMM sky coordinates using the factor we calculated in the main function
+            w = reg.width.value / 2 / sky_to_deg
+            # We do the same for the height
+            h = reg.height.value / 2 / sky_to_deg
+            # The rotation angle from the region object is in degrees already
+            shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
+                                                                             cy=conv_cen[1].value, w=w, h=h,
+                                                                             rot=reg.angle.value)
+            return shape_str
+
+        if central_coord is None:
+            central_coord = self._default_coord
+
+        # These checks/conversions are already done by the evselect_spectrum command, but I don't
+        #  mind doing them again
+        inner_radius = self.convert_radius(inner_radius, 'deg')
+        outer_radius = self.convert_radius(outer_radius, 'deg')
+
+        # Then we can check to make sure that the outer radius is larger than the inner radius
+        if inner_radius >= outer_radius:
+            raise ValueError("A SAS region for {s} cannot have an inner_radius larger than or equal to its "
+                             "outer_radius".format(s=self.name))
+
+        if output_unit == xmm_det:
+            c_str = "DETX,DETY"
+            raise NotImplementedError("This coordinate system is not yet supported, and isn't a priority. Please "
+                                      "submit an issue on https://github.com/DavidT3/XGA/issues if you particularly "
+                                      "want this.")
+        elif output_unit == xmm_sky:
+            c_str = "X,Y"
+        else:
+            raise NotImplementedError("Only detector and sky coordinates are currently "
+                                      "supported for generating SAS region strings.")
+
+        # We need a matching image to perform the coordinate conversion we require
+        rel_im = self.get_products("image", obs_id, inst)[0]
+        # We can set our own offset value when we call this function, but I don't think I need to
+        sky_to_deg = sky_deg_scale(rel_im, central_coord)
+
+        # We need our chosen central coordinates in the right units of course
+        xmm_central_coord = rel_im.coord_conv(central_coord, output_unit)
+        # And just to make sure the central coordinates are in degrees
+        deg_central_coord = rel_im.coord_conv(central_coord, deg)
+
+        # If the user doesn't pass any regions, then we have to find them ourselves. I decided to allow this
+        #  so that within_radii can just be called once externally for a set of ObsID-instrument combinations,
+        #  like in evselect_spectrum for instance.
+        if interloper_regions is None:
+            interloper_regions = self.regions_within_radii(inner_radius, outer_radius, deg_central_coord)
+
+        # So now we convert our interloper regions into their SAS equivalents
+        sas_interloper = [interloper_sas_string(i) for i in interloper_regions]
+
+        # And we need to define a SAS string for the actual region of interest
+        sas_source_area = "(({t}) IN annulus({cx},{cy},{ri},{ro}))"
+        sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value, cy=xmm_central_coord[1].value,
+                                                 ri=inner_radius.value/sky_to_deg, ro=outer_radius.value/sky_to_deg)
+
+        # Combining the source region with the regions we need to cut out
+        if len(sas_interloper) == 0:
+            final_src = sas_source_area
+        else:
+            final_src = sas_source_area + " &&! " + " &&! ".join(sas_interloper)
+
+        return final_src
 
     @property
     def nH(self) -> Quantity:
@@ -1798,7 +1981,7 @@ class BaseSource:
                 ex_data[ex_data > 0] = 1
                 # We do this because it then becomes very easy to calculate the intersection area of the mask
                 #  with the XMM chips. Just mask the modified expmap, then sum.
-                area[o][ex.instrument] = (ex_data*m).sum()
+                area[o][ex.instrument] = (ex_data * m).sum()
 
         if max(list(full_area.values())) == 0:
             # Everything has to be rejected in this case
@@ -2116,6 +2299,7 @@ class NullSource:
         :return: List of matching products.
         :rtype: List[BaseProduct]
         """
+
         def unpack_list(to_unpack: list):
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
@@ -2218,7 +2402,3 @@ class NullSource:
         :rtype: int
         """
         return len(self.obs_ids)
-
-
-
-
