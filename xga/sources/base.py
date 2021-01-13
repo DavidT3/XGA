@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2021, 14:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2021, 17:12. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1419,8 +1419,8 @@ class BaseSource:
         # This is horrible I know, but it basically generates points on the boundary of each interloper, and then
         #  calculates their distance from the central coordinate. So you end up with an Nx30 (because 30 is
         #  how many points I generate) and N is the number of potential interlopers
-        int_dists = np.array([np.sqrt(np.sum((perimeter_points(r.center.ra.value, r.center.dec.value, r.width.value,
-                                                               r.height.value, r.angle.to('rad').value)
+        int_dists = np.array([np.sqrt(np.sum((perimeter_points(r.center.ra.value, r.center.dec.value, r.width.value/2,
+                                                               r.height.value/2, r.angle.to('rad').value)
                                               - deg_central_coord.value) ** 2, axis=1))
                               for r in self._interloper_regions])
 
