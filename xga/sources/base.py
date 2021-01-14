@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/01/2021, 11:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/01/2021, 15:39. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1556,7 +1556,7 @@ class BaseSource:
             sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
                                                      cy=xmm_central_coord[1].value,
                                                      r=outer_radius.value/sky_to_deg)
-        elif not inner_radius.isscalar and inner_radius.value != 0:
+        elif not inner_radius.isscalar and inner_radius[0].value != 0:
             sas_source_area = "(({t}) IN elliptannulus({cx},{cy},{wi},{hi},{wo},{ho},{rot},{rot}))"
             sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
                                                      cy=xmm_central_coord[1].value,
@@ -1564,7 +1564,7 @@ class BaseSource:
                                                      hi=inner_radius[1].value/sky_to_deg,
                                                      wo=outer_radius[0].value/sky_to_deg,
                                                      ho=outer_radius[1].value/sky_to_deg, rot=rot_angle.to('deg').value)
-        elif not inner_radius.isscalar and inner_radius.value == 0:
+        elif not inner_radius.isscalar and inner_radius[0].value == 0:
             sas_source_area = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))"
             sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
                                                      cy=xmm_central_coord[1].value,
