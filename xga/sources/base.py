@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2021, 17:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/01/2021, 11:51. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1460,10 +1460,14 @@ class BaseSource:
         w = reg.width.value / 2 / sky_to_deg
         # We do the same for the height
         h = reg.height.value / 2 / sky_to_deg
-        # The rotation angle from the region object is in degrees already
-        shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
-                                                                         cy=conv_cen[1].value, w=w, h=h,
-                                                                         rot=reg.angle.value)
+        if w == h:
+            shape_str = "(({t}) IN circle({cx},{cy},{r}))"
+            shape_str = shape_str.format(t=c_str, cx=conv_cen[0].value, cy=conv_cen[1].value, r=h)
+        else:
+            # The rotation angle from the region object is in degrees already
+            shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
+                                                                             cy=conv_cen[1].value, w=w, h=h,
+                                                                             rot=reg.angle.value)
         return shape_str
 
     def get_annular_sas_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
@@ -1540,13 +1544,19 @@ class BaseSource:
         # So now we convert our interloper regions into their SAS equivalents
         sas_interloper = [self._interloper_sas_string(i, rel_im, output_unit) for i in interloper_regions]
 
-        if inner_radius.isscalar:
+        if inner_radius.isscalar and inner_radius.value != 0:
             # And we need to define a SAS string for the actual region of interest
             sas_source_area = "(({t}) IN annulus({cx},{cy},{ri},{ro}))"
             sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
                                                      cy=xmm_central_coord[1].value, ri=inner_radius.value/sky_to_deg,
                                                      ro=outer_radius.value/sky_to_deg)
-        else:
+        # If the inner radius is zero then we write a circle region, because it seems that's a LOT faster in SAS
+        elif inner_radius.isscalar and inner_radius.value == 0:
+            sas_source_area = "(({t}) IN circle({cx},{cy},{r}))"
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
+                                                     cy=xmm_central_coord[1].value,
+                                                     r=outer_radius.value/sky_to_deg)
+        elif not inner_radius.isscalar and inner_radius.value != 0:
             sas_source_area = "(({t}) IN elliptannulus({cx},{cy},{wi},{hi},{wo},{ho},{rot},{rot}))"
             sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
                                                      cy=xmm_central_coord[1].value,
@@ -1554,6 +1564,13 @@ class BaseSource:
                                                      hi=inner_radius[1].value/sky_to_deg,
                                                      wo=outer_radius[0].value/sky_to_deg,
                                                      ho=outer_radius[1].value/sky_to_deg, rot=rot_angle.to('deg').value)
+        elif not inner_radius.isscalar and inner_radius.value == 0:
+            sas_source_area = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))"
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
+                                                     cy=xmm_central_coord[1].value,
+                                                     w=outer_radius[0].value / sky_to_deg,
+                                                     h=outer_radius[1].value / sky_to_deg,
+                                                     rot=rot_angle.to('deg').value)
 
         # Combining the source region with the regions we need to cut out
         if len(sas_interloper) == 0:
