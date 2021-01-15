@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 15:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 16:30. Copyright (c) David J Turner
 
 
 import os
 import warnings
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 from astropy.units import Quantity
@@ -22,10 +22,10 @@ class Spectrum(BaseProduct):
     for storing and accessing fit information, as well as viewing the spectrum.
     """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
-                 inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str, stdout_str: str,
-                 stderr_str: str, gen_cmd: str, raise_properly: bool = True):
+                 inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str, grouped: bool, min_counts: int,
+                 min_sn: Union[float, int], over_sample: float, stdout_str: str, stderr_str: str, gen_cmd: str):
 
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._prod_type = "spectrum"
 
         if os.path.exists(rmf_path):
@@ -83,6 +83,20 @@ class Spectrum(BaseProduct):
         # This is specifically for fakeit runs (for cntrate - lum conversions) on the ARF/RMF
         #  associated with this Spectrum
         self._conv_factors = {}
+
+        # This set of properties describe the configuration of evselect/specgroup during generation
+        self._grouped = grouped
+        self._min_counts = min_counts
+        self._min_sn = min_sn
+        if self._grouped and self._min_counts is not None:
+            self._grouped_on = 'counts'
+        elif self._grouped and self._min_sn is not None:
+            self._grouped_on = 'signal to noise'
+        else:
+            self._grouped_on = None
+
+        # Not to do with grouping, but this states the level of oversampling requested from evselect
+        self._over_sample = over_sample
 
     def _update_spec_headers(self, which_spec: str):
         """
@@ -278,6 +292,59 @@ class Spectrum(BaseProduct):
         :rtype: Quantity
         """
         return self._outer_rad
+
+    @property
+    def grouped(self) -> bool:
+        """
+        A property stating whether SAS was told to group this spectrum during generation or not.
+
+        :return: Boolean variable describing whether the spectrum is grouped or not
+        :rtype: bool
+        """
+        return self._grouped
+
+    @property
+    def grouped_on(self) -> str:
+        """
+        A property stating what metric this spectrum was grouped on.
+
+        :return: String representation of the metric this spectrum was grouped on (None if not grouped).
+        :rtype: str
+        """
+        return self._grouped_on
+
+    @property
+    def min_counts(self) -> int:
+        """
+        A property stating the minimum number of counts allowed in a grouped channel.
+
+        :return: The integer minimum number of counts per grouped channel (if this spectrum was grouped on
+            minimum numbers of counts).
+        :rtype: int
+        """
+        return self._min_counts
+
+    @property
+    def min_sn(self) -> Union[float, int]:
+        """
+        A property stating the minimum signal to noise allowed in a grouped channel.
+
+        :return: The minimum signal to noise per grouped channel (if this spectrum was grouped on
+            minimum signal to noise).
+        :rtype: Union[float, int]
+        """
+        return self._min_sn
+
+    @property
+    def over_sample(self) -> float:
+        """
+        A property string stating the amount of oversampling applied by evselect during the spectrum
+        generation process.
+
+        :return: Oversampling applied during generation
+        :rtype: float
+        """
+        return self._over_sample
 
     @property
     def exposure(self) -> Quantity:
@@ -538,7 +605,7 @@ class Spectrum(BaseProduct):
 class AnnularSpectra(BaseAggregateProduct):
     def __init__(self, spec_paths: list, rmf_paths: list, arf_paths: list, b_path: str, b_rmf_path: str,
                  b_arf_path: str, inn_radii: Quantity, out_radii: Quantity, obs_id: str, instrument: str,
-                 stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
+                 stdout_str: str, stderr_str: str, gen_cmd: str):
         super().__init__(spec_paths, 'ann_spec', obs_id, instrument)
 
         # TODO Check that the radii quantities are in length units
@@ -564,7 +631,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
         for f_ind, f in enumerate(spec_paths):
             interim = Spectrum(f, rmf_paths[f_ind], arf_paths[f_ind], b_path, b_rmf_path, b_arf_path, "annular",
-                               obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+                               obs_id, instrument, stdout_str, stderr_str, gen_cmd)
 
             pos_key = inn_radii[f_ind].value + "-" + out_radii[f_ind].value
             self._component_products[pos_key] = interim
