@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/01/2021, 15:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 18:19. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -297,7 +297,7 @@ class BaseSource:
             #  this variable with just the energy key
             en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
         elif type(prod_obj) == Spectrum:
-            extra_key = prod_obj.reg_type
+            extra_key = prod_obj.storage_key
         elif type(prod_obj) == PSFGrid:
             # The first part of the key is the model used (by default its ELLBETA for example), and
             #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
@@ -531,6 +531,7 @@ class BaseSource:
                 for ex in exs:
                     self.update_products(parse_image_like(ex, "expmap"))
 
+                # TODO UPDATE THIS FOR NEW SPECTRUM NAMES
                 # For spectra we search for products that have the name of this object in, as they are for
                 #  specific parts of the observation.
                 # Have to replace any + characters with x, as thats what we did in evselect_spectrum due to SAS
