@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 14:40. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 17:03. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -221,16 +221,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                          source.default_coord)
             src_inn_rad_str = inner_radii[s_ind].value
             src_out_rad_str = outer_radii[s_ind].value
-            # The key under which these spectra will be stored
-            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=source.default_coord[0].value,
-                                                         dec=source.default_coord[1].value,
-                                                         ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec)
-        else:
-            spec_storage_name = "region_grp{gr}".format(gr=group_spec)
-
-        # Adds on the extra information about grouping to the storage key
-        spec_storage_name += extra_name
 
         # Check which event lists are associated with each individual source
         for pack in source.get_products("events", just_obj=False):
@@ -324,6 +314,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             else:
                 extra_file_name = ''
 
+            # And if it was oversampled during generation then we need to include that as well
+            if over_sample is not None:
+                extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
             spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_spec.fits"
             spec = spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec,
@@ -405,7 +399,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                "b_spec_path": os.path.join(OUTPUT, obs_id, b_spec),
                                "b_rmf_path": os.path.join(OUTPUT, obs_id, b_rmf),
                                "b_arf_path": os.path.join(OUTPUT, obs_id, b_arf),
-                               "obs_id": obs_id, "instrument": inst, "storage_key": spec_storage_name})
+                               "obs_id": obs_id, "instrument": inst, "grouped": group_spec, "min_counts": min_counts,
+                               "min_sn": min_sn, "over_sample": over_sample})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))

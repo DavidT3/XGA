@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 16:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 17:03. Copyright (c) David J Turner
 
 
 import os
@@ -22,9 +22,9 @@ class Spectrum(BaseProduct):
     for storing and accessing fit information, as well as viewing the spectrum.
     """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
-                 inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str, grouped: bool, min_counts: int,
-                 min_sn: Union[float, int], over_sample: float, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 region: bool = False):
+                 central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str,
+                 grouped: bool, min_counts: int, min_sn: Union[float, int], over_sample: float, stdout_str: str,
+                 stderr_str: str, gen_cmd: str, region: bool = False):
 
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._prod_type = "spectrum"
@@ -64,6 +64,9 @@ class Spectrum(BaseProduct):
             self._usable = False
             self._why_unusable.append("BackARFPathDoesNotExist")
 
+        # Storing the central coordinate of this spectrum
+        self._central_coord = central_coord
+
         # Storing the region information
         self._inner_rad = inn_rad
         self._outer_rad = out_rad
@@ -101,6 +104,39 @@ class Spectrum(BaseProduct):
 
         # This describes whether this spectrum was generated directly from a region present in a region file
         self._region = region
+
+        # Here we generate the storage key for this object, its just convenient to do it in here
+        # Sets up the extra part of the storage key name depending on if grouping is enabled
+        if grouped and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif grouped and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+        spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
+        if not self._region and self.inner_rad.isscalar:
+            spec_storage_name = spec_storage_name.format(ra=self.central_coord[0].value,
+                                                         dec=self.central_coord[1].value,
+                                                         ri=self._inner_rad.value, ro=self._outer_rad.value,
+                                                         gr=grouped)
+        elif not self._region and not self._inner_rad.isscalar:
+            inn_rad_str = 'and'.join(self._inner_rad.value.astype(str))
+            out_rad_str = 'and'.join(self._outer_rad.value.astype(str))
+            spec_storage_name = spec_storage_name.format(ra=self.central_coord[0].value,
+                                                         dec=self.central_coord[1].value, ri=inn_rad_str,
+                                                         ro=out_rad_str, gr=grouped)
+        else:
+            spec_storage_name = "region_grp{gr}".format(gr=grouped)
+
+        spec_storage_name += extra_name
+        print(spec_storage_name)
+        # And we save the completed key to an attribute
+        self._storage_key = spec_storage_name
 
     def _update_spec_headers(self, which_spec: str):
         """
@@ -264,6 +300,29 @@ class Spectrum(BaseProduct):
             self._update_spec_headers("back")
         else:
             raise FileNotFoundError("That new background ARF file does not exist")
+
+    @property
+    def storage_key(self) -> str:
+        """
+        This property returns the storage key which this object assembles to place the Spectrum in
+        an XGA source's storage structure. The key is based on the properties of the spectrum, and
+        some of the configuration options, and is basically human readable.
+
+        :return: String storage key.
+        :rtype: str
+        """
+        return self._storage_key
+
+    @property
+    def central_coord(self) -> Quantity:
+        """
+        This property provides the central coordinates (RA-Dec) of the region that this spectrum
+        was generated from.
+
+        :return: Astropy quantity object containing the central coordinate in degrees.
+        :rtype: Quantity
+        """
+        return self._central_coord
 
     @property
     def shape(self) -> str:
