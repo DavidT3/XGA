@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2021, 17:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 09:29. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,11 +8,11 @@ from typing import Union, Tuple, List
 
 import numpy as np
 from astropy.units import Quantity
-from tqdm import tqdm
 
 from .misc import cifbuild
 from .. import OUTPUT, NUM_CORES
 from ..samples.base import BaseSample
+from ..sas.run import sas_call
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
 from ..sources.base import NullSource
 from ..utils import RAD_LABELS
@@ -124,8 +124,7 @@ def _spec_cmds():
     pass
 
 
-# TODO Restore this decorator, specs won't actually be generated without it
-# @sas_call
+@sas_call
 def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                       min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
@@ -186,9 +185,6 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     sources_extras = []
     sources_types = []
 
-    # TODO Give myself cause to remove this by speeding up region string generation
-    # This progress bar is being placed here because it can take QUITE a while to generate the SAS region strings
-    spec_prep = tqdm(desc="Preparing evselect spectrum commands", total=len(sources), disable=disable_progress)
     for s_ind, source in enumerate(sources):
         # rmfgen and arfgen both take arguments that describe if something is an extended source or not,
         #  so we check the source type
@@ -250,24 +246,23 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                                                     rot_angle=reg.angle)
                 b_reg = source.get_annular_sas_region(outer_radii[0] * source.background_radius_factors[0],
                                                       outer_radii[0] * source.background_radius_factors[1], obs_id,
-                                                      inst, interloper_regions=interloper_regions,
+                                                      inst, interloper_regions=back_inter_reg,
                                                       central_coord=source.default_coord)
+                # Explicitly read out the current inner radius and outer radius, useful for some bits later
+                src_inn_rad_str = 'and'.join(inner_radii[0].value.astype(str))
+                src_out_rad_str = 'and'.join(outer_radii[0].value.astype(str))
 
             else:
+                # This constructs the sas strings for any radius that isn't 'region'
                 reg = source.get_annular_sas_region(inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
                                                     interloper_regions=interloper_regions,
                                                     central_coord=source.default_coord)
                 b_reg = source.get_annular_sas_region(outer_radii[s_ind] * source.background_radius_factors[0],
                                                       outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
-                                                      inst, interloper_regions=interloper_regions,
+                                                      inst, interloper_regions=back_inter_reg,
                                                       central_coord=source.default_coord)
-
-            print(b_reg)
-            import sys
-            sys.exit()
-
-            # This method returns a SAS expression for the source and background regions - excluding interlopers
-            # reg, b_reg = source.get_sas_region(outer_radius, obs_id, inst, xmm_sky)
+                src_inn_rad_str = inner_radii[s_ind].value
+                src_out_rad_str = outer_radii[s_ind].value
 
             # Some settings depend on the instrument, XCS uses different patterns for different instruments
             if "pn" in inst:
@@ -290,10 +285,25 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             evt_list = pack[-1]
             # Sets up the file names of the output files
             dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source_name)
-            spec = "{o}_{i}_{n}_{bt}_spec.fits".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
-            b_spec = "{o}_{i}_{n}_{bt}_backspec.fits".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
-            arf = "{o}_{i}_{n}_{bt}.arf".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
-            b_arf = "{o}_{i}_{n}_{bt}_back.arf".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
+            spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_spec.fits".format(o=obs_id, i=inst, n=source_name,
+                                                                                ra=source.default_coord[0].value,
+                                                                                dec=source.default_coord[1].value,
+                                                                                ri=src_inn_rad_str,
+                                                                                ro=src_out_rad_str)
+            b_spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.fits".format(o=obs_id, i=inst, n=source_name,
+                                                                                      ra=source.default_coord[0].value,
+                                                                                      dec=source.default_coord[1].value,
+                                                                                      ri=src_inn_rad_str,
+                                                                                      ro=src_out_rad_str)
+            arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf".format(o=obs_id, i=inst, n=source_name,
+                                                                         ra=source.default_coord[0].value,
+                                                                         dec=source.default_coord[1].value,
+                                                                         ri=src_inn_rad_str, ro=src_out_rad_str)
+            b_arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_back.arf".format(o=obs_id, i=inst, n=source_name,
+                                                                                ra=source.default_coord[0].value,
+                                                                                dec=source.default_coord[1].value,
+                                                                                ri=src_inn_rad_str,
+                                                                                ro=src_out_rad_str)
             ccf = dest_dir + "ccf.cif"
 
             # Fills out the evselect command to make the main and background spectra
@@ -304,11 +314,18 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             #  an individual one for each spectrum. Also adds arfgen commands on the end, as they depend on
             #  the rmf.
             if one_rmf:
-                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source_name, bt="universal")
+                rmf = "{o}_{i}_{n}_universal.rmf".format(o=obs_id, i=inst, n=source_name)
                 b_rmf = rmf
             else:
-                rmf = "{o}_{i}_{n}_{bt}.rmf".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
-                b_rmf = "{o}_{i}_{n}_{bt}_back.rmf".format(o=obs_id, i=inst, n=source_name, bt=outer_radius)
+                rmf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf".format(o=obs_id, i=inst, n=source_name,
+                                                                             ra=source.default_coord[0].value,
+                                                                             dec=source.default_coord[1].value,
+                                                                             ri=src_inn_rad_str, ro=src_out_rad_str)
+                b_rmf = "{o}_{i}_{n}_ra{ra}+dec{dec}_ri{ri}_ro{ro}_back.rmf".format(o=obs_id, i=inst, n=source_name,
+                                                                                    ra=source.default_coord[0].value,
+                                                                                    dec=source.default_coord[1].value,
+                                                                                    ri=src_inn_rad_str,
+                                                                                    ro=src_out_rad_str)
 
             if one_rmf and not os.path.exists(dest_dir + rmf):
                 cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
@@ -361,13 +378,10 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
 
-        spec_prep.update(1)
-    spec_prep.close()
-
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
-def evselect_annular_spectrum():
+def evselect_annular_spectrum_set():
     raise NotImplementedError("Haven't quite got around to doing this bit yet")
 
 
