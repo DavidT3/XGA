@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/12/2020, 13:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 10:24. Copyright (c) David J Turner
 
 
 import os
@@ -430,12 +430,15 @@ class Spectrum(BaseProduct):
         rel_vals = self._conv_factors[model][en_key]
         return rel_vals["factor"], rel_vals["lum"], rel_vals["rate"]
 
-    def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV")):
+    def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV"),
+             figsize: Tuple = (8, 6)):
         """
         Very simple method to plot the data/models associated with this Spectrum object,
         between certain energy limits.
+
         :param Quantity lo_en: The lower energy limit from which to plot the spectrum.
         :param Quantity hi_en: The upper energy limit to plot the spectrum to.
+        :param Tuple figsize: The desired size of the output figure.
         """
         if lo_en > hi_en:
             raise ValueError("hi_en cannot be greater than lo_en")
@@ -445,7 +448,7 @@ class Spectrum(BaseProduct):
 
         if len(self._plot_data.keys()) != 0:
             # Create figure object
-            plt.figure(figsize=(8, 5))
+            plt.figure(figsize=figsize)
 
             # Set the plot up to look nice and professional.
             ax = plt.gca()
