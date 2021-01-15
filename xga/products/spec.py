@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 10:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 15:38. Copyright (c) David J Turner
 
 
 import os
@@ -17,9 +17,13 @@ from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError
 
 
 class Spectrum(BaseProduct):
+    """
+    This class is designed to act as an interface with an X-ray spectrum, and includes various methods and attributes
+    for storing and accessing fit information, as well as viewing the spectrum.
+    """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
-                 reg_type: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 raise_properly: bool = True):
+                 inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str, stdout_str: str,
+                 stderr_str: str, gen_cmd: str, raise_properly: bool = True):
 
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
         self._prod_type = "spectrum"
@@ -59,15 +63,14 @@ class Spectrum(BaseProduct):
             self._usable = False
             self._why_unusable.append("BackARFPathDoesNotExist")
 
-        allowed_regs = ["region", "r2500", "r500", "r200", "custom", "annular"]
-        if reg_type in allowed_regs:
-            self._reg_type = reg_type
+        # Storing the region information
+        self._inner_rad = inn_rad
+        self._outer_rad = out_rad
+        # And also the shape of the region
+        if self._inner_rad.isscalar:
+            self._shape = 'circular'
         else:
-            self._usable = False
-            self._why_unusable.append("InvalidRegionType")
-            self._reg_type = ''
-            raise ValueError("{0} is not a supported region type, please use one of these; "
-                             "{1}".format(reg_type, ", ".join(allowed_regs)))
+            self._shape = 'elliptical'
 
         self._update_spec_headers("main")
         self._update_spec_headers("back")
@@ -244,17 +247,37 @@ class Spectrum(BaseProduct):
         else:
             raise FileNotFoundError("That new background ARF file does not exist")
 
-    # This is an intrinsic property of the generated spectrum, so users will not be allowed to change this
     @property
-    def reg_type(self) -> str:
+    def shape(self) -> str:
         """
-        Getter method for the type of region this spectrum was generated for. e.g. 'region' - which would
-        mean it represents the spectrum inside a region specificied by region files, or 'r500' - which
-        would mean the radius of a cluster where the mean density is 500 times critical density of the Universe.
-        :return: The region type this spectrum was generated for
+        Returns the shape of the outer edge of the region this spectrum was generated from.
+
+        :return: The shape (either circular or elliptical).
         :rtype: str
         """
-        return self._reg_type
+        return self._shape
+
+    @property
+    def inner_rad(self) -> Quantity:
+        """
+        Gives the inner radius (if circular) or radii (if elliptical - semi-major, semi-minor) of the
+        region in which this spectrum was generated.
+
+        :return: The inner radius(ii) of the region.
+        :rtype: Quantity
+        """
+        return self._inner_rad
+
+    @property
+    def outer_rad(self):
+        """
+        Gives the outer radius (if circular) or radii (if elliptical - semi-major, semi-minor) of the
+        region in which this spectrum was generated.
+
+        :return: The outer radius(ii) of the region.
+        :rtype: Quantity
+        """
+        return self._outer_rad
 
     @property
     def exposure(self) -> Quantity:
