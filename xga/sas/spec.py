@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 10:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 13:07. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -11,6 +11,7 @@ from astropy.units import Quantity
 
 from .misc import cifbuild
 from .. import OUTPUT, NUM_CORES
+from ..exceptions import SASInputInvalid
 from ..samples.base import BaseSample
 from ..sas.run import sas_call
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -142,7 +143,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal to noise set this parameter to None.
-    :param float over_sample: The minimum energy resolution for each group, set to None to disable.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
@@ -156,6 +158,24 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     if outer_radius != 'region':
         sources, inner_radii, outer_radii = _spec_setup(sources, outer_radius, inner_radius, disable_progress, '')
+
+    # These check that the user hasn't done something silly like passing multiple grouping options, this is not
+    #  allowed by SAS, will cause the generation to fail
+    if all([o is not None for o in [min_counts, min_sn]]):
+        raise SASInputInvalid("evselect only allows one grouping option to be passed, you can't group both by"
+                              " minimum counts AND by minimum signal to noise.")
+    # Should also check that the user has passed any sort of grouping argument, if they say they want to group
+    elif group_spec and all([o is None for o in [min_counts, min_sn]]):
+        raise SASInputInvalid("If you set group_spec=True, you must supply a grouping option, either min_counts"
+                              " or min_sn.")
+
+    # Sets up the extra part of the storage key name depending on if grouping is enabled
+    if group_spec and min_counts is not None:
+        extra_name = "_mincnt{}".format(min_counts)
+    elif group_spec and min_sn is not None:
+        extra_name = "_minsn{}".format(min_sn)
+    else:
+        extra_name = ''
 
     # Define the various SAS commands that need to be populated, for a useful spectrum you also need ARF/RMF
     spec_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; evselect table={e} withspectrumset=yes " \
@@ -199,6 +219,18 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
                                                          outer_radii[s_ind] * source.background_radius_factors[1],
                                                          source.default_coord)
+            src_inn_rad_str = inner_radii[s_ind].value
+            src_out_rad_str = outer_radii[s_ind].value
+            # The key under which these spectra will be stored
+            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
+            spec_storage_name = spec_storage_name.format(ra=source.default_coord[0].value,
+                                                         dec=source.default_coord[1].value,
+                                                         ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec)
+        else:
+            spec_storage_name = "region"
+
+        # Adds on the extra information about grouping to the storage key
+        spec_storage_name += extra_name
 
         # Check which event lists are associated with each individual source
         for pack in source.get_products("events", just_obj=False):
@@ -244,7 +276,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                       central_coord=source.default_coord)
                 # Explicitly read out the current inner radius and outer radius, useful for some bits later
                 src_inn_rad_str = 'and'.join(inner_radii[0].value.astype(str))
-                src_out_rad_str = 'and'.join(outer_radii[0].value.astype(str))
+                src_out_rad_str = 'and'.join(outer_radii[0].value.astype(str)) + "_region"
 
             else:
                 # This constructs the sas strings for any radius that isn't 'region'
@@ -255,8 +287,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                       outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
                                                       inst, interloper_regions=back_inter_reg,
                                                       central_coord=source.default_coord)
-                src_inn_rad_str = inner_radii[s_ind].value
-                src_out_rad_str = outer_radii[s_ind].value
 
             # Some settings depend on the instrument, XCS uses different patterns for different instruments
             if "pn" in inst:
