@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 17:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 18:11. Copyright (c) David J Turner
 
 
 import os
@@ -134,7 +134,6 @@ class Spectrum(BaseProduct):
             spec_storage_name = "region_grp{gr}".format(gr=grouped)
 
         spec_storage_name += extra_name
-        print(spec_storage_name)
         # And we save the completed key to an attribute
         self._storage_key = spec_storage_name
 
