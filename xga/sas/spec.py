@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 13:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 14:40. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -227,7 +227,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                          dec=source.default_coord[1].value,
                                                          ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec)
         else:
-            spec_storage_name = "region"
+            spec_storage_name = "region_grp{gr}".format(gr=group_spec)
 
         # Adds on the extra information about grouping to the storage key
         spec_storage_name += extra_name
@@ -277,6 +277,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Explicitly read out the current inner radius and outer radius, useful for some bits later
                 src_inn_rad_str = 'and'.join(inner_radii[0].value.astype(str))
                 src_out_rad_str = 'and'.join(outer_radii[0].value.astype(str)) + "_region"
+                # Also explicitly read out into variables the actual radii values
+                inn_rad_degrees = inner_radii[0]
+                out_rad_degrees = outer_radii[0]
 
             else:
                 # This constructs the sas strings for any radius that isn't 'region'
@@ -287,6 +290,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                       outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
                                                       inst, interloper_regions=back_inter_reg,
                                                       central_coord=source.default_coord)
+                inn_rad_degrees = inner_radii[s_ind]
+                out_rad_degrees = outer_radii[s_ind]
 
             # Some settings depend on the instrument, XCS uses different patterns for different instruments
             if "pn" in inst:
@@ -309,25 +314,32 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             evt_list = pack[-1]
             # Sets up the file names of the output files
             dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source_name)
-            spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_spec.fits".format(o=obs_id, i=inst, n=source_name,
-                                                                                ra=source.default_coord[0].value,
-                                                                                dec=source.default_coord[1].value,
-                                                                                ri=src_inn_rad_str,
-                                                                                ro=src_out_rad_str)
-            b_spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.fits".format(o=obs_id, i=inst, n=source_name,
-                                                                                      ra=source.default_coord[0].value,
-                                                                                      dec=source.default_coord[1].value,
-                                                                                      ri=src_inn_rad_str,
-                                                                                      ro=src_out_rad_str)
-            arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf".format(o=obs_id, i=inst, n=source_name,
-                                                                         ra=source.default_coord[0].value,
-                                                                         dec=source.default_coord[1].value,
-                                                                         ri=src_inn_rad_str, ro=src_out_rad_str)
-            b_arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_back.arf".format(o=obs_id, i=inst, n=source_name,
-                                                                                ra=source.default_coord[0].value,
-                                                                                dec=source.default_coord[1].value,
-                                                                                ri=src_inn_rad_str,
-                                                                                ro=src_out_rad_str)
+
+            # Sets up something very similar to the extra name variable above, but for the file names
+            #  Stores some information about grouping in the file names
+            if group_spec and min_counts is not None:
+                extra_file_name = "_mincnt{c}".format(c=min_counts)
+            elif group_spec and min_sn is not None:
+                extra_file_name = "_minsn{s}".format(s=min_sn)
+            else:
+                extra_file_name = ''
+
+            spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_spec.fits"
+            spec = spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec,
+                               ex=extra_file_name)
+            b_spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_backspec.fits"
+            b_spec = b_spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                   dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                   gr=group_spec, ex=extra_file_name)
+            arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.arf"
+            arf = arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                             dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec,
+                             ex=extra_file_name)
+            b_arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.arf"
+            b_arf = b_arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                 dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                 gr=group_spec, ex=extra_file_name)
             ccf = dest_dir + "ccf.cif"
 
             # Fills out the evselect command to make the main and background spectra
@@ -341,15 +353,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 rmf = "{o}_{i}_{n}_universal.rmf".format(o=obs_id, i=inst, n=source_name)
                 b_rmf = rmf
             else:
-                rmf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf".format(o=obs_id, i=inst, n=source_name,
-                                                                             ra=source.default_coord[0].value,
-                                                                             dec=source.default_coord[1].value,
-                                                                             ri=src_inn_rad_str, ro=src_out_rad_str)
-                b_rmf = "{o}_{i}_{n}_ra{ra}+dec{dec}_ri{ri}_ro{ro}_back.rmf".format(o=obs_id, i=inst, n=source_name,
-                                                                                    ra=source.default_coord[0].value,
-                                                                                    dec=source.default_coord[1].value,
-                                                                                    ri=src_inn_rad_str,
-                                                                                    ro=src_out_rad_str)
+                rmf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.rmf"
+                rmf = rmf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                 dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                 gr=group_spec, ex=extra_file_name)
+                b_rmf = "{o}_{i}_{n}_ra{ra}+dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.rmf"
+                b_rmf = b_rmf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                     gr=group_spec, ex=extra_file_name)
 
             if one_rmf and not os.path.exists(dest_dir + rmf):
                 cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
@@ -388,12 +399,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             os.makedirs(dest_dir)
 
             final_paths.append(os.path.join(OUTPUT, obs_id, spec))
-            extra_info.append({"reg_type": outer_radius, "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
+            extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
+                               "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
                                "arf_path": os.path.join(OUTPUT, obs_id, arf),
                                "b_spec_path": os.path.join(OUTPUT, obs_id, b_spec),
                                "b_rmf_path": os.path.join(OUTPUT, obs_id, b_rmf),
                                "b_arf_path": os.path.join(OUTPUT, obs_id, b_arf),
-                               "obs_id": obs_id, "instrument": inst})
+                               "obs_id": obs_id, "instrument": inst, "storage_key": spec_storage_name})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
