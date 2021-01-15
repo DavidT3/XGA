@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 17:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 16:30. Copyright (c) David J Turner
 
 
 import warnings
@@ -24,7 +24,7 @@ from ..utils import xmm_sky, find_all_wcs
 
 class Image(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity):
         """
         The initialisation method for the Image class.
         :param str path: The path to where the product file SHOULD be located.
@@ -33,9 +33,8 @@ class Image(BaseProduct):
         :param str gen_cmd: The command used to generate the product.
         :param Quantity lo_en: The lower energy bound used to generate this product.
         :param Quantity hi_en: The upper energy bound used to generate this product.
-        :param bool raise_properly: Shall we actually raise the errors as Python errors?
         """
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._shape = None
         self._wcs_radec = None
         self._wcs_xmmXY = None
@@ -653,8 +652,8 @@ class Image(BaseProduct):
 
 class ExpMap(Image):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, raise_properly: bool = True):
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, raise_properly)
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity):
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en)
         self._prod_type = "expmap"
 
     def get_exp(self, at_coord: Quantity) -> float:
@@ -1108,10 +1107,10 @@ class RateMap(Image):
 
 class PSF(Image):
     def __init__(self, path: str, psf_model: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, raise_properly: bool = True):
+                 gen_cmd: str):
         lo_en = Quantity(0, 'keV')
         hi_en = Quantity(100, 'keV')
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, raise_properly)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en)
         self._prod_type = "psf"
         self._psf_centre = None
         self._psf_model = psf_model
@@ -1209,8 +1208,7 @@ class PSF(Image):
 
 class PSFGrid(BaseAggregateProduct):
     def __init__(self, file_paths: list, bins: int, psf_model: str, x_bounds: np.ndarray, y_bounds: np.ndarray,
-                 obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 raise_properly: bool = True):
+                 obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
         super().__init__(file_paths, 'psf', obs_id, instrument)
         self._psf_model = psf_model
         # Set none here because if I want positions of PSFs and there has been an error during generation, the user
@@ -1223,7 +1221,7 @@ class PSFGrid(BaseAggregateProduct):
         for f_ind, f in enumerate(file_paths):
             # I pass the whole stdout and stderr for each PSF, even though they will include ALL the PSFs in this
             #  grid, its a bit of a bodge but life goes on eh?
-            interim = PSF(f, psf_model, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+            interim = PSF(f, psf_model, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
             # The dictionary key the PSF will be stored under - the key corresponds to the numpy y-x
             #  index from which it was generated
             pos = np.unravel_index(f_ind, (bins, bins))

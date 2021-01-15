@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 17:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 16:30. Copyright (c) David J Turner
 
 
 import inspect
@@ -32,15 +32,18 @@ PROF_TYPE_MODELS_PRIORS = {"brightness": SB_MODELS_PRIORS}
 
 
 class BaseProduct:
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, raise_properly: bool = True):
+    """
+    The super class for all SAS generated products in XGA. Stores relevant file path information, parses the std_err
+    output of the generation process, and stores the instrument and ObsID that the product was generated for.
+    """
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
         """
         The initialisation method for the BaseProduct class.
+
         :param str path: The path to where the product file SHOULD be located.
         :param str stdout_str: The stdout from calling the terminal command.
         :param str stderr_str: The stderr from calling the terminal command.
         :param str gen_cmd: The command used to generate the product.
-        :param bool raise_properly: Shall we actually raise the errors as Python errors?
         """
         # This attribute stores strings that indicate why a product object has been deemed as unusable
         self._why_unusable = []
