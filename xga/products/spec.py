@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 16:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 16:34. Copyright (c) David J Turner
 
 
 import os
@@ -23,7 +23,8 @@ class Spectrum(BaseProduct):
     """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
                  inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str, grouped: bool, min_counts: int,
-                 min_sn: Union[float, int], over_sample: float, stdout_str: str, stderr_str: str, gen_cmd: str):
+                 min_sn: Union[float, int], over_sample: float, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 region: bool = False):
 
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._prod_type = "spectrum"
@@ -97,6 +98,9 @@ class Spectrum(BaseProduct):
 
         # Not to do with grouping, but this states the level of oversampling requested from evselect
         self._over_sample = over_sample
+
+        # This describes whether this spectrum was generated directly from a region present in a region file
+        self._region = region
 
     def _update_spec_headers(self, which_spec: str):
         """
@@ -345,6 +349,18 @@ class Spectrum(BaseProduct):
         :rtype: float
         """
         return self._over_sample
+
+    @property
+    def region(self) -> bool:
+        """
+        This property states whether this spectrum was generated directly from a region file
+        region or not. If true then this isn't from any arbitrary radii or an overdensity radius, but
+        instead directly from a source finder.
+
+        :return: A boolean flag describing if this is a region spectrum or not.
+        :rtype: bool
+        """
+        return self._region
 
     @property
     def exposure(self) -> Quantity:
