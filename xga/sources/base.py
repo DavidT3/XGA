@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 18:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:07. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -531,26 +531,66 @@ class BaseSource:
                 for ex in exs:
                     self.update_products(parse_image_like(ex, "expmap"))
 
-                # TODO UPDATE THIS FOR NEW SPECTRUM NAMES
                 # For spectra we search for products that have the name of this object in, as they are for
                 #  specific parts of the observation.
-                # Have to replace any + characters with x, as thats what we did in evselect_spectrum due to SAS
+                # Have to replace any + characters with x, as that's what we did in evselect_spectrum due to SAS
                 #  having some issues with the + character in file names
                 named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
                          self._name.replace("+", "x") in f and obs in f
                          and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
                 specs = [f for f in named if "spec" in f and "back" not in f and "ann" not in f]
+
                 for sp in specs:
                     # Filename contains a lot of useful information, so splitting it out to get it
                     sp_info = sp.split("/")[-1].split("_")
+                    # Reading these out into variables mostly for my own sanity while writing this
+                    obs_id = sp_info[0]
                     inst = sp_info[1]
-                    reg_type = sp_info[-2]
+                    central_coord = Quantity([float(sp_info[3].strip('ra')), float(sp_info[4].strip('dec'))], 'deg')
+                    r_inner = Quantity(np.array(sp_info[5].strip('ri').split('and')).astype(float), 'deg')
+                    r_outer = Quantity(np.array(sp_info[6].strip('ro').split('and')).astype(float), 'deg')
+                    if len(r_inner) == 1:
+                        r_inner = r_inner[0]
+                        r_outer = r_outer[0]
+
+                    # Only check the actual filename, as I have no knowledge of what strings might be in the
+                    #  user's path to xga output
+                    if 'grpTrue' in sp.split('/')[-1]:
+                        grp_ind = sp_info.index('grpTrue')
+                        grouped = True
+                    else:
+                        grouped = False
+
+                    if grouped and 'mincnt' in sp:
+                        min_counts = int(sp_info[grp_ind+1].split('mincnt')[-1])
+                        min_sn = None
+                    elif grouped and 'minsn' in sp:
+                        min_sn = float(sp_info[grp_ind+1].split('minsn')[-1])
+                        min_counts = None
+                    else:
+                        min_sn = None
+                        min_counts = None
+
+                    if 'ovsamp' in sp.split('/')[-1]:
+                        over_sample = float(sp_info[-2].split('ovsamp')[-1])
+                    else:
+                        over_sample = None
+
+                    if "region" in sp.split('/')[-1]:
+                        region = True
+                    else:
+                        region = False
+
+                    # I split the 'spec' part of the end of the name of the spectrum, and can use the parts of the
+                    #  file name preceding it to search for matching arf/rmf files
+                    sp_info_str = sp.split('_spec')[0]
+
                     # Fairly self explanatory, need to find all the separate products needed to define an XGA
                     #  spectrum
                     arf = [f for f in named if "arf" in f and "ann" not in f and "back" not in f
-                           and inst in f and reg_type in f]
+                           and sp_info_str == f.split('.arf')[0]]
                     rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" not in f
-                           and inst in f and reg_type in f]
+                           and sp_info_str == f.split('.rmf')[0]]
                     # As RMFs can be generated for source and background spectra separately, or one for both,
                     #  we need to check for matching RMFs to the spectrum we found
                     if len(rmf) == 0:
@@ -558,11 +598,12 @@ class BaseSource:
                                and inst in f and "universal" in f]
 
                     # Exact same checks for the background spectrum
-                    back = [f for f in named if "backspec" in f and "ann" not in f and inst in f and reg_type in f]
-                    back_arf = [f for f in named if "arf" in f and "ann" not in f and inst in f and reg_type in f
-                                and "back" in f]
+                    back = [f for f in named if "backspec" in f and "ann" not in f and inst in f
+                            and sp_info_str == f.split('_backspec')[0]]
+                    back_arf = [f for f in named if "arf" in f and "ann" not in f and inst in f
+                                and sp_info_str == f.split('_back.arf')[0] and "back" in f]
                     back_rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" in f and inst in f
-                                and reg_type in f]
+                                and sp_info_str == f.split('_back.rmf')[0]]
                     if len(back_rmf) == 0:
                         back_rmf = rmf
 
@@ -570,9 +611,12 @@ class BaseSource:
                     #  add it the source object.
                     if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and \
                             len(back_rmf) == 1:
-                        obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], reg_type, obs, inst,
-                                       "", "", "")
+                        obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], central_coord,
+                                       r_inner, r_outer, obs_id, inst, grouped, min_counts, min_sn, over_sample, "",
+                                       "", "", region)
                         self.update_products(obj)
+                    else:
+                        raise ValueError("I have found multiple file matches for a Spectrum, contact the developer!")
         os.chdir(og_dir)
 
         # Merged products have all the ObsIDs that they are made up of in their name
