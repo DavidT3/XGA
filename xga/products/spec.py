@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 12:46. Copyright (c) David J Turner
 
 
 import os
@@ -76,8 +76,12 @@ class Spectrum(BaseProduct):
         else:
             self._shape = 'elliptical'
 
-        self._update_spec_headers("main")
-        self._update_spec_headers("back")
+        try:
+            self._update_spec_headers("main")
+            self._update_spec_headers("back")
+        except OSError:
+            self._usable = False
+            self._why_unusable.append("FITSIOOSError")
 
         self._exp = None
         self._plot_data = {}

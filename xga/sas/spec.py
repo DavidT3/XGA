@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 12:46. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -380,18 +380,21 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                      dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                      gr=group_spec, ex=extra_file_name)
 
-            if one_rmf and not os.path.exists(dest_dir + rmf):
+            final_rmf_path = OUTPUT + obs_id + '/' + rmf
+            if one_rmf and not os.path.exists(final_rmf_path):
                 cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src), sb_cmd_str,
                                     arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src)])
-            elif not one_rmf and not os.path.exists(dest_dir + rmf):
+            elif not one_rmf and not os.path.exists(final_rmf_path):
                 cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src)]) + ";"
                 cmd_str += ";".join([sb_cmd_str, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src),
                                      arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src)])
             else:
-                cmd_str = ";".join([s_cmd_str, arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path,
-                                                              es=ex_src)]) + ";"
+                # This one just copies the existing universal rmf into the temporary generation folder
+                cmd_str = "cp {f_rmf} {d};".format(f_rmf=final_rmf_path, d=dest_dir)
+                cmd_str += ";".join([s_cmd_str, arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path,
+                                                               es=ex_src)]) + ";"
                 cmd_str += ";".join([sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path,
                                                                 es=ex_src)])
 
@@ -476,9 +479,51 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                       num_cores, disable_progress)
 
 
-def evselect_annular_spectrum_set():
-    raise NotImplementedError("Haven't quite got around to doing this bit yet")
+def evselect_annular_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
+                                  group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                                  over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
+                                  disable_progress: bool = False):
+    """
 
+    :param sources:
+    :param radii:
+    :param group_spec:
+    :param min_counts:
+    :param min_sn:
+    :param over_sample:
+    :param one_rmf:
+    :param num_cores:
+    :param disable_progress:
+    """
+    # If its a single source I put it into an iterable object (i.e. a list), just for convenience
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+    # And the only other option is a BaseSample instance, so if it isn't that then we get angry
+    elif not isinstance(sources, BaseSample):
+        raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
 
+    # I just want to make sure that nobody passes anything daft for the radii
+    if isinstance(radii, Quantity) and len(sources) != 1:
+        raise TypeError("You may only pass a Quantity for the radii parameter if you are only analysing "
+                        "one source. You are attempting to generate spectrum sets for {0} sources, so please pass "
+                        "a list of {0} non-scalar quantities.".format(len(sources)))
+    elif isinstance(radii, (list, np.ndarray)) and len(sources) != len(radii):
+        raise ValueError("The list of quantities passed for the radii parameter must be the same length as the "
+                         "number of sources which you are analysing.")
 
+    # If we've made it to this point then the radii type is fine, but I want to make sure that radii is a list
+    #  of quantities - as expected by the rest of the function
+    if isinstance(radii, Quantity):
+        radii = [radii]
 
+    # I'm also going to check to make sure that every annulus N+1 is further out then annulus N. There is a check
+    #  for this in the spec setup function but if I catch it here I can give a more informative error message
+    for s_ind, source in enumerate(sources):
+        # I'll also check that the quantity passed for the radii isn't scalar, and isn't only two long - that's not
+        #  a set of annuli, they should just use evselect_spectrum for that
+        cur_rad = radii[s_ind]
+        src_name = source.name
+        if cur_rad.isscalar:
+            raise ValueError("The radii quantity you have passed for {s} only has one value in it, this function is "
+                             "for generating a set of multiple annular spectra, I need at least three "
+                             "entries.".format(s=src_name))
