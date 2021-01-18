@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:37. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -582,7 +582,7 @@ class BaseSource:
 
                     # Only if oversampling was applied will it appear in the filename
                     if 'ovsamp' in sp.split('/')[-1]:
-                        over_sample = float(sp_info[-2].split('ovsamp')[-1])
+                        over_sample = int(sp_info[-2].split('ovsamp')[-1])
                     else:
                         over_sample = None
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:37. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -123,7 +123,7 @@ def _spec_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str,
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-               min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+               min_counts: int = 5, min_sn: float = None, over_sample: int = None, one_rmf: bool = True,
                num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     An internal function to generate all the commands necessary to produce an evselect spectrum, but is not
@@ -143,7 +143,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal to noise set this parameter to None.
-    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+    :param int over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
@@ -162,6 +162,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
+
+    # Just make sure these values are the expect data type, this matters when the information is
+    #  added to the storage strings and file names
+    if over_sample is not None:
+        over_sample = int(over_sample)
+    if min_counts is not None:
+        min_counts = int(min_counts)
+    if min_sn is not None:
+        min_sn = float(min_sn)
 
     # These check that the user hasn't done something silly like passing multiple grouping options, this is not
     #  allowed by SAS, will cause the generation to fail

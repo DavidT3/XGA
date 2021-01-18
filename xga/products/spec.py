@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 18:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:37. Copyright (c) David J Turner
 
 
 import os
@@ -23,7 +23,7 @@ class Spectrum(BaseProduct):
     """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str,
-                 grouped: bool, min_counts: int, min_sn: Union[float, int], over_sample: float, stdout_str: str,
+                 grouped: bool, min_counts: int, min_sn: float, over_sample: int, stdout_str: str,
                  stderr_str: str, gen_cmd: str, region: bool = False):
 
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
