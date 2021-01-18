@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 18:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:25. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -248,18 +248,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             if not os.path.exists(OUTPUT + obs_id):
                 os.mkdir(OUTPUT + obs_id)
 
-            # TODO restore all this when new storage system is in place
-
             # Got to check if this spectrum already exists
-            # exists = [match for match in source.get_products("spectrum", obs_id, inst, just_obj=False)
-            #           if outer_radius in match]
-            # if len(exists) == 1 and exists[0][-1].usable:
-            #     continue
+            exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name)
+            if len(exists) == 1 and exists[0].usable:
+                continue
 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
-            # if outer_radius == "region" and source.source_back_regions("region", obs_id)[0] is None:
-            #     continue
+            if outer_radius == "region" and source.source_back_regions("region", obs_id)[0] is None:
+                continue
 
             # Because the region will be different for each ObsID, I have to call the setup function here
             if outer_radius == 'region':
