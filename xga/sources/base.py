@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 11:11. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -546,9 +546,15 @@ class BaseSource:
                     # Reading these out into variables mostly for my own sanity while writing this
                     obs_id = sp_info[0]
                     inst = sp_info[1]
+                    # I now store the central coordinate in the file name, and read it out into astropy quantity
+                    #  for when I need to define the spectrum object
                     central_coord = Quantity([float(sp_info[3].strip('ra')), float(sp_info[4].strip('dec'))], 'deg')
+                    # Also read out the inner and outer radii into astropy quantities (I know that
+                    #  they will be in degree units).
                     r_inner = Quantity(np.array(sp_info[5].strip('ri').split('and')).astype(float), 'deg')
                     r_outer = Quantity(np.array(sp_info[6].strip('ro').split('and')).astype(float), 'deg')
+                    # Check if there is only one r_inner and r_outer value each, if so its a circle
+                    #  (otherwise its an ellipse)
                     if len(r_inner) == 1:
                         r_inner = r_inner[0]
                         r_outer = r_outer[0]
@@ -561,6 +567,7 @@ class BaseSource:
                     else:
                         grouped = False
 
+                    # mincnt or minsn information will only be in the filename if the spectrum is grouped
                     if grouped and 'mincnt' in sp:
                         min_counts = int(sp_info[grp_ind+1].split('mincnt')[-1])
                         min_sn = None
@@ -568,9 +575,12 @@ class BaseSource:
                         min_sn = float(sp_info[grp_ind+1].split('minsn')[-1])
                         min_counts = None
                     else:
+                        # We still need to pass the variables to the spectrum definition, even if it isn't
+                        #  grouped
                         min_sn = None
                         min_counts = None
 
+                    # Only if oversampling was applied will it appear in the filename
                     if 'ovsamp' in sp.split('/')[-1]:
                         over_sample = float(sp_info[-2].split('ovsamp')[-1])
                     else:
@@ -611,9 +621,11 @@ class BaseSource:
                     #  add it the source object.
                     if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and \
                             len(back_rmf) == 1:
+                        # Defining our XGA spectrum instance
                         obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], central_coord,
                                        r_inner, r_outer, obs_id, inst, grouped, min_counts, min_sn, over_sample, "",
                                        "", "", region)
+                        # And adding it to the source storage structure
                         self.update_products(obj)
                     else:
                         raise ValueError("I have found multiple file matches for a Spectrum, contact the developer!")
