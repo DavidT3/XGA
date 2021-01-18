@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 15:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 15:06. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -538,7 +538,7 @@ class BaseSource:
                 named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
                          self._name.replace("+", "x") in f and obs in f
                          and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
-                specs = [f for f in named if "spec" in f and "back" not in f and "ann" not in f]
+                specs = [f for f in named if "spec" in f.split('/')[-1] and "back" not in f.split('/')[-1]]
 
                 for sp in specs:
                     # Filename contains a lot of useful information, so splitting it out to get it
@@ -597,22 +597,19 @@ class BaseSource:
 
                     # Fairly self explanatory, need to find all the separate products needed to define an XGA
                     #  spectrum
-                    arf = [f for f in named if "arf" in f and "ann" not in f and "back" not in f
-                           and sp_info_str == f.split('.arf')[0]]
-                    rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" not in f
-                           and sp_info_str == f.split('.rmf')[0]]
+                    arf = [f for f in named if "arf" in f and "back" not in f and sp_info_str == f.split('.arf')[0]]
+                    rmf = [f for f in named if "rmf" in f and "back" not in f and sp_info_str == f.split('.rmf')[0]]
                     # As RMFs can be generated for source and background spectra separately, or one for both,
                     #  we need to check for matching RMFs to the spectrum we found
                     if len(rmf) == 0:
-                        rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" not in f
-                               and inst in f and "universal" in f]
+                        rmf = [f for f in named if "rmf" in f and "back" not in f and inst in f and "universal" in f]
 
                     # Exact same checks for the background spectrum
-                    back = [f for f in named if "backspec" in f and "ann" not in f and inst in f
+                    back = [f for f in named if "backspec" in f and inst in f
                             and sp_info_str == f.split('_backspec')[0]]
-                    back_arf = [f for f in named if "arf" in f and "ann" not in f and inst in f
+                    back_arf = [f for f in named if "arf" in f and inst in f
                                 and sp_info_str == f.split('_back.arf')[0] and "back" in f]
-                    back_rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" in f and inst in f
+                    back_rmf = [f for f in named if "rmf" in f and "back" in f and inst in f
                                 and sp_info_str == f.split('_back.rmf')[0]]
                     if len(back_rmf) == 0:
                         back_rmf = rmf
