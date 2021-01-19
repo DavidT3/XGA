@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:39. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -483,20 +483,30 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
 
 @sas_call
 def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
-                                  group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                                  over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                                  disable_progress: bool = False):
+                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                 one_rmf: bool = True, num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
+    This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular annuli.
+    Such spectrum sets can be used to measure projected spectroscopic quantities, or even be de-projected to attempt
+    to measure spectroscopic quantities in a three dimensional space.
 
-    :param sources:
-    :param radii:
-    :param group_spec:
-    :param min_counts:
-    :param min_sn:
-    :param over_sample:
-    :param one_rmf:
-    :param num_cores:
-    :param disable_progress:
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
+    :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the
+        annuli for the sources. A single quantity containing at least three radii may be passed if one source
+        is being analysed, but for multiple sources there should be a quantity (with at least three radii), PER
+        source.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
+    :param int num_cores: The number of cores to use (if running locally), default is set to
+        90% of available.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     # If its a single source I put it into an iterable object (i.e. a list), just for convenience
     if isinstance(sources, ExtendedSource):
