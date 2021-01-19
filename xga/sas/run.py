@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 14:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 15:16. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -131,6 +131,8 @@ def sas_call(sas_func):
         results = {s: [] for s in src_lookup}
         # Any errors raised shouldn't be SAS, as they are stored within the product object.
         raised_errors = []
+        # Making sure something is defined for this variable
+        prod_type_str = ""
         if to_execute and COMPUTE_MODE == "local" and len(all_run) > 0:
             # Will run the commands locally in a pool
             prod_type_str = ", ".join(set(all_type))
