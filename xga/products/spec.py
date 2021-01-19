@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 17:23. Copyright (c) David J Turner
 
 
 import os
 import warnings
-from typing import Tuple, Union
+from typing import Tuple, Union, List
 
 import numpy as np
 from astropy.units import Quantity
@@ -13,7 +13,8 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
 from . import BaseProduct, BaseAggregateProduct
-from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError
+from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError
+from ..utils import dict_search
 
 
 class Spectrum(BaseProduct):
@@ -728,40 +729,57 @@ class Spectrum(BaseProduct):
 
 
 class AnnularSpectra(BaseAggregateProduct):
-    def __init__(self, spec_paths: list, rmf_paths: list, arf_paths: list, b_path: str, b_rmf_path: str,
-                 b_arf_path: str, inn_radii: Quantity, out_radii: Quantity, obs_id: str, instrument: str,
-                 stdout_str: str, stderr_str: str, gen_cmd: str):
-        super().__init__(spec_paths, 'ann_spec', obs_id, instrument)
+    """
+    A class designed to hold a set of XGA spectra generated in concentric, circular annuli.
+    """
+    def __init__(self, spectra: List[Spectrum]):
+        """
+        The init method for the AnnularSpectrum class, performs checks and organises the spectra which
+        have been passed in, for easy retrieval.
 
-        # TODO Check that the radii quantities are in length units
-        # We just check that the arrays with inner and outer radii are the same length
-        if len(inn_radii) != len(out_radii):
-            raise ValueError("The inn_radii and out_radii arrays must be the same length.")
-        self._num_ann = len(inn_radii)
+        :param List[Spectrum] spectra: A list of XGA spectrum objects which make up this set.
+        """
+        super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined")
 
-        # Now we check that the number of spectra, rmfs, and arfs match the number we expect
-        len_checks = [len(p) == self._num_ann for p in [spec_paths, rmf_paths, arf_paths]]
-        if not all(len_checks):
-            raise ValueError("There must be the same number of spec_paths, rmf_paths, and arf_paths as there "
-                             "are annuli.")
+        # There shouldn't be any way this can happen, but it doesn't hurt to check that all of the spectra
+        #  have the same set ID
+        set_idents = set([s.set_ident for s in spectra])
+        if len(set_idents) != 1:
+            raise XGASetIDError("You have passed spectra that have set IDs that do not match")
 
-        # Stored the passed file lists in attributes just for future reference
-        self._inn_radii = inn_radii
-        self._out_radii = out_radii
-        self._rad_pairs = np.append(inn_radii, out_radii)
+        # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
+        #  many annuli there are and start storing spectra appropriately
+        self._num_ann = len(set([s.annulus_ident for s in spectra]))
 
-        # Saving the various file paths
-        self._rmfs = rmf_paths
-        self._arfs = arf_paths
+        # While the official ObsID and Instrument of this product are 'combined', I do still
+        #  want to know which ObsIDs and instruments the spectra belong to
+        inst_dict = {o: [] for o in [s.obs_id for s in spectra]}
+        for s in spectra:
+            if s.instrument not in inst_dict[s.obs_id]:
+                inst_dict[s.obs_id].append(s.instrument)
 
-        for f_ind, f in enumerate(spec_paths):
-            interim = Spectrum(f, rmf_paths[f_ind], arf_paths[f_ind], b_path, b_rmf_path, b_arf_path, "annular",
-                               obs_id, instrument, stdout_str, stderr_str, gen_cmd)
+        # The same idea as the source.instruments dictionary
+        self._instruments = inst_dict
 
-            pos_key = inn_radii[f_ind].value + "-" + out_radii[f_ind].value
-            self._component_products[pos_key] = interim
+        # All the radii will be in degrees, but I'll grab it dynamically anyway
+        self._rad_unit = spectra[0].inner_rad.unit
 
-        self._all_usable = all(p.usable for p in self)
+        # I want to grab the radii out of the spectra, then put them in order, just so I have them
+        radii = sorted(list(set([s.inner_rad for s in spectra] + [s.outer_rad for s in spectra])))
+        self._radii = Quantity([r.value for r in radii], self._rad_unit)
+
+        # Finally storing the spectra inside the product, though with multiple layers of products
+        # This sets up the component products dictionary, allowing for the separated storage of
+        #  spectra from different ObsIDs
+        self._component_products = {ai: {o: {i: None for i in self._instruments[o]} for o in self.obs_ids}
+                                    for ai in range(self._num_ann)}
+        self._component_products = {o: {i: {ai: None for ai in range(self._num_ann)}
+                                        for i in self._instruments[o]} for o in self.obs_ids}
+        # And putting the spectra in their place
+        for s in spectra:
+            self._component_products[s.obs_id][s.instrument][s.annulus_ident] = s
+
+        self._all_usable = all(s.usable for s in self.all_spectra)
 
     @property
     def num_annuli(self) -> int:
@@ -772,50 +790,136 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self._num_ann
 
-    @property
-    def rmf(self) -> list:
+    def background(self, obs_id: str, inst: str) -> str:
         """
-        This method returns the list of RMF files for the annular spectra associated with this object.
-        :return: The path to the RMF files associated with the annular spectra of this object.
-        :rtype: list
-        """
-        return self._rmfs
+        This method returns the path to the background spectrum for a particular ObsID and
+        instrument. It is the background associated with the outermost annulus of this object.
 
-    @property
-    def arf(self) -> list:
-        """
-        This method returns the list of ARF files for the annular spectra associated with this object.
-        :return: The path to the ARF files associated with the annular spectra of this object.
-        :rtype: list
-        """
-        return self._arfs
-
-    @property
-    def background(self) -> str:
-        """
-        This method returns the path to the background spectrum.
+        :param str obs_id: The ObsID to get the background spectrum for.
+        :param str inst: The instrument to get the background spectrum for.
         :return: Path of the background spectrum.
         :rtype: str
         """
-        return self._component_products.values()[0].background
+        return self.get_spectra(self._num_ann-1, obs_id, inst).background
 
-    @property
-    def background_rmf(self) -> str:
+    def background_rmf(self, obs_id: str, inst: str) -> str:
         """
-        This method returns the path to the background spectrum's RMF file.
-        :return: The path the the background spectrum's RMF.
+        This method returns the path to the background spectrum's RMF for a particular ObsID and
+        instrument. It is the RMF of the background associated with the outermost annulus of this object.
+
+        :param str obs_id: The ObsID to get the background spectrum's RMF for.
+        :param str inst: The instrument to get the background spectrum' RMF for.
+        :return: Path of the background spectrum RMF.
         :rtype: str
         """
-        return self._component_products.values()[0].background_rmf
+        return self.get_spectra(self._num_ann-1, obs_id, inst).background_rmf
 
-    @property
-    def background_arf(self) -> str:
+    def background_arf(self, obs_id: str, inst: str) -> str:
         """
-        This method returns the path to the background spectrum's ARF file.
-        :return: The path the the background spectrum's ARF.
+        This method returns the path to the background spectrum's ARF for a particular ObsID and
+        instrument. It is the ARF of the background associated with the outermost annulus of this object.
+
+        :param str obs_id: The ObsID to get the background spectrum's ARF for.
+        :param str inst: The instrument to get the background spectrum' ARF for.
+        :return: Path of the background spectrum ARF.
         :rtype: str
         """
-        return self._component_products.values()[0].background_arf
+        return self.get_spectra(self._num_ann - 1, obs_id, inst).background_arf
+
+    @property
+    def obs_ids(self) -> list:
+        """
+        A property of this spectrum set that details which ObsIDs have contributed spectra to this object.
+
+        :return: A list of ObsIDs.
+        containing instruments associated with those ObsIDs.
+        :rtype: dict
+        """
+        return list(self._instruments.keys())
+
+    @property
+    def instruments(self) -> dict:
+        """
+        A property of this spectrum set that details which ObsIDs and instruments have contributed spectra
+        to this object.
+
+        :return: A dictionary of lists, with the top level keys being ObsIDs, and the lists
+        containing instruments associated with those ObsIDs.
+        :rtype: dict
+        """
+        return self._instruments
+
+    def get_spectra(self, annulus_ident, obs_id: str = None, inst: str = None) -> Union[List[Spectrum], Spectrum]:
+        """
+        This is the getter for the spectra stored in the AnnularSpectra data storage structure. They can
+        be retrieved based on annulus identifier, ObsID, and instrument.
+
+        :param int annulus_ident: The annulus identifier to retrieve spectra for.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied.
+        :param str inst: Optionally, a specific instrument to search for can be supplied.
+        :return: List of matching spectra, or just a Spectrum object if one match is found.
+        :rtype: Union[List[Spectrum], Spectrum]
+        """
+        def unpack_list(to_unpack: list):
+            """
+            A recursive function to go through every layer of a nested list and flatten it all out. It
+            doesn't return anything because to make life easier the 'results' are appended to a variable
+            in the namespace above this one.
+
+            :param list to_unpack: The list that needs unpacking.
+            """
+            # Must iterate through the given list
+            for entry in to_unpack:
+                # If the current element is not a list then all is chill, this element is ready for appending
+                # to the final list
+                if not isinstance(entry, list):
+                    out.append(entry)
+                else:
+                    # If the current element IS a list, then obviously we still have more unpacking to do,
+                    # so we call this function recursively.
+                    unpack_list(entry)
+
+        if annulus_ident not in np.array(range(0, self._num_ann)):
+            ann_str = ", ".join(np.array(range(0, self._num_ann)).astype(str))
+            raise IndexError("{i} is not an annulus ID associated with this AnnularSpectra object. "
+                             "Allowed annulus IDs are; ".format(i=annulus_ident, a=ann_str))
+        elif obs_id not in self._component_products and obs_id is not None:
+            raise NotAssociatedError("{0} is not associated with this AnnularSpectra.".format(obs_id))
+        elif (obs_id is not None and obs_id in self._component_products) and \
+                (inst is not None and inst not in self._component_products[obs_id]):
+            raise NotAssociatedError("Instrument {1} is not associated with {0}".format(obs_id, inst))
+
+        matches = []
+        for match in dict_search(annulus_ident, self._component_products):
+            out = []
+            unpack_list(match)
+            if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None):
+                matches.append(out[-1])
+
+        # Here I only return the object if one match was found
+        if len(matches) == 1:
+            matches = matches[0]
+        return matches
+
+    @property
+    def all_spectra(self) -> List[Spectrum]:
+        """
+        Simple extra wrapper for get_spectra that allows the user to retrieve every single spectrum associated
+        with this AnnularSpectra instance, for all annulus IDs.
+
+        :return: A list of every single spectrum associated with this object.
+        :rtype: List[Spectrum]
+        """
+        all_spec = []
+        for ann_i in range(self._num_ann):
+            all_spec += self.get_spectra(ann_i)
+
+        return all_spec
+
+
+
+
+
 
 
 
