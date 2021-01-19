@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 13:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 17:53. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -608,7 +608,8 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
                 #  other part of the string
                 split_p = p.split('/')
                 # We add the set and annulus identifiers
-                new_spec = split_p[-1].replace("_spec.fits", "_id{si}_{ai}".format(si=set_id, ai=r_ind)) + "_spec.fits"
+                new_spec = split_p[-1].replace("_spec.fits", "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                           + "_spec.fits"
                 # Not enough just to change the name passed through XGA, it has to be changed in
                 #  the SAS commands as well
                 cur_cmd = cur_cmd.replace(split_p[-1], new_spec)
@@ -624,8 +625,8 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
                     # Much the same process as with the spectrum name
                     split_r = copy(interim_extras[p_ind]['rmf_path']).split('/')
                     split_br = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
-                    new_rmf = split_r[-1].replace('.rmf', "_id{si}_{ai}".format(si=set_id, ai=r_ind)) + ".rmf"
-                    new_b_rmf = split_br[-1].replace('_back.rmf', "_id{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                    new_rmf = split_r[-1].replace('.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".rmf"
+                    new_b_rmf = split_br[-1].replace('_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
                                 + "_back.rmf"
 
                     # Replacing the names in the SAS commands
@@ -642,10 +643,10 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
                 split_a = copy(interim_extras[p_ind]['arf_path']).split('/')
                 split_ba = copy(interim_extras[p_ind]['b_arf_path']).split('/')
                 split_bs = copy(interim_extras[p_ind]['b_spec_path']).split('/')
-                new_arf = split_a[-1].replace('.arf', "_id{si}_{ai}".format(si=set_id, ai=r_ind)) + ".arf"
-                new_b_arf = split_ba[-1].replace('_back.arf', "_id{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                new_arf = split_a[-1].replace('.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".arf"
+                new_b_arf = split_ba[-1].replace('_back.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
                             + "_back.arf"
-                new_b_spec = split_bs[-1].replace('_backspec.fits', "_id{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                new_b_spec = split_bs[-1].replace('_backspec.fits', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
                             + "_backspec.fits"
 
                 # New names into the commands
