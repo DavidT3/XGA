@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 12:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 13:38. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -510,7 +510,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     # If its a single source I put it into an iterable object (i.e. a list), just for convenience
-    if isinstance(sources, ExtendedSource):
+    if isinstance(sources, BaseSource):
         sources = [sources]
     # And the only other option is a BaseSample instance, so if it isn't that then we get angry
     elif not isinstance(sources, BaseSample):
@@ -521,6 +521,8 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
         raise TypeError("You may only pass a Quantity for the radii parameter if you are only analysing "
                         "one source. You are attempting to generate spectrum sets for {0} sources, so please pass "
                         "a list of {0} non-scalar quantities.".format(len(sources)))
+    elif isinstance(radii, Quantity):
+        pass
     elif isinstance(radii, (list, np.ndarray)) and len(sources) != len(radii):
         raise ValueError("The list of quantities passed for the radii parameter must be the same length as the "
                          "number of sources which you are analysing.")
