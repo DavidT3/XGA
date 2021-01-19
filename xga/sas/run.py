@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 15:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 18:10. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -225,6 +225,7 @@ def sas_call(sas_func):
                 elif product.type is not None and product.usable and prod_type_str == "annular spectrum set components":
                     # Really we're just re-creating the results dictionary here, but I want these products
                     #  to go through the error checking stuff like everything else does
+                    sources[ind].update_products(product)
                     ann_spec_comps[entry].append(product)
 
             if len(to_raise) != 0:

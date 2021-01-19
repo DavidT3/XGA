@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 15:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 18:10. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -23,7 +23,7 @@ from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObserva
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.misc import sky_deg_scale
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
-    RateMap, PSFGrid, BaseProfile1D
+    RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
@@ -512,6 +512,8 @@ class BaseSource:
             return right_merged
 
         og_dir = os.getcwd()
+        # This is used for spectra that should be part of an AnnularSpectra object
+        ann_spec_constituents = {}
         for obs in self._obs:
             if os.path.exists(OUTPUT + obs):
                 os.chdir(OUTPUT + obs)
@@ -568,10 +570,10 @@ class BaseSource:
                         grouped = False
 
                     # mincnt or minsn information will only be in the filename if the spectrum is grouped
-                    if grouped and 'mincnt' in sp:
+                    if grouped and 'mincnt' in sp.split('/')[-1]:
                         min_counts = int(sp_info[grp_ind+1].split('mincnt')[-1])
                         min_sn = None
-                    elif grouped and 'minsn' in sp:
+                    elif grouped and 'minsn' in sp.split('/')[-1]:
                         min_sn = float(sp_info[grp_ind+1].split('minsn')[-1])
                         min_counts = None
                     else:
@@ -622,11 +624,27 @@ class BaseSource:
                         obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], central_coord,
                                        r_inner, r_outer, obs_id, inst, grouped, min_counts, min_sn, over_sample, "",
                                        "", "", region)
+
                         # And adding it to the source storage structure
                         self.update_products(obj)
+                        if "ident" in sp.split('/')[-1]:
+                            set_id = int(sp.split('ident')[-1].split('_')[0])
+                            ann_id = int(sp.split('ident')[-1].split('_')[1])
+                            obj.annulus_ident = ann_id
+                            obj.set_ident = set_id
+                            if set_id not in ann_spec_constituents:
+                                ann_spec_constituents[set_id] = []
+                            ann_spec_constituents[set_id].append(obj)
                     else:
                         raise ValueError("I have found multiple file matches for a Spectrum, contact the developer!")
         os.chdir(og_dir)
+
+        # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
+        #  those objects and add them to the storage structure
+        if len(ann_spec_constituents) != 0:
+            for set_id in ann_spec_constituents:
+                ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+                self.update_products(ann_spec_obj)
 
         # Merged products have all the ObsIDs that they are made up of in their name
         obs_str = "_".join(self._obs)
