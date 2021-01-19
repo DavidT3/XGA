@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:32. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -482,7 +482,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
 
 
 @sas_call
-def evselect_annular_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
+def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
                                   group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                                   over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                                   disable_progress: bool = False):
@@ -567,6 +567,8 @@ def evselect_annular_spectrum_set(sources: Union[BaseSource, BaseSample], radii:
     all_extras = []
     # Iterating through the sources
     for s_ind, source in enumerate(sources):
+        set_id = randint(0, 1e+8)
+
         # This is where the commands/extra information get concatenated from the different annuli
         src_cmds = np.array([])
         src_paths = np.array([])
@@ -583,7 +585,7 @@ def evselect_annular_spectrum_set(sources: Union[BaseSource, BaseSample], radii:
             interim_extras = spec_cmd_out[6][0]
             # Add an annulus identifier to the extra_info dictionary
             for ei in range(len(interim_extras)):
-                interim_extras[ei].update({"ann_ident": r_ind})
+                interim_extras[ei].update({"set_ident": set_id, "ann_ident": r_ind})
             src_extras = np.concatenate([src_extras, interim_extras])
             src_paths = np.concatenate([src_paths, spec_cmd_out[5][0]])
         src_out_types = np.array(src_out_types)

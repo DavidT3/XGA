@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:32. Copyright (c) David J Turner
 
 
 import os
@@ -142,8 +142,10 @@ class Spectrum(BaseProduct):
         self._storage_key = spec_storage_name
 
         # This attribute is set via the property, ONLY if this spectrum is considered to be a member of a set
-        #  of annular spectra.
+        #  of annular spectra. It describes which position in the set this spectrum has
         self._ann_ident = None
+        # This holds a unique random identifier for the set itself, and again will only be set from outside
+        self._set_ident = None
 
     def _update_spec_headers(self, which_spec: str):
         """
@@ -447,6 +449,27 @@ class Spectrum(BaseProduct):
         if not isinstance(new_ident, int):
             raise TypeError("Spectrum annulus identifiers may ONLY be positive integers")
         self._ann_ident = new_ident
+
+    @property
+    def set_ident(self) -> int:
+        """
+        This property returns the random id of the spectrum set this is a part of.
+
+        :return: Set identifier, None if not part of a set.
+        :rtype: object
+        """
+        return self._set_ident
+
+    @set_ident.setter
+    def set_ident(self, new_ident: int):
+        """
+        This property sets the set identifier of this object.
+
+        :param int new_ident: The set identifier of this spectrum.
+        """
+        if not isinstance(new_ident, int):
+            raise TypeError("Spectrum set identifiers may ONLY be positive integers")
+        self._set_ident = new_ident
 
     @property
     def exposure(self) -> Quantity:

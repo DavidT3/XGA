@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:32. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -78,6 +78,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     # An extra step is required for annular spectrum set components
     if p_type == "annular spectrum set components":
         prod.annulus_ident = extra_info["ann_ident"]
+        prod.set_ident = extra_info["set_ident"]
 
     return prod, src
 
