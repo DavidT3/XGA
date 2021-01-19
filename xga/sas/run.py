@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 13:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 14:55. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -228,13 +228,14 @@ def sas_call(sas_func):
             if len(to_raise) != 0:
                 all_to_raise.append(to_raise)
 
-        for entry in ann_spec_comps:
-            # So now we pass the list of spectra to a AnnularSpectra definition - and it will sort them out
-            #  itself so the order doesn't matter
-            ann_spec = AnnularSpectra(ann_spec_comps[entry])
-            ind = src_lookup[entry]
-            # And adding our exciting new set of annular spectra into the storage structure
-            sources[ind].update_products(ann_spec)
+        if prod_type_str == "annular spectrum set components":
+            for entry in ann_spec_comps:
+                # So now we pass the list of spectra to a AnnularSpectra definition - and it will sort them out
+                #  itself so the order doesn't matter
+                ann_spec = AnnularSpectra(ann_spec_comps[entry])
+                ind = src_lookup[entry]
+                # And adding our exciting new set of annular spectra into the storage structure
+                sources[ind].update_products(ann_spec)
 
         # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
         for error in raised_errors:
