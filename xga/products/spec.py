@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 12:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:03. Copyright (c) David J Turner
 
 
 import os
@@ -141,6 +141,10 @@ class Spectrum(BaseProduct):
         # And we save the completed key to an attribute
         self._storage_key = spec_storage_name
 
+        # This attribute is set via the property, ONLY if this spectrum is considered to be a member of a set
+        #  of annular spectra.
+        self._ann_ident = None
+
     def _update_spec_headers(self, which_spec: str):
         """
         An internal method that will 'push' the current class attributes that hold the paths to data products
@@ -150,7 +154,7 @@ class Spectrum(BaseProduct):
         """
         # This function is meant for internal use only, so I won't check that the passed-in file paths
         #  actually exist. This will have been checked already
-        if which_spec == "main":
+        if which_spec == "main" and self.usable:
             with FITS(self._path, 'rw') as spec_fits:
                 spec_fits[1].write_key("RESPFILE", self._rmf)
                 spec_fits[1].write_key("ANCRFILE", self._arf)
@@ -158,14 +162,12 @@ class Spectrum(BaseProduct):
                 spec_fits[0].write_key("RESPFILE", self._rmf)
                 spec_fits[0].write_key("ANCRFILE", self._arf)
                 spec_fits[0].write_key("BACKFILE", self._back_spec)
-        elif which_spec == "back":
+        elif which_spec == "back" and self.usable:
             with FITS(self._back_spec, 'rw') as spec_fits:
                 spec_fits[1].write_key("RESPFILE", self._back_rmf)
                 spec_fits[1].write_key("ANCRFILE", self._back_arf)
                 spec_fits[0].write_key("RESPFILE", self._back_rmf)
                 spec_fits[0].write_key("ANCRFILE", self._back_arf)
-        else:
-            raise ValueError("Illegal value for which_spec, you shouldn't be using this internal function!")
 
     @property
     def path(self) -> str:
@@ -423,6 +425,28 @@ class Spectrum(BaseProduct):
         :rtype: bool
         """
         return self._region
+
+    @property
+    def annulus_ident(self) -> int:
+        """
+        This property returns the integer identifier of which annulus in a set this Spectrum is, if it
+        is part of a set.
+
+        :return: Integer annulus identifier, None if not part of a set.
+        :rtype: object
+        """
+        return self._ann_ident
+
+    @annulus_ident.setter
+    def annulus_ident(self, new_ident: int):
+        """
+        This property sets the annulus identifier of this object.
+
+        :param int new_ident: The annulus integer identifier of this spectrum.
+        """
+        if not isinstance(new_ident, int):
+            raise TypeError("Spectrum annulus identifiers may ONLY be positive integers")
+        self._ann_ident = new_ident
 
     @property
     def exposure(self) -> Quantity:

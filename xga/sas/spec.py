@@ -1,8 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2021, 12:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:03. Copyright (c) David J Turner
 
 import os
 import warnings
+from random import randint
 from shutil import rmtree
 from typing import Union, Tuple, List
 
@@ -326,8 +327,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Just grabs the event list object
             evt_list = pack[-1]
-            # Sets up the file names of the output files
-            dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source_name)
+            # Sets up the file names of the output files, adding a random number so that the
+            #  function for generating annular spectra doesn't clash and try to use the same folder
+            dest_dir = OUTPUT + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
 
             # Sets up something very similar to the extra name variable above, but for the file names
             #  Stores some information about grouping in the file names
@@ -479,6 +481,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                       num_cores, disable_progress)
 
 
+@sas_call
 def evselect_annular_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
                                   group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                                   over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
@@ -496,7 +499,7 @@ def evselect_annular_spectrum_set(sources: Union[BaseSource, BaseSample], radii:
     :param disable_progress:
     """
     # If its a single source I put it into an iterable object (i.e. a list), just for convenience
-    if isinstance(sources, BaseSource):
+    if isinstance(sources, ExtendedSource):
         sources = [sources]
     # And the only other option is a BaseSample instance, so if it isn't that then we get angry
     elif not isinstance(sources, BaseSample):
@@ -516,6 +519,11 @@ def evselect_annular_spectrum_set(sources: Union[BaseSource, BaseSample], radii:
     if isinstance(radii, Quantity):
         radii = [radii]
 
+    # Check that all radii are passed in the units, I could convert them and make sure but I can't
+    #  be bothered
+    if len(set([r.unit for r in radii])) != 1:
+        raise ValueError("Please pass all radii sets in the same units.")
+
     # I'm also going to check to make sure that every annulus N+1 is further out then annulus N. There is a check
     #  for this in the spec setup function but if I catch it here I can give a more informative error message
     for s_ind, source in enumerate(sources):
@@ -527,3 +535,67 @@ def evselect_annular_spectrum_set(sources: Union[BaseSource, BaseSample], radii:
             raise ValueError("The radii quantity you have passed for {s} only has one value in it, this function is "
                              "for generating a set of multiple annular spectra, I need at least three "
                              "entries.".format(s=src_name))
+        elif len(cur_rad) < 3:
+            raise ValueError("The radii quantity have you passed for {s} must have at least 3 entries, this "
+                             "would generate a set of 2 annular spectra and is the minimum for this "
+                             "function.".format(s=src_name))
+
+        # This runs through the radii for this source and makes sure that annulus N+1 is larger than annulus N
+        greater_check = [cur_rad[r_ind] < cur_rad[r_ind+1] for r_ind in range(0, len(cur_rad)-1)]
+        if not all(greater_check):
+            raise ValueError("Not all of the radii passed for {s} are larger than the annulus that "
+                             "precedes them.".format(s=src_name))
+
+    # Just to make sure calibration files have been generated, though I don't actually think they could
+    #  have gotten to this point without them
+    cifbuild(sources, num_cores, disable_progress)
+
+    # This generates a spectra between the innermost and outmost radii for each source, and a universal RMF
+    if one_rmf:
+        innermost_rads = Quantity([r_set[0] for r_set in radii], radii[0].unit)
+        outermost_rads = Quantity([r_set[-1] for r_set in radii], radii[0].unit)
+        evselect_spectrum(sources, outermost_rads, innermost_rads, group_spec, min_counts, min_sn, over_sample,
+                          one_rmf, num_cores, disable_progress)
+
+    # I want to be able to generate all the individual annuli in parallel, but I need them to be associated with
+    #  the correct annuli, which is why I have to iterate through the sources and radii
+
+    # These store the final output information needed to run the commands
+    all_cmds = []
+    all_paths = []
+    all_out_types = []
+    all_extras = []
+    # Iterating through the sources
+    for s_ind, source in enumerate(sources):
+        # This is where the commands/extra information get concatenated from the different annuli
+        src_cmds = np.array([])
+        src_paths = np.array([])
+        src_out_types = []
+        src_extras = np.array([])
+        # Here we run through all the requested annuli for the current source
+        for r_ind in range(len(radii[s_ind])-1):
+            # Generate the SAS commands for the current annulus of the current source, for all observations
+            spec_cmd_out = _spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
+                                      min_sn, over_sample, one_rmf, num_cores, disable_progress)
+            # Go through and concatenate things to the source lists defined above
+            src_cmds = np.concatenate([src_cmds, spec_cmd_out[0][0]])
+            src_out_types += ['annular spectrum set components'] * len(spec_cmd_out[4][0])
+            interim_extras = spec_cmd_out[6][0]
+            # Add an annulus identifier to the extra_info dictionary
+            for ei in range(len(interim_extras)):
+                interim_extras[ei].update({"ann_ident": r_ind})
+            src_extras = np.concatenate([src_extras, interim_extras])
+            src_paths = np.concatenate([src_paths, spec_cmd_out[5][0]])
+        src_out_types = np.array(src_out_types)
+
+        # This adds the current sources final commands to the 'all sources' lists
+        all_cmds.append(src_cmds)
+        all_paths.append(src_paths)
+        all_out_types.append(src_out_types)
+        all_extras.append(src_extras)
+
+    # This gets passed back to the sas call function and is used to run the commands
+    return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
+
+
+

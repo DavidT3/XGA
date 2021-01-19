@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 18:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:03. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -60,7 +60,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         # ccf files may not be destined to spend life as product objects, but that doesn't mean
         # I can't take momentarily advantage of the error parsing I built into the product classes
         prod = BaseProduct(p_path[0], "", "", out, err, cmd)
-    elif p_type == "spectrum" and "NullSource" not in src:
+    elif (p_type == "spectrum" or p_type == "annular spectrum set components") and "NullSource" not in src:
         prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
                         extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info['central_coord'],
                         extra_info["inner_radius"], extra_info["outer_radius"], extra_info["obs_id"],
@@ -74,6 +74,10 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = None
     else:
         raise NotImplementedError("Not implemented yet")
+
+    # An extra step is required for annular spectrum set components
+    if p_type == "annular spectrum set components":
+        prod.annulus_ident = extra_info["ann_ident"]
 
     return prod, src
 
