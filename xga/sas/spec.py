@@ -1,8 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 12:09. Copyright (c) David J Turner
 
 import os
 import warnings
+from copy import copy
 from random import randint
 from shutil import rmtree
 from typing import Union, Tuple, List
@@ -377,7 +378,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 rmf = rmf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                  dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                  gr=group_spec, ex=extra_file_name)
-                b_rmf = "{o}_{i}_{n}_ra{ra}+dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.rmf"
+                b_rmf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.rmf"
                 b_rmf = b_rmf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                      dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                      gr=group_spec, ex=extra_file_name)
@@ -589,15 +590,84 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
             # Generate the SAS commands for the current annulus of the current source, for all observations
             spec_cmd_out = _spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
                                       min_sn, over_sample, one_rmf, num_cores, disable_progress)
-            # Go through and concatenate things to the source lists defined above
-            src_cmds = np.concatenate([src_cmds, spec_cmd_out[0][0]])
-            src_out_types += ['annular spectrum set components'] * len(spec_cmd_out[4][0])
+
+            # Read out some of the output into variables to be modified
+            interim_paths = spec_cmd_out[5][0]
             interim_extras = spec_cmd_out[6][0]
-            # Add an annulus identifier to the extra_info dictionary
-            for ei in range(len(interim_extras)):
-                interim_extras[ei].update({"set_ident": set_id, "ann_ident": r_ind})
+            interim_cmds = spec_cmd_out[0][0]
+
+            # Modified paths and commands will be stored in here
+            new_paths = []
+            new_cmds = []
+            for p_ind, p in enumerate(interim_paths):
+                cur_cmd = interim_cmds[p_ind]
+
+                # Split up the current path, so we only modify the actual file name and not any
+                #  other part of the string
+                split_p = p.split('/')
+                # We add the set and annulus identifiers
+                new_spec = split_p[-1].replace("_spec.fits", "_id{si}_{ai}".format(si=set_id, ai=r_ind)) + "_spec.fits"
+                # Not enough just to change the name passed through XGA, it has to be changed in
+                #  the SAS commands as well
+                cur_cmd = cur_cmd.replace(split_p[-1], new_spec)
+
+                # Add the new filename back into the split spec file path
+                split_p[-1] = new_spec
+
+                # Add an annulus identifier to the extra_info dictionary
+                interim_extras[p_ind].update({"set_ident": set_id, "ann_ident": r_ind})
+
+                # Only need to modify the RMF paths if the universal RMF HASN'T been used
+                if "universal" not in interim_extras[p_ind]['rmf_path']:
+                    # Much the same process as with the spectrum name
+                    split_r = copy(interim_extras[p_ind]['rmf_path']).split('/')
+                    split_br = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
+                    new_rmf = split_r[-1].replace('.rmf', "_id{si}_{ai}".format(si=set_id, ai=r_ind)) + ".rmf"
+                    new_b_rmf = split_br[-1].replace('_back.rmf', "_id{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                                + "_back.rmf"
+
+                    # Replacing the names in the SAS commands
+                    cur_cmd = cur_cmd.replace(split_r[-1], new_rmf)
+                    cur_cmd = cur_cmd.replace(split_br[-1], new_b_rmf)
+
+                    split_r[-1] = new_rmf
+                    split_br[-1] = new_b_rmf
+
+                    # Adding the new RMF paths into the extra info dictionary
+                    interim_extras[p_ind].update({"rmf_path": "/".join(split_r), "b_rmf_path": "/".join(split_br)})
+
+                # Same process as RMFs but for the ARF, background ARF, and background spec
+                split_a = copy(interim_extras[p_ind]['arf_path']).split('/')
+                split_ba = copy(interim_extras[p_ind]['b_arf_path']).split('/')
+                split_bs = copy(interim_extras[p_ind]['b_spec_path']).split('/')
+                new_arf = split_a[-1].replace('.arf', "_id{si}_{ai}".format(si=set_id, ai=r_ind)) + ".arf"
+                new_b_arf = split_ba[-1].replace('_back.arf', "_id{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                            + "_back.arf"
+                new_b_spec = split_bs[-1].replace('_backspec.fits', "_id{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                            + "_backspec.fits"
+
+                # New names into the commands
+                cur_cmd = cur_cmd.replace(split_a[-1], new_arf)
+                cur_cmd = cur_cmd.replace(split_ba[-1], new_b_arf)
+                cur_cmd = cur_cmd.replace(split_bs[-1], new_b_spec)
+
+                split_a[-1] = new_arf
+                split_ba[-1] = new_b_arf
+                split_bs[-1] = new_b_spec
+
+                # Update the extra info dictionary some more
+                interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_arf_path": "/".join(split_ba),
+                                              "b_spec_path": "/".join(split_bs)})
+
+                # Add the new paths and commands to their respective lists
+                new_paths.append("/".join(split_p))
+                new_cmds.append(cur_cmd)
+
+            src_paths = np.concatenate([src_paths, new_paths])
+            # Go through and concatenate things to the source lists defined above
+            src_cmds = np.concatenate([src_cmds, new_cmds])
+            src_out_types += ['annular spectrum set components'] * len(spec_cmd_out[4][0])
             src_extras = np.concatenate([src_extras, interim_extras])
-            src_paths = np.concatenate([src_paths, spec_cmd_out[5][0]])
         src_out_types = np.array(src_out_types)
 
         # This adds the current sources final commands to the 'all sources' lists

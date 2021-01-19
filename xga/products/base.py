@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/01/2021, 16:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 12:09. Copyright (c) David J Turner
 
 
 import inspect
@@ -305,9 +305,12 @@ class BaseProduct:
         return self._og_cmd
 
 
-# TODO Obviously finish this, but also comment and docstring
 class BaseAggregateProduct:
+    """
+    A base class for any XGA products that are an aggregate of an XGA SAS product.
+    """
     def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str):
+        self._all_paths = file_paths
         self._all_usable = True
         self._obs_id = obs_id
         self._inst = instrument
