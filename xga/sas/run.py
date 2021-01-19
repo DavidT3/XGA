@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 09:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 13:08. Copyright (c) David J Turner
 
 import os
 from multiprocessing.dummy import Pool
@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from .. import COMPUTE_MODE
 from ..exceptions import SASNotFoundError, SASGenerationError
-from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
+from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpectra
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
@@ -192,6 +192,8 @@ def sas_call(sas_func):
 
         # Now we assign products to source objects
         all_to_raise = []
+        # This is for the special case of generating an AnnularSpectra product
+        ann_spec_comps = {k: [] for k in results}
         for entry in results:
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add this set of products to
@@ -215,12 +217,25 @@ def sas_call(sas_func):
 
                 # ccfs aren't actually stored in the source product storage, but they are briefly put into
                 #  BaseProducts for error parsing etc. So if the product type is None we don't store it
-                if product.type is not None and product.usable:  # If not usable don't add
+                if product.type is not None and product.usable and prod_type_str != "annular spectrum set components":
                     # For each product produced for this source, we add it to the storage hierarchy
                     sources[ind].update_products(product)
+                elif product.type is not None and product.usable and prod_type_str == "annular spectrum set components":
+                    # Really we're just re-creating the results dictionary here, but I want these products
+                    #  to go through the error checking stuff like everything else does
+                    ann_spec_comps[entry].append(product)
 
             if len(to_raise) != 0:
                 all_to_raise.append(to_raise)
+
+        for entry in ann_spec_comps:
+            # So now we pass the list of spectra to a AnnularSpectra definition - and it will sort them out
+            #  itself so the order doesn't matter
+            ann_spec = AnnularSpectra(ann_spec_comps[entry])
+            ind = src_lookup[entry]
+            # And adding our exciting new set of annular spectra into the storage structure
+            sources[ind].update_products(ann_spec)
+
         # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
         for error in raised_errors:
             raise error
