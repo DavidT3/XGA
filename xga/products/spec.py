@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 17:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 18:08. Copyright (c) David J Turner
 
 
 import os
@@ -916,7 +916,15 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return all_spec
 
+    @property
+    def radii(self) -> Quantity:
+        """
+        A property to return all the boundary radii of the constituent annuli.
 
+        :return: Astropy quantity of the radii.
+        :rtype: Quantity
+        """
+        return self._radii
 
 
 
