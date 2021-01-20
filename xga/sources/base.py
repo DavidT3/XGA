@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 11:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 12:17. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2135,12 +2135,13 @@ class BaseSource:
     #  and I can make lists of 1 product return just as the product without being a breaking change
     def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                    min_counts: int = 5, min_sn: float = None, over_sample: float = None) \
-            -> Union[Spectrum, List[Spectrum]]:
+                    min_counts: int = 5, min_sn: float = None,
+                    over_sample: float = None) -> Union[Spectrum, List[Spectrum]]:
         """
         A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
         Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum
-        in evselect_spectrum, and the spectra(um) will be provided to you.
+        in evselect_spectrum, and the spectra(um) will be provided to you. If no match is found then a
+        NoProductAvailableError will be raised.
 
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
@@ -2160,7 +2161,7 @@ class BaseSource:
         :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
             over sampling used?
         :return: An XGA Spectrum object (if there is an exact match), or a list of XGA Spectrum objects (if there
-            were multiple matching products). If no match is found then None shall be returned
+            were multiple matching products).
         :rtype: Union[Spectrum, List[Spectrum]]
         """
         if isinstance(inner_radius, Quantity):
@@ -2212,7 +2213,7 @@ class BaseSource:
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
-            matched_prods = None
+            raise NoProductAvailableError("Cannot find any spectra matching your input.")
 
         return matched_prods
 
@@ -2221,7 +2222,8 @@ class BaseSource:
         """
         Another useful method that wraps the get_products function, though this one gets you AnnularSpectra.
         Pass the radii used to generate the annuli, and the same settings you used to generate the spectrum
-        in spectrum_set, and the AnnularSpectra will be returned (if it exists).
+        in spectrum_set, and the AnnularSpectra will be returned (if it exists). If no match is found then
+        a NoProductAvailableError will be raised.
 
         :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
             that you wish to retrieve.
@@ -2232,8 +2234,7 @@ class BaseSource:
             noise, what was the minimum signal to noise.
         :param float over_sample: If the spectrum set you wish to retrieve was over sampled, what was the level of
             over sampling used?
-        :return: An XGA AnnularSpectra object if there is an exact match, and if no match is found then
-        None shall be returned
+        :return: An XGA AnnularSpectra object if there is an exact match.
         :rtype: AnnularSpectra
         """
         if group_spec and min_counts is not None:
@@ -2259,31 +2260,85 @@ class BaseSource:
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
-            matched_prods = None
+            raise NoProductAvailableError("No matching AnnularSpectra can be found.")
 
         return matched_prods
 
-    def get_image(self):
+    def get_images(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                   psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                   psf_iter: int = 15):
+        """
+        A method to retrieve XGA Image objects. This supports the retrieval of both PSF corrected and non-PSF
+        corrected images, as well as setting the energy limits of the specific image you would like.
+
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all images matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all images matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the image you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the image you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected image or not.
+        :param str psf_model: If the image you want is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the image you want is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the image you want is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
+        """
+
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        # If we are looking for a PSF corrected image then we assemble the extra key with PSF details
+        if psf_corr:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
+
+        if not psf_corr:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products('image', obs_id, inst, extra_key=energy_key)
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products('image', obs_id, inst, extra_key=energy_key+extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products('image', obs_id, inst, extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any spectra matching your input.")
+
+        return matched_prods
+
+    def get_expmaps(self):
         raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
 
-    def get_expmap(self):
-        raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
-
-    def get_ratemap(self):
+    def get_ratemaps(self):
         raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
 
     # The combined photometric products don't really NEED their own get methods, but I figured I would just for
     #  clarity's sake
-    def get_combined_image(self):
+    def get_combined_images(self):
         raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
 
-    def get_combined_expmap(self):
+    def get_combined_expmaps(self):
         raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
 
-    def get_combined_ratemap(self):
+    def get_combined_ratemaps(self):
         raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
 
-    def get_profile(self):
+    def get_profiles(self):
         raise NotImplementedError("This will be implemented very soon, but I think I need to rejig how I store"
                                   " profiles first")
 
