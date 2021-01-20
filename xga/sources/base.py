@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 12:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 12:34. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2339,7 +2339,7 @@ class BaseSource:
             is None (which will retrieve all images regardless of energy limit).
         :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
             is None (which will retrieve all images regardless of energy limit).
-        :return: An XGA ExpMap object (if there is an exact match), or a list of XGA Image objects (if there
+        :return: An XGA ExpMap object (if there is an exact match), or a list of XGA ExpMap objects (if there
             were multiple matching products).
         :rtype: Union[ExpMap, List[ExpMap]]
         """
@@ -2428,8 +2428,34 @@ class BaseSource:
     def get_combined_images(self):
         raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
 
-    def get_combined_expmaps(self):
-        raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
+    def get_combined_expmaps(self, lo_en: Quantity = None, hi_en: Quantity = None) -> Union[ExpMap, List[ExpMap]]:
+        """
+        A method to retrieve combined XGA ExpMap objects, as in those exposure maps that have been created by
+        merging all available data for this source. This supports setting the energy limits of the specific
+        exposure maps you would like. A NoProductAvailableError error will be raised if no matches are found.
+
+        :param Quantity lo_en: The lower energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :return: An XGA ExpMap object (if there is an exact match), or a list of XGA Image objects (if there
+            were multiple matching products).
+        :rtype: Union[ExpMap, List[ExpMap]]
+        """
+        if all([lo_en is None, hi_en is None]):
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        matched_prods = self.get_products('combined_expmap', extra_key=energy_key)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any combined exposure maps matching your input.")
+
+        return matched_prods
 
     def get_combined_ratemaps(self):
         raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
