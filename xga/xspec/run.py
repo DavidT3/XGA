@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/09/2020, 11:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 16:31. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -122,7 +122,7 @@ def xspec_call(sas_func):
         #  and 3rd is the number of cores to use.
         # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
         #  countrate to luminosity conversion constants
-        script_list, paths, cores, reg_type, run_type, src_inds = sas_func(*args, **kwargs)
+        script_list, paths, cores, inner_radii, outer_radii, run_type, src_inds = sas_func(*args, **kwargs)
         src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
         rel_src_repr = [repr(src) for src_ind, src in enumerate(sources) if src_ind in src_inds]
 
@@ -186,9 +186,14 @@ def xspec_call(sas_func):
                 inst_lums = {}
                 for line_ind, line in enumerate(res_set[0]["SPEC_INFO"]):
                     sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                    # Want to derive the spectra storage key from the file name, this strips off some unnecessary info
+                    sp_key = line["SPEC_PATH"].strip(" ").split("/")[-1].split('ra')[-1].split('_spec.fits')[0]
+                    # This adds ra back on, and removes any ident information if it is there
+                    sp_key = 'ra' + sp_key.split('_ident')[0]
+
                     # Finds the appropriate matching spectrum object for the current table line
-                    spec = [match for match in s.get_products("spectrum", sp_info[0], sp_info[1], just_obj=False)
-                            if reg_type in match and match[-1].usable][0][-1]
+                    spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
+                    sp_key = spec.storage_key
 
                     # Adds information from this fit to the spectrum object.
                     spec.add_fit_data(str(model), line, res_set[0]["PLOT"+str(line_ind+1)])
@@ -212,9 +217,11 @@ def xspec_call(sas_func):
                     chosen_lums = inst_lums["mos1"]
 
                 # Push global fit results, luminosities etc. into the corresponding source object.
-                s.add_fit_data(model, reg_type, global_results, chosen_lums)
+                s.add_fit_data(model, global_results, chosen_lums, sp_key)
 
             elif len(res_set) != 0 and res_set[1] and run_type == "conv_factors":
+                raise NotImplementedError("This hasn't yet been altered to work with the new radii inputs, I'm "
+                                          "urgently working on it")
                 res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})
                 # Gets the model name from the file name of the output results table
                 model = res_set[0].split("_")[-3]

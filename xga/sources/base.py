@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 12:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 16:31. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1699,31 +1699,33 @@ class BaseSource:
         """
         return self._name
 
-    # TODO Pass through units in column headers?
-    def add_fit_data(self, model: str, reg_type: str, tab_line, lums: dict):
+    def add_fit_data(self, model: str, tab_line, lums: dict, spec_storage_key: str):
         """
         A method that stores fit results and global information about a the set of spectra in a source object.
         Any variable parameters in the fit are stored in an internal dictionary structure, as are any luminosities
         calculated. Other parameters of interest are store in other internal attributes.
-        :param str model:
-        :param str reg_type:
-        :param tab_line:
-        :param dict lums:
+
+        :param str model: The XSPEC definition of the model used to perform the fit. e.g. tbabs*apec
+        :param tab_line: The table line with the fit data.
+        :param dict lums: The various luminosities measured during the fit.
+        :param str spec_storage_key: The storage key of any spectrum that was used in this particular fit. The
+            ObsID and instrument used don't matter, as the storage key will be the same and is based off of the
+            settings when the spectra were generated.
         """
         # Just headers that will always be present in tab_line that are not fit parameters
         not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
                    'NUM_UNLINKED_THAWED_VARS', 'FIT_STATISTIC', 'TEST_STATISTIC', 'DOF']
 
         # Various global values of interest
-        self._total_exp[reg_type] = float(tab_line["TOTAL_EXPOSURE"])
-        if reg_type not in self._total_count_rate:
-            self._total_count_rate[reg_type] = {}
-            self._test_stat[reg_type] = {}
-            self._dof[reg_type] = {}
-        self._total_count_rate[reg_type][model] = [float(tab_line["TOTAL_COUNT_RATE"]),
-                                                   float(tab_line["TOTAL_COUNT_RATE_ERR"])]
-        self._test_stat[reg_type][model] = float(tab_line["TEST_STATISTIC"])
-        self._dof[reg_type][model] = float(tab_line["DOF"])
+        self._total_exp[spec_storage_key] = float(tab_line["TOTAL_EXPOSURE"])
+        if spec_storage_key not in self._total_count_rate:
+            self._total_count_rate[spec_storage_key] = {}
+            self._test_stat[spec_storage_key] = {}
+            self._dof[spec_storage_key] = {}
+        self._total_count_rate[spec_storage_key][model] = [float(tab_line["TOTAL_COUNT_RATE"]),
+                                                           float(tab_line["TOTAL_COUNT_RATE_ERR"])]
+        self._test_stat[spec_storage_key][model] = float(tab_line["TEST_STATISTIC"])
+        self._dof[spec_storage_key][model] = float(tab_line["DOF"])
 
         # The parameters available will obviously be dynamic, so have to find out what they are and then
         #  then for each result find the +- errors
@@ -1754,45 +1756,65 @@ class BaseSource:
             mod_res[par_name][ident][pos] = float(tab_line[par])
 
         # Storing the fit results
-        if reg_type not in self._fit_results:
-            self._fit_results[reg_type] = {}
-        self._fit_results[reg_type][model] = mod_res
+        if spec_storage_key not in self._fit_results:
+            self._fit_results[spec_storage_key] = {}
+        self._fit_results[spec_storage_key][model] = mod_res
 
         # And now storing the luminosity results
-        if reg_type not in self._luminosities:
-            self._luminosities[reg_type] = {}
-        self._luminosities[reg_type][model] = lums
+        if spec_storage_key not in self._luminosities:
+            self._luminosities[spec_storage_key] = {}
+        self._luminosities[spec_storage_key][model] = lums
 
-    def get_results(self, reg_type: str, model: str, par: str = None):
+    def get_results(self, model: str, outer_radius: Union[str, Quantity],
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None):
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
         all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
         of such numpy arrays, with the keys corresponding to parameter names.
-        :param str reg_type: The type of region that the fitted spectra were generated from.
+
         :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
         :param str par: The name of the parameter you want a result for.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The requested result value, and uncertainties.
         """
+        # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
+        #  because then I can just grab the storage key from one of them
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        storage_key = specs[0].storage_key
+
         # Bunch of checks to make sure the requested results actually exist
         if len(self._fit_results) == 0:
             raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
-        elif reg_type not in self._fit_results:
-            av_regs = ", ".join(self._fit_results.keys())
-            raise ModelNotAssociatedError("{r} has no associated XSPEC fit to {s}; available regions are "
-                                          "{a}".format(r=reg_type, s=self.name, a=av_regs))
-        elif model not in self._fit_results[reg_type]:
-            av_mods = ", ".join(self._fit_results[reg_type].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to {r} spectra of {s}; available "
-                                          "models are  {a}".format(m=model, r=reg_type, s=self.name, a=av_mods))
-        elif par is not None and par not in self._fit_results[reg_type][model]:
-            av_pars = ", ".join(self._fit_results[reg_type][model].keys())
+        elif storage_key not in self._fit_results:
+            raise ModelNotAssociatedError("Those spectra have no associated XSPEC fit to {s}".format(s=self.name))
+        elif model not in self._fit_results[storage_key]:
+            av_mods = ", ".join(self._fit_results[storage_key].keys())
+            raise ModelNotAssociatedError("{m} has not been fitted to those spectra of {s}; available "
+                                          "models are {a}".format(m=model, s=self.name, a=av_mods))
+        elif par is not None and par not in self._fit_results[storage_key][model]:
+            av_pars = ", ".join(self._fit_results[storage_key][model].keys())
             raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to {s}, "
                                               "the options are {a}".format(p=par, m=model, s=self.name, a=av_pars))
 
         # Read out into variable for readabilities sake
-        fit_data = self._fit_results[reg_type][model]
+        fit_data = self._fit_results[storage_key][model]
         proc_data = {}  # Where the output will ive
         for p_key in fit_data:
             # Used to shape the numpy array the data is transferred into
@@ -1818,19 +1840,41 @@ class BaseSource:
         else:
             return proc_data[par]
 
-    def get_luminosities(self, reg_type: str, model: str, lo_en: Quantity = None, hi_en: Quantity = None):
+    def get_luminosities(self, model: str, outer_radius: Union[str, Quantity],
+                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
+                         hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                         over_sample: float = None):
         """
         Get method for luminosities calculated from model fits to spectra associated with this source.
         Either for given energy limits (that must have been specified when the fit was first performed), or
         for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
         the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
-        :param str reg_type: The type of region that the fitted spectra were generated from.
-        :param str model: The name of the fitted model that you're requesting the
-        luminosities from (e.g. tbabs*apec).
+
+        :param str model: The name of the fitted model that you're requesting the luminosities from (e.g. tbabs*apec).
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The requested luminosity value, and uncertainties.
         """
+        # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
+        #  because then I can just grab the storage key from one of them
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        storage_key = specs[0].storage_key
+
         # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
         #  bounds. If the limits are none then so is the energy key
         if lo_en is not None and hi_en is not None and lo_en > hi_en:
@@ -1843,17 +1887,14 @@ class BaseSource:
         # Checks that the requested region, model and energy band actually exist
         if len(self._luminosities) == 0:
             raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
-        elif reg_type not in self._luminosities:
-            av_regs = ", ".join(self._luminosities.keys())
-            raise ModelNotAssociatedError("{r} has no associated XSPEC fit to {s}; available regions are "
-                                          "{a}".format(r=reg_type, s=self.name, a=av_regs))
-        elif model not in self._luminosities[reg_type]:
-            av_mods = ", ".join(self._luminosities[reg_type].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to {r} spectra of {s}; "
-                                          "available models are {a}".format(m=model, r=reg_type, s=self.name,
-                                                                            a=av_mods))
-        elif en_key is not None and en_key not in self._luminosities[reg_type][model]:
-            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[reg_type][model].keys()])
+        elif storage_key not in self._luminosities:
+            raise ModelNotAssociatedError("These spectra have no associated XSPEC fit to {s}.".format(s=self.name))
+        elif model not in self._luminosities[storage_key]:
+            av_mods = ", ".join(self._luminosities[storage_key].keys())
+            raise ModelNotAssociatedError("{m} has not been fitted to these spectra of {s}; "
+                                          "available models are {a}".format(m=model, s=self.name, a=av_mods))
+        elif en_key is not None and en_key not in self._luminosities[storage_key][model]:
+            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[storage_key][model].keys()])
             raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
                                               "energy bands are {b}".format(l=lo_en.to("keV").value,
                                                                             u=hi_en.to("keV").value,
@@ -1862,13 +1903,13 @@ class BaseSource:
         # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
         if en_key is None:
             parsed_lums = {}
-            for lum_key in self._luminosities[reg_type][model]:
-                lum_value = self._luminosities[reg_type][model][lum_key]
+            for lum_key in self._luminosities[storage_key][model]:
+                lum_value = self._luminosities[storage_key][model][lum_key]
                 parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
                 parsed_lums[lum_key] = parsed_lum
             return parsed_lums
         else:
-            lum_value = self._luminosities[reg_type][model][en_key]
+            lum_value = self._luminosities[storage_key][model][en_key]
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
@@ -2576,6 +2617,21 @@ class BaseSource:
         raise NotImplementedError("This will be implemented soon, but I think I need to rejig how I store"
                                   " profiles first")
 
+    @property
+    def fitted_models(self) -> List[str]:
+        """
+        This property cycles through all the available fit results, and finds the unique names of XSPEC models
+        that have been fitted to this source.
+
+        :return: A list of model names.
+        :rtype: List[str]
+        """
+        models = []
+        for s_key in self._fit_results:
+            models += list(self._fit_results[s_key].keys())
+
+        return models
+
     def info(self):
         """
         Very simple function that just prints a summary of important information related to the source object..
@@ -2605,8 +2661,7 @@ class BaseSource:
         print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
 
         if len(self._fit_results) != 0:
-            fits = [k + " - " + ", ".join(models) for k, models in self._fit_results.items()]
-            print("Available fits - {}".format(" | ".join(fits)))
+            print("Fitted Models - {}".format(" | ".join(self.fitted_models)))
 
         if self._regions is not None and "custom" in self._radii:
             if self._redshift is not None:

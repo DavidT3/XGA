@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 14:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 16:31. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -35,7 +35,7 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
         default this is zero arcseconds, resulting in a circular spectrum.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param str obs_id: Only used if the 'region' radius name is passed, the ObsID to retrieve the region for.
-    :return: The source objects, a list of inner radius quantities,
+    :return: The source objects, a list of inner radius quantities, and a list of outer radius quantities.
     :rtype: Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]
     """
     # NullSources are not allowed to have spectra, as they can have any observations associated and thus won't

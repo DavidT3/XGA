@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/12/2020, 16:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 16:31. Copyright (c) David J Turner
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -10,8 +10,8 @@ from astropy.units import Quantity
 from numpy import ndarray
 from tqdm import tqdm
 
-from ..exceptions import NoMatchFoundError, NoValidObservationsError
 from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..exceptions import NoValidObservationsError
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
 
@@ -159,28 +159,54 @@ class BaseSample:
         """
         return self._failed_sources
 
-    def Lx(self, reg_type: str, model: str, lo_en: Quantity = Quantity(0.5, 'keV'),
-           hi_en: Quantity = Quantity(2.0, 'keV')):
+    def Lx(self, model: str, outer_radius: Union[str, Quantity],
+           inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
+           hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+           over_sample: float = None):
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
         set, unlike the Tx method of ClusterSample. An extra condition that aims to only return 'good' data has
         been included, so that any Lx measurement with an uncertainty greater than value will be set to NaN, and
         a warning will be issued.
-        :param str reg_type: The type of region that the fitted spectra were generated from.
-        :param str model: The name of the fitted model that you're requesting the
-        luminosities from (e.g. tbabs*apec).
+
+        :param str model: The name of the fitted model that you're requesting the luminosities from (e.g. tbabs*apec).
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). You may also pass a quantity containing radius values,
+            with one value for each source in this sample.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum. You may also pass a quantity containing radius values, with one value for each
+            source in this sample.
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
         column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
         :rtype: Quantity
         """
+        # Has to be here to prevent circular import unfortunately
+        from ..sas.spec import region_setup
+
+        if outer_radius != 'region':
+            # This just parses the input inner and outer radii into something predictable
+            inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
+        else:
+            raise NotImplementedError("Sorry region fitting is currently well supported")
+
         lums = []
-        for src in self._sources.values():
+        for src_ind, src in enumerate(self._sources.values()):
             try:
                 # Fetch the luminosity from a given source using the dedicated method
-                lx_val = src.get_luminosities(reg_type, model, lo_en, hi_en)
+                lx_val = src.get_luminosities(model, out_rads[src_ind], inn_rads[src_ind], lo_en, hi_en, group_spec,
+                                              min_counts, min_sn, over_sample)
                 frac_err = lx_val[1:] / lx_val[0]
                 if len(frac_err[frac_err > 1]) == 0:
                     lums.append(lx_val)
