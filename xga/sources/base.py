@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 18:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 09:41. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -277,14 +277,15 @@ class BaseSource:
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict, odf_dict
 
-    # TODO Maybe allow BaseAggregateProfile1D to be stored in the future
     # TODO Redo how profiles are stored - I was lazy when I implemented it at first
     def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D]):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
         but will overwrite existing products with a warning. Raises errors if the ObsID is not associated
         with this source or the instrument is not associated with the ObsID.
-        :param BaseProduct prod_obj: The new product object to be added to the source object.
+
+        :param BaseProduct/BaseAggregateProduct/BaseProfile1D prod_obj: The new product object to be
+            added to the source object.
         """
         # Aggregate products are things like PSF grids and sets of annular spectra.
         if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D)):
@@ -296,7 +297,7 @@ class BaseSource:
             # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
             #  this variable with just the energy key
             en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
-        elif type(prod_obj) == Spectrum:
+        elif type(prod_obj) == Spectrum or type(prod_obj) == AnnularSpectra:
             extra_key = prod_obj.storage_key
         elif type(prod_obj) == PSFGrid:
             # The first part of the key is the model used (by default its ELLBETA for example), and

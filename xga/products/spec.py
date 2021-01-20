@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 18:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 09:41. Copyright (c) David J Turner
 
 
 import os
@@ -457,7 +457,7 @@ class Spectrum(BaseProduct):
         This property returns the random id of the spectrum set this is a part of.
 
         :return: Set identifier, None if not part of a set.
-        :rtype: object
+        :rtype: int
         """
         return self._set_ident
 
@@ -747,6 +747,9 @@ class AnnularSpectra(BaseAggregateProduct):
         if len(set_idents) != 1:
             raise XGASetIDError("You have passed spectra that have set IDs that do not match")
 
+        # Just put the set ID into an attribute in case anyone ever wants to know it
+        self._set_id = list(set_idents)[0]
+
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
         self._num_ann = len(set([s.annulus_ident for s in spectra]))
@@ -779,7 +782,62 @@ class AnnularSpectra(BaseAggregateProduct):
         for s in spectra:
             self._component_products[s.obs_id][s.instrument][s.annulus_ident] = s
 
+        # Run through all the spectra associated with this AnnularSpectra and see if they are usable
         self._all_usable = all(s.usable for s in self.all_spectra)
+
+        # This set of properties describe the configuration of evselect/specgroup during generation. I take
+        #  properties from the first spectra in the list because they're all part of the same set, so were
+        #  generated with the same settings
+        self._grouped = spectra[0].grouped
+        self._min_counts = spectra[0].min_counts
+        self._min_sn = spectra[0].min_sn
+        if self._grouped and self._min_counts is not None:
+            self._grouped_on = 'counts'
+        elif self._grouped and self._min_sn is not None:
+            self._grouped_on = 'signal to noise'
+        else:
+            self._grouped_on = None
+
+        # The RA-Dec coordinates that this set of spectra are centred on
+        self._central_coord = spectra[0].central_coord
+
+        # Not to do with grouping, but this states the level of oversampling requested from evselect
+        self._over_sample = spectra[0].over_sample
+
+        # Here we generate the storage key for this object, its just convenient to do it in here
+        # Sets up the extra part of the storage key name depending on if grouping is enabled
+        if self._grouped and self._min_counts is not None:
+            extra_name = "_mincnt{}".format(self._min_counts)
+        elif self._grouped and self._min_sn is not None:
+            extra_name = "_minsn{}".format(self._min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if self._over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=self._over_sample)
+
+        # Combines the annular radii into a string
+        ann_rad_str = "_".join(self._radii.value.astype(str))
+
+        spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
+        spec_storage_name = spec_storage_name.format(ra=self.central_coord[0].value,
+                                                     dec=self.central_coord[1].value, ar=ann_rad_str, gr=self._grouped)
+
+        spec_storage_name += extra_name
+        # And we save the completed key to an attribute
+        self._storage_key = spec_storage_name
+
+    @property
+    def central_coord(self) -> Quantity:
+        """
+        This property provides the central coordinates (RA-Dec) that this set of spectra was
+        generated around.
+
+        :return: Astropy quantity object containing the central coordinate in degrees.
+        :rtype: Quantity
+        """
+        return self._central_coord
 
     @property
     def num_annuli(self) -> int:
@@ -926,8 +984,81 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self._radii
 
+    @property
+    def set_ident(self) -> int:
+        """
+        This property returns the ID of this set of spectra.
 
+        :return: The integer ID of this set.
+        :rtype: int
+        """
+        return self._set_id
 
+    @property
+    def storage_key(self) -> str:
+        """
+        This property returns the storage key which this object assembles to place the AnnularSpectrum in
+        an XGA source's storage structure. The key is based on the properties of the AnnularSpectrum, and
+        some of the configuration options, and is basically human readable.
+
+        :return: String storage key.
+        :rtype: str
+        """
+        return self._storage_key
+
+    @property
+    def grouped(self) -> bool:
+        """
+        A property stating whether SAS was told to group the spectra in this set during generation or not.
+
+        :return: Boolean variable describing whether the spectra are grouped or not
+        :rtype: bool
+        """
+        return self._grouped
+
+    @property
+    def grouped_on(self) -> str:
+        """
+        A property stating what metric the spectra in this set were grouped on.
+
+        :return: String representation of the metric the spectra were grouped on (None if not grouped).
+        :rtype: str
+        """
+        return self._grouped_on
+
+    @property
+    def min_counts(self) -> int:
+        """
+        A property stating the minimum number of counts allowed in a grouped channel for the spectra in this set.
+
+        :return: The integer minimum number of counts per grouped channel (if these spectra were grouped on
+            minimum numbers of counts).
+        :rtype: int
+        """
+        return self._min_counts
+
+    @property
+    def min_sn(self) -> Union[float, int]:
+        """
+        A property stating the minimum signal to noise allowed in a grouped channel for the spectra in this set.
+
+        :return: The minimum signal to noise per grouped channel (if these spectra were grouped on
+            minimum signal to noise).
+        :rtype: Union[float, int]
+        """
+        return self._min_sn
+
+    @property
+    def over_sample(self) -> float:
+        """
+        A property string stating the amount of oversampling applied by evselect during the generation
+        of the spectra in this set. e.g. if over_sample=3 then the minimum width of a group is
+        1/3 of the resolution FWHM at that energy.
+
+        :return: Oversampling applied during generation.
+        :rtype: float
+        """
+        return self._over_sample
 
 
 
