@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 14:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 14:14. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -21,8 +21,8 @@ from ..sources.base import NullSource
 from ..utils import RAD_LABELS
 
 
-def _spec_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                inner_radius: Union[str, Quantity], disable_progress: bool, obs_id: str) \
+def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
+                 inner_radius: Union[str, Quantity], disable_progress: bool, obs_id: str) \
         -> Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]:
     """
     The preparation and value checking stage for SAS spectrum generation.
@@ -161,7 +161,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     if outer_radius != 'region':
         from_region = False
-        sources, inner_radii, outer_radii = _spec_setup(sources, outer_radius, inner_radius, disable_progress, '')
+        sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress, '')
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
@@ -272,8 +272,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Because the region will be different for each ObsID, I have to call the setup function here
             if outer_radius == 'region':
-                interim_source, inner_radii, outer_radii = _spec_setup([source], outer_radius, inner_radius,
-                                                                       disable_progress, obs_id)
+                interim_source, inner_radii, outer_radii = region_setup([source], outer_radius, inner_radius,
+                                                                        disable_progress, obs_id)
                 # Need the reg for central coordinates
                 reg = source.source_back_regions('region', obs_id)[0]
                 reg_cen_coords = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
