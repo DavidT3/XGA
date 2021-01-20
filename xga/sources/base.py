@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 12:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 12:41. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2425,7 +2425,7 @@ class BaseSource:
 
     # The combined photometric products don't really NEED their own get methods, but I figured I would just for
     #  clarity's sake
-    def get_combine_images(self, lo_en: Quantity = None, hi_en: Quantity = None, psf_corr: bool = False,
+    def get_combined_images(self, lo_en: Quantity = None, hi_en: Quantity = None, psf_corr: bool = False,
                            psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                            psf_iter: int = 15) -> Union[Image, List[Image]]:
         """
@@ -2512,11 +2512,68 @@ class BaseSource:
 
         return matched_prods
 
-    def get_combined_ratemaps(self):
-        raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
+    def get_combined_ratemaps(self, lo_en: Quantity = None, hi_en: Quantity = None,  psf_corr: bool = False,
+                              psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                              psf_iter: int = 15) -> Union[RateMap, List[RateMap]]:
+        """
+        A method to retrieve combined XGA RateMap objects, as in those ratemap that have been created by
+        merging all available data for this source. This supports the retrieval of both PSF corrected and non-PSF
+        corrected ratemaps, as well as setting the energy limits of the specific ratemap you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
+
+        :param Quantity lo_en: The lower energy limit of the ratemaps you wish to retrieve, the default
+            is None (which will retrieve all ratemaps regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the ratemaps you wish to retrieve, the default
+            is None (which will retrieve all ratemaps regardless of energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected ratemap or not.
+        :param str psf_model: If the ratemap you want is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the ratemap you want is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the ratemap you want is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
+        :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
+            were multiple matching products).
+        :rtype: Union[RateMap, List[RateMap]]
+        """
+        # This function is essentially identical to get_images, but I'm going to be lazy and not write
+        #  a separate internal function to do both.
+
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        # If we are looking for a PSF corrected ratemap then we assemble the extra key with PSF details
+        if psf_corr:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
+
+        if not psf_corr:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key)
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key + extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products('combined_ratemap', extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any combined ratemaps matching your input.")
+
+        return matched_prods
 
     def get_profiles(self):
-        raise NotImplementedError("This will be implemented very soon, but I think I need to rejig how I store"
+        raise NotImplementedError("This will be implemented soon, but I think I need to rejig how I store"
                                   " profiles first")
 
     def info(self):
