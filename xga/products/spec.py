@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 09:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 10:10. Copyright (c) David J Turner
 
 
 import os
@@ -1059,6 +1059,17 @@ class AnnularSpectra(BaseAggregateProduct):
         :rtype: float
         """
         return self._over_sample
+
+    def __len__(self) -> int:
+        """
+        The length of a AnnularSpectra is the number of individual spectra that make it up.
+        :return: The length of the list from self.all_spectra
+        :rtype: int
+        """
+        return len(self.all_spectra)
+
+    def __getitem__(self, ind):
+        return self.all_spectra[ind]
 
 
 
