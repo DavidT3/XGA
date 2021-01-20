@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 12:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 12:29. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2266,10 +2266,11 @@ class BaseSource:
 
     def get_images(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
                    psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                   psf_iter: int = 15):
+                   psf_iter: int = 15) -> Union[Image, List[Image]]:
         """
         A method to retrieve XGA Image objects. This supports the retrieval of both PSF corrected and non-PSF
-        corrected images, as well as setting the energy limits of the specific image you would like.
+        corrected images, as well as setting the energy limits of the specific image you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
 
         :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
             which means all images matching the other criteria will be returned.
@@ -2285,6 +2286,9 @@ class BaseSource:
             side in the PSF grid.
         :param str psf_algo: If the image you want is PSF corrected, this is the algorithm used.
         :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
+        :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
+            were multiple matching products).
+        :rtype: Union[Image, List[Image]]
         """
 
         # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
@@ -2321,15 +2325,48 @@ class BaseSource:
 
         return matched_prods
 
-    def get_expmaps(self):
-        raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
+    def get_expmaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[ExpMap, List[ExpMap]]:
+        """
+        A method to retrieve XGA ExpMap objects. This supports setting the energy limits of the specific
+        exposure maps you would like. A NoProductAvailableError error will be raised if no matches are found.
+
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all exposure maps matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all exposure maps matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :return: An XGA ExpMap object (if there is an exact match), or a list of XGA Image objects (if there
+            were multiple matching products).
+        :rtype: Union[ExpMap, List[ExpMap]]
+        """
+
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        matched_prods = self.get_products('expmap', obs_id=obs_id, inst=inst, extra_key=energy_key)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any exposure maps matching your input.")
+
+        return matched_prods
 
     def get_ratemaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
                      psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                     psf_iter: int = 15):
+                     psf_iter: int = 15) -> Union[RateMap, List[RateMap]]:
         """
         A method to retrieve XGA RateMap objects. This supports the retrieval of both PSF corrected and non-PSF
-        corrected ratemaps, as well as setting the energy limits of the specific ratemap you would like.
+        corrected ratemaps, as well as setting the energy limits of the specific ratemap you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
 
         :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
             which means all ratemaps matching the other criteria will be returned.
@@ -2345,6 +2382,9 @@ class BaseSource:
             side in the PSF grid.
         :param str psf_algo: If the ratemap you want is PSF corrected, this is the algorithm used.
         :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
+        :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
+            were multiple matching products).
+        :rtype: Union[RateMap, List[RateMap]]
         """
         # This function is essentially identical to get_images, but I'm going to be lazy and not write
         #  a separate internal function to do both.
