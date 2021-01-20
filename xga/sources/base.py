@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 09:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 11:50. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2129,6 +2129,163 @@ class BaseSource:
                     reject_dict[o].append(i)
 
         return reject_dict
+
+    # And here I'm adding a bunch of get methods that should mean the user never has to use get_products, for
+    #  individual product types. It will also mean that they will never have to figure out extra keys themselves
+    #  and I can make lists of 1 product return just as the product without being a breaking change
+    def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                    min_counts: int = 5, min_sn: float = None, over_sample: float = None) \
+            -> Union[Spectrum, List[Spectrum]]:
+        """
+        A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
+        Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum
+        in evselect_spectrum, and the spectra(um) will be provided to you.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+            'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
+            default this is zero arcseconds, resulting in a circular spectrum.
+        :param bool group_spec: Was the spectrum you wish to retrieve grouped?
+        :param float min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
+            the minimum number of counts?
+        :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
+            the minimum signal to noise.
+        :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
+            over sampling used?
+        :return: An XGA Spectrum object (if there is an exact match), or a list of XGA Spectrum objects (if there
+            were multiple matching products). If no match is found then None shall be returned
+        :rtype: Union[Spectrum, List[Spectrum]]
+        """
+        if isinstance(inner_radius, Quantity):
+            inn_rad_num = self.convert_radius(inner_radius, 'deg')
+        elif isinstance(inner_radius, str):
+            inn_rad_num = self.get_radius(inner_radius, 'deg')
+        else:
+            raise TypeError("You may only a quantity or a string as inner_radius")
+
+        if isinstance(outer_radius, Quantity):
+            out_rad_num = self.convert_radius(outer_radius, 'deg')
+        elif isinstance(outer_radius, str):
+            out_rad_num = self.get_radius(outer_radius, 'deg')
+        else:
+            raise TypeError("You may only a quantity or a string as outer_radius")
+
+        if over_sample is not None:
+            over_sample = int(over_sample)
+        if min_counts is not None:
+            min_counts = int(min_counts)
+        if min_sn is not None:
+            min_sn = float(min_sn)
+
+        # Sets up the extra part of the storage key name depending on if grouping is enabled
+        if group_spec and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif group_spec and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+        if outer_radius != 'region':
+            # The key under which these spectra will be stored
+            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
+            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
+                                                         dec=self.default_coord[1].value,
+                                                         ri=inn_rad_num.value, ro=out_rad_num.value,
+                                                         gr=group_spec)
+        else:
+            spec_storage_name = "region_grp{gr}".format(gr=group_spec)
+
+        # Adds on the extra information about grouping to the storage key
+        spec_storage_name += extra_name
+        matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            matched_prods = None
+
+        return matched_prods
+
+    def get_annular_spectra(self, radii: Quantity, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                            over_sample: float = None) -> AnnularSpectra:
+        """
+        Another useful method that wraps the get_products function, though this one gets you AnnularSpectra.
+        Pass the radii used to generate the annuli, and the same settings you used to generate the spectrum
+        in spectrum_set, and the AnnularSpectra will be returned (if it exists).
+
+        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
+            that you wish to retrieve.
+        :param bool group_spec: Was the spectrum set you wish to retrieve grouped?
+        :param float min_counts: If the spectrum set you wish to retrieve was grouped on minimum counts, what was
+            the minimum number of counts?
+        :param float min_sn: If the spectrum set you wish to retrieve was grouped on minimum signal to
+            noise, what was the minimum signal to noise.
+        :param float over_sample: If the spectrum set you wish to retrieve was over sampled, what was the level of
+            over sampling used?
+        :return: An XGA AnnularSpectra object if there is an exact match, and if no match is found then
+        None shall be returned
+        :rtype: AnnularSpectra
+        """
+        if group_spec and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif group_spec and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
+        #  degrees in the storage key
+        ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
+        spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
+        spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
+                                                     dec=self.default_coord[1].value, ar=ann_rad_str, gr=group_spec)
+        spec_storage_name += extra_name
+
+        matched_prods = self.get_products('combined_spectrum', extra_key=spec_storage_name)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            matched_prods = None
+
+        return matched_prods
+
+    def get_image(self):
+        raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
+
+    def get_expmap(self):
+        raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
+
+    def get_ratemap(self):
+        raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
+
+    # The combined photometric products don't really NEED their own get methods, but I figured I would just for
+    #  clarity's sake
+    def get_combined_image(self):
+        raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
+
+    def get_combined_expmap(self):
+        raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
+
+    def get_combined_ratemap(self):
+        raise NotImplementedError("This will be implemented so soon you'll probably never even see this")
+
+    def get_profile(self):
+        raise NotImplementedError("This will be implemented very soon, but I think I need to rejig how I store"
+                                  " profiles first")
 
     def info(self):
         """
