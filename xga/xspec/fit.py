@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 16:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 09:54. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -16,20 +16,60 @@ from ..sas import evselect_spectrum, region_setup
 from ..sources import BaseSource, ExtendedSource, PointSource
 
 
-def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_en: Quantity,  hi_en: Quantity,
-                  fit_method: str, abund_table: str) -> Union[List[BaseSource], BaseSample]:
+def _check_inputs(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
+                  inner_radius: Union[str, Quantity],  lum_en: Quantity, lo_en: Quantity,  hi_en: Quantity,
+                  fit_method: str, abund_table: str, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                  over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES) \
+        -> Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity]:
     """
-    This performs some checks that are common to all the model fit functions.
-    :param Union[BaseSource, BaseSample] sources:
+    This performs some checks that are common to all the model fit functions, also makes sure the necessary spectra
+    have been generated.
+
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
+    :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
+        desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
+        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+        inner radius will be ignored. If you are fitting for multiple sources then you can also pass a
+        Quantity with one entry per source.
+    :param str/Quantity inner_radius: The name or value of the outer radius of the region that the
+        desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
+        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+        inner radius will be ignored. By default this is zero arcseconds, resulting in a circular spectrum. If
+        you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
+    :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :return: Most likely just the passed in sources, but if a single source was passed
     then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
     """
+
+    # I call the evselect_spectrum function here for two reasons; to make sure that the spectra which the user
+    #  want to fit are generated, and because that function has a lot of radius parsing and checking stuff
+    #  in it which will kick up a fuss if variables aren't formatted right
+    evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
+                      num_cores)
+
+    # This is the spectrum region preparation function, and I'm calling it here because it will return properly
+    #  formatted arrays for the inner and outer radii
+    if outer_radius != 'region':
+        inn_rad_vals, out_rad_vals = region_setup(sources, outer_radius, inner_radius, True, '')[1:]
+    else:
+        raise NotImplementedError("I don't currently support fitting region spectra")
+
     # This function supports passing both individual sources and samples of sources, but I do require that
     #  the sources object is iterable
     if isinstance(sources, BaseSource):
@@ -62,7 +102,7 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
         raise ValueError("{f} is not an XSPEC abundance table, allowed abundance tables are; "
                          "{a}.".format(f=fit_method, a=", ".join(ABUND_TABLES)))
 
-    return sources
+    return sources, inn_rad_vals, out_rad_vals
 
 
 def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, abund_table: str, fit_method: str,
@@ -173,20 +213,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     """
-    # I call the evselect_spectrum function here for two reasons; to make sure that the spectra which the user
-    #  want to fit are generated, and because that function has a lot of radius parsing and checking stuff
-    #  in it which will kick up a fuss if variables aren't formatted right
-    evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
-                      num_cores)
-
-    # This is the spectrum region preparation function, and I'm calling it here because it will return properly
-    #  formatted arrays for the inner and outer radii
-    if outer_radius != 'region':
-        inn_rad_vals, out_rad_vals = region_setup(sources, outer_radius, inner_radius, True, '')[1:]
-    else:
-        raise NotImplementedError("I don't currently support fitting region spectra")
-
-    sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table)
+    sources, inn_rad_vals, out_rad_vals = _check_inputs(sources, outer_radius, inner_radius, lum_en, lo_en, hi_en,
+                                                        fit_method, abund_table, group_spec, min_counts, min_sn,
+                                                        over_sample, one_rmf, num_cores)
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
@@ -261,16 +290,29 @@ def double_temp_apec():
 
 
 @xspec_call
-def power_law(sources: Union[BaseSource, BaseSample], reg_type: str, redshifted: bool = False,
+def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
+              inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
               lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_pho_index: float = 1.,
               lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
               freeze_nh: bool = True, link_norm: bool = False, par_fit_stat: float = 1., lum_conf: float = 68.,
-              abund_table: str = "angr", fit_method: str = "leven", num_cores: int = NUM_CORES):
+              abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
+              min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+              num_cores: int = NUM_CORES):
     """
     This is a convenience function for fitting a tbabs absorbed powerlaw (or zpowerlw if redshifted
     is selected) to source spectra.
+
     :param List[BaseSource] sources: A single source object, or a sample of sources.
-    :param str reg_type: Tells the method what region's spectrum you want to use, for instance r500 or r200.
+    :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
+        desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
+        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+        inner radius will be ignored. If you are fitting for multiple sources then you can also pass a
+        Quantity with one entry per source.
+    :param str/Quantity inner_radius: The name or value of the outer radius of the region that the
+        desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
+        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+        inner radius will be ignored. By default this is zero arcseconds, resulting in a circular spectrum. If
+        you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param bool redshifted: Whether the powerlaw that includes redshift (zpowerlw) should be used.
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param float start_pho_index: The starting value for the photon index of the powerlaw.
@@ -282,10 +324,21 @@ def power_law(sources: Union[BaseSource, BaseSample], reg_type: str, redshifted:
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     """
-    raise NotImplementedError("Haven't updated this to work with new radii yet")
-    sources = _check_inputs(sources, reg_type, lum_en, lo_en, hi_en, fit_method, abund_table)
+    sources, inn_rad_vals, out_rad_vals = _check_inputs(sources, outer_radius, inner_radius, lum_en, lo_en, hi_en,
+                                                        fit_method, abund_table, group_spec, min_counts, min_sn,
+                                                        over_sample, one_rmf, num_cores)
 
     # This function is for a set model, either absorbed powerlaw or absorbed zpowerlw
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
@@ -303,11 +356,10 @@ def power_law(sources: Union[BaseSource, BaseSample], reg_type: str, redshifted:
     outfile_paths = []
     src_inds = []
     for src_ind, source in enumerate(sources):
-        # Find matching spectrum objects associated with the current source, and checking if they are valid
-        spec_objs = [match for match in source.get_products("spectrum", extra_key=reg_type) if match.usable]
-        # Obviously we can't do a fit if there are no spectra, so throw an error if thats the case
+        spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind], group_spec=group_spec,
+                                       min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
         if len(spec_objs) == 0:
-            raise NoProductAvailableError("There are no matching spectra for {s} object, you "
+            raise NoProductAvailableError("There are no matching spectra for {s}, you "
                                           "need to generate them first!".format(s=source.name))
 
         # Turn spectra paths into TCL style list for substitution into template
@@ -351,21 +403,21 @@ def power_law(sources: Union[BaseSource, BaseSample], reg_type: str, redshifted:
             warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
                           " will be invalid, as redshift has been set to zero.".format(s=source.name))
 
-        out_file, script_file = _write_xspec_script(source, reg_type, model, abund_table, fit_method, specs,
-                                                    lo_en, hi_en, par_names, par_values, linking, freezing,
+        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
+                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z)
 
         # If the fit has already been performed we do not wish to perform it again
         try:
-            # TODO THIS CALL WILL NO LONGER WORK WITH THE NEW RADII STUFF
-            res = source.get_results(reg_type, model)
+            res = source.get_results(model, out_rad_vals[src_ind], inn_rad_vals[src_ind], None, group_spec, min_counts,
+                                     min_sn, over_sample)
         except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, reg_type, run_type, src_inds
+    return script_paths, outfile_paths, num_cores, inn_rad_vals, out_rad_vals, run_type, src_inds
 
 
 def custom():
