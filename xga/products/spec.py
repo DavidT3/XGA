@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 10:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 23:18. Copyright (c) David J Turner
 
 
 import os
@@ -7,8 +7,9 @@ import warnings
 from typing import Tuple, Union, List
 
 import numpy as np
+from astropy.io import fits
 from astropy.units import Quantity
-from fitsio import FITS, hdu
+from fitsio import hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
@@ -80,7 +81,7 @@ class Spectrum(BaseProduct):
         try:
             self._update_spec_headers("main")
             self._update_spec_headers("back")
-        except OSError:
+        except OSError as err:
             self._usable = False
             self._why_unusable.append("FITSIOOSError")
 
@@ -158,19 +159,48 @@ class Spectrum(BaseProduct):
         # This function is meant for internal use only, so I won't check that the passed-in file paths
         #  actually exist. This will have been checked already
         if which_spec == "main" and self.usable:
-            with FITS(self._path, 'rw') as spec_fits:
-                spec_fits[1].write_key("RESPFILE", self._rmf)
-                spec_fits[1].write_key("ANCRFILE", self._arf)
-                spec_fits[1].write_key("BACKFILE", self._back_spec)
-                spec_fits[0].write_key("RESPFILE", self._rmf)
-                spec_fits[0].write_key("ANCRFILE", self._arf)
-                spec_fits[0].write_key("BACKFILE", self._back_spec)
+            # Currently having to use astropy's fits interface, I don't really want to because of risk of segfaults
+            with fits.open(self._path, mode='update') as spec_fits:
+                spec_fits["SPECTRUM"].header["RESPFILE"] = self._rmf
+                spec_fits["SPECTRUM"].header["ANCRFILE"] = self._arf
+                spec_fits["SPECTRUM"].header["BACKFILE"] = self._back_spec
+            # with FITS(self._path, 'rw', clobber=True) as spec_fits:
+            #     cur_hdr_list = spec_fits["SPECTRUM"].read_header_list()
+            #     # Clean the list
+            #     clean_hdr_list = [hd for hd in cur_hdr_list if hd["name"] != "RESPFILE"
+            #                       and hd["name"] != "ANCRFILE" and hd["name"] != "BACKFILE" not in hd.keys()]
+            #     new_info = [{'name': 'RESPFILE', 'comment': '', 'value': self._rmf},
+            #                 {'name': 'ANCRFILE', 'comment': '', 'value': self._arf},
+            #                 {'name': 'BACKFILE', 'comment': '', 'value': self._back_spec}]
+            #     new_info = {"RESPFILE": self._rmf, "ANCRFILE": self._arf, "BACKFILE": self._back_spec}
+            #     new_info = {"RESPFILE": 'boi', "ANCRFILE": 'boi', "BACKFILE": 'boi'}
+            #     # new_hdr = FITSHDR(clean_hdr_list + new_info)
+            #
+            #
+            #     # spec_fits["SPECTRUM"].read_header().delete('RESPFILE')
+            #     # spec_fits["SPECTRUM"].read_header().delete('ANCRFILE')
+            #     # spec_fits["SPECTRUM"].read_header().delete('BACKFILE')
+            #     # print(spec_fits["SPECTRUM"].read_header()["RESPFILE"])
+            #
+            #     spec_fits["SPECTRUM"].write_keys(new_info)
+            #
+            #     print(spec_fits["SPECTRUM"].read_header())
+            # import sys
+            # sys.exit()
+
         elif which_spec == "back" and self.usable:
-            with FITS(self._back_spec, 'rw') as spec_fits:
-                spec_fits[1].write_key("RESPFILE", self._back_rmf)
-                spec_fits[1].write_key("ANCRFILE", self._back_arf)
-                spec_fits[0].write_key("RESPFILE", self._back_rmf)
-                spec_fits[0].write_key("ANCRFILE", self._back_arf)
+            # with FITS(self._back_spec, 'rw') as spec_fits:
+            #     spec_fits[1].write_key("RESPFILE", self._back_rmf)
+            #     spec_fits[1].write_key("ANCRFILE", self._back_arf)
+            #     spec_fits[0].write_key("RESPFILE", self._back_rmf)
+            #     spec_fits[0].write_key("ANCRFILE", self._back_arf)
+            #     spec_fits[-1].write_key("RESPFILE", self._back_rmf)
+            #     spec_fits[-1].write_key("ANCRFILE", self._back_arf)
+            #     spec_fits["SPECTRUM"].write_key("RESPFILE", self._back_rmf)
+            #     spec_fits["SPECTRUM"].write_key("ANCRFILE", self._back_arf)
+            with fits.open(self._back_spec, mode='update') as spec_fits:
+                spec_fits["SPECTRUM"].header["RESPFILE"] = self._back_rmf
+                spec_fits["SPECTRUM"].header["ANCRFILE"] = self._back_arf
 
     @property
     def path(self) -> str:
@@ -672,8 +702,7 @@ class Spectrum(BaseProduct):
             ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
             # Set the title with all relevant information about the spectrum object in it
-            plt.title("{n} - {o}{i} {r} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper(),
-                                                         r=self.reg_type))
+            plt.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()))
             for mod_ind, mod in enumerate(self._plot_data):
                 x = self._plot_data[mod]["x"]
                 # If the defaults are left, just update them to the min and max of the dataset
@@ -828,6 +857,13 @@ class AnnularSpectra(BaseAggregateProduct):
         # And we save the completed key to an attribute
         self._storage_key = spec_storage_name
 
+        # Now for a very important step, all the constituent spectra need to know that their new background
+        #  spectrum is the one from the outermost annulus. I have added a method to this class to find the correct
+        #  file for an ObsID and instrument, and apparently past me added a property setter to the Spectrum class
+        #  will automatically push the change to the file headers, so that is handy
+        for s in self.all_spectra:
+            s.background = self.background(s.obs_id, s.instrument)
+
     @property
     def central_coord(self) -> Quantity:
         """
@@ -940,7 +976,7 @@ class AnnularSpectra(BaseAggregateProduct):
         if annulus_ident not in np.array(range(0, self._num_ann)):
             ann_str = ", ".join(np.array(range(0, self._num_ann)).astype(str))
             raise IndexError("{i} is not an annulus ID associated with this AnnularSpectra object. "
-                             "Allowed annulus IDs are; ".format(i=annulus_ident, a=ann_str))
+                             "Allowed annulus IDs are; {a}".format(i=annulus_ident, a=ann_str))
         elif obs_id not in self._component_products and obs_id is not None:
             raise NotAssociatedError("{0} is not associated with this AnnularSpectra.".format(obs_id))
         elif (obs_id is not None and obs_id in self._component_products) and \
