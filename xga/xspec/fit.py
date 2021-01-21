@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 09:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 09:56. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -399,9 +399,9 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         if redshifted or (not redshifted and source.redshift is not None):
             z = source.redshift
         else:
-            z = 0
+            z = 1
             warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
-                          " will be invalid, as redshift has been set to zero.".format(s=source.name))
+                          " will be invalid, as redshift has been set to one.".format(s=source.name))
 
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
