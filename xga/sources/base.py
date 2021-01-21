@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 16:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 09:23. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -682,11 +682,16 @@ class BaseSource:
                     inst_lums = {}
                     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
                         sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                        # Want to derive the spectra storage key from the file name, this strips off some
+                        #  unnecessary info
+                        sp_key = line["SPEC_PATH"].strip(" ").split("/")[-1].split('ra')[-1].split('_spec.fits')[0]
+                        # This adds ra back on, and removes any ident information if it is there
+                        sp_key = 'ra' + sp_key.split('_ident')[0]
+
                         # Finds the appropriate matching spectrum object for the current table line
                         try:
-                            spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1],
-                                                                         just_obj=False)
-                                    if reg_type in match and match[-1].usable][0][-1]
+                            spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
+
                         except IndexError:
                             raise NoProductAvailableError("A Spectrum object referenced in a fit file for {n} "
                                                           "cannot be loaded".format(n=self._name))
@@ -713,7 +718,7 @@ class BaseSource:
                         chosen_lums = inst_lums["mos1"]
 
                     # Push global fit results, luminosities etc. into the corresponding source object.
-                    self.add_fit_data(model, reg_type, global_results, chosen_lums)
+                    self.add_fit_data(model, global_results, chosen_lums, sp_key)
 
                 except OSError:
                     chosen_lums = {}
@@ -1703,7 +1708,9 @@ class BaseSource:
         """
         A method that stores fit results and global information about a the set of spectra in a source object.
         Any variable parameters in the fit are stored in an internal dictionary structure, as are any luminosities
-        calculated. Other parameters of interest are store in other internal attributes.
+        calculated. Other parameters of interest are store in other internal attributes. This probably shouldn't
+        ever be used by the user, just other parts of XGA, hence why I've asked for a spec_storage_key to be passed
+        in rather than all the spectrum configuration options individually.
 
         :param str model: The XSPEC definition of the model used to perform the fit. e.g. tbabs*apec
         :param tab_line: The table line with the fit data.
