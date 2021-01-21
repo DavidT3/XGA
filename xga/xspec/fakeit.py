@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/10/2020, 15:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 11:45. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -32,6 +32,8 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str,
     :param str abund_table: The name of the XSPEC abundance table to use.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     """
+    raise NotImplementedError("This function hasn't yet been updated to cope with the new storage methods"
+                              " for spectra")
     # Again these checking stages are basically copied from another function, I'm feeling lazy
     allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
     # This function supports passing both individual sources and sets of sources

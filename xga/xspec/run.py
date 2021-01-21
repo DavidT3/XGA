@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 16:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 11:45. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -23,8 +23,6 @@ from ..sources import BaseSource
 # Currently raises an error, but perhaps later on I'll relax this to a warning.
 if shutil.which("xspec") is None:
     raise HeasoftError("Unable to locate an XSPEC installation.")
-
-# TODO Make xga_extract deal with no redshift better
 
 
 def execute_cmd(x_script: str, out_file: str, src: str, run_type: str) \
