@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 15:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 18:18. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -280,7 +280,9 @@ def xspec_call(sas_func):
                 #  the last spectra that was opened in the loop
                 ann_spec = s.get_annular_spectra(set_id=spec.set_ident)
                 ann_spec.add_fit_data(model, ann_results, ann_lums)
-                # ann_spec.generate_profiles(model)
+                # TODO Maybe change this behaviour
+                if model == "tbabs*apec":
+                    ann_spec.generate_profile(model, 'kT', 'keV')
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.

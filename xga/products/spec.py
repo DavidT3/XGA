@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 15:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 18:18. Copyright (c) David J Turner
 
 
 import os
@@ -8,13 +8,14 @@ from typing import Tuple, Union, List
 
 import numpy as np
 from astropy.io import fits
-from astropy.units import Quantity
+from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError
+from ..products.profile import ProjectedGasTemperature1D
 from ..utils import dict_search
 
 
@@ -882,6 +883,11 @@ class AnnularSpectra(BaseAggregateProduct):
         self._fit_results = {ai: {} for ai in range(self._num_ann)}
         self._luminosities = {ai: {} for ai in range(self._num_ann)}
 
+        # This can be set through a property, as products shouldn't have any knowledge of their source
+        #  other than the name. And someone might define one of these source-lessly. It will contain radii
+        #  which are proper, not in degrees
+        self._proper_radii = None
+
     @property
     def central_coord(self) -> Quantity:
         """
@@ -1037,6 +1043,39 @@ class AnnularSpectra(BaseAggregateProduct):
         :rtype: Quantity
         """
         return self._radii
+
+    @property
+    def proper_radii(self) -> Quantity:
+        """
+        A property to return the boundary radii of the constituent annuli in kpc. This has
+        to be set using the setter first, otherwise the value is None.
+
+        :return: Astropy quantity of the proper radii.
+        :rtype: Quantity
+        """
+        if self._proper_radii is not None:
+            to_return = self._proper_radii.to('kpc')
+        else:
+            to_return = self._proper_radii
+
+        return to_return
+
+    @proper_radii.setter
+    def proper_radii(self, new_vals: Quantity):
+        """
+        A setter for the proper radii property.
+
+        :param Quantity new_vals: The new values for proper radii, must be convertable to kpc.
+        """
+        if not new_vals.unit.is_equivalent('kpc'):
+            raise UnitConversionError("Proper radii passed into this object must be convertable to kpc.")
+        elif new_vals.isscalar:
+            raise ValueError("A radii quantity for an AnnularSpectra object cannot be scalar")
+        elif len(new_vals) != len(self._radii):
+            raise ValueError("The proper radii quantity you have passed isn't the same length as the radii "
+                             "attribute of this object, there should be {} entries.".format(len(self._radii)))
+
+        self._proper_radii = new_vals
 
     @property
     def set_ident(self) -> int:
@@ -1240,24 +1279,47 @@ class AnnularSpectra(BaseAggregateProduct):
         else:
             return proc_data[par]
 
-    def generate_profiles(self, model: str):
+    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str]):
         """
+        This generates a radial profile of the requested fit parameter using the stored results from
+        an XSPEC model fit run on this AnnularSpectra. The profile is added to AnnularSpectra internal
+        storage, and also returned to the user.
 
-        :param str model: The name of the fitted model you wish to generate profiles from.
+        :param str model: The name of the fitted model you wish to generate a profile from.
+        :param str par: The name of the free model parameter that you wish to generate a profile for.
+        :param Unit/str par_unit: The unit of the free model parameter as an astropy unit object, or a string
+            representation (e.g. keV).
         """
-        if model == "tbabs*apec":
-            temp_data = []
-            for ai in range(self._num_ann):
-                temp_data.append(self.get_results(ai, model, 'kT'))
+        # If a string representation was passed, we make it an astropy unit
+        if isinstance(par_unit, str):
+            par_unit = Unit(par_unit)
 
-            print(temp_data)
-            import sys
-            sys.exit()
-        else:
-            raise NotImplementedError("Sorry I don't currently support profiles from other models, though"
-                                      " get in contact if there is something specific you want")
+        if self.proper_radii is None:
+            raise UnitConversionError("Currently proper radius units are required to generate "
+                                      "profiles, please assign some using the proper_radii property.")
 
+        par_data = []
+        for ai in range(self._num_ann):
+            par_data.append(self.get_results(ai, model, par))
 
+        if isinstance(par_data[0], dict):
+            raise ValueError("Unfortunately {} has been stored on a per-spectrum level, and cannot be made into"
+                             " a profile at the current time.")
+
+        par_quant = Quantity(par_data, par_unit)
+        mid_radii = np.sum(self.proper_radii.to('kpc'), axis=0) / 2
+
+        pr = self.proper_radii.to("kpc").value
+        mid_radii = [(pr[r_ind] + pr[r_ind+1])/2 for r_ind in range(len(pr)-1)]
+        mid_radii = Quantity(mid_radii, 'kpc')
+
+        if self.radii[0].value == 0:
+            mid_radii[0] = 0
+
+        if par == 'kT':
+            # TODO UNCERTAINTIES ON VALUES AND RADII
+            new_prof = ProjectedGasTemperature1D(mid_radii, par_quant[:, 0], self.central_coord, self.src_name,
+                                                 'combined', 'combined')
 
 
     def view(self, ann_ident: int, figsize: Tuple = (8, 6)):

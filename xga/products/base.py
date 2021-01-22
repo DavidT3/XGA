@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 12:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 18:18. Copyright (c) David J Turner
 
 
 import inspect
@@ -15,20 +15,10 @@ from matplotlib import pyplot as plt
 from scipy.optimize import curve_fit, minimize
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
-from ..models import SB_MODELS, SB_MODELS_STARTS, SB_MODELS_PRIORS, DENS_MODELS, DENS_MODELS_STARTS, TEMP_MODELS, \
-    TEMP_MODELS_STARTS, MODEL_PUBLICATION_NAMES
+from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_YAXIS, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, \
+    PROF_TYPE_MODELS_PRIORS
 from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
-
-PROF_TYPE_YAXIS = {"base": "Unknown", "brightness": "Surface Brightness", "gas_density": "Gas Density",
-                   "2d_temperature": "Projected Temperature", "3d_temperature": "3D Temperature",
-                   "gas_mass": "Cumulative Gas Mass"}
-PROF_TYPE_MODELS = {"brightness": SB_MODELS, "gas_density": DENS_MODELS, "2d_temperature": TEMP_MODELS,
-                    "3d_temperature": TEMP_MODELS}
-PROF_TYPE_MODELS_STARTS = {"brightness": SB_MODELS_STARTS, "gas_density": DENS_MODELS_STARTS,
-                           "2d_temperature": TEMP_MODELS_STARTS, "3d_temperature": TEMP_MODELS_STARTS}
-# TODO FILL THIS OUT AND ADD PRIORS FOR OTHER MODELS
-PROF_TYPE_MODELS_PRIORS = {"brightness": SB_MODELS_PRIORS}
 
 
 class BaseProduct:
