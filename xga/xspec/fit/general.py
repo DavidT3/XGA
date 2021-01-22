@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 11:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 15:13. Copyright (c) David J Turner
 
 import warnings
 from typing import List, Union
@@ -136,7 +136,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             src_inds.append(src_ind)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, inn_rad_vals, out_rad_vals, run_type, src_inds
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None
 
 
 @xspec_call
@@ -268,6 +268,6 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             src_inds.append(src_ind)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, inn_rad_vals, out_rad_vals, run_type, src_inds
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None
 
 

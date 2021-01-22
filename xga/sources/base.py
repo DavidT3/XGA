@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 10:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 15:13. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -626,8 +626,6 @@ class BaseSource:
                                        r_inner, r_outer, obs_id, inst, grouped, min_counts, min_sn, over_sample, "",
                                        "", "", region)
 
-                        # And adding it to the source storage structure
-                        self.update_products(obj)
                         if "ident" in sp.split('/')[-1]:
                             set_id = int(sp.split('ident')[-1].split('_')[0])
                             ann_id = int(sp.split('ident')[-1].split('_')[1])
@@ -636,6 +634,10 @@ class BaseSource:
                             if set_id not in ann_spec_constituents:
                                 ann_spec_constituents[set_id] = []
                             ann_spec_constituents[set_id].append(obj)
+                        else:
+                            # And adding it to the source storage structure, but only if its not a member
+                            #  of an AnnularSpectra
+                            self.update_products(obj)
                     else:
                         raise ValueError("I have found multiple file matches for a Spectrum, contact the developer!")
         os.chdir(og_dir)

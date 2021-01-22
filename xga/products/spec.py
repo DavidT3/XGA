@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 23:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 15:13. Copyright (c) David J Turner
 
 
 import os
@@ -864,6 +864,24 @@ class AnnularSpectra(BaseAggregateProduct):
         for s in self.all_spectra:
             s.background = self.background(s.obs_id, s.instrument)
 
+        # Setting up attributes that allow for the storage of final fit results within this class, very similar
+        #  to how they're stored in a source object. This makes sense here because an AnnularSpectra is an
+        #  aggregate product of all the relevant spectra. All fit results are stored on annular basis, then most
+        #  will have different entries for different models
+
+        # The total exposure of the combined spectra, will be overwritten if multiple models are fit, but
+        #  as its a property of the spectra and not the fit it should always be the same
+        self._total_exp = {ai: None for ai in range(self._num_ann)}
+        # These will be stored on a per model basis
+        self._total_count_rate = {ai: {} for ai in range(self._num_ann)}
+        self._test_stat = {ai: {} for ai in range(self._num_ann)}
+        self._dof = {ai: {} for ai in range(self._num_ann)}
+
+        # Finally the most important outputs, the fit results and luminosities. There obviously is some data
+        #  duplication here with the source, but this will be so convenient I don't care
+        self._fit_results = {ai: {} for ai in range(self._num_ann)}
+        self._luminosities = {ai: {} for ai in range(self._num_ann)}
+
     @property
     def central_coord(self) -> Quantity:
         """
@@ -1095,6 +1113,159 @@ class AnnularSpectra(BaseAggregateProduct):
         :rtype: float
         """
         return self._over_sample
+
+    def add_fit_data(self, model: str, tab_line: dict, lums: dict):
+        """
+        An equivelant to the add_fit_data method built into all source objects. The final fit results
+        and luminosities are housed in a storage structure within the AnnularSpectra, which makes sense
+        because this is an aggregate product of all the relevant spectra, storing them just as source objects
+        store spectra that don't exist in a spectrum set.
+
+        :param str model: The XSPEC definition of the model used to perform the fit. e.g. tbabs*apec
+        :param tab_line: A dictionary of table lines with fit data, the keys of the dictionary being
+            the relevant annulus ID for the fit.
+        :param dict lums: A dictionary of the luminosities measured during the fits, the keys of the
+            outermost dictionary being annulus IDs, and the luminosity dictionaries being energy based.
+        """
+        # Just headers that will always be present in tab_line that are not fit parameters
+        not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
+                   'NUM_UNLINKED_THAWED_VARS', 'FIT_STATISTIC', 'TEST_STATISTIC', 'DOF']
+
+        # Checking that we have the expected amount of data passed in
+        if len(tab_line) != self._num_ann:
+            raise ValueError("The dictionary passed in with the fit results in it does not have the same"
+                             " number of entries as there are annuli.")
+        elif len(lums) != self._num_ann:
+            raise ValueError("The dictionary passed in with the luminosities in it does not have the same"
+                             " number of entries as there are annuli.")
+
+        for ai in range(0, self._num_ann):
+            # Various global values of interest
+            self._total_exp[ai] = float(tab_line[ai]["TOTAL_EXPOSURE"])
+            self._total_count_rate[ai][model] = [float(tab_line[ai]["TOTAL_COUNT_RATE"]),
+                                                 float(tab_line[ai]["TOTAL_COUNT_RATE_ERR"])]
+            self._test_stat[ai][model] = float(tab_line[ai]["TEST_STATISTIC"])
+            self._dof[ai][model] = float(tab_line[ai]["DOF"])
+
+            # The parameters available will obviously be dynamic, so have to find out what they are and then
+            #  then for each result find the +- errors.
+            par_headers = [n for n in tab_line[ai].dtype.names if n not in not_par]
+            mod_res = {}
+            for par in par_headers:
+                # The parameter name and the parameter index used by XSPEC are separated by |
+                par_info = par.split("|")
+                par_name = par_info[0]
+
+                # The parameter index can also have an - or + after it if the entry in question is an uncertainty
+                if par_info[1][-1] == "-":
+                    ident = par_info[1][:-1]
+                    pos = 1
+                elif par_info[1][-1] == "+":
+                    ident = par_info[1][:-1]
+                    pos = 2
+                else:
+                    ident = par_info[1]
+                    pos = 0
+
+                # Sets up the dictionary structure for the results
+                if par_name not in mod_res:
+                    mod_res[par_name] = {ident: [0, 0, 0]}
+                elif ident not in mod_res[par_name]:
+                    mod_res[par_name][ident] = [0, 0, 0]
+
+                mod_res[par_name][ident][pos] = float(tab_line[ai][par])
+
+            # Storing the fit results
+            self._fit_results[ai][model] = mod_res
+            # And now storing the luminosity results
+            self._luminosities[ai][model] = lums[ai]
+
+    def get_results(self, annulus_ident: int, model: str, par: str = None):
+        """
+        Important method that will retrieve fit results from the AnnularSpectra object. Either for a specific
+        parameter of the supplied model combination, or for all of them. If a specific parameter is requested,
+        all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
+        column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
+        of such numpy arrays, with the keys corresponding to parameter names.
+
+        :param int annulus_ident: The annulus for which you wish to retrieve the fit results.
+        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str par: The name of the parameter you want a result for.
+        :return: The requested result value, and uncertainties.
+        """
+
+        if annulus_ident < 0:
+            raise ValueError("Annulus IDs can only be positive.")
+        elif annulus_ident >= self.num_annuli:
+            raise ValueError("Annulus indexing starts at zero, and this AnnularSpectra only has {} "
+                             "annuli.".format(self._num_ann))
+
+        # Bunch of checks to make sure the requested results actually exist
+        if len(self._fit_results[annulus_ident]) == 0:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra "
+                                          "object".format(s=self.name))
+        elif model not in self._fit_results[annulus_ident]:
+            av_mods = ", ".join(self._fit_results[annulus_ident].keys())
+            raise ModelNotAssociatedError("{m} has not been fitted to this AnnularSpectra; available "
+                                          "models are {a}".format(m=model, a=av_mods))
+        elif par is not None and par not in self._fit_results[annulus_ident][model]:
+            av_pars = ", ".join(self._fit_results[annulus_ident][model].keys())
+            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to this AnnularSpectra; "
+                                              "available parameters are {a}".format(p=par, m=model, a=av_pars))
+
+        # Read out into variable for readabilities sake
+        fit_data = self._fit_results[annulus_ident][model]
+        proc_data = {}  # Where the output will ive
+        for p_key in fit_data:
+            # Used to shape the numpy array the data is transferred into
+            num_entries = len(fit_data[p_key])
+            # 'Empty' new array to write out the results into, done like this because results are stored
+            #  in nested dictionaries with their XSPEC parameter number as an extra key
+            new_data = np.zeros((num_entries, 3))
+
+            # If a parameter is unlinked in a fit with multiple spectra (like normalisation for instance),
+            #  there can be N entries for the same parameter, writing them out in order to a numpy array
+            for incr, par_index in enumerate(fit_data[p_key]):
+                new_data[incr, :] = fit_data[p_key][par_index]
+
+            # Just makes the output a little nicer if there is only one entry
+            if new_data.shape[0] == 1:
+                proc_data[p_key] = new_data[0]
+            else:
+                proc_data[p_key] = new_data
+
+        # If no specific parameter was requested, the user gets all of them
+        if par is None:
+            return proc_data
+        else:
+            return proc_data[par]
+
+    def generate_profiles(self, model: str):
+        """
+
+        :param str model: The name of the fitted model you wish to generate profiles from.
+        """
+        if model == "tbabs*apec":
+            temp_data = []
+            for ai in range(self._num_ann):
+                temp_data.append(self.get_results(ai, model, 'kT'))
+
+            print(temp_data)
+            import sys
+            sys.exit()
+        else:
+            raise NotImplementedError("Sorry I don't currently support profiles from other models, though"
+                                      " get in contact if there is something specific you want")
+
+
+
+
+    def view(self, ann_ident: int, figsize: Tuple = (8, 6)):
+        """
+        An equivelant to the Spectrum view method, but allows all spectra from the same annulus to be
+        displayed on the same axis.
+        """
+        raise NotImplementedError("This will be done shortly!")
 
     def __len__(self) -> int:
         """

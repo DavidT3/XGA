@@ -1,16 +1,20 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 11:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 15:13. Copyright (c) David J Turner
 
 from typing import List, Union
 
+import astropy.units as u
 from astropy.units import Quantity
 
+from .common import _write_xspec_script
+from ..run import xspec_call
 from ... import NUM_CORES
 from ...samples.base import BaseSample
 from ...sas import spectrum_set
 from ...sources import BaseSource
 
 
+@xspec_call
 def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, List[Quantity]],
                              start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
                              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
@@ -55,6 +59,83 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     """
     # We make sure the requested sets of annular spectra have actually been generated
     spectrum_set(sources, radii, group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
+
+    # Unfortunately, a very great deal of this function is going to be copied from the original single_temp_apec
+    model = "tbabs*apec"
+    par_names = "{nH kT Abundanc Redshift norm}"
+    lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
+    lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
+
+    script_paths = []
+    outfile_paths = []
+    src_inds = []
+
+    deg_rad = []
+    for src_ind, source in enumerate(sources):
+        # Gets the set of radii for this particular source into a variable
+        cur_radii = radii[src_ind]
+
+        source: BaseSource
+        # This will fetch the annular_spec, get_annular_spectra will throw an error if no matches
+        #  are found, though as we have run spectrum_set that shouldn't happen
+        ann_spec = source.get_annular_spectra(cur_radii, group_spec, min_counts, min_sn, over_sample)
+        deg_rad.append(ann_spec.radii)
+
+        # If source.get_annular_spectra returns a list, it means that multiple matches have been found
+        if isinstance(ann_spec, list):
+            # This shouldn't ever go off I don't think
+            raise ValueError("Multiple annular spectra set matches have been found.")
+
+        # We step through the annuli and make fitting scripts for them all independently
+        for ann_id in range(ann_spec.num_annuli):
+            # We fetch the spectrum objects for this particular annulus
+            spec_objs = ann_spec.get_spectra(ann_id)
+
+            # Turn spectra paths into TCL style list for substitution into template
+            specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
+            # For this model, we have to know the redshift of the source.
+            if source.redshift is None:
+                raise ValueError("You cannot supply a source without a redshift to this model.")
+
+            # Whatever start temperature is passed gets converted to keV, this will be put in the template
+            t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
+            # Another TCL list, this time of the parameter start values for this model.
+            par_values = "{{{0} {1} {2} {3} {4}}}".format(source.nH.to("10^22 cm^-2").value, t,
+                                                          start_met, source.redshift, 1.)
+
+            # Set up the TCL list that defines which parameters are frozen, dependant on user input
+            if freeze_nh and freeze_met:
+                freezing = "{T F T T F}"
+            elif not freeze_nh and freeze_met:
+                freezing = "{F F T T F}"
+            elif freeze_nh and not freeze_met:
+                freezing = "{T F F T F}"
+            elif not freeze_nh and not freeze_met:
+                freezing = "{F F F T F}"
+
+            # Set up the TCL list that defines which parameters are linked across different spectra,
+            #  dependant on user input
+            if link_norm:
+                linking = "{T T T T T}"
+            else:
+                linking = "{T T T T F}"
+
+            file_prefix = spec_objs[0].storage_key + "_ident{}_".format(spec_objs[0].set_ident) \
+                          + str(spec_objs[0].annulus_ident)
+            out_file, script_file = _write_xspec_script(source, file_prefix, model, abund_table, fit_method,
+                                                        specs, lo_en, hi_en, par_names, par_values, linking, freezing,
+                                                        par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf,
+                                                        source.redshift)
+
+            # TODO Figure out some way of checking if that fit has already run, when the fit is stored somewhere
+            script_paths.append(script_file)
+            outfile_paths.append(out_file)
+            src_inds.append(src_ind)
+
+    run_type = "fit"
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad
+
+
 
 
 
