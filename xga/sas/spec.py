@@ -1,11 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 16:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 10:03. Copyright (c) David J Turner
 
 import os
 import warnings
 from copy import copy
 from random import randint
-from shutil import rmtree
 from typing import Union, Tuple, List
 
 import numpy as np
@@ -417,9 +416,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Adds clean up commands to move all generated files and remove temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
             cmds.append(cmd_str)  # Adds the full command to the set
-            # If something got interrupted and the temp directory still exists, this will remove it
-            if os.path.exists(dest_dir):
-                rmtree(dest_dir)
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
 
