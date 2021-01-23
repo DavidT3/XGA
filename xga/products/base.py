@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 18:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
 
 
 import inspect
@@ -457,8 +457,11 @@ class BaseAggregateProduct:
         return list(self._component_products.values())[ind]
 
 
-# TODO Sweep through and docstring up in here
 class BaseProfile1D:
+    """
+    The superclass for all 1D radial profile products, with built in fitting, viewing, and result retrieval
+    functionality. Classes derived from BaseProfile1D can be added together to create Aggregate Profiles.
+    """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None):
         if type(radii) != Quantity or type(values) != Quantity:

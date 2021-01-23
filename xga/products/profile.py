@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 18:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -415,7 +415,40 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         self._prof_type = "1d_proj_temperature"
 
 
+class ProjectedGasMetallicity1D(BaseProfile1D):
+    """
+    A profile product meant to hold a radial profile of projected X-ray metallicities/abundances, as measured
+    from a set of annular spectra by XSPEC. These are typically only defined by XGA methods.
+    """
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
+                 radii_err: Quantity = None, values_err: Quantity = None):
+        """
+        The init of a subclass of BaseProfile1D which will hold a 1D projected metallicity/abundance profile.
 
+        :param Quantity radii: The radii at which the projected gas metallicity have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The projected gas metallicity that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        """
+        #
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err)
+
+        # Actually imposing limits on what units are allowed for the radii and values for this - just
+        #  to make things like the gas mass integration easier and more reliable. Also this is for mass
+        #  density, not number density.
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+
+        if not values.unit.is_equivalent(""):
+            raise UnitConversionError("Values unit cannot be converted to dimensionless")
+
+        # Setting the type
+        self._prof_type = "1d_proj_metallicity"
 
 
 

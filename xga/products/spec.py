@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 18:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
 
 
 import os
@@ -15,7 +15,7 @@ from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError
-from ..products.profile import ProjectedGasTemperature1D
+from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D
 from ..utils import dict_search
 
 
@@ -1241,8 +1241,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Bunch of checks to make sure the requested results actually exist
         if len(self._fit_results[annulus_ident]) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra "
-                                          "object".format(s=self.name))
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra object")
         elif model not in self._fit_results[annulus_ident]:
             av_mods = ", ".join(self._fit_results[annulus_ident].keys())
             raise ModelNotAssociatedError("{m} has not been fitted to this AnnularSpectra; available "
@@ -1306,21 +1305,37 @@ class AnnularSpectra(BaseAggregateProduct):
             raise ValueError("Unfortunately {} has been stored on a per-spectrum level, and cannot be made into"
                              " a profile at the current time.")
 
+        # Just makes the read out values into an astropy quantity
         par_quant = Quantity(par_data, par_unit)
-        mid_radii = np.sum(self.proper_radii.to('kpc'), axis=0) / 2
+        par_val = par_quant[:, 0]
+        # Extract the parameter uncertainties, and average because profiles currently only accept 1D errors
+        par_errs = par_quant[:, 1:]
+        par_errs = np.average(par_errs, axis=1)
 
+        # Just reads out the proper radii into a variable so it can be modified
         pr = self.proper_radii.to("kpc").value
+        # Minds the mid points of the annular boundaries - the centres of the bins
         mid_radii = [(pr[r_ind] + pr[r_ind+1])/2 for r_ind in range(len(pr)-1)]
+        # Makes mid_radii a quantity
         mid_radii = Quantity(mid_radii, 'kpc')
+        # calculates radii errors, basically the extent of the bins
+        rad_errors = Quantity(np.diff(pr, axis=0) / 2, 'kpc')
 
+        # For the central annulus, if its a circle around the zero point, then the calculated mid_radii value
+        #  is invalid
         if self.radii[0].value == 0:
             mid_radii[0] = 0
 
         if par == 'kT':
-            # TODO UNCERTAINTIES ON VALUES AND RADII
-            new_prof = ProjectedGasTemperature1D(mid_radii, par_quant[:, 0], self.central_coord, self.src_name,
-                                                 'combined', 'combined')
+            new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
+                                                 'combined', rad_errors, par_errs)
+        elif par == 'Abundanc':
+            new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
+                                                 'combined', rad_errors, par_errs)
+        else:
+            raise NotImplementedError("I cannot yet generate generic profiles, but soon!")
 
+        return new_prof
 
     def view(self, ann_ident: int, figsize: Tuple = (8, 6)):
         """
