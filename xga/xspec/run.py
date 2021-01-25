@@ -109,7 +109,7 @@ def xspec_call(xspec_func):
     :return:
     """
 
-    @wraps(sas_func)
+    @wraps(xspec_func)
     def wrapper(*args, **kwargs):
         # The first argument of all of these XSPEC functions will be the source object (or a list of),
         # so rather than return them from the XSPEC model function I'll just access them like this.
