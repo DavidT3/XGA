@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 15:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 12:58. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -11,10 +11,10 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from tqdm import tqdm
 
-from ..exceptions import NoRegionsError, NoProductAvailableError, XGAFitError
+from ..exceptions import NoRegionsError, NoProductAvailableError, XGAFitError, ModelNotAssociatedError, \
+    ParameterNotAssociatedError
 from ..imagetools.profile import radial_brightness
 from ..samples.extended import ClusterSample
-from ..sas import evselect_spectrum
 from ..sources import GalaxyCluster
 from ..utils import NUM_CORES, COMPUTE_MODE
 from ..xspec.fakeit import cluster_cr_conv
@@ -91,19 +91,30 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
     # Now, we have all the brightness values at common radii (in units of R200 so scaled properly), now we have
     #  to weight the SB values so they are directly comparable. This accounts for redshift, nH, and sort-of for
     #  the temperature of each cluster.
-    # First must make sure we have generated spectra for all the clusters, as we need the ARFs and RMFs to
-    #  simulate spectra and calculate conversion values
-    evselect_spectrum(sources, scale_radius)  # Use our standard setting for spectra generation
 
     # Calculate all the conversion factors
     if custom_temps is not None:
-        cluster_cr_conv(sources, scale_radius, custom_temps, sim_met, abund_table=abund_table)
+        # I'm not going to give the user the ability to choose the specifics of the spectra that are
+        #  being used to calculate conversion factors - I'll use standard settings. This function will
+        #  also make sure that they've actually been generated.
+        cluster_cr_conv(sources, scale_radius, custom_temps, sim_met=sim_met, abund_table=abund_table)
     else:
         # Use a simple single_temp_apec to fit said spectra, but only if we haven't had custom temperatures
         #  passed in
-        single_temp_apec(sources, reg_type=scale_radius, abund_table=abund_table)
-        temps = Quantity([source.get_temperature(scale_radius, "tbabs*apec")[0].value for source in sources], 'keV')
-        cluster_cr_conv(sources, scale_radius, temps)
+        single_temp_apec(sources, scale_radius, abund_table=abund_table)
+        temp_temps = []
+        for src in sources:
+            try:
+                # A temporary temperature variable
+                temp_temp = src.get_temperature("tbabs*apec", scale_radius)[0]
+            except (ModelNotAssociatedError, ParameterNotAssociatedError):
+                warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
+                     "3keV".format(s=src.name))
+                temp_temp = Quantity(3, 'keV')
+
+            temp_temps.append(temp_temp.value)
+        temps = Quantity(temp_temps, 'keV')
+        cluster_cr_conv(sources, scale_radius, sim_temp=temps, sim_met=sim_met, abund_table=abund_table)
 
     combined_factors = []
     # Now to generate a combined conversion factor from count rate to luminosity
