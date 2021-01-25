@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 12:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 12:52. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -99,9 +99,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
             temp_temp = Quantity(3, 'keV')
 
         temp_temps.append(temp_temp.value)
-
     temps = Quantity(temp_temps, 'keV')
-    print(temps)
 
     # This call actually does the fakeit calculation of the conversion factors, then stores them in the
     #  XGA Spectrum objects
@@ -233,7 +231,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
     dens_prog = tqdm(desc="Inverse Abel transforming data and measuring densities", total=len(sources))
     for src_ind, src in enumerate(sources):
-        sb_prof = _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
+        sb_prof = _run_sb(src, outer_radius, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
                           pix_step, min_snr)
         src.update_products(sb_prof)
 
@@ -266,7 +264,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
 
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: str, fit_method: str = "mcmc",
-                          model_priors: List = None, model_start_pars: list = None, outer_radius: str = "r500",
+                          model_priors: list = None, model_start_pars: list = None, outer_radius: str = "r500",
                           use_peak: bool = True, pix_step: int = 1, min_snr: Union[int, float] = 0.0,
                           abund_table: str = "angr", lo_en: Quantity = Quantity(0.5, 'keV'),
                           hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True,
@@ -276,14 +274,18 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
                           min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                           num_cores: int = NUM_CORES):
     """
-
+    A more sophisticated method of calculating density profiles than inv_abel_data, this fits a model
+    to the surface brightness profile of each cluster, and the model is then numerically inverse Abel
+    transformed. Tends to result in a more stable and smoother density profile.
 
     :param GalaxyCluster/ClusterSample sources: A GalaxyCluster or ClusterSample object to measure density
         profiles for.
-    :param model:
-    :param fit_method:
-    :param model_priors:
-    :param model_start_pars:
+    :param str model: The model to fit to the surface brightness profiles.
+    :param str fit_method: The method for the profile object to use to fit the model, default is mcmc.
+    :param list model_priors: If supplied these will be used as priors for the model fit (if mcmc is the
+        fitting method), otherwise model defaults will be used.
+    :param list model_start_pars: If supplied these will be used as start pars for the model fit (if mcmc is
+        NOT the fit method), otherwise model defaults will be used.
     :param str/Quantity outer_radius: The name or value of the outer radius of the spectra that should be used
         to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
         Quantity(1000, 'kpc')).
@@ -301,11 +303,14 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
     :param int psf_bins: If PSF corrected, the number of bins per side.
     :param str psf_algo: If PSF corrected, the algorithm used.
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
-    :param model_realisations:
-    :param model_rad_steps:
-    :param conf_level:
-    :param num_walkers:
-    :param num_steps:
+    :param int model_realisations: The number of realisations of the fitted model to generate for
+        error propagation, default is 500.
+    :param int model_rad_steps: The number of radius points at which to sample the model for the
+        realisations, the default is 300.
+    :param int conf_level: The confidence level at which to calculate uncertainties on the density
+        profiles, default is 90%.
+    :param int num_walkers: If using mcmc fitting, the number of walkers to use. Default is 20.
+    :param int num_steps: If using mcmc fitting, the number of steps each walker should take. Default is 20000.
     :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
     :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
         were grouped by minimum counts.
@@ -313,7 +318,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
         were grouped by minimum signal to noise.
     :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
-    :return:
+    :return: The source/sample object passed in to this function.
+    :rtype: GalaxyCluster/ClusterSample
     """
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
@@ -329,7 +335,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
         prog_bar_allowed = False
 
     for src_ind, src in enumerate(sources):
-        sb_prof = _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
+        sb_prof = _run_sb(src, outer_radius, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
                           pix_step, min_snr)
         src.update_products(sb_prof)
 
