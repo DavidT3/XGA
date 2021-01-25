@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 11:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 14:34. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -244,11 +244,12 @@ def xspec_call(xspec_func):
                     else:
                         chosen_lums = inst_lums["mos1"]
 
-                    # Push global fit results, luminosities etc. into the corresponding source object.
-                    s.add_fit_data(model, global_results, chosen_lums, sp_key)
                     if ann_fit:
                         ann_results[spec.annulus_ident] = global_results
                         ann_lums[spec.annulus_ident] = chosen_lums
+                    elif not ann_fit:
+                        # Push global fit results, luminosities etc. into the corresponding source object.
+                        s.add_fit_data(model, global_results, chosen_lums, sp_key)
 
                 elif len(res_set) != 0 and res_set[1] and run_type == "conv_factors":
                     res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 18:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 14:34. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,6 +8,7 @@ from itertools import product
 from typing import Tuple, List, Dict, Union
 
 import numpy as np
+import pandas as pd
 from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
@@ -671,17 +672,35 @@ class BaseSource:
 
         # Now loading in previous fits
         if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
+            ann_results = {}
+            ann_lums = {}
             prev_fits = [OUTPUT + "XSPEC/" + self.name + "/" + f
                          for f in os.listdir(OUTPUT + "XSPEC/" + self.name) if ".xcm" not in f and ".fits" in f]
             for fit in prev_fits:
-                fit_info = fit.split("/")[-1].split("_")
-                reg_type = fit_info[1]
-                fit_model = fit_info[-1].split(".")[0]
+                fit_name = fit.split("/")[-1]
+                fit_info = fit_name.split("_")
+                storage_key = "_".join(fit_info[1:-1])
+                # Load in the results table
                 fit_data = FITS(fit)
 
                 # This bit is largely copied from xspec.py, sorry for my laziness
                 global_results = fit_data["RESULTS"][0]
                 model = global_results["MODEL"].strip(" ")
+
+                if "_ident" in storage_key:
+                    set_id, ann_id = storage_key.split("_ident")[-1].split("_")
+                    set_id = int(set_id)
+                    ann_id = int(ann_id)
+                    if set_id not in ann_results:
+                        ann_results[set_id] = {}
+                        ann_lums[set_id] = {}
+
+                    if model not in ann_results[set_id]:
+                        ann_results[set_id][model] = {}
+                        ann_lums[set_id][model] = {}
+                else:
+                    set_id = None
+                    ann_id = None
 
                 try:
                     inst_lums = {}
@@ -690,20 +709,23 @@ class BaseSource:
                         # Want to derive the spectra storage key from the file name, this strips off some
                         #  unnecessary info
                         sp_key = line["SPEC_PATH"].strip(" ").split("/")[-1].split('ra')[-1].split('_spec.fits')[0]
-                        # This adds ra back on, and removes any ident information if it is there
-                        sp_key = 'ra' + sp_key.split('_ident')[0]
 
-                        # Finds the appropriate matching spectrum object for the current table line
-                        try:
+                        # If its not an AnnularSpectra fit then we can just fetch the spectrum from the source
+                        #  the normal way
+                        if set_id is None:
+                            # This adds ra back on, and removes any ident information if it is there
+                            sp_key = 'ra' + sp_key
+                            # Finds the appropriate matching spectrum object for the current table line
                             spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
-
-                        except IndexError:
-                            raise NoProductAvailableError("A Spectrum object referenced in a fit file for {n} "
-                                                          "cannot be loaded".format(n=self._name))
+                        else:
+                            sp_key = 'ra' + sp_key.split('_ident')[0]
+                            ann_spec = self.get_annular_spectra(set_id=set_id)
+                            spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
 
                         # Adds information from this fit to the spectrum object.
-                        spec.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)])
-                        self.update_products(spec)  # Adds the updated spectrum object back into the source
+                        spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
+                        # if not ann_fit:
+                        #     s.update_products(spec)  # Adds the updated spectrum object back into the source
 
                         # The add_fit_data method formats the luminosities nicely, so we grab them back out
                         #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
@@ -722,14 +744,54 @@ class BaseSource:
                     else:
                         chosen_lums = inst_lums["mos1"]
 
-                    # Push global fit results, luminosities etc. into the corresponding source object.
-                    self.add_fit_data(model, global_results, chosen_lums, sp_key)
+                    if set_id is not None:
+                        ann_results[set_id][model][spec.annulus_ident] = global_results
+                        ann_lums[set_id][model][spec.annulus_ident] = chosen_lums
+                    else:
+                        # Push global fit results, luminosities etc. into the corresponding source object.
+                        self.add_fit_data(model, global_results, chosen_lums, sp_key)
 
                 except OSError:
                     chosen_lums = {}
-
                 fit_data.close()
+            
+            if len(ann_results) != 0:
+                for set_id in ann_results:
+                    rel_ann_spec = self.get_annular_spectra(set_id=set_id)
+                    for model in ann_results[set_id]:
+                        rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model])
+                        if model == "tbabs*apec":
+                            temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
+                            self.update_products(temp_prof)
+                            if 'Abundanc' in rel_ann_spec.get_results(0, 'tbabs*apec'):
+                                met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
+                                self.update_products(met_prof)
+
         os.chdir(og_dir)
+
+        # And finally loading in any conversion factors that have been calculated using XGA's fakeit interface
+        if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
+            conv_factors = [OUTPUT + "XSPEC/" + self.name + "/" + f for f in os.listdir(OUTPUT + "XSPEC/" + self.name)
+                            if ".xcm" not in f and "conv_factors" in f]
+            for conv_path in conv_factors:
+                res_table = pd.read_csv(conv_path, dtype={"lo_en": str, "hi_en": str})
+                # Gets the model name from the file name of the output results table
+                model = conv_path.split("_")[-3]
+
+                # We can infer the storage key from the name of the results table, just makes it easier to
+                #  grab the correct spectra
+                storage_key = conv_path.split('/')[-1].split(self.name)[-1][1:].split(model)[0][:-1]
+
+                # Grabs the ObsID+instrument combinations from the headers of the csv. Makes sure they are unique
+                #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
+                # First two columns are skipped because they are energy limits
+                combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
+                # Getting the spectra for each column, then assigning rates and lums
+                for comb in combos:
+                    spec = self.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
+                    spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
+                                          res_table["rate_{}".format(comb)].values,
+                                          res_table["Lx_{}".format(comb)].values, model)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
