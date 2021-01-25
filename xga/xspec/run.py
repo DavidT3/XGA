@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 09:56. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -281,6 +281,8 @@ def xspec_call(sas_func):
                 ann_spec = s.get_annular_spectra(set_id=spec.set_ident)
                 ann_spec.add_fit_data(model, ann_results, ann_lums)
 
+                # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
+                #  so we check whether tbabs*apec has been run and if so generate a Tx profile automatically
                 if model == "tbabs*apec":
                     temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
                     s.update_products(temp_prof)

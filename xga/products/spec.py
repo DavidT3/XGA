@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 09:56. Copyright (c) David J Turner
 
 
 import os
 import warnings
-from typing import Tuple, Union, List
+from typing import Tuple, Union, List, Dict
 
 import numpy as np
 from astropy.io import fits
@@ -1277,6 +1277,58 @@ class AnnularSpectra(BaseAggregateProduct):
             return proc_data
         else:
             return proc_data[par]
+
+    def get_luminosities(self, annulus_ident: int, model: str, lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[Quantity, Dict[str, Quantity]]:
+        """
+        This will retrieve luminosities of specific annuli from fits performed on this AnnularSpectra object.
+        A model name must be supplied, and if a luminosity from a specific energy range is desired then lower
+        and upper energy bounds may be passed.
+
+        :param int annulus_ident: The annulus for which you wish to retrieve the luminosities.
+        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :return: The requested luminosity value, and uncertainties. If a specific energy range has been supplied
+            then a quantity containing the value (col 1), -err (col 2), and +err (col 3), will be returned. If no
+            energy range is supplied then a dictionary of all available luminosity quantities will be returned.
+        :rtype: Union[Quantity, Dict[str, Quantity]]
+        """
+        # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
+        #  bounds. If the limits are none then so is the energy key
+        if all([lo_en is not None, hi_en is not None]) and lo_en > hi_en:
+            raise ValueError("The low energy limit cannot be greater than the high energy limit")
+        elif all([lo_en is not None, hi_en is not None]):
+            en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
+        else:
+            en_key = None
+
+        # Checks that the requested region, model and energy band actually exist
+        if len(self._luminosities[annulus_ident]) == 0:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra")
+        elif model not in self._luminosities[annulus_ident]:
+            av_mods = ", ".join(self._luminosities[annulus_ident].keys())
+            raise ModelNotAssociatedError("{m} has not been fitted to this AnnularSpectra; "
+                                          "available models are {a}".format(m=model, a=av_mods))
+        elif en_key is not None and en_key not in self._luminosities[annulus_ident][model]:
+            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[annulus_ident][model].keys()])
+            raise ParameterNotAssociatedError("A luminosity within {l}-{u}keV was not measured for the fit "
+                                              "with {m}; available energy bands are "
+                                              "{b}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value, m=model,
+                                                           b=av_bands))
+
+        # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
+        if en_key is None:
+            parsed_lums = {}
+            for lum_key in self._luminosities[annulus_ident][model]:
+                lum_value = self._luminosities[annulus_ident][model][lum_key]
+                parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
+                parsed_lums[lum_key] = parsed_lum
+            return parsed_lums
+        else:
+            lum_value = self._luminosities[annulus_ident][model][en_key]
+            parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
+            return parsed_lum
 
     def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str]):
         """
