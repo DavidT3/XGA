@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 15:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 14:38. Copyright (c) David J Turner
 
 from typing import List, Union
 
@@ -9,6 +9,7 @@ from astropy.units import Quantity
 from .common import _write_xspec_script
 from ..run import xspec_call
 from ... import NUM_CORES
+from ...exceptions import ModelNotAssociatedError
 from ...samples.base import BaseSample
 from ...sas import spectrum_set
 from ...sources import BaseSource
@@ -127,10 +128,13 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                                                         par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf,
                                                         source.redshift)
 
-            # TODO Figure out some way of checking if that fit has already run, when the fit is stored somewhere
-            script_paths.append(script_file)
-            outfile_paths.append(out_file)
-            src_inds.append(src_ind)
+            try:
+                res = ann_spec.get_results(0, 'tbabs*apec', 'kT')
+            except ModelNotAssociatedError:
+                script_paths.append(script_file)
+                outfile_paths.append(out_file)
+                src_inds.append(src_ind)
+
 
     run_type = "fit"
     return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad
