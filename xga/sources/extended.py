@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 16:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 11:40. Copyright (c) David J Turner
 
 import warnings
 from typing import Union
@@ -328,19 +328,34 @@ class GalaxyCluster(ExtendedSource):
 
         sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize, draw_rads=draw_rads, back_sub=back_sub)
 
-    def combined_lum_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
+    def combined_lum_conv_factor(self, outer_radius: Union[str, Quantity], lo_en: Quantity, hi_en: Quantity,
+                                 inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                                 min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> Quantity:
         """
         Combines conversion factors calculated for this source with individual instrument-observation
         spectra, into one overall conversion factor.
-        :param str reg_type: The region type the conversion factor is associated with.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius of the spectra that should be used
+            to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
+            Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+            inner radius will be ignored.
+        :param str/Quantity inner_radius: The name or value of the inner radius of the spectra that should be used
+            to calculate conversion factors (for instance 'r500' would be acceptable for a GalaxyCluster, or
+            Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum.
         :param Quantity lo_en: The lower energy limit of the conversion factors.
         :param Quantity hi_en: The upper energy limit of the conversion factors.
-        :return: A combined conversion factor that can be applied to a combined ratemap to
-        calculate luminosity.
+        :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
+            were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were used for fakeit
+            were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
+        :return: A combined conversion factor that can be applied to a combined ratemap to calculate luminosity.
         :rtype: Quantity
         """
         # Grabbing the relevant spectra
-        spec = self.get_products("spectrum", extra_key=reg_type)
+        spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
+                                min_sn=min_sn, over_sample=over_sample)
         # Setting up variables to be added into
         av_lum = Quantity(0, "erg/s")
         total_phot = 0
@@ -362,17 +377,34 @@ class GalaxyCluster(ExtendedSource):
         # Calculating and returning the combined factor.
         return av_lum / total_rate
 
-    def combined_norm_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
+    def combined_norm_conv_factor(self, outer_radius: Union[str, Quantity], lo_en: Quantity, hi_en: Quantity,
+                                  inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                                  min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> Quantity:
         """
         Combines count-rate to normalisation conversion factors associated with this source
-        :param str reg_type: The region type the conversion factor is associated with.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius of the spectra that should be used
+            to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
+            Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+            inner radius will be ignored.
+        :param str/Quantity inner_radius: The name or value of the inner radius of the spectra that should be used
+            to calculate conversion factors (for instance 'r500' would be acceptable for a GalaxyCluster, or
+            Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum.
         :param Quantity lo_en: The lower energy limit of the conversion factors.
         :param Quantity hi_en: The upper energy limit of the conversion factors.
+        :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
+            were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were used for fakeit
+            were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
         :return: A combined conversion factor that can be applied to a combined ratemap to
         calculate luminosity.
         :rtype: Quantity
         """
-        spec = self.get_products("spectrum", extra_key=reg_type)
+        # Grabbing the relevant spectra
+        spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
+                                min_sn=min_sn, over_sample=over_sample)
         total_phot = 0
         for s in spec:
             s: Spectrum
