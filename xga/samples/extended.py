@@ -1,5 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2021, 16:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 17:31. Copyright (c) David J Turner
+
+from typing import Union
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -14,6 +16,10 @@ from ..sources.extended import GalaxyCluster
 
 # Names are required for the ClusterSample because they'll be used to access specific cluster objects
 class ClusterSample(BaseSample):
+    """
+    A sample class to be used for declaring and analysing populations of galaxy clusters, with many cluster-science
+    specific functions, such as the ability to create common scaling relations.
+    """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray, name: np.ndarray, r200: Quantity = None,
                  r500: Quantity = None, r2500: Quantity = None, richness: np.ndarray = None,
                  richness_err: np.ndarray = None, wl_mass: Quantity = None, wl_mass_err: Quantity = None,
@@ -295,31 +301,58 @@ class ClusterSample(BaseSample):
 
         return Quantity(rads, 'kpc')
 
-    def Tx(self, reg_type: str, model: str = 'tbabs*apec'):
+    def Tx(self, model: str = 'tbabs*apec', outer_radius: Union[str, Quantity] = 'r500',
+           inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
+           min_sn: float = None, over_sample: float = None):
         """
         A get method for temperatures measured for the constituent clusters of this sample. An error will be
-        thrown if temperatures haven't been measured for the given region and model (default is the tbabs*apec model
-        which single_temp_apec fits to cluster spectra). Any clusters for which temperature fits failed will return
-        NaN temperatures.
+        thrown if temperatures haven't been measured for the given region (the default is R_500) and model (default
+        is the tbabs*apec model which single_temp_apec fits to cluster spectra). Any clusters for which temperature
+        fits failed will return NaN temperatures.
 
-        :param str reg_type: The type of region that the fitted spectra were generated from.
         :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored. You may also pass a quantity containing radius
+            values, with one value for each source in this sample. The default for this method is r500.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum. You may also pass a quantity containing radius values, with one value for each
+            source in this sample.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
         """
+        # Has to be here to prevent circular import unfortunately
+        from ..sas.spec import region_setup
+
+        if outer_radius != 'region':
+            # This just parses the input inner and outer radii into something predictable
+            inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
+        else:
+            raise NotImplementedError("Sorry region fitting is currently well supported")
+
         temps = []
-        for gcs in self._sources.values():
+        for src_ind, gcs in enumerate(self._sources.values()):
             try:
                 # Fetch the temperature from a given cluster using the dedicated method
-                gcs_temp = gcs.get_temperature(reg_type, model).value
+                gcs_temp = gcs.get_temperature(model, out_rads[src_ind], inn_rads[src_ind], group_spec, min_counts,
+                                               min_sn, over_sample).value
 
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
                 #  so its set to NaN
-                if gcs_temp[0] == 64:
+                if gcs_temp[0] > 30:
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
-                    warn("A temperature of 64keV was measured for {s}, this is considered a failed fit by "
-                         "XGA".format(s=gcs.name))
+                    warn("A temperature of {m}keV was measured for {s}, anything over 30keV considered a failed "
+                         "fit by XGA".format(s=gcs.name, m=gcs_temp))
                 temps.append(gcs_temp)
 
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
@@ -432,13 +465,16 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def gm_Tx(self, rad_name: str, x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+12, 'solMass'),
-              fit_method: str = 'odr', start_pars: list = None, dens_tech: str = 'inv_abel_model',
-              model: str = 'tbabs*apec') -> ScalingRelation:
+    # I don't allow the user to supply an inner radius here because I cannot think of a reason why you'd want to
+    #  make a scaling relation with a core excised temperature.
+    def gm_Tx(self, outer_radius: str, x_norm: Quantity = Quantity(4, 'keV'),
+              y_norm: Quantity = Quantity(1e+12, 'solMass'), fit_method: str = 'odr', start_pars: list = None,
+              dens_tech: str = 'inv_abel_model', model: str = 'tbabs*apec', group_spec: bool = True,
+              min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> ScalingRelation:
         """
         This generates a Gas Mass vs Tx scaling relation for this sample of Galaxy Clusters.
 
-        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param str outer_radius: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
         :param str fit_method: The name of the fit method to use to generate the scaling relation.
@@ -446,6 +482,12 @@ class ClusterSample(BaseSample):
         :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
             which is the superior of the two I have implemented as of 03/12/20.
         :param str model: The name of the model that the temperatures were measured with.
+        :param bool group_spec: Whether the spectra that were fitted for the Tx values were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            Tx values were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            Tx values were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
         """
@@ -453,19 +495,19 @@ class ClusterSample(BaseSample):
         fit_method = fit_method.lower()
 
         # Read out the temperature values into variables just for convenience sake
-        t_vals = self.Tx(rad_name, model)
+        t_vals = self.Tx(model, outer_radius, Quantity(0, 'deg'), group_spec, min_counts, min_sn, over_sample)
         t_data = t_vals[:, 0]
         t_errs = t_vals[:, 1:]
 
         # Read out the mass values, and multiply by the inverse e function for each cluster
-        gm_vals = self.gas_mass(rad_name, dens_tech, conf_level=90) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        gm_vals = self.gas_mass(outer_radius, dens_tech, conf_level=90) * self.cosmo.inv_efunc(self.redshifts)[..., None]
         gm_data = gm_vals[:, 0]
         gm_err = gm_vals[:, 1:]
 
-        if rad_name in ['r200', 'r500', 'r2500']:
-            rn = rad_name[1:]
+        if outer_radius in ['r200', 'r500', 'r2500']:
+            rn = outer_radius[1:]
         else:
-            rn = rad_name
+            rn = outer_radius
 
         x_name = r"T$_{\rm{x}," + rn + '}$'
         y_name = r"E(z)$^{-1}$M$_{\rm{g}," + rn + "}$"
@@ -486,13 +528,18 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def Lx_richness(self, rad_name: str, x_norm: Quantity = Quantity(60), y_norm: Quantity = Quantity(1e+44, 'erg/s'),
-                    fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec',
-                    lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')) -> ScalingRelation:
+    def Lx_richness(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(60),
+                    y_norm: Quantity = Quantity(1e+44, 'erg/s'), fit_method: str = 'odr', start_pars: list = None,
+                    model: str = 'tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
+                    hi_en: Quantity = Quantity(2.0, 'keV'), inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                    over_sample: float = None) -> ScalingRelation:
         """
-        This generates a Lx vs richness scaling relation for this sample of Galaxy Clusters.
+        This generates a Lx vs richness scaling relation for this sample of Galaxy Clusters. If you have run fits
+        to find core excised luminosity, and wish to use it in this scaling relation, then please don't forget
+        to supply an inner_radius to the method call.
 
-        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param str outer_radius: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
         :param str fit_method: The name of the fit method to use to generate the scaling relation.
@@ -500,6 +547,17 @@ class ClusterSample(BaseSample):
         :param str model: The name of the model that the luminosities were measured with.
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum. You may also pass a quantity containing radius values, with one value for each
+            source in this sample.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
         """
@@ -511,15 +569,17 @@ class ClusterSample(BaseSample):
         r_errs = self.richness[:, 1]
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        lx_vals = self.Lx(rad_name, model, lo_en, hi_en) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        lx_vals = self.Lx(model, outer_radius, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
+                          over_sample) * self.cosmo.inv_efunc(self.redshifts)[..., None]
         lx_data = lx_vals[:, 0]
         lx_err = lx_vals[:, 1:]
 
-        if rad_name in ['r200', 'r500', 'r2500']:
-            rn = rad_name[1:]
+        if outer_radius in ['r200', 'r500', 'r2500']:
+            rn = outer_radius[1:]
         else:
-            rn = rad_name
-        y_name = r"E(z)$^{-1}$L$_{\rm{x}," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+            raise ValueError("As this is a method for a whole population, please use a named radius such as "
+                             "r200, r500, or r2500.")
+        y_name = "E(z)$^{-1}$L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, r_data, r_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name,
@@ -538,13 +598,19 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def Lx_Tx(self, rad_name: str, x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+44, 'erg/s'),
-              fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec',
-              lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV')) -> ScalingRelation:
+    def Lx_Tx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(4, 'keV'),
+              y_norm: Quantity = Quantity(1e+44, 'erg/s'), fit_method: str = 'odr', start_pars: list = None,
+              model: str = 'tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
+              tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+              lx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+              min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> ScalingRelation:
         """
-        This generates a Lx vs Tx scaling relation for this sample of Galaxy Clusters.
+        This generates a Lx vs Tx scaling relation for this sample of Galaxy Clusters. If you have run fits
+        to find core excised luminosity, and wish to use it in this scaling relation, then you can specify the inner
+        radius of those spectra using lx_inner_radius, as well as ensuring that you use the temperature
+        fit you want by setting tx_inner_radius.
 
-        :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param str outer_radius: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
         :param str fit_method: The name of the fit method to use to generate the scaling relation.
@@ -552,6 +618,20 @@ class ClusterSample(BaseSample):
         :param str model: The name of the model that the luminosities and temperatures were measured with.
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param str/Quantity tx_inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the temperature (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum. You may also pass a quantity containing radius values, with one value for each
+            source in this sample.
+        :param str/Quantity lx_inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the Lx. The same rules as tx_inner_radius apply, and this option
+            is particularly useful if you have measured core-excised luminosity an wish to use it in a scaling relation.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
         """
@@ -559,22 +639,29 @@ class ClusterSample(BaseSample):
         fit_method = fit_method.lower()
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        lx_vals = self.Lx(rad_name, model, lo_en, hi_en) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        lx_vals = self.Lx(model, outer_radius, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
+                          over_sample) * self.cosmo.inv_efunc(self.redshifts)[..., None]
         lx_data = lx_vals[:, 0]
         lx_err = lx_vals[:, 1:]
 
         # Read out the temperature values into variables just for convenience sake
-        t_vals = self.Tx(rad_name, model)
+        t_vals = self.Tx(model, outer_radius, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
         t_data = t_vals[:, 0]
         t_errs = t_vals[:, 1:]
 
-        if rad_name in ['r200', 'r500', 'r2500']:
-            rn = rad_name[1:]
+        if outer_radius in ['r200', 'r500', 'r2500']:
+            rn = outer_radius[1:]
         else:
-            rn = rad_name
+            raise ValueError("As this is a method for a whole population, please use a named radius such as "
+                             "r200, r500, or r2500.")
 
-        x_name = r"T$_{\rm{x}," + rn + '}$'
-        y_name = r"E(z)$^{-1}$L$_{\rm{x}," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+        if lx_inner_radius.value != 0:
+            lx_rn = "Core-Excised " + rn
+        else:
+            lx_rn = rn
+
+        x_name = r"T$_{x," + rn + '}$'
+        y_name = "E(z)$^{-1}$L$_{x," + lx_rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, t_data, t_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name,

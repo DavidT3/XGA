@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2021, 21:53. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 09:41. Copyright (c) David J Turner
 
 import json
 import os
@@ -52,7 +52,7 @@ ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combin
                          "combined_brightness_profile", "combined_gas_density_profile", "combined_gas_mass_profile"]
 # List of all XMM products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "brightness_profile",
-                    "gas_density_profile", "gas_mass_profile"] + ENERGY_BOUND_PRODUCTS
+                    "gas_density_profile", "gas_mass_profile", "combined_spectrum"] + ENERGY_BOUND_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]
 
 # Here we read in files that list the errors and warnings in SAS
@@ -77,6 +77,9 @@ ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
 # Conversion from Hydrogen number density to electron number density
 NHC = {"angr": 1.199}
 XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
+
+# A centralised constant to define what radius labels are allowed
+RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
 
 
 def xmm_obs_id_test(test_string: str) -> bool:
@@ -293,8 +296,8 @@ else:
         raise XGAConfigError("Some events file paths (or the root_xmm_dir) in the config have not "
                              "been changed from default, please configure {} to match your setup".format(CONFIG_FILE))
     elif not os.path.exists(xga_conf["XMM_FILES"]["root_xmm_dir"]):
-        raise FileNotFoundError("That root_xmm_dir does not appear to exist, "
-                                "if it an SFTP mount check the connection.")
+        raise FileNotFoundError("root_xmm_dir={d} does not appear to exist, if it an SFTP mount check the "
+                                "connection.".format(d=xga_conf["XMM_FILES"]["root_xmm_dir"]))
 
     # Now I do the same for the XGA_SETUP section
     keys_to_check = ["xga_save_path"]

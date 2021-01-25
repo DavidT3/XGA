@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 10:03. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -266,6 +266,7 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
             psf_grid.unload_data()
 
         corr_progress.update(1)
+    corr_progress.set_description(corr_prog_message.format('complete'))
     corr_progress.close()
 
     # For the passed sources we now run emosaic to create combined PSF corrected images.

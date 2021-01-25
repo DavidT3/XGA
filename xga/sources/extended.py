@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 11:40. Copyright (c) David J Turner
 
 import warnings
 from typing import Union
@@ -10,7 +10,7 @@ from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitConversionError, pix, kpc
 
 from .general import ExtendedSource
-from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, NoRegionsError
+from ..exceptions import NoRegionsError
 from ..imagetools import radial_brightness
 from ..products import Spectrum
 from ..sourcetools import ang_to_rad, rad_to_ang
@@ -186,48 +186,34 @@ class GalaxyCluster(ExtendedSource):
 
     # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
     #  justified considering how often the cluster temperature is used in X-ray cluster studies.
-    def get_temperature(self, reg_type: str, model: str = None):
+    def get_temperature(self, model: str, outer_radius: Union[str, Quantity],
+                        inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                        min_counts: int = 5, min_sn: float = None, over_sample: float = None):
         """
         Convenience method that calls get_results to retrieve temperature measurements. All matching values
         from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
         column 1 is err-, and column 2 is err+).
 
-        :param str reg_type: The type of region that the fitted spectra were generated from.
         :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The temperature value, and uncertainties.
         """
-        allowed_rtype = ["region", "custom", "r500", "r200", "r2500"]
+        res = self.get_results(model, outer_radius, inner_radius, "kT", group_spec, min_counts, min_sn, over_sample)
 
-        if reg_type not in allowed_rtype:
-            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-        elif len(self._fit_results) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with this {s}".format(s=self.name))
-        elif reg_type not in self._fit_results:
-            av_regs = ", ".join(self._fit_results.keys())
-            raise ModelNotAssociatedError("{r} has no associated XSPEC fit to {s}; available regions are "
-                                          "{a}".format(r=reg_type, s=self.name, a=av_regs))
-
-        # Find which available models have kT in them
-        models_with_kt = [m for m, v in self._fit_results[reg_type].items() if "kT" in v]
-
-        if model is not None and model not in self._fit_results[reg_type]:
-            av_mods = ", ".join(self._fit_results[reg_type].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to {r} spectra of {s}; available "
-                                          "models are {a}".format(m=model, r=reg_type, a=av_mods, s=self.name))
-        elif model is not None and "kT" not in self._fit_results[reg_type][model]:
-            raise ParameterNotAssociatedError("kT was not a free parameter in the {m} fit to "
-                                              "{s}.".format(m=model, s=self.name))
-        elif model is not None and "kT" in self._fit_results[reg_type][model]:
-            # Just going to call the get_results method with specific parameters, to get the result formatted
-            #  the same way.
-            return Quantity(self.get_results(reg_type, model, "kT"), 'keV')
-        elif model is None and len(models_with_kt) != 1:
-            raise ValueError("The model parameter can only be None when there is only one model available"
-                             " with a kT measurement.")
-        # For convenience sake, if there is only one model with a kT measurement, I'll allow the model parameter
-        #  to be None.
-        elif model is None and len(models_with_kt) == 1:
-            return Quantity(self.get_results(reg_type, models_with_kt[0], "kT"), 'keV')
+        return Quantity(res, 'keV')
 
     def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
                                 use_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
@@ -348,20 +334,34 @@ class GalaxyCluster(ExtendedSource):
 
         sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize, draw_rads=draw_rads, back_sub=back_sub)
 
-    def combined_lum_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
+    def combined_lum_conv_factor(self, outer_radius: Union[str, Quantity], lo_en: Quantity, hi_en: Quantity,
+                                 inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                                 min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> Quantity:
         """
         Combines conversion factors calculated for this source with individual instrument-observation
         spectra, into one overall conversion factor.
 
-        :param str reg_type: The region type the conversion factor is associated with.
+        :param str/Quantity outer_radius: The name or value of the outer radius of the spectra that should be used
+            to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
+            Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+            inner radius will be ignored.
+        :param str/Quantity inner_radius: The name or value of the inner radius of the spectra that should be used
+            to calculate conversion factors (for instance 'r500' would be acceptable for a GalaxyCluster, or
+            Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum.
         :param Quantity lo_en: The lower energy limit of the conversion factors.
         :param Quantity hi_en: The upper energy limit of the conversion factors.
-        :return: A combined conversion factor that can be applied to a combined ratemap to
-            calculate luminosity.
+        :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
+            were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were used for fakeit
+            were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
+        :return: A combined conversion factor that can be applied to a combined ratemap to calculate luminosity.
         :rtype: Quantity
         """
         # Grabbing the relevant spectra
-        spec = self.get_products("spectrum", extra_key=reg_type)
+        spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
+                                min_sn=min_sn, over_sample=over_sample)
         # Setting up variables to be added into
         av_lum = Quantity(0, "erg/s")
         total_phot = 0
@@ -383,18 +383,34 @@ class GalaxyCluster(ExtendedSource):
         # Calculating and returning the combined factor.
         return av_lum / total_rate
 
-    def combined_norm_conv_factor(self, reg_type: str, lo_en: Quantity, hi_en: Quantity) -> Quantity:
+    def combined_norm_conv_factor(self, outer_radius: Union[str, Quantity], lo_en: Quantity, hi_en: Quantity,
+                                  inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                                  min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> Quantity:
         """
-        Combines count-rate to normalisation conversion factors associated with this source.
+        Combines count-rate to normalisation conversion factors associated with this source
 
-        :param str reg_type: The region type the conversion factor is associated with.
+        :param str/Quantity outer_radius: The name or value of the outer radius of the spectra that should be used
+            to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
+            Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+            inner radius will be ignored.
+        :param str/Quantity inner_radius: The name or value of the inner radius of the spectra that should be used
+            to calculate conversion factors (for instance 'r500' would be acceptable for a GalaxyCluster, or
+            Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum.
         :param Quantity lo_en: The lower energy limit of the conversion factors.
         :param Quantity hi_en: The upper energy limit of the conversion factors.
+        :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
+            were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were used for fakeit
+            were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
         :return: A combined conversion factor that can be applied to a combined ratemap to
             calculate luminosity.
         :rtype: Quantity
         """
-        spec = self.get_products("spectrum", extra_key=reg_type)
+        # Grabbing the relevant spectra
+        spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
+                                min_sn=min_sn, over_sample=over_sample)
         total_phot = 0
         for s in spec:
             s: Spectrum

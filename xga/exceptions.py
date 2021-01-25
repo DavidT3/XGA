@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 20:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 14:15. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -514,6 +514,26 @@ class XGAOptionalDependencyError(Exception):
             return '{}'.format(self.message)
         else:
             return 'XGAOptionalDependencyError has been raised'
+
+
+class XGASetIDError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when something is attempting to use annular spectra (which are all part of spectrum sets) together,
+        but they have different set IDs.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'XGASetIDError has been raised'
 
 
 

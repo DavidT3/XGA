@@ -1,19 +1,22 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2021, 19:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 09:56. Copyright (c) David J Turner
 
 
 import os
 import warnings
-from typing import Tuple
+from typing import Tuple, Union, List, Dict
 
 import numpy as np
-from astropy.units import Quantity
-from fitsio import FITS, hdu
+from astropy.io import fits
+from astropy.units import Quantity, Unit, UnitConversionError
+from fitsio import hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
 from . import BaseProduct, BaseAggregateProduct
-from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError
+from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError
+from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D
+from ..utils import dict_search
 
 
 class Spectrum(BaseProduct):
@@ -24,10 +27,11 @@ class Spectrum(BaseProduct):
     can be viewed.
     """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, b_rmf_path: str, b_arf_path: str,
-                 reg_type: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 raise_properly: bool = True):
+                 central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str,
+                 grouped: bool, min_counts: int, min_sn: float, over_sample: int, stdout_str: str,
+                 stderr_str: str, gen_cmd: str, region: bool = False):
 
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._prod_type = "spectrum"
 
         if os.path.exists(rmf_path):
@@ -65,18 +69,24 @@ class Spectrum(BaseProduct):
             self._usable = False
             self._why_unusable.append("BackARFPathDoesNotExist")
 
-        allowed_regs = ["region", "r2500", "r500", "r200", "custom", "annular", 'point']
-        if reg_type in allowed_regs:
-            self._reg_type = reg_type
-        else:
-            self._usable = False
-            self._why_unusable.append("InvalidRegionType")
-            self._reg_type = ''
-            raise ValueError("{0} is not a supported region type, please use one of these; "
-                             "{1}".format(reg_type, ", ".join(allowed_regs)))
+        # Storing the central coordinate of this spectrum
+        self._central_coord = central_coord
 
-        self._update_spec_headers("main")
-        self._update_spec_headers("back")
+        # Storing the region information
+        self._inner_rad = inn_rad
+        self._outer_rad = out_rad
+        # And also the shape of the region
+        if self._inner_rad.isscalar:
+            self._shape = 'circular'
+        else:
+            self._shape = 'elliptical'
+
+        try:
+            self._update_spec_headers("main")
+            self._update_spec_headers("back")
+        except OSError as err:
+            self._usable = False
+            self._why_unusable.append("FITSIOOSError")
 
         self._exp = None
         self._plot_data = {}
@@ -86,6 +96,61 @@ class Spectrum(BaseProduct):
         # This is specifically for fakeit runs (for cntrate - lum conversions) on the ARF/RMF
         #  associated with this Spectrum
         self._conv_factors = {}
+
+        # This set of properties describe the configuration of evselect/specgroup during generation
+        self._grouped = grouped
+        self._min_counts = min_counts
+        self._min_sn = min_sn
+        if self._grouped and self._min_counts is not None:
+            self._grouped_on = 'counts'
+        elif self._grouped and self._min_sn is not None:
+            self._grouped_on = 'signal to noise'
+        else:
+            self._grouped_on = None
+
+        # Not to do with grouping, but this states the level of oversampling requested from evselect
+        self._over_sample = over_sample
+
+        # This describes whether this spectrum was generated directly from a region present in a region file
+        self._region = region
+
+        # Here we generate the storage key for this object, its just convenient to do it in here
+        # Sets up the extra part of the storage key name depending on if grouping is enabled
+        if grouped and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif grouped and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+        spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
+        if not self._region and self.inner_rad.isscalar:
+            spec_storage_name = spec_storage_name.format(ra=self.central_coord[0].value,
+                                                         dec=self.central_coord[1].value,
+                                                         ri=self._inner_rad.value, ro=self._outer_rad.value,
+                                                         gr=grouped)
+        elif not self._region and not self._inner_rad.isscalar:
+            inn_rad_str = 'and'.join(self._inner_rad.value.astype(str))
+            out_rad_str = 'and'.join(self._outer_rad.value.astype(str))
+            spec_storage_name = spec_storage_name.format(ra=self.central_coord[0].value,
+                                                         dec=self.central_coord[1].value, ri=inn_rad_str,
+                                                         ro=out_rad_str, gr=grouped)
+        else:
+            spec_storage_name = "region_grp{gr}".format(gr=grouped)
+
+        spec_storage_name += extra_name
+        # And we save the completed key to an attribute
+        self._storage_key = spec_storage_name
+
+        # This attribute is set via the property, ONLY if this spectrum is considered to be a member of a set
+        #  of annular spectra. It describes which position in the set this spectrum has
+        self._ann_ident = None
+        # This holds a unique random identifier for the set itself, and again will only be set from outside
+        self._set_ident = None
 
     def _update_spec_headers(self, which_spec: str):
         """
@@ -97,22 +162,49 @@ class Spectrum(BaseProduct):
         """
         # This function is meant for internal use only, so I won't check that the passed-in file paths
         #  actually exist. This will have been checked already
-        if which_spec == "main":
-            with FITS(self._path, 'rw') as spec_fits:
-                spec_fits[1].write_key("RESPFILE", self._rmf)
-                spec_fits[1].write_key("ANCRFILE", self._arf)
-                spec_fits[1].write_key("BACKFILE", self._back_spec)
-                spec_fits[0].write_key("RESPFILE", self._rmf)
-                spec_fits[0].write_key("ANCRFILE", self._arf)
-                spec_fits[0].write_key("BACKFILE", self._back_spec)
-        elif which_spec == "back":
-            with FITS(self._back_spec, 'rw') as spec_fits:
-                spec_fits[1].write_key("RESPFILE", self._back_rmf)
-                spec_fits[1].write_key("ANCRFILE", self._back_arf)
-                spec_fits[0].write_key("RESPFILE", self._back_rmf)
-                spec_fits[0].write_key("ANCRFILE", self._back_arf)
-        else:
-            raise ValueError("Illegal value for which_spec, you shouldn't be using this internal function!")
+        if which_spec == "main" and self.usable:
+            # Currently having to use astropy's fits interface, I don't really want to because of risk of segfaults
+            with fits.open(self._path, mode='update') as spec_fits:
+                spec_fits["SPECTRUM"].header["RESPFILE"] = self._rmf
+                spec_fits["SPECTRUM"].header["ANCRFILE"] = self._arf
+                spec_fits["SPECTRUM"].header["BACKFILE"] = self._back_spec
+            # with FITS(self._path, 'rw', clobber=True) as spec_fits:
+            #     cur_hdr_list = spec_fits["SPECTRUM"].read_header_list()
+            #     # Clean the list
+            #     clean_hdr_list = [hd for hd in cur_hdr_list if hd["name"] != "RESPFILE"
+            #                       and hd["name"] != "ANCRFILE" and hd["name"] != "BACKFILE" not in hd.keys()]
+            #     new_info = [{'name': 'RESPFILE', 'comment': '', 'value': self._rmf},
+            #                 {'name': 'ANCRFILE', 'comment': '', 'value': self._arf},
+            #                 {'name': 'BACKFILE', 'comment': '', 'value': self._back_spec}]
+            #     new_info = {"RESPFILE": self._rmf, "ANCRFILE": self._arf, "BACKFILE": self._back_spec}
+            #     new_info = {"RESPFILE": 'boi', "ANCRFILE": 'boi', "BACKFILE": 'boi'}
+            #     # new_hdr = FITSHDR(clean_hdr_list + new_info)
+            #
+            #
+            #     # spec_fits["SPECTRUM"].read_header().delete('RESPFILE')
+            #     # spec_fits["SPECTRUM"].read_header().delete('ANCRFILE')
+            #     # spec_fits["SPECTRUM"].read_header().delete('BACKFILE')
+            #     # print(spec_fits["SPECTRUM"].read_header()["RESPFILE"])
+            #
+            #     spec_fits["SPECTRUM"].write_keys(new_info)
+            #
+            #     print(spec_fits["SPECTRUM"].read_header())
+            # import sys
+            # sys.exit()
+
+        elif which_spec == "back" and self.usable:
+            # with FITS(self._back_spec, 'rw') as spec_fits:
+            #     spec_fits[1].write_key("RESPFILE", self._back_rmf)
+            #     spec_fits[1].write_key("ANCRFILE", self._back_arf)
+            #     spec_fits[0].write_key("RESPFILE", self._back_rmf)
+            #     spec_fits[0].write_key("ANCRFILE", self._back_arf)
+            #     spec_fits[-1].write_key("RESPFILE", self._back_rmf)
+            #     spec_fits[-1].write_key("ANCRFILE", self._back_arf)
+            #     spec_fits["SPECTRUM"].write_key("RESPFILE", self._back_rmf)
+            #     spec_fits["SPECTRUM"].write_key("ANCRFILE", self._back_arf)
+            with fits.open(self._back_spec, mode='update') as spec_fits:
+                spec_fits["SPECTRUM"].header["RESPFILE"] = self._back_rmf
+                spec_fits["SPECTRUM"].header["ANCRFILE"] = self._back_arf
 
     @property
     def path(self) -> str:
@@ -263,18 +355,168 @@ class Spectrum(BaseProduct):
         else:
             raise FileNotFoundError("That new background ARF file does not exist")
 
-    # This is an intrinsic property of the generated spectrum, so users will not be allowed to change this
     @property
-    def reg_type(self) -> str:
+    def storage_key(self) -> str:
         """
-        Getter method for the type of region this spectrum was generated for. e.g. 'region' - which would
-        mean it represents the spectrum inside a region specificied by region files, or 'r500' - which
-        would mean the radius of a cluster where the mean density is 500 times critical density of the Universe.
+        This property returns the storage key which this object assembles to place the Spectrum in
+        an XGA source's storage structure. The key is based on the properties of the spectrum, and
+        some of the configuration options, and is basically human readable.
 
-        :return: The region type this spectrum was generated for
+        :return: String storage key.
         :rtype: str
         """
-        return self._reg_type
+        return self._storage_key
+
+    @property
+    def central_coord(self) -> Quantity:
+        """
+        This property provides the central coordinates (RA-Dec) of the region that this spectrum
+        was generated from.
+
+        :return: Astropy quantity object containing the central coordinate in degrees.
+        :rtype: Quantity
+        """
+        return self._central_coord
+
+    @property
+    def shape(self) -> str:
+        """
+        Returns the shape of the outer edge of the region this spectrum was generated from.
+
+        :return: The shape (either circular or elliptical).
+        :rtype: str
+        """
+        return self._shape
+
+    @property
+    def inner_rad(self) -> Quantity:
+        """
+        Gives the inner radius (if circular) or radii (if elliptical - semi-major, semi-minor) of the
+        region in which this spectrum was generated.
+
+        :return: The inner radius(ii) of the region.
+        :rtype: Quantity
+        """
+        return self._inner_rad
+
+    @property
+    def outer_rad(self):
+        """
+        Gives the outer radius (if circular) or radii (if elliptical - semi-major, semi-minor) of the
+        region in which this spectrum was generated.
+
+        :return: The outer radius(ii) of the region.
+        :rtype: Quantity
+        """
+        return self._outer_rad
+
+    @property
+    def grouped(self) -> bool:
+        """
+        A property stating whether SAS was told to group this spectrum during generation or not.
+
+        :return: Boolean variable describing whether the spectrum is grouped or not
+        :rtype: bool
+        """
+        return self._grouped
+
+    @property
+    def grouped_on(self) -> str:
+        """
+        A property stating what metric this spectrum was grouped on.
+
+        :return: String representation of the metric this spectrum was grouped on (None if not grouped).
+        :rtype: str
+        """
+        return self._grouped_on
+
+    @property
+    def min_counts(self) -> int:
+        """
+        A property stating the minimum number of counts allowed in a grouped channel.
+
+        :return: The integer minimum number of counts per grouped channel (if this spectrum was grouped on
+            minimum numbers of counts).
+        :rtype: int
+        """
+        return self._min_counts
+
+    @property
+    def min_sn(self) -> Union[float, int]:
+        """
+        A property stating the minimum signal to noise allowed in a grouped channel.
+
+        :return: The minimum signal to noise per grouped channel (if this spectrum was grouped on
+            minimum signal to noise).
+        :rtype: Union[float, int]
+        """
+        return self._min_sn
+
+    @property
+    def over_sample(self) -> float:
+        """
+        A property string stating the amount of oversampling applied by evselect during the spectrum
+        generation process.
+
+        :return: Oversampling applied during generation
+        :rtype: float
+        """
+        return self._over_sample
+
+    @property
+    def region(self) -> bool:
+        """
+        This property states whether this spectrum was generated directly from a region file
+        region or not. If true then this isn't from any arbitrary radii or an overdensity radius, but
+        instead directly from a source finder.
+
+        :return: A boolean flag describing if this is a region spectrum or not.
+        :rtype: bool
+        """
+        return self._region
+
+    @property
+    def annulus_ident(self) -> int:
+        """
+        This property returns the integer identifier of which annulus in a set this Spectrum is, if it
+        is part of a set.
+
+        :return: Integer annulus identifier, None if not part of a set.
+        :rtype: object
+        """
+        return self._ann_ident
+
+    @annulus_ident.setter
+    def annulus_ident(self, new_ident: int):
+        """
+        This property sets the annulus identifier of this object.
+
+        :param int new_ident: The annulus integer identifier of this spectrum.
+        """
+        if not isinstance(new_ident, int):
+            raise TypeError("Spectrum annulus identifiers may ONLY be positive integers")
+        self._ann_ident = new_ident
+
+    @property
+    def set_ident(self) -> int:
+        """
+        This property returns the random id of the spectrum set this is a part of.
+
+        :return: Set identifier, None if not part of a set.
+        :rtype: int
+        """
+        return self._set_ident
+
+    @set_ident.setter
+    def set_ident(self, new_ident: int):
+        """
+        This property sets the set identifier of this object.
+
+        :param int new_ident: The set identifier of this spectrum.
+        """
+        if not isinstance(new_ident, int):
+            raise TypeError("Spectrum set identifiers may ONLY be positive integers")
+        self._set_ident = new_ident
 
     @property
     def exposure(self) -> Quantity:
@@ -456,13 +698,15 @@ class Spectrum(BaseProduct):
         rel_vals = self._conv_factors[model][en_key]
         return rel_vals["factor"], rel_vals["lum"], rel_vals["rate"]
 
-    def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV")):
+    def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV"),
+             figsize: Tuple = (8, 6)):
         """
         Very simple method to plot the data/models associated with this Spectrum object,
         between certain energy limits.
 
         :param Quantity lo_en: The lower energy limit from which to plot the spectrum.
         :param Quantity hi_en: The upper energy limit to plot the spectrum to.
+        :param Tuple figsize: The desired size of the output figure.
         """
         if lo_en > hi_en:
             raise ValueError("hi_en cannot be greater than lo_en")
@@ -472,7 +716,7 @@ class Spectrum(BaseProduct):
 
         if len(self._plot_data.keys()) != 0:
             # Create figure object
-            plt.figure(figsize=(8, 5))
+            plt.figure(figsize=figsize)
 
             # Set the plot up to look nice and professional.
             ax = plt.gca()
@@ -480,8 +724,7 @@ class Spectrum(BaseProduct):
             ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
             # Set the title with all relevant information about the spectrum object in it
-            plt.title("{n} - {o}{i} {r} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper(),
-                                                         r=self.reg_type))
+            plt.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()))
             for mod_ind, mod in enumerate(self._plot_data):
                 x = self._plot_data[mod]["x"]
                 # If the defaults are left, just update them to the min and max of the dataset
@@ -538,44 +781,144 @@ class Spectrum(BaseProduct):
 
 class AnnularSpectra(BaseAggregateProduct):
     """
-    This class is the XGA product responsible for storing a set of spectra, measured in concentric annuli.
-    Various qualities that can be measured from it (X-ray luminosity for example) can be associated with an instance
-    of this object, as well as conversion factors that can be calculated from XSPEC.
+    A class designed to hold a set of XGA spectra generated in concentric, circular annuli.
     """
-    def __init__(self, spec_paths: list, rmf_paths: list, arf_paths: list, b_path: str, b_rmf_path: str,
-                 b_arf_path: str, inn_radii: Quantity, out_radii: Quantity, obs_id: str, instrument: str,
-                 stdout_str: str, stderr_str: str, gen_cmd: str, raise_properly: bool = True):
-        super().__init__(spec_paths, 'ann_spec', obs_id, instrument)
+    def __init__(self, spectra: List[Spectrum]):
+        """
+        The init method for the AnnularSpectrum class, performs checks and organises the spectra which
+        have been passed in, for easy retrieval.
 
-        # TODO Check that the radii quantities are in length units
-        # We just check that the arrays with inner and outer radii are the same length
-        if len(inn_radii) != len(out_radii):
-            raise ValueError("The inn_radii and out_radii arrays must be the same length.")
-        self._num_ann = len(inn_radii)
+        :param List[Spectrum] spectra: A list of XGA spectrum objects which make up this set.
+        """
+        super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined")
 
-        # Now we check that the number of spectra, rmfs, and arfs match the number we expect
-        len_checks = [len(p) == self._num_ann for p in [spec_paths, rmf_paths, arf_paths]]
-        if not all(len_checks):
-            raise ValueError("There must be the same number of spec_paths, rmf_paths, and arf_paths as there "
-                             "are annuli.")
+        # There shouldn't be any way this can happen, but it doesn't hurt to check that all of the spectra
+        #  have the same set ID
+        set_idents = set([s.set_ident for s in spectra])
+        if len(set_idents) != 1:
+            raise XGASetIDError("You have passed spectra that have set IDs that do not match")
 
-        # Stored the passed file lists in attributes just for future reference
-        self._inn_radii = inn_radii
-        self._out_radii = out_radii
-        self._rad_pairs = np.append(inn_radii, out_radii)
+        # Just put the set ID into an attribute in case anyone ever wants to know it
+        self._set_id = list(set_idents)[0]
 
-        # Saving the various file paths
-        self._rmfs = rmf_paths
-        self._arfs = arf_paths
+        # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
+        #  many annuli there are and start storing spectra appropriately
+        self._num_ann = len(set([s.annulus_ident for s in spectra]))
 
-        for f_ind, f in enumerate(spec_paths):
-            interim = Spectrum(f, rmf_paths[f_ind], arf_paths[f_ind], b_path, b_rmf_path, b_arf_path, "annular",
-                               obs_id, instrument, stdout_str, stderr_str, gen_cmd, raise_properly)
+        # While the official ObsID and Instrument of this product are 'combined', I do still
+        #  want to know which ObsIDs and instruments the spectra belong to
+        inst_dict = {o: [] for o in [s.obs_id for s in spectra]}
+        for s in spectra:
+            if s.instrument not in inst_dict[s.obs_id]:
+                inst_dict[s.obs_id].append(s.instrument)
 
-            pos_key = inn_radii[f_ind].value + "-" + out_radii[f_ind].value
-            self._component_products[pos_key] = interim
+        # The same idea as the source.instruments dictionary
+        self._instruments = inst_dict
 
-        self._all_usable = all(p.usable for p in self)
+        # All the radii will be in degrees, but I'll grab it dynamically anyway
+        self._rad_unit = spectra[0].inner_rad.unit
+
+        # I want to grab the radii out of the spectra, then put them in order, just so I have them
+        radii = sorted(list(set([s.inner_rad for s in spectra] + [s.outer_rad for s in spectra])))
+        self._radii = Quantity([r.value for r in radii], self._rad_unit)
+
+        # Finally storing the spectra inside the product, though with multiple layers of products
+        # This sets up the component products dictionary, allowing for the separated storage of
+        #  spectra from different ObsIDs
+        self._component_products = {ai: {o: {i: None for i in self._instruments[o]} for o in self.obs_ids}
+                                    for ai in range(self._num_ann)}
+        self._component_products = {o: {i: {ai: None for ai in range(self._num_ann)}
+                                        for i in self._instruments[o]} for o in self.obs_ids}
+        # And putting the spectra in their place
+        for s in spectra:
+            self._component_products[s.obs_id][s.instrument][s.annulus_ident] = s
+
+        # Run through all the spectra associated with this AnnularSpectra and see if they are usable
+        self._all_usable = all(s.usable for s in self.all_spectra)
+
+        # This set of properties describe the configuration of evselect/specgroup during generation. I take
+        #  properties from the first spectra in the list because they're all part of the same set, so were
+        #  generated with the same settings
+        self._grouped = spectra[0].grouped
+        self._min_counts = spectra[0].min_counts
+        self._min_sn = spectra[0].min_sn
+        if self._grouped and self._min_counts is not None:
+            self._grouped_on = 'counts'
+        elif self._grouped and self._min_sn is not None:
+            self._grouped_on = 'signal to noise'
+        else:
+            self._grouped_on = None
+
+        # The RA-Dec coordinates that this set of spectra are centred on
+        self._central_coord = spectra[0].central_coord
+
+        # Not to do with grouping, but this states the level of oversampling requested from evselect
+        self._over_sample = spectra[0].over_sample
+
+        # Here we generate the storage key for this object, its just convenient to do it in here
+        # Sets up the extra part of the storage key name depending on if grouping is enabled
+        if self._grouped and self._min_counts is not None:
+            extra_name = "_mincnt{}".format(self._min_counts)
+        elif self._grouped and self._min_sn is not None:
+            extra_name = "_minsn{}".format(self._min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if self._over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=self._over_sample)
+
+        # Combines the annular radii into a string
+        ann_rad_str = "_".join(self._radii.value.astype(str))
+
+        spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
+        spec_storage_name = spec_storage_name.format(ra=self.central_coord[0].value,
+                                                     dec=self.central_coord[1].value, ar=ann_rad_str, gr=self._grouped)
+
+        spec_storage_name += extra_name
+        # And we save the completed key to an attribute
+        self._storage_key = spec_storage_name
+
+        # Now for a very important step, all the constituent spectra need to know that their new background
+        #  spectrum is the one from the outermost annulus. I have added a method to this class to find the correct
+        #  file for an ObsID and instrument, and apparently past me added a property setter to the Spectrum class
+        #  will automatically push the change to the file headers, so that is handy
+        for s in self.all_spectra:
+            s.background = self.background(s.obs_id, s.instrument)
+
+        # Setting up attributes that allow for the storage of final fit results within this class, very similar
+        #  to how they're stored in a source object. This makes sense here because an AnnularSpectra is an
+        #  aggregate product of all the relevant spectra. All fit results are stored on annular basis, then most
+        #  will have different entries for different models
+
+        # The total exposure of the combined spectra, will be overwritten if multiple models are fit, but
+        #  as its a property of the spectra and not the fit it should always be the same
+        self._total_exp = {ai: None for ai in range(self._num_ann)}
+        # These will be stored on a per model basis
+        self._total_count_rate = {ai: {} for ai in range(self._num_ann)}
+        self._test_stat = {ai: {} for ai in range(self._num_ann)}
+        self._dof = {ai: {} for ai in range(self._num_ann)}
+
+        # Finally the most important outputs, the fit results and luminosities. There obviously is some data
+        #  duplication here with the source, but this will be so convenient I don't care
+        self._fit_results = {ai: {} for ai in range(self._num_ann)}
+        self._luminosities = {ai: {} for ai in range(self._num_ann)}
+
+        # This can be set through a property, as products shouldn't have any knowledge of their source
+        #  other than the name. And someone might define one of these source-lessly. It will contain radii
+        #  which are proper, not in degrees
+        self._proper_radii = None
+
+    @property
+    def central_coord(self) -> Quantity:
+        """
+        This property provides the central coordinates (RA-Dec) that this set of spectra was
+        generated around.
+
+        :return: Astropy quantity object containing the central coordinate in degrees.
+        :rtype: Quantity
+        """
+        return self._central_coord
 
     @property
     def num_annuli(self) -> int:
@@ -587,55 +930,504 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self._num_ann
 
-    @property
-    def rmf(self) -> list:
+    def background(self, obs_id: str, inst: str) -> str:
         """
-        This method returns the list of RMF files for the annular spectra associated with this object.
+        This method returns the path to the background spectrum for a particular ObsID and
+        instrument. It is the background associated with the outermost annulus of this object.
 
-        :return: The path to the RMF files associated with the annular spectra of this object.
-        :rtype: list
-        """
-        return self._rmfs
-
-    @property
-    def arf(self) -> list:
-        """
-        This method returns the list of ARF files for the annular spectra associated with this object.
-
-        :return: The path to the ARF files associated with the annular spectra of this object.
-        :rtype: list
-        """
-        return self._arfs
-
-    @property
-    def background(self) -> str:
-        """
-        This method returns the path to the background spectrum.
-
+        :param str obs_id: The ObsID to get the background spectrum for.
+        :param str inst: The instrument to get the background spectrum for.
         :return: Path of the background spectrum.
         :rtype: str
         """
-        return self._component_products.values()[0].background
+        return self.get_spectra(self._num_ann-1, obs_id, inst).background
 
-    @property
-    def background_rmf(self) -> str:
+    def background_rmf(self, obs_id: str, inst: str) -> str:
         """
-        This method returns the path to the background spectrum's RMF file.
+        This method returns the path to the background spectrum's RMF for a particular ObsID and
+        instrument. It is the RMF of the background associated with the outermost annulus of this object.
 
-        :return: The path the the background spectrum's RMF.
+        :param str obs_id: The ObsID to get the background spectrum's RMF for.
+        :param str inst: The instrument to get the background spectrum' RMF for.
+        :return: Path of the background spectrum RMF.
         :rtype: str
         """
-        return self._component_products.values()[0].background_rmf
+        return self.get_spectra(self._num_ann-1, obs_id, inst).background_rmf
 
-    @property
-    def background_arf(self) -> str:
+    def background_arf(self, obs_id: str, inst: str) -> str:
         """
-        This method returns the path to the background spectrum's ARF file.
+        This method returns the path to the background spectrum's ARF for a particular ObsID and
+        instrument. It is the ARF of the background associated with the outermost annulus of this object.
 
-        :return: The path the the background spectrum's ARF.
+        :param str obs_id: The ObsID to get the background spectrum's ARF for.
+        :param str inst: The instrument to get the background spectrum' ARF for.
+        :return: Path of the background spectrum ARF.
         :rtype: str
         """
-        return self._component_products.values()[0].background_arf
+        return self.get_spectra(self._num_ann - 1, obs_id, inst).background_arf
+
+    @property
+    def obs_ids(self) -> list:
+        """
+        A property of this spectrum set that details which ObsIDs have contributed spectra to this object.
+
+        :return: A list of ObsIDs.
+        containing instruments associated with those ObsIDs.
+        :rtype: dict
+        """
+        return list(self._instruments.keys())
+
+    @property
+    def instruments(self) -> dict:
+        """
+        A property of this spectrum set that details which ObsIDs and instruments have contributed spectra
+        to this object.
+
+        :return: A dictionary of lists, with the top level keys being ObsIDs, and the lists
+        containing instruments associated with those ObsIDs.
+        :rtype: dict
+        """
+        return self._instruments
+
+    def get_spectra(self, annulus_ident, obs_id: str = None, inst: str = None) -> Union[List[Spectrum], Spectrum]:
+        """
+        This is the getter for the spectra stored in the AnnularSpectra data storage structure. They can
+        be retrieved based on annulus identifier, ObsID, and instrument.
+
+        :param int annulus_ident: The annulus identifier to retrieve spectra for.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied.
+        :param str inst: Optionally, a specific instrument to search for can be supplied.
+        :return: List of matching spectra, or just a Spectrum object if one match is found.
+        :rtype: Union[List[Spectrum], Spectrum]
+        """
+        def unpack_list(to_unpack: list):
+            """
+            A recursive function to go through every layer of a nested list and flatten it all out. It
+            doesn't return anything because to make life easier the 'results' are appended to a variable
+            in the namespace above this one.
+
+            :param list to_unpack: The list that needs unpacking.
+            """
+            # Must iterate through the given list
+            for entry in to_unpack:
+                # If the current element is not a list then all is chill, this element is ready for appending
+                # to the final list
+                if not isinstance(entry, list):
+                    out.append(entry)
+                else:
+                    # If the current element IS a list, then obviously we still have more unpacking to do,
+                    # so we call this function recursively.
+                    unpack_list(entry)
+
+        if annulus_ident not in np.array(range(0, self._num_ann)):
+            ann_str = ", ".join(np.array(range(0, self._num_ann)).astype(str))
+            raise IndexError("{i} is not an annulus ID associated with this AnnularSpectra object. "
+                             "Allowed annulus IDs are; {a}".format(i=annulus_ident, a=ann_str))
+        elif obs_id not in self._component_products and obs_id is not None:
+            raise NotAssociatedError("{0} is not associated with this AnnularSpectra.".format(obs_id))
+        elif (obs_id is not None and obs_id in self._component_products) and \
+                (inst is not None and inst not in self._component_products[obs_id]):
+            raise NotAssociatedError("Instrument {1} is not associated with {0}".format(obs_id, inst))
+
+        matches = []
+        for match in dict_search(annulus_ident, self._component_products):
+            out = []
+            unpack_list(match)
+            if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None):
+                matches.append(out[-1])
+
+        # Here I only return the object if one match was found
+        if len(matches) == 1:
+            matches = matches[0]
+        return matches
+
+    @property
+    def all_spectra(self) -> List[Spectrum]:
+        """
+        Simple extra wrapper for get_spectra that allows the user to retrieve every single spectrum associated
+        with this AnnularSpectra instance, for all annulus IDs.
+
+        :return: A list of every single spectrum associated with this object.
+        :rtype: List[Spectrum]
+        """
+        all_spec = []
+        for ann_i in range(self._num_ann):
+            all_spec += self.get_spectra(ann_i)
+
+        return all_spec
+
+    @property
+    def radii(self) -> Quantity:
+        """
+        A property to return all the boundary radii of the constituent annuli.
+
+        :return: Astropy quantity of the radii.
+        :rtype: Quantity
+        """
+        return self._radii
+
+    @property
+    def proper_radii(self) -> Quantity:
+        """
+        A property to return the boundary radii of the constituent annuli in kpc. This has
+        to be set using the setter first, otherwise the value is None.
+
+        :return: Astropy quantity of the proper radii.
+        :rtype: Quantity
+        """
+        if self._proper_radii is not None:
+            to_return = self._proper_radii.to('kpc')
+        else:
+            to_return = self._proper_radii
+
+        return to_return
+
+    @proper_radii.setter
+    def proper_radii(self, new_vals: Quantity):
+        """
+        A setter for the proper radii property.
+
+        :param Quantity new_vals: The new values for proper radii, must be convertable to kpc.
+        """
+        if not new_vals.unit.is_equivalent('kpc'):
+            raise UnitConversionError("Proper radii passed into this object must be convertable to kpc.")
+        elif new_vals.isscalar:
+            raise ValueError("A radii quantity for an AnnularSpectra object cannot be scalar")
+        elif len(new_vals) != len(self._radii):
+            raise ValueError("The proper radii quantity you have passed isn't the same length as the radii "
+                             "attribute of this object, there should be {} entries.".format(len(self._radii)))
+
+        self._proper_radii = new_vals
+
+    @property
+    def set_ident(self) -> int:
+        """
+        This property returns the ID of this set of spectra.
+
+        :return: The integer ID of this set.
+        :rtype: int
+        """
+        return self._set_id
+
+    @property
+    def storage_key(self) -> str:
+        """
+        This property returns the storage key which this object assembles to place the AnnularSpectrum in
+        an XGA source's storage structure. The key is based on the properties of the AnnularSpectrum, and
+        some of the configuration options, and is basically human readable.
+
+        :return: String storage key.
+        :rtype: str
+        """
+        return self._storage_key
+
+    @property
+    def grouped(self) -> bool:
+        """
+        A property stating whether SAS was told to group the spectra in this set during generation or not.
+
+        :return: Boolean variable describing whether the spectra are grouped or not
+        :rtype: bool
+        """
+        return self._grouped
+
+    @property
+    def grouped_on(self) -> str:
+        """
+        A property stating what metric the spectra in this set were grouped on.
+
+        :return: String representation of the metric the spectra were grouped on (None if not grouped).
+        :rtype: str
+        """
+        return self._grouped_on
+
+    @property
+    def min_counts(self) -> int:
+        """
+        A property stating the minimum number of counts allowed in a grouped channel for the spectra in this set.
+
+        :return: The integer minimum number of counts per grouped channel (if these spectra were grouped on
+            minimum numbers of counts).
+        :rtype: int
+        """
+        return self._min_counts
+
+    @property
+    def min_sn(self) -> Union[float, int]:
+        """
+        A property stating the minimum signal to noise allowed in a grouped channel for the spectra in this set.
+
+        :return: The minimum signal to noise per grouped channel (if these spectra were grouped on
+            minimum signal to noise).
+        :rtype: Union[float, int]
+        """
+        return self._min_sn
+
+    @property
+    def over_sample(self) -> float:
+        """
+        A property string stating the amount of oversampling applied by evselect during the generation
+        of the spectra in this set. e.g. if over_sample=3 then the minimum width of a group is
+        1/3 of the resolution FWHM at that energy.
+
+        :return: Oversampling applied during generation.
+        :rtype: float
+        """
+        return self._over_sample
+
+    def add_fit_data(self, model: str, tab_line: dict, lums: dict):
+        """
+        An equivelant to the add_fit_data method built into all source objects. The final fit results
+        and luminosities are housed in a storage structure within the AnnularSpectra, which makes sense
+        because this is an aggregate product of all the relevant spectra, storing them just as source objects
+        store spectra that don't exist in a spectrum set.
+
+        :param str model: The XSPEC definition of the model used to perform the fit. e.g. tbabs*apec
+        :param tab_line: A dictionary of table lines with fit data, the keys of the dictionary being
+            the relevant annulus ID for the fit.
+        :param dict lums: A dictionary of the luminosities measured during the fits, the keys of the
+            outermost dictionary being annulus IDs, and the luminosity dictionaries being energy based.
+        """
+        # Just headers that will always be present in tab_line that are not fit parameters
+        not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
+                   'NUM_UNLINKED_THAWED_VARS', 'FIT_STATISTIC', 'TEST_STATISTIC', 'DOF']
+
+        # Checking that we have the expected amount of data passed in
+        if len(tab_line) != self._num_ann:
+            raise ValueError("The dictionary passed in with the fit results in it does not have the same"
+                             " number of entries as there are annuli.")
+        elif len(lums) != self._num_ann:
+            raise ValueError("The dictionary passed in with the luminosities in it does not have the same"
+                             " number of entries as there are annuli.")
+
+        for ai in range(0, self._num_ann):
+            # Various global values of interest
+            self._total_exp[ai] = float(tab_line[ai]["TOTAL_EXPOSURE"])
+            self._total_count_rate[ai][model] = [float(tab_line[ai]["TOTAL_COUNT_RATE"]),
+                                                 float(tab_line[ai]["TOTAL_COUNT_RATE_ERR"])]
+            self._test_stat[ai][model] = float(tab_line[ai]["TEST_STATISTIC"])
+            self._dof[ai][model] = float(tab_line[ai]["DOF"])
+
+            # The parameters available will obviously be dynamic, so have to find out what they are and then
+            #  then for each result find the +- errors.
+            par_headers = [n for n in tab_line[ai].dtype.names if n not in not_par]
+            mod_res = {}
+            for par in par_headers:
+                # The parameter name and the parameter index used by XSPEC are separated by |
+                par_info = par.split("|")
+                par_name = par_info[0]
+
+                # The parameter index can also have an - or + after it if the entry in question is an uncertainty
+                if par_info[1][-1] == "-":
+                    ident = par_info[1][:-1]
+                    pos = 1
+                elif par_info[1][-1] == "+":
+                    ident = par_info[1][:-1]
+                    pos = 2
+                else:
+                    ident = par_info[1]
+                    pos = 0
+
+                # Sets up the dictionary structure for the results
+                if par_name not in mod_res:
+                    mod_res[par_name] = {ident: [0, 0, 0]}
+                elif ident not in mod_res[par_name]:
+                    mod_res[par_name][ident] = [0, 0, 0]
+
+                mod_res[par_name][ident][pos] = float(tab_line[ai][par])
+
+            # Storing the fit results
+            self._fit_results[ai][model] = mod_res
+            # And now storing the luminosity results
+            self._luminosities[ai][model] = lums[ai]
+
+    def get_results(self, annulus_ident: int, model: str, par: str = None):
+        """
+        Important method that will retrieve fit results from the AnnularSpectra object. Either for a specific
+        parameter of the supplied model combination, or for all of them. If a specific parameter is requested,
+        all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
+        column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
+        of such numpy arrays, with the keys corresponding to parameter names.
+
+        :param int annulus_ident: The annulus for which you wish to retrieve the fit results.
+        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str par: The name of the parameter you want a result for.
+        :return: The requested result value, and uncertainties.
+        """
+
+        if annulus_ident < 0:
+            raise ValueError("Annulus IDs can only be positive.")
+        elif annulus_ident >= self.num_annuli:
+            raise ValueError("Annulus indexing starts at zero, and this AnnularSpectra only has {} "
+                             "annuli.".format(self._num_ann))
+
+        # Bunch of checks to make sure the requested results actually exist
+        if len(self._fit_results[annulus_ident]) == 0:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra object")
+        elif model not in self._fit_results[annulus_ident]:
+            av_mods = ", ".join(self._fit_results[annulus_ident].keys())
+            raise ModelNotAssociatedError("{m} has not been fitted to this AnnularSpectra; available "
+                                          "models are {a}".format(m=model, a=av_mods))
+        elif par is not None and par not in self._fit_results[annulus_ident][model]:
+            av_pars = ", ".join(self._fit_results[annulus_ident][model].keys())
+            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to this AnnularSpectra; "
+                                              "available parameters are {a}".format(p=par, m=model, a=av_pars))
+
+        # Read out into variable for readabilities sake
+        fit_data = self._fit_results[annulus_ident][model]
+        proc_data = {}  # Where the output will ive
+        for p_key in fit_data:
+            # Used to shape the numpy array the data is transferred into
+            num_entries = len(fit_data[p_key])
+            # 'Empty' new array to write out the results into, done like this because results are stored
+            #  in nested dictionaries with their XSPEC parameter number as an extra key
+            new_data = np.zeros((num_entries, 3))
+
+            # If a parameter is unlinked in a fit with multiple spectra (like normalisation for instance),
+            #  there can be N entries for the same parameter, writing them out in order to a numpy array
+            for incr, par_index in enumerate(fit_data[p_key]):
+                new_data[incr, :] = fit_data[p_key][par_index]
+
+            # Just makes the output a little nicer if there is only one entry
+            if new_data.shape[0] == 1:
+                proc_data[p_key] = new_data[0]
+            else:
+                proc_data[p_key] = new_data
+
+        # If no specific parameter was requested, the user gets all of them
+        if par is None:
+            return proc_data
+        else:
+            return proc_data[par]
+
+    def get_luminosities(self, annulus_ident: int, model: str, lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[Quantity, Dict[str, Quantity]]:
+        """
+        This will retrieve luminosities of specific annuli from fits performed on this AnnularSpectra object.
+        A model name must be supplied, and if a luminosity from a specific energy range is desired then lower
+        and upper energy bounds may be passed.
+
+        :param int annulus_ident: The annulus for which you wish to retrieve the luminosities.
+        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :return: The requested luminosity value, and uncertainties. If a specific energy range has been supplied
+            then a quantity containing the value (col 1), -err (col 2), and +err (col 3), will be returned. If no
+            energy range is supplied then a dictionary of all available luminosity quantities will be returned.
+        :rtype: Union[Quantity, Dict[str, Quantity]]
+        """
+        # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
+        #  bounds. If the limits are none then so is the energy key
+        if all([lo_en is not None, hi_en is not None]) and lo_en > hi_en:
+            raise ValueError("The low energy limit cannot be greater than the high energy limit")
+        elif all([lo_en is not None, hi_en is not None]):
+            en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
+        else:
+            en_key = None
+
+        # Checks that the requested region, model and energy band actually exist
+        if len(self._luminosities[annulus_ident]) == 0:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra")
+        elif model not in self._luminosities[annulus_ident]:
+            av_mods = ", ".join(self._luminosities[annulus_ident].keys())
+            raise ModelNotAssociatedError("{m} has not been fitted to this AnnularSpectra; "
+                                          "available models are {a}".format(m=model, a=av_mods))
+        elif en_key is not None and en_key not in self._luminosities[annulus_ident][model]:
+            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[annulus_ident][model].keys()])
+            raise ParameterNotAssociatedError("A luminosity within {l}-{u}keV was not measured for the fit "
+                                              "with {m}; available energy bands are "
+                                              "{b}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value, m=model,
+                                                           b=av_bands))
+
+        # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
+        if en_key is None:
+            parsed_lums = {}
+            for lum_key in self._luminosities[annulus_ident][model]:
+                lum_value = self._luminosities[annulus_ident][model][lum_key]
+                parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
+                parsed_lums[lum_key] = parsed_lum
+            return parsed_lums
+        else:
+            lum_value = self._luminosities[annulus_ident][model][en_key]
+            parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
+            return parsed_lum
+
+    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str]):
+        """
+        This generates a radial profile of the requested fit parameter using the stored results from
+        an XSPEC model fit run on this AnnularSpectra. The profile is added to AnnularSpectra internal
+        storage, and also returned to the user.
+
+        :param str model: The name of the fitted model you wish to generate a profile from.
+        :param str par: The name of the free model parameter that you wish to generate a profile for.
+        :param Unit/str par_unit: The unit of the free model parameter as an astropy unit object, or a string
+            representation (e.g. keV).
+        """
+        # If a string representation was passed, we make it an astropy unit
+        if isinstance(par_unit, str):
+            par_unit = Unit(par_unit)
+
+        if self.proper_radii is None:
+            raise UnitConversionError("Currently proper radius units are required to generate "
+                                      "profiles, please assign some using the proper_radii property.")
+
+        par_data = []
+        for ai in range(self._num_ann):
+            par_data.append(self.get_results(ai, model, par))
+
+        if isinstance(par_data[0], dict):
+            raise ValueError("Unfortunately {} has been stored on a per-spectrum level, and cannot be made into"
+                             " a profile at the current time.")
+
+        # Just makes the read out values into an astropy quantity
+        par_quant = Quantity(par_data, par_unit)
+        par_val = par_quant[:, 0]
+        # Extract the parameter uncertainties, and average because profiles currently only accept 1D errors
+        par_errs = par_quant[:, 1:]
+        par_errs = np.average(par_errs, axis=1)
+
+        # Just reads out the proper radii into a variable so it can be modified
+        pr = self.proper_radii.to("kpc").value
+        # Minds the mid points of the annular boundaries - the centres of the bins
+        mid_radii = [(pr[r_ind] + pr[r_ind+1])/2 for r_ind in range(len(pr)-1)]
+        # Makes mid_radii a quantity
+        mid_radii = Quantity(mid_radii, 'kpc')
+        # calculates radii errors, basically the extent of the bins
+        rad_errors = Quantity(np.diff(pr, axis=0) / 2, 'kpc')
+
+        # For the central annulus, if its a circle around the zero point, then the calculated mid_radii value
+        #  is invalid
+        if self.radii[0].value == 0:
+            mid_radii[0] = 0
+
+        if par == 'kT':
+            new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
+                                                 'combined', rad_errors, par_errs)
+        elif par == 'Abundanc':
+            new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
+                                                 'combined', rad_errors, par_errs)
+        else:
+            raise NotImplementedError("I cannot yet generate generic profiles, but soon!")
+
+        return new_prof
+
+    def view(self, ann_ident: int, figsize: Tuple = (8, 6)):
+        """
+        An equivelant to the Spectrum view method, but allows all spectra from the same annulus to be
+        displayed on the same axis.
+        """
+        raise NotImplementedError("This will be done shortly!")
+
+    def __len__(self) -> int:
+        """
+        The length of a AnnularSpectra is the number of individual spectra that make it up.
+        :return: The length of the list from self.all_spectra
+        :rtype: int
+        """
+        return len(self.all_spectra)
+
+    def __getitem__(self, ind):
+        return self.all_spectra[ind]
 
 
 

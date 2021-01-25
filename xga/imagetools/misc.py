@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 21:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/01/2021, 14:08. Copyright (c) David J Turner
 
 
 from typing import Tuple, List, Union
@@ -10,19 +10,20 @@ from astropy.wcs import WCS
 
 from ..products import Image, RateMap, ExpMap
 from ..sourcetools import ang_to_rad, rad_to_ang
+from ..utils import xmm_sky
 
 
 def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quantity(1, 'arcmin')) -> float:
     """
-    Very heavily inspired by the regions version of this function, just tweaked to work better for
+    Very heavily inspired by the regions module version of this function, just tweaked to work better for
     my use case. Perturbs the given coordinates with the small_offset value, converts the changed ra-dec
     coordinates to pixel, then calculates the difference between the new and original coordinates in pixel.
     Then small_offset is converted to degrees and  divided by the pixel distance to calculate a pixel to degree
     factor.
 
     :param Quantity coord: The starting coordinates.
-    :param WCS input_wcs: The to calculate the pixel to degree scale
-    :param Quantity small_offset: The amount you wish to peturb the original coordinates
+    :param WCS input_wcs: The world coordinate system used to calculate the pixel to degree scale
+    :param Quantity small_offset: The amount you wish to perturb the original coordinates
     :return: Factor that can be used to convert pixel distances to degree distances.
     :rtype: float
     """
@@ -36,9 +37,11 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
     if coord.unit == deg:
         pix_coord = Quantity(input_wcs.all_world2pix(*coord.value, 0), pix)
         deg_coord = coord
-    else:
+    elif coord.unit == pix:
         deg_coord = Quantity(input_wcs.all_pix2world(*coord.value, 0), deg)
         pix_coord = coord
+    else:
+        raise UnitConversionError('{} is not a recognised position unit'.format(coord.unit.to_string()))
 
     perturbed_coord = deg_coord + Quantity([0, small_offset.to("deg").value], 'deg')
     perturbed_pix_coord = Quantity(input_wcs.all_world2pix(*perturbed_coord.value, 0), pix)
@@ -47,6 +50,43 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
     pix_dist = np.hypot(*diff)
 
     scale = small_offset.to('deg').value / pix_dist.value
+
+    return scale
+
+
+def sky_deg_scale(im_prod: Union[Image, RateMap, ExpMap], coord: Quantity,
+                  small_offset: Quantity = Quantity(1, 'arcmin')) -> float:
+    """
+    This is equivelant to pix_deg_scale, but instead calculates the conversion factor between
+    XMM's XY sky coordinate system and degrees.
+
+    :param Image/Ratemap/ExpMap im_prod: The image product to calculate the conversion factor for.
+    :param Quantity coord: The starting coordinates.
+    :param Quantity small_offset: The amount you wish to perturb the original coordinates
+    :return: A scaling factor to convert sky distances to degree distances.
+    :rtype: float
+    """
+    # Now really this function probably isn't necessary at, because there is a fixed scaling from degrees
+    #  to this coordinate system, but I do like to be general
+
+    if coord.shape != (2,):
+        raise ValueError("coord input must only contain 1 pair.")
+    elif not small_offset.unit.is_equivalent("deg"):
+        raise UnitConversionError("small_offset must be convertible to degrees")
+
+    # Seeing as we're taking an image product input on this one, I can leave the checking
+    #  of inputs to coord_conv
+    # We need the degree and xmm_sky original coordinates
+    deg_coord = im_prod.coord_conv(coord, deg)
+    sky_coord = im_prod.coord_conv(coord, xmm_sky)
+
+    perturbed_coord = deg_coord + Quantity([0, small_offset.to("deg").value], 'deg')
+    perturbed_sky_coord = im_prod.coord_conv(perturbed_coord, xmm_sky)
+
+    diff = abs(perturbed_sky_coord - sky_coord)
+    sky_dist = np.hypot(*diff)
+
+    scale = small_offset.to('deg').value / sky_dist.value
 
     return scale
 

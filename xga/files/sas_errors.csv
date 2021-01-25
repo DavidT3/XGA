@@ -865,3 +865,4 @@ InvalidSummaryFile,cifbuild
 UnexpectedEOF,cifbuild
 UnknownAlgoId,rmfgen
 invalidOption,psfgen
+NoSummaryFile,cifbuild

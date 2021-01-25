@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 18:18. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -11,8 +11,9 @@ from typing import Tuple
 from tqdm import tqdm
 
 from .. import COMPUTE_MODE
+from ..exceptions import SASNotFoundError, SASGenerationError
+from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpectra
 from ..exceptions import SASGenerationError
-from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
@@ -32,7 +33,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     This function is called for the local compute option, and runs the passed command in a Popen shell.
     It then creates an appropriate product object, and passes it back to the callback function of the Pool
     it was called from.
-    
+
     :param str cmd: SAS command to be executed on the command line.
     :param str p_type: The product type that will be produced by this command.
     :param str p_path: The final output path of the product.
@@ -64,10 +65,12 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         # ccf files may not be destined to spend life as product objects, but that doesn't mean
         # I can't take momentarily advantage of the error parsing I built into the product classes
         prod = BaseProduct(p_path[0], "", "", out, err, cmd)
-    elif p_type == "spectrum" and "NullSource" not in src:
+    elif (p_type == "spectrum" or p_type == "annular spectrum set components") and "NullSource" not in src:
         prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
-                        extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info["reg_type"],
-                        extra_info["obs_id"], extra_info["instrument"], out, err, cmd)
+                        extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info['central_coord'],
+                        extra_info["inner_radius"], extra_info["outer_radius"], extra_info["obs_id"],
+                        extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"], extra_info["min_sn"],
+                        extra_info["over_sample"], out, err, cmd, extra_info["from_region"])
     elif p_type == "psf" and "NullSource" not in src:
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                        extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
@@ -76,6 +79,11 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = None
     else:
         raise NotImplementedError("Not implemented yet")
+
+    # An extra step is required for annular spectrum set components
+    if p_type == "annular spectrum set components":
+        prod.annulus_ident = extra_info["ann_ident"]
+        prod.set_ident = extra_info["set_ident"]
 
     return prod, src
 
@@ -130,6 +138,8 @@ def sas_call(sas_func):
         results = {s: [] for s in src_lookup}
         # Any errors raised shouldn't be SAS, as they are stored within the product object.
         raised_errors = []
+        # Making sure something is defined for this variable
+        prod_type_str = ""
         if to_execute and COMPUTE_MODE == "local" and len(all_run) > 0:
             # Will run the commands locally in a pool
             prod_type_str = ", ".join(set(all_type))
@@ -191,6 +201,8 @@ def sas_call(sas_func):
 
         # Now we assign products to source objects
         all_to_raise = []
+        # This is for the special case of generating an AnnularSpectra product
+        ann_spec_comps = {k: [] for k in results}
         for entry in results:
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add this set of products to
@@ -214,12 +226,29 @@ def sas_call(sas_func):
 
                 # ccfs aren't actually stored in the source product storage, but they are briefly put into
                 #  BaseProducts for error parsing etc. So if the product type is None we don't store it
-                if product.type is not None and product.usable:  # If not usable don't add
+                if product.type is not None and product.usable and prod_type_str != "annular spectrum set components":
                     # For each product produced for this source, we add it to the storage hierarchy
                     sources[ind].update_products(product)
+                elif product.type is not None and product.usable and prod_type_str == "annular spectrum set components":
+                    # Really we're just re-creating the results dictionary here, but I want these products
+                    #  to go through the error checking stuff like everything else does
+                    ann_spec_comps[entry].append(product)
 
             if len(to_raise) != 0:
                 all_to_raise.append(to_raise)
+
+        if prod_type_str == "annular spectrum set components":
+            for entry in ann_spec_comps:
+                # So now we pass the list of spectra to a AnnularSpectra definition - and it will sort them out
+                #  itself so the order doesn't matter
+                ann_spec = AnnularSpectra(ann_spec_comps[entry])
+                if sources[ind].redshift is not None:
+                    # If we know the redshift we will add the radii to the annular spectra in proper distance units
+                    ann_spec.proper_radii = sources[ind].convert_radius(ann_spec.radii, 'kpc')
+                ind = src_lookup[entry]
+                # And adding our exciting new set of annular spectra into the storage structure
+                sources[ind].update_products(ann_spec)
+
         # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
         for error in raised_errors:
             raise error

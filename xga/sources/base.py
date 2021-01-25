@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2021, 19:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 14:34. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,11 +8,12 @@ from itertools import product
 from typing import Tuple, List, Dict, Union
 
 import numpy as np
+import pandas as pd
 from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
-from astropy.units import Quantity, UnitBase, Unit, UnitConversionError
+from astropy.units import Quantity, UnitBase, Unit, UnitConversionError, deg
 from fitsio import FITS
 from numpy import ndarray
 from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
@@ -21,8 +22,9 @@ from regions import read_ds9, PixelRegion, CompoundSkyRegion
 from .. import xga_conf
 from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..imagetools.misc import sky_deg_scale
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
-    RateMap, PSFGrid, BaseProfile1D
+    RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
@@ -36,8 +38,8 @@ class BaseSource:
     def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=True, load_fits=False):
         self._ra_dec = np.array([ra, dec])
         if name is not None:
-            # We don't be liking spaces in source names
-            self._name = name.replace(" ", "")
+            # We don't be liking spaces in source names, we also don't like underscores
+            self._name = name.replace(" ", "").replace("_", "-")
         else:
             self._name = coord_to_name(self.ra_dec)
 
@@ -166,6 +168,15 @@ class BaseSource:
         # Easier for it be internally kep as a numpy array, but I want the user to have astropy coordinates
         return Quantity(self._ra_dec, 'deg')
 
+    @property
+    def default_coord(self) -> Quantity:
+        """
+        A getter for the default analysis coordinate of this source.
+        :return: An Astropy quantity containing the default analysis coordinate.
+        :rtype: Quantity
+        """
+        return self._default_coord
+
     def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
@@ -174,6 +185,7 @@ class BaseSource:
             dictionary containing paths to region files, and another dictionary containing paths to attitude files.
         :rtype: Tuple[dict, dict, dict]
         """
+
         def read_default_products(en_lims: tuple) -> Tuple[str, dict]:
             """
             This nested function takes pairs of energy limits defined in the config file and runs
@@ -269,7 +281,6 @@ class BaseSource:
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict, odf_dict
 
-    # TODO Maybe allow BaseAggregateProfile1D to be stored in the future
     # TODO Redo how profiles are stored - I was lazy when I implemented it at first
     def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D]):
         """
@@ -277,8 +288,8 @@ class BaseSource:
         but will overwrite existing products with a warning. Raises errors if the ObsID is not associated
         with this source or the instrument is not associated with the ObsID.
 
-        :param BaseProduct/BaseAggregateProduct/BaseProfile1D prod_obj: The new product object to be added to
-            the source object.
+        :param BaseProduct/BaseAggregateProduct/BaseProfile1D prod_obj: The new product object to be
+            added to the source object.
         """
         # Aggregate products are things like PSF grids and sets of annular spectra.
         if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D)):
@@ -290,8 +301,8 @@ class BaseSource:
             # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
             #  this variable with just the energy key
             en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
-        elif type(prod_obj) == Spectrum:
-            extra_key = prod_obj.reg_type
+        elif type(prod_obj) == Spectrum or type(prod_obj) == AnnularSpectra:
+            extra_key = prod_obj.storage_key
         elif type(prod_obj) == PSFGrid:
             # The first part of the key is the model used (by default its ELLBETA for example), and
             #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
@@ -509,6 +520,8 @@ class BaseSource:
             return right_merged
 
         og_dir = os.getcwd()
+        # This is used for spectra that should be part of an AnnularSpectra object
+        ann_spec_constituents = {}
         for obs in self._obs:
             if os.path.exists(OUTPUT + obs):
                 os.chdir(OUTPUT + obs)
@@ -530,35 +543,84 @@ class BaseSource:
 
                 # For spectra we search for products that have the name of this object in, as they are for
                 #  specific parts of the observation.
-                # Have to replace any + characters with x, as thats what we did in evselect_spectrum due to SAS
+                # Have to replace any + characters with x, as that's what we did in evselect_spectrum due to SAS
                 #  having some issues with the + character in file names
                 named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
                          self._name.replace("+", "x") in f and obs in f
                          and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
-                specs = [f for f in named if "spec" in f and "back" not in f and "ann" not in f]
+                specs = [f for f in named if "spec" in f.split('/')[-1] and "back" not in f.split('/')[-1]]
+
                 for sp in specs:
                     # Filename contains a lot of useful information, so splitting it out to get it
                     sp_info = sp.split("/")[-1].split("_")
+                    # Reading these out into variables mostly for my own sanity while writing this
+                    obs_id = sp_info[0]
                     inst = sp_info[1]
-                    reg_type = sp_info[-2]
+                    # I now store the central coordinate in the file name, and read it out into astropy quantity
+                    #  for when I need to define the spectrum object
+                    central_coord = Quantity([float(sp_info[3].strip('ra')), float(sp_info[4].strip('dec'))], 'deg')
+                    # Also read out the inner and outer radii into astropy quantities (I know that
+                    #  they will be in degree units).
+                    r_inner = Quantity(np.array(sp_info[5].strip('ri').split('and')).astype(float), 'deg')
+                    r_outer = Quantity(np.array(sp_info[6].strip('ro').split('and')).astype(float), 'deg')
+                    # Check if there is only one r_inner and r_outer value each, if so its a circle
+                    #  (otherwise its an ellipse)
+                    if len(r_inner) == 1:
+                        r_inner = r_inner[0]
+                        r_outer = r_outer[0]
+
+                    # Only check the actual filename, as I have no knowledge of what strings might be in the
+                    #  user's path to xga output
+                    if 'grpTrue' in sp.split('/')[-1]:
+                        grp_ind = sp_info.index('grpTrue')
+                        grouped = True
+                    else:
+                        grouped = False
+
+                    # mincnt or minsn information will only be in the filename if the spectrum is grouped
+                    if grouped and 'mincnt' in sp.split('/')[-1]:
+                        min_counts = int(sp_info[grp_ind+1].split('mincnt')[-1])
+                        min_sn = None
+                    elif grouped and 'minsn' in sp.split('/')[-1]:
+                        min_sn = float(sp_info[grp_ind+1].split('minsn')[-1])
+                        min_counts = None
+                    else:
+                        # We still need to pass the variables to the spectrum definition, even if it isn't
+                        #  grouped
+                        min_sn = None
+                        min_counts = None
+
+                    # Only if oversampling was applied will it appear in the filename
+                    if 'ovsamp' in sp.split('/')[-1]:
+                        over_sample = int(sp_info[-2].split('ovsamp')[-1])
+                    else:
+                        over_sample = None
+
+                    if "region" in sp.split('/')[-1]:
+                        region = True
+                    else:
+                        region = False
+
+                    # I split the 'spec' part of the end of the name of the spectrum, and can use the parts of the
+                    #  file name preceding it to search for matching arf/rmf files
+                    sp_info_str = sp.split('_spec')[0]
+
                     # Fairly self explanatory, need to find all the separate products needed to define an XGA
                     #  spectrum
-                    arf = [f for f in named if "arf" in f and "ann" not in f and "back" not in f
-                           and inst in f and reg_type in f]
-                    rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" not in f
-                           and inst in f and reg_type in f]
+                    arf = [f for f in named if "arf" in f and "back" not in f and sp_info_str == f.split('.arf')[0]]
+                    rmf = [f for f in named if "rmf" in f and "back" not in f and sp_info_str == f.split('.rmf')[0]]
                     # As RMFs can be generated for source and background spectra separately, or one for both,
                     #  we need to check for matching RMFs to the spectrum we found
                     if len(rmf) == 0:
-                        rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" not in f
-                               and inst in f and "universal" in f]
+                        rmf = [f for f in named if "rmf" in f and "back" not in f and inst in f and "universal" in f]
 
                     # Exact same checks for the background spectrum
-                    back = [f for f in named if "backspec" in f and "ann" not in f and inst in f and reg_type in f]
-                    back_arf = [f for f in named if "arf" in f and "ann" not in f and inst in f and reg_type in f
-                                and "back" in f]
-                    back_rmf = [f for f in named if "rmf" in f and "ann" not in f and "back" in f and inst in f
-                                and reg_type in f]
+                    back = [f for f in named if "backspec" in f and inst in f
+                            and sp_info_str == f.split('_backspec')[0]]
+                    back_arf = [f for f in named if "arf" in f and inst in f
+                                and sp_info_str == f.split('_back.arf')[0] and "back" in f]
+                    back_rmf = [f for f in named if "rmf" in f and "back" in f and inst in f
+                                and sp_info_str == f.split('_back.rmf')[0]]
                     if len(back_rmf) == 0:
                         back_rmf = rmf
 
@@ -566,10 +628,36 @@ class BaseSource:
                     #  add it the source object.
                     if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and \
                             len(back_rmf) == 1:
-                        obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], reg_type, obs, inst,
-                                       "", "", "")
-                        self.update_products(obj)
+                        # Defining our XGA spectrum instance
+                        obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], central_coord,
+                                       r_inner, r_outer, obs_id, inst, grouped, min_counts, min_sn, over_sample, "",
+                                       "", "", region)
+
+                        if "ident" in sp.split('/')[-1]:
+                            set_id = int(sp.split('ident')[-1].split('_')[0])
+                            ann_id = int(sp.split('ident')[-1].split('_')[1])
+                            obj.annulus_ident = ann_id
+                            obj.set_ident = set_id
+                            if set_id not in ann_spec_constituents:
+                                ann_spec_constituents[set_id] = []
+                            ann_spec_constituents[set_id].append(obj)
+                        else:
+                            # And adding it to the source storage structure, but only if its not a member
+                            #  of an AnnularSpectra
+                            self.update_products(obj)
+                    else:
+                        raise ValueError("I have found multiple file matches for a Spectrum, contact the developer!")
         os.chdir(og_dir)
+
+        # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
+        #  those objects and add them to the storage structure
+        if len(ann_spec_constituents) != 0:
+            for set_id in ann_spec_constituents:
+                ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+                if self._redshift is not None:
+                    # If we know the redshift we will add the radii to the annular spectra in proper distance units
+                    ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
+                self.update_products(ann_spec_obj)
 
         # Merged products have all the ObsIDs that they are made up of in their name
         obs_str = "_".join(self._obs)
@@ -590,34 +678,60 @@ class BaseSource:
 
         # Now loading in previous fits
         if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
+            ann_results = {}
+            ann_lums = {}
             prev_fits = [OUTPUT + "XSPEC/" + self.name + "/" + f
                          for f in os.listdir(OUTPUT + "XSPEC/" + self.name) if ".xcm" not in f and ".fits" in f]
             for fit in prev_fits:
-                fit_info = fit.split("/")[-1].split("_")
-                reg_type = fit_info[1]
-                fit_model = fit_info[-1].split(".")[0]
+                fit_name = fit.split("/")[-1]
+                fit_info = fit_name.split("_")
+                storage_key = "_".join(fit_info[1:-1])
+                # Load in the results table
                 fit_data = FITS(fit)
 
                 # This bit is largely copied from xspec.py, sorry for my laziness
                 global_results = fit_data["RESULTS"][0]
                 model = global_results["MODEL"].strip(" ")
 
+                if "_ident" in storage_key:
+                    set_id, ann_id = storage_key.split("_ident")[-1].split("_")
+                    set_id = int(set_id)
+                    ann_id = int(ann_id)
+                    if set_id not in ann_results:
+                        ann_results[set_id] = {}
+                        ann_lums[set_id] = {}
+
+                    if model not in ann_results[set_id]:
+                        ann_results[set_id][model] = {}
+                        ann_lums[set_id][model] = {}
+                else:
+                    set_id = None
+                    ann_id = None
+
                 try:
                     inst_lums = {}
                     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
                         sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
-                        # Finds the appropriate matching spectrum object for the current table line
-                        try:
-                            spec = [match for match in self.get_products("spectrum", sp_info[0], sp_info[1],
-                                                                         just_obj=False)
-                                    if reg_type in match and match[-1].usable][0][-1]
-                        except IndexError:
-                            raise NoProductAvailableError("A Spectrum object referenced in a fit file for {n} "
-                                                          "cannot be loaded".format(n=self._name))
+                        # Want to derive the spectra storage key from the file name, this strips off some
+                        #  unnecessary info
+                        sp_key = line["SPEC_PATH"].strip(" ").split("/")[-1].split('ra')[-1].split('_spec.fits')[0]
+
+                        # If its not an AnnularSpectra fit then we can just fetch the spectrum from the source
+                        #  the normal way
+                        if set_id is None:
+                            # This adds ra back on, and removes any ident information if it is there
+                            sp_key = 'ra' + sp_key
+                            # Finds the appropriate matching spectrum object for the current table line
+                            spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
+                        else:
+                            sp_key = 'ra' + sp_key.split('_ident')[0]
+                            ann_spec = self.get_annular_spectra(set_id=set_id)
+                            spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
 
                         # Adds information from this fit to the spectrum object.
-                        spec.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)])
-                        self.update_products(spec)  # Adds the updated spectrum object back into the source
+                        spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
+                        # if not ann_fit:
+                        #     s.update_products(spec)  # Adds the updated spectrum object back into the source
 
                         # The add_fit_data method formats the luminosities nicely, so we grab them back out
                         #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
@@ -636,14 +750,54 @@ class BaseSource:
                     else:
                         chosen_lums = inst_lums["mos1"]
 
-                    # Push global fit results, luminosities etc. into the corresponding source object.
-                    self.add_fit_data(model, reg_type, global_results, chosen_lums)
+                    if set_id is not None:
+                        ann_results[set_id][model][spec.annulus_ident] = global_results
+                        ann_lums[set_id][model][spec.annulus_ident] = chosen_lums
+                    else:
+                        # Push global fit results, luminosities etc. into the corresponding source object.
+                        self.add_fit_data(model, global_results, chosen_lums, sp_key)
 
                 except OSError:
                     chosen_lums = {}
-
                 fit_data.close()
+
+            if len(ann_results) != 0:
+                for set_id in ann_results:
+                    rel_ann_spec = self.get_annular_spectra(set_id=set_id)
+                    for model in ann_results[set_id]:
+                        rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model])
+                        if model == "tbabs*apec":
+                            temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
+                            self.update_products(temp_prof)
+                            if 'Abundanc' in rel_ann_spec.get_results(0, 'tbabs*apec'):
+                                met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
+                                self.update_products(met_prof)
+
         os.chdir(og_dir)
+
+        # And finally loading in any conversion factors that have been calculated using XGA's fakeit interface
+        if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
+            conv_factors = [OUTPUT + "XSPEC/" + self.name + "/" + f for f in os.listdir(OUTPUT + "XSPEC/" + self.name)
+                            if ".xcm" not in f and "conv_factors" in f]
+            for conv_path in conv_factors:
+                res_table = pd.read_csv(conv_path, dtype={"lo_en": str, "hi_en": str})
+                # Gets the model name from the file name of the output results table
+                model = conv_path.split("_")[-3]
+
+                # We can infer the storage key from the name of the results table, just makes it easier to
+                #  grab the correct spectra
+                storage_key = conv_path.split('/')[-1].split(self.name)[-1][1:].split(model)[0][:-1]
+
+                # Grabs the ObsID+instrument combinations from the headers of the csv. Makes sure they are unique
+                #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
+                # First two columns are skipped because they are energy limits
+                combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
+                # Getting the spectra for each column, then assigning rates and lums
+                for comb in combos:
+                    spec = self.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
+                    spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
+                                          res_table["rate_{}".format(comb)].values,
+                                          res_table["Lx_{}".format(comb)].values, model)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
@@ -660,6 +814,7 @@ class BaseSource:
         :return: List of matching products.
         :rtype: List[BaseProduct]
         """
+
         def unpack_list(to_unpack: list):
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
@@ -716,6 +871,7 @@ class BaseSource:
 
         :return: Tuple[dict, dict]
         """
+
         def dist_from_source(reg):
             """
             Calculates the euclidean distance between the centre of a supplied region, and the
@@ -1246,6 +1402,7 @@ class BaseSource:
             another SAS region which will include background emission and exclude nuisance sources.
         :rtype: Tuple[str, str]
         """
+
         def sas_shape(reg: SkyRegion, im: Image) -> str:
             """
             This will convert the input SkyRegion into an appropriate SAS compatible region string, for use
@@ -1371,6 +1528,229 @@ class BaseSource:
 
         return final_src, final_back
 
+    def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity,
+                             deg_central_coord: Quantity) -> np.ndarray:
+        """
+        This function finds and returns any interloper regions that have any part of their boundary within
+        the specified radii, centered on the specified central coordinate.
+
+        :param Quantity inner_radius: The inner radius of the area to search for interlopers in.
+        :param Quantity outer_radius: The outer radius of the area to search for interlopers in.
+        :param Quantity deg_central_coord: The central coordinate (IN DEGREES) of the area to search for
+            interlopers in.
+        :return: A numpy array of the interloper regions within the specified area.
+        :rtype: np.ndarray
+        """
+        def perimeter_points(reg_cen_x: float, reg_cen_y: float, reg_major_rad: float, reg_minor_rad: float,
+                             rotation: float) -> np.ndarray:
+            """
+            An internal function to generate thirty x-y positions on the boundary of a particular region.
+
+            :param float reg_cen_x: The x position of the centre of the region, in degrees.
+            :param float reg_cen_y: The y position of the centre of the region, in degrees
+            :param float reg_major_rad: The semi-major axis of the region, in degrees.
+            :param float reg_minor_rad: The semi-minor axis of the region, in degrees.
+            :param float rotation: The rotation of the region, in radians.
+            :return: An array of thirty x-y coordinates on the boundary of the region.
+            :rtype: np.ndarray
+            """
+            # Just the numpy array of angles (in radians) to find the x-y points of
+            angs = np.linspace(0, 2 * np.pi, 30)
+
+            # This is just the parametric equation of an ellipse - I only include the displacement to the
+            #  central coordinates of the region AFTER it has been rotated
+            x = reg_major_rad * np.cos(angs)
+            y = reg_minor_rad * np.sin(angs)
+
+            # Sets of the rotation matrix
+            rot_mat = np.array([[np.cos(rotation), -1 * np.sin(rotation)], [np.sin(rotation), np.cos(rotation)]])
+
+            # Just rotates the edge coordinates to match the known rotation of this particular region
+            edge_coords = (rot_mat @ np.vstack([x, y])).T
+
+            # Now I re-centre the region
+            edge_coords[:, 0] += reg_cen_x
+            edge_coords[:, 1] += reg_cen_y
+
+            return edge_coords
+
+        if deg_central_coord.unit != deg:
+            raise UnitConversionError("The central coordinate must be in degrees for this function.")
+
+        inner_radius = self.convert_radius(inner_radius, 'deg')
+        outer_radius = self.convert_radius(outer_radius, 'deg')
+
+        # Then we can check to make sure that the outer radius is larger than the inner radius
+        if inner_radius >= outer_radius:
+            raise ValueError("A SAS region for {s} cannot have an inner_radius larger than or equal to its "
+                             "outer_radius".format(s=self.name))
+
+        # I think my last attempt at this type of function was made really slow by something to with the regions
+        #  module, so I'm going to try and move away from that here
+        # This is horrible I know, but it basically generates points on the boundary of each interloper, and then
+        #  calculates their distance from the central coordinate. So you end up with an Nx30 (because 30 is
+        #  how many points I generate) and N is the number of potential interlopers
+        int_dists = np.array([np.sqrt(np.sum((perimeter_points(r.center.ra.value, r.center.dec.value, r.width.value/2,
+                                                               r.height.value/2, r.angle.to('rad').value)
+                                              - deg_central_coord.value) ** 2, axis=1))
+                              for r in self._interloper_regions])
+
+        # Finds which of the possible interlopers have any part of their boundary within the annulus in consideration
+        int_within = np.unique(np.where((int_dists < outer_radius.value) & (int_dists > inner_radius.value))[0])
+
+        return np.array(self._interloper_regions)[int_within]
+
+    @staticmethod
+    def _interloper_sas_string(reg: EllipseSkyRegion, im: Image, output_unit: Union[UnitBase, str]) -> str:
+        """
+        Converts ellipse sky regions into SAS region strings for use in SAS tasks.
+
+        :param EllipseSkyRegion reg: The interloper region to generate a SAS string for
+        :param Image im: The XGA image to use for coordinate conversion.
+        :param UnitBase/str output_unit: The output unit for this SAS region, either xmm_sky or xmm_det.
+        :return: The SAS string region for this interloper
+        :rtype: str
+        """
+
+        if output_unit == xmm_det:
+            c_str = "DETX,DETY"
+            raise NotImplementedError("This coordinate system is not yet supported, and isn't a priority. Please "
+                                      "submit an issue on https://github.com/DavidT3/XGA/issues if you particularly "
+                                      "want this.")
+        elif output_unit == xmm_sky:
+            c_str = "X,Y"
+        else:
+            raise NotImplementedError("Only detector and sky coordinates are currently "
+                                      "supported for generating SAS region strings.")
+
+        cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
+        sky_to_deg = sky_deg_scale(im, cen)
+        conv_cen = im.coord_conv(cen, output_unit)
+        # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
+        #  from degrees to XMM sky coordinates using the factor we calculated in the main function
+        w = reg.width.value / 2 / sky_to_deg
+        # We do the same for the height
+        h = reg.height.value / 2 / sky_to_deg
+        if w == h:
+            shape_str = "(({t}) IN circle({cx},{cy},{r}))"
+            shape_str = shape_str.format(t=c_str, cx=conv_cen[0].value, cy=conv_cen[1].value, r=h)
+        else:
+            # The rotation angle from the region object is in degrees already
+            shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
+                                                                             cy=conv_cen[1].value, w=w, h=h,
+                                                                             rot=reg.angle.value)
+        return shape_str
+
+    def get_annular_sas_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
+                               output_unit: Union[UnitBase, str] = xmm_sky, rot_angle: Quantity = Quantity(0, 'deg'),
+                               interloper_regions: np.ndarray = None, central_coord: Quantity = None) -> str:
+        """
+        A method to generate a SAS region string for an arbitrary circular or elliptical annular region, with
+        interloper sources removed.
+
+        :param Quantity inner_radius: The inner radius/radii of the region you wish to generate in SAS, if the
+            quantity has multiple elements then an elliptical region will be generated, with the first element
+            being the inner radius on the semi-major axis, and the second on the semi-minor axis.
+        :param Quantity outer_radius: The inner outer_radius/radii of the region you wish to generate in SAS, if the
+            quantity has multiple elements then an elliptical region will be generated, with the first element
+            being the outer radius on the semi-major axis, and the second on the semi-minor axis.
+        :param str obs_id: The ObsID of the observation you wish to generate the SAS region for.
+        :param str inst: The instrument of the observation you to generate the SAS region for.
+        :param UnitBase/str output_unit: The output unit for this SAS region, either xmm_sky or xmm_det.
+        :param np.ndarray interloper_regions: The interloper regions to remove from the source region,
+            default is None, in which case the function will run self.regions_within_radii.
+        :param Quantity rot_angle: The rotation angle of the source region, default is zero degrees.
+        :param Quantity central_coord: The coordinate on which to centre the source region, default is
+            None in which case the function will use the default_coord of the source object.
+        :return: A string for use in a SAS routine that describes the source region, and the regions
+            to cut out of it.
+        :rtype: str
+        """
+
+        if central_coord is None:
+            central_coord = self._default_coord
+
+        # These checks/conversions are already done by the evselect_spectrum command, but I don't
+        #  mind doing them again
+        inner_radius = self.convert_radius(inner_radius, 'deg')
+        outer_radius = self.convert_radius(outer_radius, 'deg')
+
+        # Then we can check to make sure that the outer radius is larger than the inner radius
+        if inner_radius.isscalar and inner_radius >= outer_radius:
+            raise ValueError("A SAS circular region for {s} cannot have an inner_radius larger than or equal to its "
+                             "outer_radius".format(s=self.name))
+        elif not inner_radius.isscalar and (inner_radius[0] >= outer_radius[0] or inner_radius[1] >= outer_radius[1]):
+            raise ValueError("A SAS elliptical region for {s} cannot have inner radii larger than or equal to its "
+                             "outer radii".format(s=self.name))
+
+        if output_unit == xmm_det:
+            c_str = "DETX,DETY"
+            raise NotImplementedError("This coordinate system is not yet supported, and isn't a priority. Please "
+                                      "submit an issue on https://github.com/DavidT3/XGA/issues if you particularly "
+                                      "want this.")
+        elif output_unit == xmm_sky:
+            c_str = "X,Y"
+        else:
+            raise NotImplementedError("Only detector and sky coordinates are currently "
+                                      "supported for generating SAS region strings.")
+
+        # We need a matching image to perform the coordinate conversion we require
+        rel_im = self.get_products("image", obs_id, inst)[0]
+        # We can set our own offset value when we call this function, but I don't think I need to
+        sky_to_deg = sky_deg_scale(rel_im, central_coord)
+
+        # We need our chosen central coordinates in the right units of course
+        xmm_central_coord = rel_im.coord_conv(central_coord, output_unit)
+        # And just to make sure the central coordinates are in degrees
+        deg_central_coord = rel_im.coord_conv(central_coord, deg)
+
+        # If the user doesn't pass any regions, then we have to find them ourselves. I decided to allow this
+        #  so that within_radii can just be called once externally for a set of ObsID-instrument combinations,
+        #  like in evselect_spectrum for instance.
+        if interloper_regions is None and inner_radius.isscalar:
+            interloper_regions = self.regions_within_radii(inner_radius, outer_radius, deg_central_coord)
+        elif interloper_regions is None and not inner_radius.isscalar:
+            interloper_regions = self.regions_within_radii(min(inner_radius), max(outer_radius), deg_central_coord)
+
+        # So now we convert our interloper regions into their SAS equivalents
+        sas_interloper = [self._interloper_sas_string(i, rel_im, output_unit) for i in interloper_regions]
+
+        if inner_radius.isscalar and inner_radius.value != 0:
+            # And we need to define a SAS string for the actual region of interest
+            sas_source_area = "(({t}) IN annulus({cx},{cy},{ri},{ro}))"
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
+                                                     cy=xmm_central_coord[1].value, ri=inner_radius.value/sky_to_deg,
+                                                     ro=outer_radius.value/sky_to_deg)
+        # If the inner radius is zero then we write a circle region, because it seems that's a LOT faster in SAS
+        elif inner_radius.isscalar and inner_radius.value == 0:
+            sas_source_area = "(({t}) IN circle({cx},{cy},{r}))"
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
+                                                     cy=xmm_central_coord[1].value,
+                                                     r=outer_radius.value/sky_to_deg)
+        elif not inner_radius.isscalar and inner_radius[0].value != 0:
+            sas_source_area = "(({t}) IN elliptannulus({cx},{cy},{wi},{hi},{wo},{ho},{rot},{rot}))"
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
+                                                     cy=xmm_central_coord[1].value,
+                                                     wi=inner_radius[0].value/sky_to_deg,
+                                                     hi=inner_radius[1].value/sky_to_deg,
+                                                     wo=outer_radius[0].value/sky_to_deg,
+                                                     ho=outer_radius[1].value/sky_to_deg, rot=rot_angle.to('deg').value)
+        elif not inner_radius.isscalar and inner_radius[0].value == 0:
+            sas_source_area = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))"
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
+                                                     cy=xmm_central_coord[1].value,
+                                                     w=outer_radius[0].value / sky_to_deg,
+                                                     h=outer_radius[1].value / sky_to_deg,
+                                                     rot=rot_angle.to('deg').value)
+
+        # Combining the source region with the regions we need to cut out
+        if len(sas_interloper) == 0:
+            final_src = sas_source_area
+        else:
+            final_src = sas_source_area + " &&! " + " &&! ".join(sas_interloper)
+
+        return final_src
+
     @property
     def nH(self) -> Quantity:
         """
@@ -1422,32 +1802,35 @@ class BaseSource:
         """
         return self._name
 
-    # TODO Pass through units in column headers?
-    def add_fit_data(self, model: str, reg_type: str, tab_line, lums: dict):
+    def add_fit_data(self, model: str, tab_line, lums: dict, spec_storage_key: str):
         """
         A method that stores fit results and global information about a the set of spectra in a source object.
         Any variable parameters in the fit are stored in an internal dictionary structure, as are any luminosities
-        calculated. Other parameters of interest are store in other internal attributes.
+        calculated. Other parameters of interest are store in other internal attributes. This probably shouldn't
+        ever be used by the user, just other parts of XGA, hence why I've asked for a spec_storage_key to be passed
+        in rather than all the spectrum configuration options individually.
 
-        :param str model:
-        :param str reg_type:
-        :param tab_line:
-        :param dict lums:
+        :param str model: The XSPEC definition of the model used to perform the fit. e.g. tbabs*apec
+        :param tab_line: The table line with the fit data.
+        :param dict lums: The various luminosities measured during the fit.
+        :param str spec_storage_key: The storage key of any spectrum that was used in this particular fit. The
+            ObsID and instrument used don't matter, as the storage key will be the same and is based off of the
+            settings when the spectra were generated.
         """
         # Just headers that will always be present in tab_line that are not fit parameters
         not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
                    'NUM_UNLINKED_THAWED_VARS', 'FIT_STATISTIC', 'TEST_STATISTIC', 'DOF']
 
         # Various global values of interest
-        self._total_exp[reg_type] = float(tab_line["TOTAL_EXPOSURE"])
-        if reg_type not in self._total_count_rate:
-            self._total_count_rate[reg_type] = {}
-            self._test_stat[reg_type] = {}
-            self._dof[reg_type] = {}
-        self._total_count_rate[reg_type][model] = [float(tab_line["TOTAL_COUNT_RATE"]),
-                                                   float(tab_line["TOTAL_COUNT_RATE_ERR"])]
-        self._test_stat[reg_type][model] = float(tab_line["TEST_STATISTIC"])
-        self._dof[reg_type][model] = float(tab_line["DOF"])
+        self._total_exp[spec_storage_key] = float(tab_line["TOTAL_EXPOSURE"])
+        if spec_storage_key not in self._total_count_rate:
+            self._total_count_rate[spec_storage_key] = {}
+            self._test_stat[spec_storage_key] = {}
+            self._dof[spec_storage_key] = {}
+        self._total_count_rate[spec_storage_key][model] = [float(tab_line["TOTAL_COUNT_RATE"]),
+                                                           float(tab_line["TOTAL_COUNT_RATE_ERR"])]
+        self._test_stat[spec_storage_key][model] = float(tab_line["TEST_STATISTIC"])
+        self._dof[spec_storage_key][model] = float(tab_line["DOF"])
 
         # The parameters available will obviously be dynamic, so have to find out what they are and then
         #  then for each result find the +- errors
@@ -1478,16 +1861,18 @@ class BaseSource:
             mod_res[par_name][ident][pos] = float(tab_line[par])
 
         # Storing the fit results
-        if reg_type not in self._fit_results:
-            self._fit_results[reg_type] = {}
-        self._fit_results[reg_type][model] = mod_res
+        if spec_storage_key not in self._fit_results:
+            self._fit_results[spec_storage_key] = {}
+        self._fit_results[spec_storage_key][model] = mod_res
 
         # And now storing the luminosity results
-        if reg_type not in self._luminosities:
-            self._luminosities[reg_type] = {}
-        self._luminosities[reg_type][model] = lums
+        if spec_storage_key not in self._luminosities:
+            self._luminosities[spec_storage_key] = {}
+        self._luminosities[spec_storage_key][model] = lums
 
-    def get_results(self, reg_type: str, model: str, par: str = None):
+    def get_results(self, model: str, outer_radius: Union[str, Quantity],
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None):
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
@@ -1495,29 +1880,46 @@ class BaseSource:
         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
         of such numpy arrays, with the keys corresponding to parameter names.
 
-        :param str reg_type: The type of region that the fitted spectra were generated from.
         :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
         :param str par: The name of the parameter you want a result for.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The requested result value, and uncertainties.
         """
+        # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
+        #  because then I can just grab the storage key from one of them
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        storage_key = specs[0].storage_key
+
         # Bunch of checks to make sure the requested results actually exist
         if len(self._fit_results) == 0:
             raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
-        elif reg_type not in self._fit_results:
-            av_regs = ", ".join(self._fit_results.keys())
-            raise ModelNotAssociatedError("{r} has no associated XSPEC fit to {s}; available regions are "
-                                          "{a}".format(r=reg_type, s=self.name, a=av_regs))
-        elif model not in self._fit_results[reg_type]:
-            av_mods = ", ".join(self._fit_results[reg_type].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to {r} spectra of {s}; available "
-                                          "models are  {a}".format(m=model, r=reg_type, s=self.name, a=av_mods))
-        elif par is not None and par not in self._fit_results[reg_type][model]:
-            av_pars = ", ".join(self._fit_results[reg_type][model].keys())
+        elif storage_key not in self._fit_results:
+            raise ModelNotAssociatedError("Those spectra have no associated XSPEC fit to {s}".format(s=self.name))
+        elif model not in self._fit_results[storage_key]:
+            av_mods = ", ".join(self._fit_results[storage_key].keys())
+            raise ModelNotAssociatedError("{m} has not been fitted to those spectra of {s}; available "
+                                          "models are {a}".format(m=model, s=self.name, a=av_mods))
+        elif par is not None and par not in self._fit_results[storage_key][model]:
+            av_pars = ", ".join(self._fit_results[storage_key][model].keys())
             raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to {s}, "
                                               "the options are {a}".format(p=par, m=model, s=self.name, a=av_pars))
 
         # Read out into variable for readabilities sake
-        fit_data = self._fit_results[reg_type][model]
+        fit_data = self._fit_results[storage_key][model]
         proc_data = {}  # Where the output will ive
         for p_key in fit_data:
             # Used to shape the numpy array the data is transferred into
@@ -1543,20 +1945,41 @@ class BaseSource:
         else:
             return proc_data[par]
 
-    def get_luminosities(self, reg_type: str, model: str, lo_en: Quantity = None, hi_en: Quantity = None):
+    def get_luminosities(self, model: str, outer_radius: Union[str, Quantity],
+                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
+                         hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                         over_sample: float = None):
         """
         Get method for luminosities calculated from model fits to spectra associated with this source.
         Either for given energy limits (that must have been specified when the fit was first performed), or
         for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
         the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
 
-        :param str reg_type: The type of region that the fitted spectra were generated from.
-        :param str model: The name of the fitted model that you're requesting the
-            luminosities from (e.g. tbabs*apec).
+        :param str model: The name of the fitted model that you're requesting the luminosities from (e.g. tbabs*apec).
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The requested luminosity value, and uncertainties.
         """
+        # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
+        #  because then I can just grab the storage key from one of them
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        storage_key = specs[0].storage_key
+
         # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
         #  bounds. If the limits are none then so is the energy key
         if lo_en is not None and hi_en is not None and lo_en > hi_en:
@@ -1569,17 +1992,14 @@ class BaseSource:
         # Checks that the requested region, model and energy band actually exist
         if len(self._luminosities) == 0:
             raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
-        elif reg_type not in self._luminosities:
-            av_regs = ", ".join(self._luminosities.keys())
-            raise ModelNotAssociatedError("{r} has no associated XSPEC fit to {s}; available regions are "
-                                          "{a}".format(r=reg_type, s=self.name, a=av_regs))
-        elif model not in self._luminosities[reg_type]:
-            av_mods = ", ".join(self._luminosities[reg_type].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to {r} spectra of {s}; "
-                                          "available models are {a}".format(m=model, r=reg_type, s=self.name,
-                                                                            a=av_mods))
-        elif en_key is not None and en_key not in self._luminosities[reg_type][model]:
-            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[reg_type][model].keys()])
+        elif storage_key not in self._luminosities:
+            raise ModelNotAssociatedError("These spectra have no associated XSPEC fit to {s}.".format(s=self.name))
+        elif model not in self._luminosities[storage_key]:
+            av_mods = ", ".join(self._luminosities[storage_key].keys())
+            raise ModelNotAssociatedError("{m} has not been fitted to these spectra of {s}; "
+                                          "available models are {a}".format(m=model, s=self.name, a=av_mods))
+        elif en_key is not None and en_key not in self._luminosities[storage_key][model]:
+            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[storage_key][model].keys()])
             raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
                                               "energy bands are {b}".format(l=lo_en.to("keV").value,
                                                                             u=hi_en.to("keV").value,
@@ -1588,15 +2008,46 @@ class BaseSource:
         # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
         if en_key is None:
             parsed_lums = {}
-            for lum_key in self._luminosities[reg_type][model]:
-                lum_value = self._luminosities[reg_type][model][lum_key]
+            for lum_key in self._luminosities[storage_key][model]:
+                lum_value = self._luminosities[storage_key][model][lum_key]
                 parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
                 parsed_lums[lum_key] = parsed_lum
             return parsed_lums
         else:
-            lum_value = self._luminosities[reg_type][model][en_key]
+            lum_value = self._luminosities[storage_key][model][en_key]
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
+
+    def convert_radius(self, radius: Quantity, out_unit: Union[Unit, str] = 'deg') -> Quantity:
+        """
+        A simple method to convert radii between different distance units, it automatically checks whether
+        the requested conversion is possible, given available information. For instance it would fail if you
+        requested a conversion from arcseconds to a proper distance if no redshift information were available.
+
+        :param Quantity radius: The radius to convert to a new unit.
+        :param Unit/str out_unit: The unit to convert the input radius to.
+        :return: The converted radius
+        :rtype: Quantity
+        """
+        # If a string representation was passed, we make it an astropy unit
+        if isinstance(out_unit, str):
+            out_unit = Unit(out_unit)
+
+        if out_unit.is_equivalent('kpc') and self._redshift is None:
+            raise UnitConversionError("You cannot convert to this unit without redshift information.")
+
+        if radius.unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
+            out_rad = radius.to(out_unit)
+        elif radius.unit.is_equivalent('deg') and out_unit.is_equivalent('kpc'):
+            out_rad = ang_to_rad(radius, self._redshift, self._cosmo).to(out_unit)
+        elif radius.unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
+            out_rad = radius.to(out_unit)
+        elif radius.unit.is_equivalent('kpc') and out_unit.is_equivalent('deg'):
+            out_rad = rad_to_ang(radius, self._redshift, self._cosmo).to(out_unit)
+        else:
+            raise UnitConversionError("Cannot understand {} as a distance unit".format(str(out_unit)))
+
+        return out_rad
 
     def get_radius(self, rad_name: str, out_unit: Union[Unit, str] = 'deg') -> Quantity:
         """
@@ -1610,27 +2061,13 @@ class BaseSource:
         :return: The desired radius in the desired units.
         :rtype: Quantity
         """
-        # If a string representation was passed, we make it an astropy unit
-        if isinstance(out_unit, str):
-            out_unit = Unit(out_unit)
 
         # In case somebody types in R500 rather than r500 for instance.
         rad_name = rad_name.lower()
         if rad_name not in self._radii:
             raise ValueError("There is no {r} radius associated with this object.".format(r=rad_name))
-        elif out_unit.is_equivalent('kpc') and self._redshift is None:
-            raise UnitConversionError("You cannot convert to this unit without redshift information.")
 
-        if self._radii[rad_name].unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
-            out_rad = self._radii[rad_name].to(out_unit)
-        elif self._radii[rad_name].unit.is_equivalent('deg') and out_unit.is_equivalent('kpc'):
-            out_rad = ang_to_rad(self._radii[rad_name], self._redshift, self._cosmo).to(out_unit)
-        elif self._radii[rad_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
-            out_rad = self._radii[rad_name].to(out_unit)
-        elif self._radii[rad_name].unit.is_equivalent('kpc') and out_unit.is_equivalent('kpc'):
-            out_rad = rad_to_ang(self._radii[rad_name], self._redshift, self._cosmo).to(out_unit)
-        else:
-            raise UnitConversionError("Cannot understand {} as a distance unit".format(str(out_unit)))
+        out_rad = self.convert_radius(self._radii[rad_name], out_unit)
 
         return out_rad
 
@@ -1829,7 +2266,7 @@ class BaseSource:
                 ex_data[ex_data > 0] = 1
                 # We do this because it then becomes very easy to calculate the intersection area of the mask
                 #  with the XMM chips. Just mask the modified expmap, then sum.
-                area[o][ex.instrument] = (ex_data*m).sum()
+                area[o][ex.instrument] = (ex_data * m).sum()
 
         if max(list(full_area.values())) == 0:
             # Everything has to be rejected in this case
@@ -1850,6 +2287,506 @@ class BaseSource:
                     reject_dict[o].append(i)
 
         return reject_dict
+
+    # And here I'm adding a bunch of get methods that should mean the user never has to use get_products, for
+    #  individual product types. It will also mean that they will never have to figure out extra keys themselves
+    #  and I can make lists of 1 product return just as the product without being a breaking change
+    def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                    min_counts: int = 5, min_sn: float = None,
+                    over_sample: float = None) -> Union[Spectrum, List[Spectrum]]:
+        """
+        A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
+        Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum
+        in evselect_spectrum, and the spectra(um) will be provided to you. If no match is found then a
+        NoProductAvailableError will be raised.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+            'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
+            default this is zero arcseconds, resulting in a circular spectrum.
+        :param bool group_spec: Was the spectrum you wish to retrieve grouped?
+        :param float min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
+            the minimum number of counts?
+        :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
+            the minimum signal to noise.
+        :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
+            over sampling used?
+        :return: An XGA Spectrum object (if there is an exact match), or a list of XGA Spectrum objects (if there
+            were multiple matching products).
+        :rtype: Union[Spectrum, List[Spectrum]]
+        """
+        if isinstance(inner_radius, Quantity):
+            inn_rad_num = self.convert_radius(inner_radius, 'deg')
+        elif isinstance(inner_radius, str):
+            inn_rad_num = self.get_radius(inner_radius, 'deg')
+        else:
+            raise TypeError("You may only a quantity or a string as inner_radius")
+
+        if isinstance(outer_radius, Quantity):
+            out_rad_num = self.convert_radius(outer_radius, 'deg')
+        elif isinstance(outer_radius, str):
+            out_rad_num = self.get_radius(outer_radius, 'deg')
+        else:
+            raise TypeError("You may only a quantity or a string as outer_radius")
+
+        if over_sample is not None:
+            over_sample = int(over_sample)
+        if min_counts is not None:
+            min_counts = int(min_counts)
+        if min_sn is not None:
+            min_sn = float(min_sn)
+
+        # Sets up the extra part of the storage key name depending on if grouping is enabled
+        if group_spec and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif group_spec and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+        if outer_radius != 'region':
+            # The key under which these spectra will be stored
+            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
+            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
+                                                         dec=self.default_coord[1].value,
+                                                         ri=inn_rad_num.value, ro=out_rad_num.value,
+                                                         gr=group_spec)
+        else:
+            spec_storage_name = "region_grp{gr}".format(gr=group_spec)
+
+        # Adds on the extra information about grouping to the storage key
+        spec_storage_name += extra_name
+        matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any spectra matching your input.")
+
+        return matched_prods
+
+    def get_annular_spectra(self, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
+                            min_sn: float = None, over_sample: float = None, set_id: int = None) -> AnnularSpectra:
+        """
+        Another useful method that wraps the get_products function, though this one gets you AnnularSpectra.
+        Pass the radii used to generate the annuli, and the same settings you used to generate the spectrum
+        in spectrum_set, and the AnnularSpectra will be returned (if it exists). If no match is found then
+        a NoProductAvailableError will be raised. This method has an additional way of looking for a matching
+        spectrum, if the set ID is known then that can be passed by the user and used to find an exact match.
+
+        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
+            that you wish to retrieve. By default this is None, which means the method will return annular
+            spectra with any radii.
+        :param bool group_spec: Was the spectrum set you wish to retrieve grouped?
+        :param float min_counts: If the spectrum set you wish to retrieve was grouped on minimum counts, what was
+            the minimum number of counts?
+        :param float min_sn: If the spectrum set you wish to retrieve was grouped on minimum signal to
+            noise, what was the minimum signal to noise.
+        :param float over_sample: If the spectrum set you wish to retrieve was over sampled, what was the level of
+            over sampling used?
+        :param int set_id: The unique identifier of the annular spectrum set. Passing a value for this parameter
+            will override any other information that you have given this method.
+        :return: An XGA AnnularSpectra object if there is an exact match.
+        :rtype: AnnularSpectra
+        """
+        if group_spec and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif group_spec and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
+        #  degrees in the storage key
+        if radii is not None:
+            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
+            #  storage key and look for a single match
+            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
+            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
+            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
+                                                         dec=self.default_coord[1].value,
+                                                         ar=ann_rad_str, gr=group_spec)
+            spec_storage_name += extra_name
+        else:
+            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
+            #  and we'll look for partial matches
+            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
+            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
+            spec_storage_name = [pos_str, grp_str]
+
+        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
+        #  properly constructed storage key
+        if set_id is None and radii is not None:
+            matched_prods = self.get_products('combined_spectrum', extra_key=spec_storage_name)
+        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
+        elif set_id is None and radii is None:
+            matched_prods = [p for p in self.get_products('combined_spectrum')
+                             if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
+        # However if they have passed a setID then this over-rides everything else
+        else:
+            # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
+            #  whatever the user passed in
+            matched_prods = [p for p in self.get_products('combined_spectrum') if p.set_ident == set_id]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("No matching AnnularSpectra can be found.")
+
+        return matched_prods
+
+    def get_images(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                   psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                   psf_iter: int = 15) -> Union[Image, List[Image]]:
+        """
+        A method to retrieve XGA Image objects. This supports the retrieval of both PSF corrected and non-PSF
+        corrected images, as well as setting the energy limits of the specific image you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
+
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all images matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all images matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the image you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the image you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected image or not.
+        :param str psf_model: If the image you want is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the image you want is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the image you want is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
+        :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
+            were multiple matching products).
+        :rtype: Union[Image, List[Image]]
+        """
+
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        # If we are looking for a PSF corrected image then we assemble the extra key with PSF details
+        if psf_corr:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
+
+        if not psf_corr and with_lims:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products('image', obs_id, inst, extra_key=energy_key)
+        elif not psf_corr and not with_lims:
+            broad_matches = self.get_products("image")
+            matched_prods = [p for p in broad_matches if not p.psf_corrected]
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products('image', obs_id, inst, extra_key=energy_key+extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products('image', obs_id, inst, extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any images matching your input.")
+
+        return matched_prods
+
+    def get_expmaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[ExpMap, List[ExpMap]]:
+        """
+        A method to retrieve XGA ExpMap objects. This supports setting the energy limits of the specific
+        exposure maps you would like. A NoProductAvailableError error will be raised if no matches are found.
+
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all exposure maps matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all exposure maps matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :return: An XGA ExpMap object (if there is an exact match), or a list of XGA ExpMap objects (if there
+            were multiple matching products).
+        :rtype: Union[ExpMap, List[ExpMap]]
+        """
+
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        matched_prods = self.get_products('expmap', obs_id=obs_id, inst=inst, extra_key=energy_key)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any exposure maps matching your input.")
+
+        return matched_prods
+
+    def get_ratemaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                     psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                     psf_iter: int = 15) -> Union[RateMap, List[RateMap]]:
+        """
+        A method to retrieve XGA RateMap objects. This supports the retrieval of both PSF corrected and non-PSF
+        corrected ratemaps, as well as setting the energy limits of the specific ratemap you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
+
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all ratemaps matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all ratemaps matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the ratemaps you wish to retrieve, the default
+            is None (which will retrieve all ratemaps regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the ratemaps you wish to retrieve, the default
+            is None (which will retrieve all ratemaps regardless of energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected ratemap or not.
+        :param str psf_model: If the ratemap you want is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the ratemap you want is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the ratemap you want is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
+        :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
+            were multiple matching products).
+        :rtype: Union[RateMap, List[RateMap]]
+        """
+        # This function is essentially identical to get_images, but I'm going to be lazy and not write
+        #  a separate internal function to do both.
+
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        # If we are looking for a PSF corrected ratemap then we assemble the extra key with PSF details
+        if psf_corr:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
+
+        if not psf_corr and with_lims:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products('ratemap', obs_id, inst, extra_key=energy_key)
+        elif not psf_corr and not with_lims:
+            broad_matches = self.get_products("ratemap")
+            matched_prods = [p for p in broad_matches if not p.psf_corrected]
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products('ratemap', obs_id, inst, extra_key=energy_key + extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products('ratemap', obs_id, inst, extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any ratemaps matching your input.")
+
+        return matched_prods
+
+    # The combined photometric products don't really NEED their own get methods, but I figured I would just for
+    #  clarity's sake
+    def get_combined_images(self, lo_en: Quantity = None, hi_en: Quantity = None, psf_corr: bool = False,
+                            psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                            psf_iter: int = 15) -> Union[Image, List[Image]]:
+        """
+        A method to retrieve combined XGA Image objects, as in those images that have been created by
+        merging all available data for this source. This supports the retrieval of both PSF corrected and non-PSF
+        corrected images, as well as setting the energy limits of the specific image you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
+
+        :param Quantity lo_en: The lower energy limit of the image you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the image you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected image or not.
+        :param str psf_model: If the image you want is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the image you want is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the image you want is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
+        :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
+            were multiple matching products).
+        :rtype: Union[Image, List[Image]]
+        """
+
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        # If we are looking for a PSF corrected image then we assemble the extra key with PSF details
+        if psf_corr:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
+
+        if not psf_corr and with_lims:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products('combined_image', extra_key=energy_key)
+        elif not psf_corr and not with_lims:
+            broad_matches = self.get_products("combined_image")
+            matched_prods = [p for p in broad_matches if not p.psf_corrected]
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products('combined_image', extra_key=energy_key + extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products('combined_image', extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any combined images matching your input.")
+
+        return matched_prods
+
+    def get_combined_expmaps(self, lo_en: Quantity = None, hi_en: Quantity = None) -> Union[ExpMap, List[ExpMap]]:
+        """
+        A method to retrieve combined XGA ExpMap objects, as in those exposure maps that have been created by
+        merging all available data for this source. This supports setting the energy limits of the specific
+        exposure maps you would like. A NoProductAvailableError error will be raised if no matches are found.
+
+        :param Quantity lo_en: The lower energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :return: An XGA ExpMap object (if there is an exact match), or a list of XGA Image objects (if there
+            were multiple matching products).
+        :rtype: Union[ExpMap, List[ExpMap]]
+        """
+        if all([lo_en is None, hi_en is None]):
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        matched_prods = self.get_products('combined_expmap', extra_key=energy_key)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any combined exposure maps matching your input.")
+
+        return matched_prods
+
+    def get_combined_ratemaps(self, lo_en: Quantity = None, hi_en: Quantity = None,  psf_corr: bool = False,
+                              psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                              psf_iter: int = 15) -> Union[RateMap, List[RateMap]]:
+        """
+        A method to retrieve combined XGA RateMap objects, as in those ratemap that have been created by
+        merging all available data for this source. This supports the retrieval of both PSF corrected and non-PSF
+        corrected ratemaps, as well as setting the energy limits of the specific ratemap you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
+
+        :param Quantity lo_en: The lower energy limit of the ratemaps you wish to retrieve, the default
+            is None (which will retrieve all ratemaps regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the ratemaps you wish to retrieve, the default
+            is None (which will retrieve all ratemaps regardless of energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected ratemap or not.
+        :param str psf_model: If the ratemap you want is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the ratemap you want is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the ratemap you want is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
+        :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
+            were multiple matching products).
+        :rtype: Union[RateMap, List[RateMap]]
+        """
+        # This function is essentially identical to get_images, but I'm going to be lazy and not write
+        #  a separate internal function to do both.
+
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        # If we are looking for a PSF corrected ratemap then we assemble the extra key with PSF details
+        if psf_corr:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
+
+        if not psf_corr and with_lims:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key)
+        elif not psf_corr and not with_lims:
+            broad_matches = self.get_products("combined_ratemap")
+            matched_prods = [p for p in broad_matches if not p.psf_corrected]
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key + extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products('combined_ratemap', extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any combined ratemaps matching your input.")
+
+        return matched_prods
+
+    def get_profiles(self):
+        raise NotImplementedError("This will be implemented soon, but I think I need to rejig how I store"
+                                  " profiles first")
+
+    @property
+    def fitted_models(self) -> List[str]:
+        """
+        This property cycles through all the available fit results, and finds the unique names of XSPEC models
+        that have been fitted to this source.
+
+        :return: A list of model names.
+        :rtype: List[str]
+        """
+        models = []
+        for s_key in self._fit_results:
+            models += list(self._fit_results[s_key].keys())
+
+        return models
 
     def info(self):
         """
@@ -1880,8 +2817,7 @@ class BaseSource:
         print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
 
         if len(self._fit_results) != 0:
-            fits = [k + " - " + ", ".join(models) for k, models in self._fit_results.items()]
-            print("Available fits - {}".format(" | ".join(fits)))
+            print("Fitted Models - {}".format(" | ".join(self.fitted_models)))
 
         if self._regions is not None and "custom" in self._radii:
             if self._redshift is not None:
@@ -2163,6 +3099,7 @@ class NullSource:
         :return: List of matching products.
         :rtype: List[BaseProduct]
         """
+
         def unpack_list(to_unpack: list):
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
@@ -2271,7 +3208,3 @@ class NullSource:
         :rtype: int
         """
         return len(self.obs_ids)
-
-
-
-

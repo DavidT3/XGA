@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
 
 
 import inspect
@@ -15,25 +15,18 @@ from matplotlib import pyplot as plt
 from scipy.optimize import curve_fit, minimize
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
-from ..models import SB_MODELS, SB_MODELS_STARTS, SB_MODELS_PRIORS, DENS_MODELS, DENS_MODELS_STARTS, TEMP_MODELS, \
-    TEMP_MODELS_STARTS, MODEL_PUBLICATION_NAMES
+from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_YAXIS, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, \
+    PROF_TYPE_MODELS_PRIORS
 from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
-PROF_TYPE_YAXIS = {"base": "Unknown", "brightness": "Surface Brightness", "gas_density": "Gas Density",
-                   "2d_temperature": "Projected Temperature", "3d_temperature": "3D Temperature",
-                   "gas_mass": "Cumulative Gas Mass"}
-PROF_TYPE_MODELS = {"brightness": SB_MODELS, "gas_density": DENS_MODELS, "2d_temperature": TEMP_MODELS,
-                    "3d_temperature": TEMP_MODELS}
-PROF_TYPE_MODELS_STARTS = {"brightness": SB_MODELS_STARTS, "gas_density": DENS_MODELS_STARTS,
-                           "2d_temperature": TEMP_MODELS_STARTS, "3d_temperature": TEMP_MODELS_STARTS}
-# TODO FILL THIS OUT AND ADD PRIORS FOR OTHER MODELS
-PROF_TYPE_MODELS_PRIORS = {"brightness": SB_MODELS_PRIORS}
-
 
 class BaseProduct:
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, raise_properly: bool = True):
+    """
+    The super class for all SAS generated products in XGA. Stores relevant file path information, parses the std_err
+    output of the generation process, and stores the instrument and ObsID that the product was generated for.
+    """
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
         """
         The initialisation method for the BaseProduct class.
 
@@ -41,7 +34,6 @@ class BaseProduct:
         :param str stdout_str: The stdout from calling the terminal command.
         :param str stderr_str: The stderr from calling the terminal command.
         :param str gen_cmd: The command used to generate the product.
-        :param bool raise_properly: Shall we actually raise the errors as Python errors?
         """
         # This attribute stores strings that indicate why a product object has been deemed as unusable
         self._why_unusable = []
@@ -319,9 +311,12 @@ class BaseProduct:
         return self._og_cmd
 
 
-# TODO Obviously finish this, but also comment and docstring
 class BaseAggregateProduct:
+    """
+    A base class for any XGA products that are an aggregate of an XGA SAS product.
+    """
     def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str):
+        self._all_paths = file_paths
         self._all_usable = True
         self._obs_id = obs_id
         self._inst = instrument
@@ -489,8 +484,11 @@ class BaseAggregateProduct:
         return list(self._component_products.values())[ind]
 
 
-# TODO Sweep through and docstring up in here
 class BaseProfile1D:
+    """
+    The superclass for all 1D radial profile products, with built in fitting, viewing, and result retrieval
+    functionality. Classes derived from BaseProfile1D can be added together to create Aggregate Profiles.
+    """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None):
         if type(radii) != Quantity or type(values) != Quantity:
