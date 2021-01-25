@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 11:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 11:03. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -11,31 +11,51 @@ from .run import xspec_call
 from .. import OUTPUT, NUM_CORES, COUNTRATE_CONV_SCRIPT
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..samples.extended import ClusterSample
+from ..sas import evselect_spectrum, region_setup
 from ..sources import BaseSource, GalaxyCluster
 from ..utils import ABUND_TABLES
 
 
-# TODO Rename this function to something more useful
 @xspec_call
-def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str, sim_temp: Quantity,
+def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), sim_temp: Quantity = Quantity(3, 'keV'),
                     sim_met: Union[float, List] = 0.3, conv_en: Quantity = Quantity([[0.5, 2.0]], "keV"),
-                    abund_table: str = "angr", num_cores: int = NUM_CORES):
+                    abund_table: str = "angr", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                    over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES):
     """
     This function uses the xspec fakeit tool to calculate conversion factors between count rate and
     luminosity for ARFs and RMFs associated with spectra in the given sources. Once complete the conversion
-    factors are stored within the relevant XGA spectrum object.
+    factors are stored within the relevant XGA spectrum object. If the requested spectra do not already
+    exist then they will automatically be generated for you. Please be aware that this function does not
+    support calculating conversion factors from AnnularSpectra.
+
     :param GalaxyCluster sources: The GalaxyCluster objects to calculate conversion factors for.
-    :param str reg_type: The region type of the spectra to base the conversion factors on.
+    :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
+        desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
+        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+        inner radius will be ignored. If you are generating factors for multiple sources then you can
+        also pass a Quantity with one entry per source.
+    :param str/Quantity inner_radius: The name or value of the outer radius of the region that the
+        desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
+        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+        inner radius will be ignored. By default this is zero arcseconds, resulting in a circular spectrum. If
+        you are generating factors for multiple sources then you can also pass a Quantity with one entry per source.
     :param Quantity sim_temp: The temperature(s) to use for the apec model.
     :param Union[float, List] sim_met: The metallicity(s) (in solar met) to use for the apec model.
     :param Quantity conv_en: The energy limit pairs to calculate conversion factors for.
     :param str abund_table: The name of the XSPEC abundance table to use.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     """
-    raise NotImplementedError("This function hasn't yet been updated to cope with the new storage methods"
-                              " for spectra")
-    # Again these checking stages are basically copied from another function, I'm feeling lazy
-    allowed_bounds = ["region", "r2500", "r500", "r200", "custom"]
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
@@ -44,11 +64,13 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str,
         ab_list = ", ".join(ABUND_TABLES)
         raise ValueError("{0} is not in the accepted list of abundance tables; {1}".format(abund_table, ab_list))
 
-    if reg_type not in allowed_bounds:
-        raise ValueError("The only valid choices for reg_type are:\n {}".format(", ".join(allowed_bounds)))
-    elif reg_type in ["r2500", "r500", "r200"] and not all([type(src) == GalaxyCluster for src in sources]):
-        raise TypeError("You cannot use ExtendedSource classes with {}, "
-                        "they have no overdensity radii.".format(reg_type))
+    # This just makes sure that spectra matching what has been requested have actually been generated
+    evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
+                      num_cores)
+
+    # And use the evselect region preparation function to parse the radii properly, and generate
+    #  some more predictable radii quantities
+    inn_rad_vals, out_rad_vals = region_setup(sources, outer_radius, inner_radius, True, '')[1:]
 
     # Checks that the luminosity energy bands are pairs of values
     if conv_en.shape[1] != 2:
@@ -91,8 +113,9 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str,
 
         total_obs_inst = source.num_pn_obs + source.num_mos1_obs + source.num_mos2_obs
         # Find matching spectrum objects associated with the current source, and checking if they are valid
-        spec_objs = [match for match in source.get_products("spectrum", just_obj=False, extra_key=reg_type)
-                     if match[-1].usable]
+        spec_objs = source.get_spectra(out_rad_vals[s_ind], inner_radius=inn_rad_vals[s_ind],
+                                       group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                       over_sample=over_sample)
         # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
         if len(spec_objs) == 0:
             raise NoProductAvailableError("There are no matching spectra for {} object, you "
@@ -104,11 +127,11 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str,
                                                                                                       source.name))
 
         # Turn RMF and ARF paths into TCL style list for substitution into template
-        rmf_paths = "{" + " ".join([spec[-1].rmf for spec in spec_objs]) + "}"
-        arf_paths = "{" + " ".join([spec[-1].arf for spec in spec_objs]) + "}"
+        rmf_paths = "{" + " ".join([spec.rmf for spec in spec_objs]) + "}"
+        arf_paths = "{" + " ".join([spec.arf for spec in spec_objs]) + "}"
         # Put in the ObsIDs and Instruments, to help name columns easily
-        obs = "{" + " ".join([spec[-1].obs_id for spec in spec_objs]) + "}"
-        inst = "{" + " ".join([spec[-1].instrument for spec in spec_objs]) + "}"
+        obs = "{" + " ".join([spec.obs_id for spec in spec_objs]) + "}"
+        inst = "{" + " ".join([spec.instrument for spec in spec_objs]) + "}"
 
         # For this model, we have to know the redshift of the source.
         if source.redshift is None:
@@ -125,8 +148,8 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str,
         dest_dir = OUTPUT + "XSPEC/" + source.name + "/"
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
-        out_file = dest_dir + source.name + "_" + reg_type + "_" + model + "_conv_factors.csv"
-        script_file = dest_dir + source.name + "_" + reg_type + "_" + model + "_conv_factors" + ".xcm"
+        out_file = dest_dir + source.name + "_" + spec_objs[0].storage_key + "_" + model + "_conv_factors.csv"
+        script_file = dest_dir + source.name + "_" + spec_objs[0].storage_key + "_" + model + "_conv_factors" + ".xcm"
 
         # Populates the fakeit conversion factor template script
         script = script.format(ab=abund_table, H0=source.cosmo.H0.value, q0=0., lamb0=source.cosmo.Ode0,
@@ -142,8 +165,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str,
             # Checks through the spectrum objects we retrieved earlier, and the energy limits,
             #  to look for conversion factor results, if they exist they aren't run again, otherwise an error
             #  is triggered and the scripts get added to the pile to run.
-            res = [s[-1].get_conv_factor(e_pair[0], e_pair[1], "tbabs*apec") for e_pair in conv_en
-                   for s in spec_objs]
+            res = [s.get_conv_factor(e_pair[0], e_pair[1], "tbabs*apec") for e_pair in conv_en for s in spec_objs]
         except (ModelNotAssociatedError, ParameterNotAssociatedError):
             script_paths.append(script_file)
             outfile_paths.append(out_file)
@@ -152,7 +174,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], reg_type: str,
     # New feature of XSPEC interface, tells the xspec_call decorator what type of output from the script
     #  to expect
     run_type = "conv_factors"
-    return script_paths, outfile_paths, num_cores, reg_type, run_type, src_inds
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None
 
 
 

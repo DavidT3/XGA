@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 09:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 11:03. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -15,7 +15,6 @@ from tqdm import tqdm
 
 from .. import COMPUTE_MODE
 from ..exceptions import XSPECFitError, HeasoftError, MultipleMatchError, NoMatchFoundError
-from ..products import Spectrum
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
@@ -97,7 +96,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str) \
     return res_tables, src, usable, error, warn
 
 
-def xspec_call(sas_func):
+def xspec_call(xspec_func):
     """
     This is used as a decorator for functions that produce XSPEC scripts. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
@@ -120,7 +119,7 @@ def xspec_call(sas_func):
         #  and 3rd is the number of cores to use.
         # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
         #  countrate to luminosity conversion constants
-        script_list, paths, cores, run_type, src_inds, radii = sas_func(*args, **kwargs)
+        script_list, paths, cores, run_type, src_inds, radii = xspec_func(*args, **kwargs)
         src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
         rel_src_repr = [repr(sources[src_ind]) for src_ind in src_inds]
 
@@ -252,18 +251,21 @@ def xspec_call(sas_func):
                         ann_lums[spec.annulus_ident] = chosen_lums
 
                 elif len(res_set) != 0 and res_set[1] and run_type == "conv_factors":
-                    raise NotImplementedError("This hasn't yet been altered to work with the new radii inputs, I'm "
-                                              "urgently working on it")
                     res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})
                     # Gets the model name from the file name of the output results table
                     model = res_set[0].split("_")[-3]
+
+                    # We can infer the storage key from the name of the results table, just makes it easier to
+                    #  grab the correct spectra
+                    storage_key = res_set[0].split('/')[-1].split(s.name)[-1][1:].split(model)[0][:-1]
+
                     # Grabs the ObsID+instrument combinations from the headers of the csv. Makes sure they are unique
                     #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
                     # First two columns are skipped because they are energy limits
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
                     # Getting the spectra for each column, then assigning rates and lums
                     for comb in combos:
-                        spec: Spectrum = s.get_products("spectrum", comb[:10], comb[10:], extra_key=reg_type)[0]
+                        spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
                         spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
                                               res_table["rate_{}".format(comb)].values,
                                               res_table["Lx_{}".format(comb)].values, model)
