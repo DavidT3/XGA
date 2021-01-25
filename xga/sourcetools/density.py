@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/12/2020, 15:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 12:29. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -10,12 +10,11 @@ from astropy.constants import m_p, m_e
 from astropy.units import Quantity, pix, kpc
 from tqdm import tqdm
 
-from ..exceptions import NoProductAvailableError
+from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.profile import radial_brightness
 from ..products import RateMap
 from ..products.profile import SurfaceBrightness1D, GasDensity1D
 from ..samples.extended import ClusterSample
-from ..sas.spec import evselect_spectrum
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
 from ..utils import NHC, ABUND_TABLES
@@ -27,20 +26,35 @@ from ..xspec.fit import single_temp_apec
 HY_MASS = m_p + m_e
 
 
-def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], reg_type: str, abund_table: str, lo_en: Quantity,
-                hi_en: Quantity, num_cores: int = NUM_CORES) -> Tuple[Union[ClusterSample, List], np.ndarray]:
+def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
+                inner_radius: Union[str, Quantity], abund_table: str, lo_en: Quantity,
+                hi_en: Quantity, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                over_sample: float = None, num_cores: int = NUM_CORES) -> Tuple[Union[ClusterSample, List], np.ndarray]:
     """
     An internal function which exists because all the density profile methods that I have planned
     need the same product checking and setup steps. This function checks that all necessary spectra/fits have
     been generated/run, then uses them to calculate the conversion factors from count-rate/volume to squared
     hydrogen number density.
+
     :param Union[GalaxyCluster, ClusterSample] sources: The source objects/sample object for which the density profile
     is being found.
-    :param str reg_type: The region type to use for the spectrum, XSPEC temperature fit, and FakeIt run.
+    :param str/Quantity outer_radius: The name or value of the outer radius of the spectra that should be used
+        to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
+        Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+        inner radius will be ignored.
+    :param str/Quantity inner_radius: The name or value of the inner radius of the spectra that should be used
+        to calculate conversion factors (for instance 'r500' would be acceptable for a GalaxyCluster, or
+        Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum.
     :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and for the
-    electron/hydrogen number density ratio.
+        electron/hydrogen number density ratio.
     :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
     :param Quantity hi_en: The upper energy limit of the combined ratemap used to calculate density.
+    :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+    :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+        desired result were grouped by minimum counts.
+    :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+        desired result were grouped by minimum signal to noise.
+    :param float over_sample: The level of oversampling applied on the spectra that were fitted.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
     :return: The source object(s)/sample that was passed in, an array of the calculated conversion factors.
     :rtype: Tuple[Union[ClusterSample, List], np.ndarray]
@@ -66,17 +80,33 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], reg_type: str, abu
         raise NotImplementedError("That is an acceptable abundance table, but I haven't added the conversion factor "
                                   "to the dictionary yet")
 
-    # Check that spectra of the passed reg_type exist
-    evselect_spectrum(sources, reg_type, num_cores=num_cores)
-    # Check that said spectra have been fitted
-    single_temp_apec(sources, reg_type, abund_table=abund_table, num_cores=num_cores)
+    # Check that the spectra we will be relying on for conversion calculation have been fitted, calling
+    #  this function will also make sure that they are generated
+    single_temp_apec(sources, outer_radius, inner_radius, abund_table=abund_table, num_cores=num_cores,
+                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
 
     # Then we need to grab the temperatures and pass them through to the cluster conversion factor
     #  calculator - this may well change as I intend to let cluster_cr_conv grab temperatures for
     #  itself at some point
-    # TODO STOP THIS KILLING EVERYTHING IF A CLUSTER HAS NO FIT
-    temps = Quantity([src.get_temperature(reg_type, "tbabs*apec")[0] for src in sources], 'keV')
-    cluster_cr_conv(sources, reg_type, temps, abund_table=abund_table)
+    temp_temps = []
+    for src in sources:
+        try:
+            # A temporary temperature variable
+            temp_temp = src.get_temperature("tbabs*apec", outer_radius, inner_radius, group_spec, min_counts, min_sn,
+                                            over_sample)[0]
+        except (ModelNotAssociatedError, ParameterNotAssociatedError):
+            warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of 3keV".format(s=src.name))
+            temp_temp = Quantity(3, 'keV')
+
+        temp_temps.append(temp_temp.value)
+
+    temps = Quantity(temp_temps, 'keV')
+    print(temps)
+
+    # This call actually does the fakeit calculation of the conversion factors, then stores them in the
+    #  XGA Spectrum objects
+    cluster_cr_conv(sources, outer_radius, inner_radius, temps, abund_table=abund_table, num_cores=num_cores,
+                    group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
 
     # This where the combined conversion factor that takes a count-rate/volume to a squared number density
     #  of hydrogen
@@ -88,7 +118,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], reg_type: str, abu
         #  is REQUIRED to define GalaxyCluster objects
         factor = ((4 * np.pi * (src.angular_diameter_distance.to("cm") * (1 + src.redshift)) ** 2) / (
                 hy_to_elec * 10 ** -14)).value
-        to_dens_convs.append(factor * src.combined_norm_conv_factor(reg_type, lo_en, hi_en).value)
+        to_dens_convs.append(factor * src.combined_norm_conv_factor(outer_radius, lo_en, hi_en, inner_radius,
+                                                                    group_spec, min_counts, min_sn, over_sample).value)
 
     # Just convert to numpy array for shits and gigs
     to_dens_convs = np.array(to_dens_convs)
@@ -115,6 +146,8 @@ def _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins
     :return:
     :rtype: SurfaceBrightness1D
     """
+    raise NotImplementedError("This function does not yet support the new way of specifying outer radius that"
+                              " has been added to the density calculation functions, see issue #349")
     if psf_corr:
         storage_key = "bound_{l}-{u}_{m}_{n}_{a}{i}".format(l=lo_en.value, u=hi_en.value, m=psf_model, n=psf_bins,
                                                             a=psf_algo, i=psf_iter)
@@ -151,38 +184,52 @@ def _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins
 
 
 # TODO Come up with some way of propagating the SB profile uncertainty to density
-def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], reg_type: str = "r500", use_peak: bool = True,
-                  pix_step: int = 1, min_snr: Union[int, float] = 0.0, abund_table: str = "angr",
+def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
+                  use_peak: bool = True, pix_step: int = 1, min_snr: Union[int, float] = 0.0, abund_table: str = "angr",
                   lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                   psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                  psf_iter: int = 15, num_cores: int = NUM_CORES) -> Union[GalaxyCluster, ClusterSample]:
+                  psf_iter: int = 15, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                  over_sample: float = None, num_cores: int = NUM_CORES) -> Union[GalaxyCluster, ClusterSample]:
     """
     This is the most basic method for measuring the baryonic density profile of a Galaxy Cluster, and is not
     recommended for serious use due to the often unstable results from applying numerical inverse abel
     transforms to data rather than a model.
-    :param Union[GalaxyCluster, ClusterSample] sources:
-    :param str reg_type: The region type to use for the spectrum, XSPEC temperature fit, and FakeIt run.
+
+    :param GalaxyCluster/ClusterSample sources: A GalaxyCluster or ClusterSample object to measure density
+        profiles for.
+    :param str/Quantity outer_radius: The name or value of the outer radius of the spectra that should be used
+        to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
+        Quantity(1000, 'kpc')).
     :param bool use_peak: If true the measured peak will be used as the central coordinate of the profile.
     :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
-    :param Union[int, float] min_snr: The minimum allowed signal to noise for the surface brightness
-    profiles. Default is 0, which disables automatic re-binning.
+    :param int/float min_snr: The minimum allowed signal to noise for the surface brightness
+        profiles. Default is 0, which disables automatic re-binning.
     :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and for the
-    electron/hydrogen number density ratio.
+        electron/hydrogen number density ratio.
     :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
     :param Quantity hi_en: The upper energy limit of the combined ratemap used to calculate density.
     :param bool psf_corr: Default True, whether PSF corrected ratemaps will be used to make the
-    surface brightness profile, and thus the density (if False density results could be incorrect).
+        surface brightness profile, and thus the density (if False density results could be incorrect).
     :param str psf_model: If PSF corrected, the PSF model used.
     :param int psf_bins: If PSF corrected, the number of bins per side.
     :param str psf_algo: If PSF corrected, the algorithm used.
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
+    :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
+    :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
+        were grouped by minimum counts.
+    :param float min_sn: The minimum signal to noise per channel, if the spectra that were used for fakeit
+        were grouped by minimum signal to noise.
+    :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
     :return: A source or sample of sources, with the density profile added to its storage structure.
     :rtype: Union[GalaxyCluster, ClusterSample]
     """
     # Run the setup function, calculates the factors that translate 3D countrate to density
-    #  Also checks parameters and runs any spectra/fits that need running
-    sources, conv_factors = _dens_setup(sources, reg_type, abund_table, lo_en, hi_en, num_cores=num_cores)
+    #  Also checks parameters and runs any spectra/fits that need running. _dens_setup takes an inner_radius
+    #  parameter, but I don't currently want people to be able to generate conversion factors from spectra
+    #  which are non-circular, so I just pass 0 arcseconds
+    sources, conv_factors = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
+                                        hi_en, group_spec, min_counts, min_sn, over_sample, num_cores)
 
     dens_prog = tqdm(desc="Inverse Abel transforming data and measuring densities", total=len(sources))
     for src_ind, src in enumerate(sources):
@@ -219,18 +266,59 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], reg_type: str = 
 
 
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: str, fit_method: str = "mcmc",
-                          model_priors: List = None, model_start_pars: list = None, reg_type: str = "r500",
+                          model_priors: List = None, model_start_pars: list = None, outer_radius: str = "r500",
                           use_peak: bool = True, pix_step: int = 1, min_snr: Union[int, float] = 0.0,
                           abund_table: str = "angr", lo_en: Quantity = Quantity(0.5, 'keV'),
                           hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True,
                           psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, model_realisations: int = 500, model_rad_steps: int = 300,
-                          conf_level: int = 90, num_cores: int = NUM_CORES, num_walkers: int = 20,
-                          num_steps: int = 20000):
+                          conf_level: int = 90, num_walkers: int = 20, num_steps: int = 20000, group_spec: bool = True,
+                          min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                          num_cores: int = NUM_CORES):
+    """
 
+
+    :param GalaxyCluster/ClusterSample sources: A GalaxyCluster or ClusterSample object to measure density
+        profiles for.
+    :param model:
+    :param fit_method:
+    :param model_priors:
+    :param model_start_pars:
+    :param str/Quantity outer_radius: The name or value of the outer radius of the spectra that should be used
+        to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
+        Quantity(1000, 'kpc')).
+    :param bool use_peak: If true the measured peak will be used as the central coordinate of the profile.
+    :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
+    :param int/float min_snr: The minimum allowed signal to noise for the surface brightness
+        profiles. Default is 0, which disables automatic re-binning.
+    :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and for the
+        electron/hydrogen number density ratio.
+    :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
+    :param Quantity hi_en: The upper energy limit of the combined ratemap used to calculate density.
+    :param bool psf_corr: Default True, whether PSF corrected ratemaps will be used to make the
+        surface brightness profile, and thus the density (if False density results could be incorrect).
+    :param str psf_model: If PSF corrected, the PSF model used.
+    :param int psf_bins: If PSF corrected, the number of bins per side.
+    :param str psf_algo: If PSF corrected, the algorithm used.
+    :param int psf_iter: If PSF corrected, the number of algorithm iterations.
+    :param model_realisations:
+    :param model_rad_steps:
+    :param conf_level:
+    :param num_walkers:
+    :param num_steps:
+    :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
+    :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
+        were grouped by minimum counts.
+    :param float min_sn: The minimum signal to noise per channel, if the spectra that were used for fakeit
+        were grouped by minimum signal to noise.
+    :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
+    :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
+    :return:
+    """
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
-    sources, conv_factors = _dens_setup(sources, reg_type, abund_table, lo_en, hi_en, num_cores=num_cores)
+    sources, conv_factors = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en, hi_en,
+                                        group_spec, min_counts, min_sn, over_sample, num_cores)
 
     dens_prog = tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
                      total=len(sources), position=0)
@@ -279,9 +367,3 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
         dens_prog.update(1)
     dens_prog.close()
     return sources
-
-
-
-
-
-
