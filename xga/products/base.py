@@ -1,6 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/01/2021, 09:03. Copyright (c) David J Turner
-
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/01/2021, 10:01. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -12,6 +11,7 @@ import emcee as em
 import numpy as np
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
+from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
@@ -1218,12 +1218,24 @@ class BaseProfile1D:
 
         # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
         main_ylims = main_ax.get_ylim()
-        y_mid = (main_ylims[1] - main_ylims[0]) / 2
+        y_pos = main_ylims[1]*0.90
         # If the user has passed radii to plot, then we plot them
         for r_name in draw_rads:
             main_ax.axvline(draw_rads[r_name].value, linestyle='dashed', color='black')
-            main_ax.text(draw_rads[r_name].value * 1.01, y_mid, r_name, rotation=90, verticalalignment='center',
+            main_ax.text(draw_rads[r_name].value * 1.01, y_pos, r_name, rotation=90, verticalalignment='center',
                          color='black', fontsize=14)
+
+        # Use the axis limits quite a lot in this next bit, so read them out into variables
+        x_axis_lims = main_ax.get_xlim()
+        y_axis_lims = main_ax.get_ylim()
+
+        # This dynamically changes how tick labels are formatted depending on the values displayed
+        if max(x_axis_lims) < 1000:
+            main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        if max(y_axis_lims) < 1000:
+            main_ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         # And of course actually showing it
         plt.show()
