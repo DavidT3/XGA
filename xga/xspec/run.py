@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 14:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/01/2021, 09:03. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -15,8 +15,7 @@ from fitsio import FITS
 from tqdm import tqdm
 
 from .. import COMPUTE_MODE
-from ..exceptions import XSPECFitError, HeasoftError, MultipleMatchError, NoMatchFoundError
-from ..products import Spectrum
+from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
@@ -109,7 +108,7 @@ def xspec_call(xspec_func):
     :return:
     """
 
-    @wraps(sas_func)
+    @wraps(xspec_func)
     def wrapper(*args, **kwargs):
         # The first argument of all of these XSPEC functions will be the source object (or a list of),
         # so rather than return them from the XSPEC model function I'll just access them like this.

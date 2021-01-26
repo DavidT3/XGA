@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/01/2021, 09:03. Copyright (c) David J Turner
 
 
 import inspect
@@ -1209,9 +1209,9 @@ class BaseProfile1D:
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
         if models and custom_title is None:
-            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
-        elif custom_title is None:
             plt.suptitle("{l} Profile - with models".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.91)
+        elif not models and custom_title is None:
+            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.91)
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
@@ -1410,6 +1410,10 @@ class BaseProfile1D:
 
 
 class BaseAggregateProfile1D:
+    """
+    Quite a simple class that is generated when multiple 1D radial profile objects are added together. The
+    purpose of instances of this class is simply to make it easy to view 1D radial profiles on the same axes.
+    """
     def __init__(self, profiles: List[BaseProfile1D]):
         # This checks that all types of profiles in the profiles list are the same
         types = [type(p) for p in profiles]
@@ -1655,10 +1659,10 @@ class BaseAggregateProfile1D:
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
         if model is None and custom_title is None:
-            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
-        elif custom_title is None:
             plt.suptitle("{l} Profiles - {m} fit".format(l=PROF_TYPE_YAXIS[self._prof_type],
                                                          m=MODEL_PUBLICATION_NAMES[model]), y=0.91)
+        elif not model and custom_title is None:
+            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.91)
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
