@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/01/2021, 12:10. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -273,7 +273,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
 
     # Returns conversion factor to degrees, so multiplying by 60 goes to arcminutes
     # Getting this because we want to be able to convert pixel distance into arcminutes for dividing by the area
-    to_arcmin = pix_deg_scale(centre, rt.radec_wcs) * 60
+    to_arcmin = pix_deg_scale(centre, rt.radec_wcs).value * 60
 
     # Just making sure we have the centre in pixel coordinates
     pix_cen = rt.coord_conv(centre, pix)

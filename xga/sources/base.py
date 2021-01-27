@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/01/2021, 11:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/01/2021, 12:10. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1653,7 +1653,7 @@ class BaseSource:
                                       "supported for generating SAS region strings.")
 
         cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
-        sky_to_deg = sky_deg_scale(im, cen)
+        sky_to_deg = sky_deg_scale(im, cen).value
         conv_cen = im.coord_conv(cen, output_unit)
         # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
         #  from degrees to XMM sky coordinates using the factor we calculated in the main function
@@ -1726,7 +1726,7 @@ class BaseSource:
         # We need a matching image to perform the coordinate conversion we require
         rel_im = self.get_products("image", obs_id, inst)[0]
         # We can set our own offset value when we call this function, but I don't think I need to
-        sky_to_deg = sky_deg_scale(rel_im, central_coord)
+        sky_to_deg = sky_deg_scale(rel_im, central_coord).value
 
         # We need our chosen central coordinates in the right units of course
         xmm_central_coord = rel_im.coord_conv(central_coord, output_unit)
