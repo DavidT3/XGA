@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 14:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/01/2021, 11:06. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1361,7 +1361,9 @@ class BaseSource:
 
         return total_src_mask, total_bck_mask
 
-    def get_snr(self, reg_type: str, central_coord: Quantity = None) -> float:
+    def get_snr(self, reg_type: str, central_coord: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+                psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False) -> float:
         """
         This takes a region type and central coordinate and calculates the signal to noise ratio.
         The background region is constructed using the back_inn_rad_factor and back_out_rad_factor
@@ -1369,23 +1371,50 @@ class BaseSource:
 
         :param str reg_type: The type of region for which to calculate the signal to noise ratio.
         :param Quantity central_coord: The central coordinate of the region.
+        :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the SNR. Default is None,
+            in which case the lower energy bound for peak finding will be used (default is 0.5keV).
+        :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the SNR. Default is None,
+            in which case the upper energy bound for peak finding will be used (default is 2.0keV).
+        :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculation. Default is None, which
+            means the combined ratemap will be used. Please note that inst must also be set to use this option.
+        :param str inst: The instrument of a specific ratemap to use for the SNR calculation. Default is None, which
+            means the combined ratemap will be used.
+        :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+        :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+        :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
+            zero, which results in a lower signal to noise (and can result in a negative signal to noise).
         :return: The signal to noise ratio.
         :rtype: float
         """
-        # Grabs the interloper corrected source masks
-        src_mask, bck_mask = self.get_mask(reg_type, None, central_coord)
+        # Checking if the user passed any energy limits of their own
+        if lo_en is None:
+            lo_en = self._peak_lo_en
+        if hi_en is None:
+            hi_en = self._peak_hi_en
 
-        # Finds an appropriate ratemap
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = self.get_products("combined_ratemap", extra_key=en_key)[0]
+        # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
+        if all([obs_id is None, inst is None]):
+            # Here the user hasn't set ObsID or instrument, so we use the combined data
+            rt = self.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+            # Grabs the interloper removed source and background region masks
+            src_mask, bck_mask = self.get_mask(reg_type, None, central_coord)
+        elif all([obs_id is not None, inst is not None]):
+            # Both ObsID and instrument have been set by the user
+            rt = self.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+            # Grabs the interloper removed source and background region masks
+            src_mask, bck_mask = self.get_mask(reg_type, obs_id, central_coord)
+        else:
+            raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
+                             " pass both obs_id and inst.".format(s=self.name))
 
-        # Sums the areas of the source and background masks
-        src_area = src_mask.sum()
-        bck_area = bck_mask.sum()
-        # Calculates signal to noise
-        ratio = ((comb_rt.data * src_mask).sum() / (comb_rt.data * bck_mask).sum()) * (bck_area / src_area)
+        # We use the ratemap's built in signal to noise calculation method
+        sn = rt.signal_to_noise(src_mask, bck_mask, allow_negative)
 
-        return ratio
+        return sn
 
     def get_sas_region(self, reg_type: str, obs_id: str, inst: str, output_unit: UnitBase = xmm_sky) \
             -> Tuple[str, str]:
