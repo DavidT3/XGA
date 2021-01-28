@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 10:40. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 19:10. Copyright (c) David J Turner
 
 
 import os
@@ -10,6 +10,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import hdu
+from matplotlib import legend_handler
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
@@ -701,6 +702,20 @@ class Spectrum(BaseProduct):
 
         rel_vals = self._conv_factors[model][en_key]
         return rel_vals["factor"], rel_vals["lum"], rel_vals["rate"]
+
+    def get_plot_data(self, model: str) -> dict:
+        """
+        Simply grabs the plot data dictionary for a given model, if the spectrum has had a fit performed on it.
+
+        :param str model:
+        :return: All information required to plot the data and model.
+        :rtype: dict
+        """
+        if model not in self._plot_data:
+            raise ModelNotAssociatedError("{m} does not have any plot data associated with it in this "
+                                          "spectrum".format(m=model))
+
+        return self._plot_data[model]
 
     def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV"),
              figsize: Tuple = (8, 6)):
@@ -1422,12 +1437,90 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return new_prof
 
-    def view(self, ann_ident: int, figsize: Tuple = (8, 6)):
+    def view_annulus(self, ann_ident: int, model: str, figsize: Tuple = (12, 8)):
         """
         An equivelant to the Spectrum view method, but allows all spectra from the same annulus to be
         displayed on the same axis.
+
+        :param int ann_ident: The integer identifier of the annulus you wish to see spectra for.
+        :param str model: The fitted model to display on the data.
+        :param tuple figsize: The size of the plot.
         """
-        raise NotImplementedError("This will be done shortly!")
+        # Grabs the relevant spectra using the annular ident
+        rel_spec = self.get_spectra(ann_ident)
+        # Sets up a matplotlib figure
+        plt.figure(figsize=figsize)
+
+        # Set the plot up to look nice and professional.
+        ax = plt.gca()
+        ax.minorticks_on()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        # Set the title with all relevant information about the spectrum object in it
+        plt.title("{n} - Annulus {num}".format(n=self.src_name, num=ann_ident))
+        # Boolean flag to check if any spectra have plot data, for the end of this method
+        anything_plotted = False
+
+        # Set up lists to store the model line and data plot handlers, so legends for fit and data can be put on
+        #  the same line
+        mod_handlers = []
+        plot_handlers = []
+        # This stores the legend labels
+        labels = []
+        # Iterate through all matching spectra
+        for spec in rel_spec:
+            # This grabs the plot data if available
+            try:
+                all_plot_data = spec.get_plot_data(model)
+                anything_plotted = True
+            except ModelNotAssociatedError:
+                continue
+
+            # Gets x data and model data
+            plot_x = all_plot_data["x"]
+            plot_mod = all_plot_data["model"]
+            # These are used as plot limits on the x axis
+            lo_en = plot_x.min()
+            hi_en = plot_x.max()
+
+            # Grabs y data + errors
+            plot_y = all_plot_data["y"]
+            plot_xerr = all_plot_data["x_err"]
+            plot_yerr = all_plot_data["y_err"]
+            # Plots the actual data, with errorbars
+            cur_plot = plt.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="+",
+                                    label="{o}-{i}".format(o=spec.obs_id, i=spec.instrument), zorder=1)
+            # The model line is put on
+            cur_mod = plt.plot(plot_x, plot_mod, label=model, linewidth=2, color=cur_plot[0].get_color())[0]
+            mod_handlers.append(cur_mod)
+            plot_handlers.append(cur_plot)
+            labels.append("{o}-{i}".format(o=spec.obs_id, i=spec.instrument))
+
+        # Sets up the legend so that matching data point and models are on the same line in the legend
+        ax.legend(handles=zip(plot_handlers, mod_handlers), labels=labels,
+                  handler_map={tuple: legend_handler.HandlerTuple(None)}, loc='best')
+
+        # Ensure axis is limited to the chosen energy range
+        plt.xlim(lo_en, hi_en)
+
+        # Just sets how the figure looks with axis labels
+        plt.xlabel("Energy [keV]")
+        plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
+        ax.set_xscale("log")
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+        ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+        plt.tight_layout()
+        # Display the spectrum
+
+        if anything_plotted:
+            plt.show()
+        else:
+            warnings.warn("There are no XSPEC fits associated with this AnnularSpectra, so you can't view it")
+
+        # Wipe the figure
+        plt.close("all")
 
     def __len__(self) -> int:
         """
