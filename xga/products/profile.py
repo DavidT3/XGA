@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 10:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 10:40. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -438,6 +438,13 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         # Making a copy of the original data, just so it can be accessed if desired after the upper limit is applied
         self._og_values = self.values.copy()
         self._og_values_err = self.values_err.copy()
+
+        # This just checks that the upper limit is in a legal unit
+        if not upper_limit.unit.is_equivalent(self.values_unit):
+            raise UnitConversionError("The upper limit unit {uu} cannot be converted to the temperature unit "
+                                      "{tu}".format(uu=upper_limit.unit.to_string(), tu=self.values.unit.to_string()))
+        else:
+            upper_limit = upper_limit.to(self.values_unit)
 
         # Applying the upper limit passed by the user
         self._values[self._values > upper_limit] = np.nan

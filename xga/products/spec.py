@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 09:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 10:40. Copyright (c) David J Turner
 
 
 import os
@@ -13,7 +13,7 @@ from fitsio import hdu
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
-from . import BaseProduct, BaseAggregateProduct
+from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError
 from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D
 from ..utils import dict_search
@@ -1356,7 +1356,8 @@ class AnnularSpectra(BaseAggregateProduct):
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
-    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str]):
+    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str], upper_limit: Quantity = None) \
+            -> Union[BaseProfile1D, ProjectedGasTemperature1D, ProjectedGasMetallicity1D]:
         """
         This generates a radial profile of the requested fit parameter using the stored results from
         an XSPEC model fit run on this AnnularSpectra. The profile is added to AnnularSpectra internal
@@ -1366,6 +1367,9 @@ class AnnularSpectra(BaseAggregateProduct):
         :param str par: The name of the free model parameter that you wish to generate a profile for.
         :param Unit/str par_unit: The unit of the free model parameter as an astropy unit object, or a string
             representation (e.g. keV).
+        :param Quantity upper_limit: Allows an allowed upper limit for the y values in the profile to be passed.
+        :return: The requested profile object.
+        :rtype: Union[BaseProfile1D, ProjectedGasTemperature1D, ProjectedGasMetallicity1D]
         """
         # If a string representation was passed, we make it an astropy unit
         if isinstance(par_unit, str):
@@ -1404,12 +1408,15 @@ class AnnularSpectra(BaseAggregateProduct):
         if self.radii[0].value == 0:
             mid_radii[0] = 0
 
-        if par == 'kT':
+        if par == 'kT' and upper_limit is None:
             new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
-                                                 'combined', rad_errors, par_errs)
+                                                 'combined', rad_errors, par_errs, associated_set_id=self.set_ident)
+        elif par == 'kT' and upper_limit is not None:
+            new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
+                                                 'combined', rad_errors, par_errs, upper_limit, self.set_ident)
         elif par == 'Abundanc':
             new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
-                                                 'combined', rad_errors, par_errs)
+                                                 'combined', rad_errors, par_errs, self.set_ident)
         else:
             raise NotImplementedError("I cannot yet generate generic profiles, but soon!")
 
