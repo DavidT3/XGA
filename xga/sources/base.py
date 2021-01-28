@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/01/2021, 12:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 13:00. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2291,7 +2291,7 @@ class BaseSource:
 
             for ex in exp_maps:
                 # Grabs exposure map data, then alters it so anything that isn't zero is a one
-                ex_data = ex.data
+                ex_data = ex.data.copy()
                 ex_data[ex_data > 0] = 1
                 # We do this because it then becomes very easy to calculate the intersection area of the mask
                 #  with the XMM chips. Just mask the modified expmap, then sum.

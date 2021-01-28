@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 12:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 13:00. Copyright (c) David J Turner
 
 
 import warnings
@@ -813,7 +813,6 @@ class RateMap(Image):
 
         # Re-setting some paths to make more sense
         self._path = self._im_path
-
 
     @property
     def shape(self) -> Tuple[int, int]:
