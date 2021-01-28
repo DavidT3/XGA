@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 10:27. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -404,7 +404,8 @@ class ProjectedGasTemperature1D(BaseProfile1D):
     of annular spectra by XSPEC. These are typically only defined by XGA methods.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None):
+                 radii_err: Quantity = None, values_err: Quantity = None, upper_limit: Quantity = Quantity(63, 'keV'),
+                 associated_set_id: int = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected temperature profile.
 
@@ -417,9 +418,13 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         :param str inst: The instrument which this profile was generated from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
+        :param Quantity upper_limit: An upper limit on what the temperature values are allowed to be, meant to
+            combat XSPEC's habit of putting failed temperature fits to 64keV. It can only be set on init, and
+            any points over that value will have their value and uncertainty set to NaN. Default is 63keV, which
+            won't have much of an effect.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
         """
-        #
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -430,8 +435,51 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         if not values.unit.is_equivalent("keV"):
             raise UnitConversionError("Values unit cannot be converted to keV")
 
+        # Making a copy of the original data, just so it can be accessed if desired after the upper limit is applied
+        self._og_values = self.values.copy()
+        self._og_values_err = self.values_err.copy()
+
+        # Applying the upper limit passed by the user
+        self._values[self._values > upper_limit] = np.nan
+        self._values_err[self._values > upper_limit] = np.nan
+
+        # Putting the upper limit into an attribute
+        self._upper_lim = upper_limit
+
         # Setting the type
         self._prof_type = "1d_proj_temperature"
+
+    @property
+    def original_values(self) -> Quantity:
+        """
+        A way to access the original temperature values of this profile, in case the upper limit
+        has removed some points.
+
+        :return: An astropy quantity containing the un-edited temperature profile values.
+        :rtype: Quantity
+        """
+        return self._og_values
+
+    @property
+    def original_values_err(self) -> Quantity:
+        """
+        A way to access the original temperature value errors of this profile, in case the upper limit
+        has removed some points.
+
+        :return: An astropy quantity containing the un-edited temperature profile value errors.
+        :rtype: Quantity
+        """
+        return self._og_values_err
+
+    @property
+    def upper_limit(self) -> Quantity:
+        """
+        Property which returns the temperature upper limit passed on init, and which has been used to cut the data.
+
+        :return: An astropy quantity containing the upper limit value.
+        :rtype: Quantity
+        """
+        return self._upper_lim
 
 
 class ProjectedGasMetallicity1D(BaseProfile1D):
@@ -440,7 +488,7 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
     from a set of annular spectra by XSPEC. These are typically only defined by XGA methods.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None):
+                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected metallicity/abundance profile.
 
@@ -453,9 +501,10 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         :param str inst: The instrument which this profile was generated from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
         """
         #
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
