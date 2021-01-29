@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/01/2021, 09:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/01/2021, 10:28. Copyright (c) David J Turner
 
 
 import os
@@ -1516,10 +1516,86 @@ class AnnularSpectra(BaseAggregateProduct):
 
     def view_annuli(self, obs_id: str, inst: str, model: str, figsize: tuple = (12, 8), elevation_angle: int = 30,
                     azimuthal_angle: int = -60):
-        raise NotImplementedError("I'm working on this currently, hopefully no one will ever see this error")
+        """
+        This view method is one of several in the AnnularSpectra class, and will display data and associated model
+        fits for a single ObsID-Instrument combination for all annuli in this AnnularSpectra, in a 3D plot. The
+        output of this can be quite visually confusing, so you may wish to use view_annulus to see the spectrum
+        of a particular annulus for a particular ObsID-Instrument in a more traditional way, or just view to see all
+        model fits at all annuli.
 
-        # if plot_data:
-        #     data_line = ax.plot(plot_x, ys, all_plot_data['y'], '+', color=mod_line[0].get_color())
+        :param str obs_id: The ObsID of the spectra to display.
+        :param str inst: The instrument of the spectra to display.
+        :param str model: The model fit to display
+        :param tuple figsize: The size of the figure.
+        :param int elevation_angle: The elevation angle in the z plane, in degrees.
+        :param int azimuthal_angle: The azimuth angle in the x,y plane, in degrees.
+        """
+        # Setup the figure as we normally would
+        fig = plt.figure(figsize=figsize)
+        # This subplot with a 3D projection is what allows us to make a 3-axis plot
+        ax = fig.add_subplot(111, projection='3d')
+        # We use the user's passed in angle values to set the perspective that we have on the plot.
+        ax.view_init(elevation_angle, azimuthal_angle)
+        # Set a relevant title
+        plt.title("{sn} - {o}-{i} Annular Spectra".format(sn=self.src_name, o=obs_id, i=inst))
+
+        # We iterate through all the annuli
+        for ann_ident in range(0, self._num_ann):
+            spec = self.get_spectra(ann_ident, obs_id, inst)
+            # This checks that the requested model has actually been fitted to said spectrum
+            try:
+                all_plot_data = spec.get_plot_data(model)
+                anything_plotted = True
+            except ModelNotAssociatedError:
+                continue
+
+            # Gets x data and model data
+            plot_x = all_plot_data["x"]
+            plot_mod = all_plot_data["model"]
+
+            # Depending on what radius information is available to this AnnularSpectra, depends which we use
+            # We will always prefer to use proper radii if they are available
+            if self.proper_radii is not None:
+                # Need to set up an array for the y axis (the radius axis) which is the same dimensions
+                #  as the x and z arrays
+                ys = np.full(shape=(len(plot_x),), fill_value=self.proper_annulus_centres[ann_ident].value)
+                chosen_unit = self.proper_radii.unit
+            else:
+                ys = np.full(shape=(len(plot_x),), fill_value=self.annulus_centres[ann_ident].value)
+                chosen_unit = self.radii.unit
+
+            data_line = ax.plot(plot_x, ys, all_plot_data['y'], '+', alpha=0.5)
+            mod_line = ax.plot(plot_x, ys, plot_mod, alpha=0.5, linewidth=2, color=data_line[0].get_color())
+
+        # Simply setting x-label and limits, don't currently scale this axis with log (though I would like to),
+        #  because the 3D version of matplotlib doesn't easily support it
+        ax.set_xlabel("Energy [keV]")
+        ax.set_xlim3d(plot_x.min(), plot_x.max())
+
+        # Setting the lower limit of the z axis to zero, but leaving the top end open
+        ax.set_zlim3d(0)
+        ax.set_zlabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
+
+        # Setting up y label (with dynamic unit) and the correct radius limits
+        ax.set_ylabel("Radius [{u}]".format(u=chosen_unit.to_string()))
+        if self.proper_radii is not None:
+            y_lims = [self.proper_annulus_centres.value[0], self.proper_radii.value[-1]]
+        else:
+            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]
+        ax.set_ylim3d(y_lims)
+
+        if anything_plotted:
+            # Sets up the legend so that matching data point and models are on the same line in the legend
+            labels = ["{o}-{i} Data".format(o=obs_id, i=inst), "{o}-{i} Folded Model".format(o=obs_id, i=inst)]
+            ax.legend(handles=[data_line[0], mod_line[0]], labels=labels,
+                      handler_map={tuple: legend_handler.HandlerTuple(None)}, loc='best')
+            plt.tight_layout()
+            plt.show()
+        else:
+            warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
+                          "it".format(m=model))
+
+        plt.close('all')
 
     def view(self, model: str, figsize: tuple = (12, 8), elevation_angle: int = 30, azimuthal_angle: int = -60):
         """
