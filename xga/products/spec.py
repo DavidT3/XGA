@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 19:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/01/2021, 09:59. Copyright (c) David J Turner
 
 
 import os
@@ -173,40 +173,8 @@ class Spectrum(BaseProduct):
                 spec_fits["SPECTRUM"].header["RESPFILE"] = self._rmf
                 spec_fits["SPECTRUM"].header["ANCRFILE"] = self._arf
                 spec_fits["SPECTRUM"].header["BACKFILE"] = self._back_spec
-            # with FITS(self._path, 'rw', clobber=True) as spec_fits:
-            #     cur_hdr_list = spec_fits["SPECTRUM"].read_header_list()
-            #     # Clean the list
-            #     clean_hdr_list = [hd for hd in cur_hdr_list if hd["name"] != "RESPFILE"
-            #                       and hd["name"] != "ANCRFILE" and hd["name"] != "BACKFILE" not in hd.keys()]
-            #     new_info = [{'name': 'RESPFILE', 'comment': '', 'value': self._rmf},
-            #                 {'name': 'ANCRFILE', 'comment': '', 'value': self._arf},
-            #                 {'name': 'BACKFILE', 'comment': '', 'value': self._back_spec}]
-            #     new_info = {"RESPFILE": self._rmf, "ANCRFILE": self._arf, "BACKFILE": self._back_spec}
-            #     new_info = {"RESPFILE": 'boi', "ANCRFILE": 'boi', "BACKFILE": 'boi'}
-            #     # new_hdr = FITSHDR(clean_hdr_list + new_info)
-            #
-            #
-            #     # spec_fits["SPECTRUM"].read_header().delete('RESPFILE')
-            #     # spec_fits["SPECTRUM"].read_header().delete('ANCRFILE')
-            #     # spec_fits["SPECTRUM"].read_header().delete('BACKFILE')
-            #     # print(spec_fits["SPECTRUM"].read_header()["RESPFILE"])
-            #
-            #     spec_fits["SPECTRUM"].write_keys(new_info)
-            #
-            #     print(spec_fits["SPECTRUM"].read_header())
-            # import sys
-            # sys.exit()
 
         elif which_spec == "back" and self.usable:
-            # with FITS(self._back_spec, 'rw') as spec_fits:
-            #     spec_fits[1].write_key("RESPFILE", self._back_rmf)
-            #     spec_fits[1].write_key("ANCRFILE", self._back_arf)
-            #     spec_fits[0].write_key("RESPFILE", self._back_rmf)
-            #     spec_fits[0].write_key("ANCRFILE", self._back_arf)
-            #     spec_fits[-1].write_key("RESPFILE", self._back_rmf)
-            #     spec_fits[-1].write_key("ANCRFILE", self._back_arf)
-            #     spec_fits["SPECTRUM"].write_key("RESPFILE", self._back_rmf)
-            #     spec_fits["SPECTRUM"].write_key("ANCRFILE", self._back_arf)
             with fits.open(self._back_spec, mode='update') as spec_fits:
                 spec_fits["SPECTRUM"].header["RESPFILE"] = self._back_rmf
                 spec_fits["SPECTRUM"].header["ANCRFILE"] = self._back_arf
@@ -840,6 +808,16 @@ class AnnularSpectra(BaseAggregateProduct):
         # I want to grab the radii out of the spectra, then put them in order, just so I have them
         radii = sorted(list(set([s.inner_rad for s in spectra] + [s.outer_rad for s in spectra])))
         self._radii = Quantity([r.value for r in radii], self._rad_unit)
+        self._ann_centres = Quantity([(self._radii[r_ind] + self._radii[r_ind + 1]) / 2 for r_ind in
+                                      range(len(self._radii) - 1)], self._rad_unit)
+        if self.radii[0].value == 0:
+            self._ann_centres[0] = 0
+
+        # This can be set through a property, as products shouldn't have any knowledge of their source
+        #  other than the name. And someone might define one of these source-lessly. It will contain radii
+        #  which are proper, not in degrees
+        self._proper_radii = None
+        self._proper_ann_centres = None
 
         # Finally storing the spectra inside the product, though with multiple layers of products
         # This sets up the component products dictionary, allowing for the separated storage of
@@ -922,11 +900,6 @@ class AnnularSpectra(BaseAggregateProduct):
         #  duplication here with the source, but this will be so convenient I don't care
         self._fit_results = {ai: {} for ai in range(self._num_ann)}
         self._luminosities = {ai: {} for ai in range(self._num_ann)}
-
-        # This can be set through a property, as products shouldn't have any knowledge of their source
-        #  other than the name. And someone might define one of these source-lessly. It will contain radii
-        #  which are proper, not in degrees
-        self._proper_radii = None
 
     @property
     def central_coord(self) -> Quantity:
@@ -1086,6 +1059,16 @@ class AnnularSpectra(BaseAggregateProduct):
         return self._radii
 
     @property
+    def annulus_centres(self) -> Quantity:
+        """
+        Returns the centres of all the annuli, in the original units the radii were passed in with.
+
+        :return: An astropy quantity containing radii.
+        :rtype: Quantity
+        """
+        return self._ann_centres
+
+    @property
     def proper_radii(self) -> Quantity:
         """
         A property to return the boundary radii of the constituent annuli in kpc. This has
@@ -1106,7 +1089,7 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         A setter for the proper radii property.
 
-        :param Quantity new_vals: The new values for proper radii, must be convertable to kpc.
+        :param Quantity new_vals: The new values for proper radii, must be convertible to kpc.
         """
         if not new_vals.unit.is_equivalent('kpc'):
             raise UnitConversionError("Proper radii passed into this object must be convertable to kpc.")
@@ -1117,6 +1100,24 @@ class AnnularSpectra(BaseAggregateProduct):
                              "attribute of this object, there should be {} entries.".format(len(self._radii)))
 
         self._proper_radii = new_vals
+        pr = self.proper_radii.value
+        # Minds the mid points of the annular boundaries - the centres of the bins
+        mid_radii = [(pr[r_ind] + pr[r_ind + 1]) / 2 for r_ind in range(len(pr) - 1)]
+        # Makes mid_radii a quantity
+        self._proper_ann_centres = Quantity(mid_radii, new_vals.unit)
+        if self.proper_radii[0].value == 0:
+            self._proper_ann_centres[0] = 0
+
+    @property
+    def proper_annulus_centres(self) -> Quantity:
+        """
+        Returns the centres of all the annuli, in the units of proper radii which the user has to have
+        set through the property setter.
+
+        :return: An astropy quantity containing radii, or None if no proper radii exist
+        :rtype: Quantity
+        """
+        return self._proper_ann_centres
 
     @property
     def set_ident(self) -> int:
@@ -1409,19 +1410,9 @@ class AnnularSpectra(BaseAggregateProduct):
         par_errs = par_quant[:, 1:]
         par_errs = np.average(par_errs, axis=1)
 
-        # Just reads out the proper radii into a variable so it can be modified
-        pr = self.proper_radii.to("kpc").value
-        # Minds the mid points of the annular boundaries - the centres of the bins
-        mid_radii = [(pr[r_ind] + pr[r_ind+1])/2 for r_ind in range(len(pr)-1)]
-        # Makes mid_radii a quantity
-        mid_radii = Quantity(mid_radii, 'kpc')
+        mid_radii = self.proper_annulus_centres.to("kpc")
         # calculates radii errors, basically the extent of the bins
-        rad_errors = Quantity(np.diff(pr, axis=0) / 2, 'kpc')
-
-        # For the central annulus, if its a circle around the zero point, then the calculated mid_radii value
-        #  is invalid
-        if self.radii[0].value == 0:
-            mid_radii[0] = 0
+        rad_errors = Quantity(np.diff(self.proper_radii.to('kpc').value, axis=0) / 2, 'kpc')
 
         if par == 'kT' and upper_limit is None:
             new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
@@ -1517,18 +1508,136 @@ class AnnularSpectra(BaseAggregateProduct):
         if anything_plotted:
             plt.show()
         else:
-            warnings.warn("There are no XSPEC fits associated with this AnnularSpectra, so you can't view it")
+            warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
+                          "it".format(m=model))
 
         # Wipe the figure
         plt.close("all")
 
+    def view_annuli(self, obs_id: str, inst: str, model: str, figsize: tuple = (12, 8), elevation_angle: int = 30,
+                    azimuthal_angle: int = -60):
+        raise NotImplementedError("I'm working on this currently, hopefully no one will ever see this error")
+
+        # if plot_data:
+        #     data_line = ax.plot(plot_x, ys, all_plot_data['y'], '+', color=mod_line[0].get_color())
+
+    def view(self, model: str, figsize: tuple = (12, 8), elevation_angle: int = 30, azimuthal_angle: int = -60):
+        """
+        This view method is one of several in the AnnularSpectra class, and will display model fits to
+        all spectra for each annuli in a 3D plot. No data is displayed in this viewing method, primarily
+        because its so visually confusing. If you wish to see model fits displayed over actual data in this style,
+        please use view_annuli.
+
+        :param str model: The model fit to display
+        :param tuple figsize: The size of the figure.
+        :param int elevation_angle: The elevation angle in the z plane, in degrees.
+        :param int azimuthal_angle: The azimuth angle in the x,y plane, in degrees.
+        """
+        # Setup the figure as we normally would
+        fig = plt.figure(figsize=figsize)
+        # This subplot with a 3D projection is what allows us to make a 3-axis plot
+        ax = fig.add_subplot(111, projection='3d')
+        # We use the user's passed in angle values to set the perspective that we have on the plot.
+        ax.view_init(elevation_angle, azimuthal_angle)
+        # Set a relevant title
+        plt.title("{sn} - Annular Spectra Folded Models".format(sn=self.src_name))
+
+        # The colour dictionary is to store a colour for a specific ObsID-instrument combo once its
+        #  first been plotted - this is because we want the same ObsID-instrument combos to have the same colours
+        #  for all annuli
+        colour_dict = {}
+        # Set up lists to hold line handlers and labels for the legend we add at the end
+        handlers = []
+        labels = []
+        # We iterate through all the annuli
+        for ann_ident in range(0, self._num_ann):
+            # Remember the instruments property is a dictionary of ObsID: {instruments}, which is why we do a nested
+            #  for loop like we do here
+            for o in self.instruments:
+                if o not in colour_dict:
+                    colour_dict[o] = {}
+                for i in self.instruments[o]:
+                    # If we've not gone over this instrument for this ObsID before, we need to add it to
+                    #  the colour dictionary for the current ObsID
+                    if i not in colour_dict[o]:
+                        colour_dict[o][i] = None
+
+                    # Simply grabbing the single spectrum which is from the current ObsID and instrument, and is for
+                    #  the current annulus
+                    spec = self.get_spectra(ann_ident, o, i)
+
+                    # This checks that the requested model has actually been fitted to said spectrum
+                    try:
+                        all_plot_data = spec.get_plot_data(model)
+                        anything_plotted = True
+                    except ModelNotAssociatedError:
+                        continue
+
+                    # Gets x data and model data
+                    plot_x = all_plot_data["x"]
+                    plot_mod = all_plot_data["model"]
+
+                    # Depending on what radius information is available to this AnnularSpectra, depends which we use
+                    # We will always prefer to use proper radii if they are available
+                    if self.proper_radii is not None:
+                        # Need to set up an array for the y axis (the radius axis) which is the same dimensions
+                        #  as the x and z arrays
+                        ys = np.full(shape=(len(plot_x), ), fill_value=self.proper_annulus_centres[ann_ident].value)
+                        chosen_unit = self.proper_radii.unit
+                    else:
+                        ys = np.full(shape=(len(plot_x), ), fill_value=self.annulus_centres[ann_ident].value)
+                        chosen_unit = self.radii.unit
+
+                    # If we've not already plotted a line for this ObsID-Instrument combo, the behaviour is different
+                    if colour_dict[o][i] is None:
+                        mod_line = ax.plot(plot_x, ys, plot_mod, alpha=0.6, linewidth=1.5)
+                        # We add the colour chosen by the colour cycle to our colour dict
+                        colour_dict[o][i] = mod_line[0].get_color()
+                        # Also add the line object to the handlers list and a label to the labels list - this
+                        #  only needs to happen once because we only want one entry in the legend per
+                        #  ObsID-Instrument combo
+                        handlers.append(mod_line[0])
+                        labels.append("{o}-{i}".format(o=spec.obs_id, i=spec.instrument))
+                    else:
+                        ax.plot(plot_x, ys, plot_mod, color=colour_dict[o][i], alpha=0.6, linewidth=1.5)
+
+        # Simply setting x-label and limits, don't currently scale this axis with log (though I would like to),
+        #  because the 3D version of matplotlib doesn't easily support it
+        ax.set_xlabel("Energy [keV]")
+        ax.set_xlim3d(plot_x.min(), plot_x.max())
+
+        # Setting the lower limit of the z axis to zero, but leaving the top end open
+        ax.set_zlim3d(0)
+        ax.set_zlabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
+
+        # Setting up y label (with dynamic unit) and the correct radius limits
+        ax.set_ylabel("Radius [{u}]".format(u=chosen_unit.to_string()))
+        if self.proper_radii is not None:
+            y_lims = [self.proper_annulus_centres.value[0], self.proper_radii.value[-1]]
+        else:
+            y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]
+        ax.set_ylim3d(y_lims)
+
+        # Sets up the legend so that matching data point and models are on the same line in the legend
+        ax.legend(handles=handlers, labels=labels, handler_map={tuple: legend_handler.HandlerTuple(None)}, loc='best')
+
+        plt.tight_layout()
+
+        if anything_plotted:
+            plt.show()
+        else:
+            warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
+                          "it".format(m=model))
+
+        plt.close('all')
+
     def __len__(self) -> int:
         """
-        The length of a AnnularSpectra is the number of individual spectra that make it up.
-        :return: The length of the list from self.all_spectra
+        The length of a AnnularSpectra is the number of annuli, so essentially a proxy for num_annuli.
+        :return: The num_annuli property.
         :rtype: int
         """
-        return len(self.all_spectra)
+        return self._num_ann
 
     def __getitem__(self, ind):
         return self.all_spectra[ind]
