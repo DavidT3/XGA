@@ -1,12 +1,12 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 14:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/01/2021, 10:32. Copyright (c) David J Turner
 
 from typing import Tuple
+from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity
 
-from ..exceptions import XGAPoorDataError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.profile import annular_mask
 from ..sources import BaseSource
@@ -122,9 +122,10 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
             cur_rads = np.delete(cur_rads, bad_snrs[-1])
             ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
 
-        if ann_masks.shape[2] < 4:
-            raise XGAPoorDataError("The requested annuli for {s} cannot be created, the data quality is too "
-                                   "low".format(s=source.name))
+        if ann_masks.shape[2] == 4 and not acceptable:
+            warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
+                 "of four annuli will be returned".format(s=source.name))
+            break
 
     # Now of course, pixels must become a more useful unit again
     final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg).to("arcsec")
