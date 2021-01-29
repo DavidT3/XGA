@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 13:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/01/2021, 13:26. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2816,6 +2816,48 @@ class BaseSource:
             models += list(self._fit_results[s_key].keys())
 
         return models
+
+    def snr_ranking(self, reg_type: str, lo_en: Quantity = None, hi_en: Quantity = None, allow_negative: bool = False) \
+            -> Tuple[np.ndarray, np.ndarray]:
+        """
+        This method generates a list of ObsID-Instrument pairs, ordered by the signal to noise measured for the
+        given region, with element zero being the lowest SNR, and element N being the highest.
+
+        :param str reg_type: The type of region for which to calculate the signal to noise ratio.
+        :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the SNR. Default is None,
+            in which case the lower energy bound for peak finding will be used (default is 0.5keV).
+        :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the SNR. Default is None,
+            in which case the upper energy bound for peak finding will be used (default is 2.0keV).
+        :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
+            zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+        :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
+            of ascending signal to noise, then an array containing the order SNR ratios.
+        :rtype: Tuple[np.ndarray, np.ndarray]
+        """
+        # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
+        obs_inst = []
+        snrs = []
+        # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+        for obs_id in self.instruments:
+            for inst in self.instruments[obs_id]:
+                # Use our handy get_snr method to calculate the SNRs we want, then add that and the
+                #  ObsID-inst combo into their respective lists
+                snrs.append(self.get_snr(reg_type, self.default_coord, lo_en, hi_en, obs_id, inst, allow_negative))
+                obs_inst.append([obs_id, inst])
+
+        # Make our storage lists into arrays, easier to work with that way
+        obs_inst = np.array(obs_inst)
+        snrs = np.array(snrs)
+
+        # We want to order the output by SNR, with the lowest being first and the highest being last, so we
+        #  use a numpy function to output the index order needed to re-order our two arrays
+        reorder_snrs = np.argsort(snrs)
+        # Then we use that to re-order them
+        snrs = snrs[reorder_snrs]
+        obs_inst = obs_inst[reorder_snrs]
+
+        # And return our ordered dictionaries
+        return obs_inst, snrs
 
     def info(self):
         """
