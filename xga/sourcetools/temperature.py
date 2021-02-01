@@ -1,15 +1,19 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 12:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 16:44. Copyright (c) David J Turner
 
-from typing import Tuple
+from typing import Tuple, Union, List
 from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity
 
+from .. import NUM_CORES
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.profile import annular_mask
+from ..samples import BaseSample
+from ..sas import region_setup
 from ..sources import BaseSource
+from ..xspec.fit import single_temp_apec_profile
 
 
 def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width: Quantity, lo_en: Quantity,
@@ -25,8 +29,8 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and avoid
         PSF effects.
-    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculation.
-    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculation.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
     :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculations. Default is None, which
             means the combined ratemap will be used. Please note that inst must also be set to use this option.
     :param str inst: The instrument of a specific ratemap to use for the SNR calculations. Default is None, which
@@ -136,9 +140,98 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     return final_rads, snrs, max_ann
 
 
-def gen_proj_temp_prof():
-    raise NotImplementedError("This function is still under construction.")
+def min_snr_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii: Union[Quantity, List[Quantity]],
+                           min_snr: float = 20, min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
+                           use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
+                           hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
+                           psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
+                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                           over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES):
+    """
+    This is a convenience function that allows you to quickly and easily start measuring projected
+    temperature profiles of galaxy clusters, deciding on the annular bins using signal to noise measurements
+    from photometric products. This function calls single_temp_apec_profile, but doesn't expose all of the more
+    in depth variables, so if you want more control then use single_temp_apec_profile directly. The projected
+    temperature profiles which are generated are added to their source's storage structure.
 
+    :param sources:
+    :param str/Quantity outer_radii: The name or value of the outer radius to use for the generation of
+        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+        'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
+        generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
+    :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
+        and avoid PSF effects.
+    :param bool use_combined: If True then the combined RateMap will be used for signal to noise annulus
+        calculations, this is overridden by use_worst.
+    :param bool use_worst: If True then the worst observation of the cluster (ranked by global signal to noise) will
+        be used for signal to noise annulus calculations.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+    :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+    :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+        side in the PSF grid.
+    :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+    :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
+        zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+    :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+            recommend that this be true for combined observations, as exposure time could change quite dramatically
+            across the combined product.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
+    :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    """
+
+    if outer_radii != 'region':
+        inn_rad_vals, out_rad_vals = region_setup(sources, outer_radii, Quantity(0, 'arcsec'), True, '')[1:]
+    else:
+        raise NotImplementedError("I don't currently support fitting region spectra")
+
+    if all([use_combined, use_worst]):
+        warn("You have passed both use_combined and use_worst as True. use_worst overrides use_combined, so the "
+             "worst observation for each source will be used to decide on the annuli.")
+        use_combined = False
+    elif all([not use_combined, not use_worst]):
+        warn("You have passed both use_combined and use_worst as False. One of them must be True, so here we default"
+             " to using the combined data to decide on the annuli.")
+        use_combined = True
+
+    all_rads = []
+    for src_ind, src in enumerate(sources):
+        if use_combined:
+            # This is the simplest option, we just use the combined ratemap to decide on the annuli with minimum SNR
+            rads, snrs, ma = _snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en, psf_corr=psf_corr,
+                                       psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo, psf_iter=psf_iter,
+                                       allow_negative=allow_negative, exp_corr=exp_corr)
+        else:
+            # This way is slightly more complicated, but here we use the worst observation (ranked by global
+            #  signal to noise).
+            # The return for this function is ranked worst to best, so we grab the first row (which is an ObsID and
+            #  instrument), then call _snr_bins with that one
+            lowest_ranked = src.snr_ranking(out_rad_vals[src_ind], lo_en, hi_en, allow_negative)[0][0, :]
+            rads, snrs, ma = _snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en, lowest_ranked[0],
+                                       lowest_ranked[1], psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
+                                       allow_negative, exp_corr)
+
+        # Shoves the annuli we've decided upon into a list for single_temp_apec_profile to use
+        all_rads.append(rads)
+
+    single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                             over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores)
+
+
+def onion_deproj_temp_prof():
+    raise NotImplementedError("I'll begin work on this soon")
 
 
 
