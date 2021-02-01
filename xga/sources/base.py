@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/01/2021, 13:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 10:15. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -22,7 +22,9 @@ from regions import read_ds9, PixelRegion, CompoundSkyRegion
 from .. import xga_conf
 from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
+from ..imagetools.profile import annular_mask
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
@@ -1360,6 +1362,59 @@ class BaseSource:
         total_bck_mask = bck_mask * interloper_mask
 
         return total_src_mask, total_bck_mask
+
+    def get_custom_mask(self, outer_rad, inner_rad: Quantity = Quantity(0, 'arcsec'), obs_id: str = None,
+                        central_coord: Quantity = None, remove_interlopers: bool = True) -> np.ndarray:
+        """
+        A simple, but powerful method, to generate mask a mask within a custom radius for a given ObsID.
+
+        :param Quantity outer_rad: The outer radius of the mask.
+        :param Quantity inner_rad: The inner radius of the mask, the default is zero arcseconds.
+        :param str obs_id: The ObsID for which to generate the mask, default is None which will return a mask
+            generated from a combined image.
+        :param Quantity central_coord: The central coordinates of the mask, the default is None which
+            will use the default coordinates of the source.
+        :param bool remove_interlopers: Whether an interloper mask should be combined with the custom mask to
+            remove interloper point sources.
+        :return: A numpy array containing the desired mask.
+        :rtype: np.ndarray
+        """
+        if central_coord is None:
+            central_coord = self._default_coord
+
+        if obs_id is None:
+            # Doesn't matter which combined ratemap, just need the size and coord conversion powers
+            rt = self.get_combined_ratemaps()
+        else:
+            # Again so long as the image matches the ObsID passed in by the user I don't care what instrument
+            #  its from
+            rt = self.get_ratemaps(obs_id=obs_id)
+
+        # If its not an instance of RateMap that means a list of RateMaps has been returned, and as I only want
+        #  the WCS information and the shape of the image I don't care which one we use
+        if not isinstance(rt, RateMap):
+            rt = rt[0]
+
+        # Convert the inner and outer radii to degrees so they can be easily converted to pixels
+        outer_rad = self.convert_radius(outer_rad, 'deg')
+        inner_rad = self.convert_radius(inner_rad, 'deg')
+        pix_to_deg = pix_deg_scale(central_coord, rt.radec_wcs)
+
+        # Making sure the inner and outer radii are whole integer numbers, as they are now in pixel units
+        outer_rad = np.array([int(np.ceil(outer_rad / pix_to_deg).value)])
+        inner_rad = np.array([int(np.floor(inner_rad / pix_to_deg).value)])
+        # Convert the chosen central coordinates to pixels
+        pix_centre = rt.coord_conv(central_coord, 'pix')
+
+        # Generate our custom mask
+        custom_mask = annular_mask(pix_centre, inner_rad, outer_rad, rt.shape)
+
+        # And applying an interloper mask if the user wants that.
+        if remove_interlopers:
+            interloper_mask = self.get_interloper_mask(obs_id)
+            custom_mask = custom_mask*interloper_mask
+
+        return custom_mask
 
     def get_snr(self, reg_type: str, central_coord: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
                 obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
