@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 10:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 12:19. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1363,7 +1363,7 @@ class BaseSource:
 
         return total_src_mask, total_bck_mask
 
-    def get_custom_mask(self, outer_rad, inner_rad: Quantity = Quantity(0, 'arcsec'), obs_id: str = None,
+    def get_custom_mask(self, outer_rad: Quantity, inner_rad: Quantity = Quantity(0, 'arcsec'), obs_id: str = None,
                         central_coord: Quantity = None, remove_interlopers: bool = True) -> np.ndarray:
         """
         A simple, but powerful method, to generate mask a mask within a custom radius for a given ObsID.
@@ -1418,7 +1418,8 @@ class BaseSource:
 
     def get_snr(self, reg_type: str, central_coord: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
                 obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
-                psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False) -> float:
+                psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
+                exp_corr: bool = True) -> float:
         """
         This takes a region type and central coordinate and calculates the signal to noise ratio.
         The background region is constructed using the back_inn_rad_factor and back_out_rad_factor
@@ -1442,6 +1443,9 @@ class BaseSource:
         :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+        :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+            recommend that this be true for combined observations, as exposure time could change quite dramatically
+            across the combined product.
         :return: The signal to noise ratio.
         :rtype: float
         """
@@ -1467,7 +1471,7 @@ class BaseSource:
                              " pass both obs_id and inst.".format(s=self.name))
 
         # We use the ratemap's built in signal to noise calculation method
-        sn = rt.signal_to_noise(src_mask, bck_mask, allow_negative)
+        sn = rt.signal_to_noise(src_mask, bck_mask, exp_corr, allow_negative)
 
         return sn
 

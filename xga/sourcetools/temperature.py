@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/01/2021, 10:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 12:19. Copyright (c) David J Turner
 
 from typing import Tuple
 from warnings import warn
@@ -15,7 +15,7 @@ from ..sources import BaseSource
 def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width: Quantity, lo_en: Quantity,
               hi_en: Quantity, obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
               psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-              allow_negative: bool = False) -> Tuple[Quantity, np.ndarray, int]:
+              allow_negative: bool = False, exp_corr: bool = True) -> Tuple[Quantity, np.ndarray, int]:
     """
     An internal function that will find the radii required to create annuli with a certain minimum signal to noise
     and minimum annulus width.
@@ -39,6 +39,9 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
     :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
         zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+    :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+            recommend that this be true for combined observations, as exposure time could change quite dramatically
+            across the combined product.
     :return: The radii of the requested annuli, the final snr values, and the original maximum number
         based on min_width.
     :rtype: Tuple[Quantity, np.ndarray, int]
@@ -102,7 +105,7 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
         snrs = []
         for i in range(cur_num_ann):
             # We're calling the signal to noise calculation method of the ratemap for all of our annuli
-            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, allow_negative=allow_negative))
+            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative))
         # Becomes a numpy array because they're nicer to work with
         snrs = np.array(snrs)
         # We find any indices of the array (== annuli) where the signal to noise is not above our minimum
@@ -133,9 +136,8 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     return final_rads, snrs, max_ann
 
 
-
-
-
+def gen_proj_temp_prof():
+    raise NotImplementedError("This function is still under construction.")
 
 
 

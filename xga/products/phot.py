@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 13:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 12:19. Copyright (c) David J Turner
 
 
 import warnings
@@ -1081,24 +1081,20 @@ class RateMap(Image):
 
         return edge_flag
 
-    def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, allow_negative: bool = False):
+    def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, exp_corr: bool = True,
+                        allow_negative: bool = False):
         """
         A signal to noise calculation method which takes information on source and background regions, then uses
         that to calculate a signal to noise for the source. This was primarily motivated by the desire to produce
         valid SNR values for combined data, where uneven exposure times across the combined field of view could
         cause issues with the usual approach of just summing the counts in the region images and scaling by area.
-        Here we:
-
-        1) Calculate an average background rate by summing the count/s of the pixels in the background region,
-        then dividing by the background area.
-        2) Multiply the exposure map by the average background rate to get a 'background count map'
-        3) Subtract the background count map from the combined image to get a background subtracted image.
-        4) Sum the background subtracted image (with source mask applied) to get a total of counts for the
-        source, then sum the original image (with source mask applied) to get a source+background count total.
-        5) Divide the source total by sqrt of source+background total to get signal to noise.
+        This method can also measure signal to noises without exposure time correction.
 
         :param np.ndarray source_mask: The mask which defines the source region, ideally with interlopers removed.
         :param np.ndarray back_mask: The mask which defines the background region, ideally with interlopers removed.
+        :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+            recommend that this be true for combined observations, as exposure time could change quite dramatically
+            across the combined product.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal to noise (and can result in a negative signal to noise).
         :return: A signal to noise value for the source region.
@@ -1116,18 +1112,39 @@ class RateMap(Image):
         elif not (back_mask >= 0).all() or not (back_mask <= 1).all():
             raise ValueError("The background mask has illegal values in it, there should only be ones and zeros.")
 
-        # Find the total background area. As the mask is just an array of ones and zeros we can just sum the
+        # Find the total mask areas. As the mask is just an array of ones and zeros we can just sum the
         #  whole thing to find the total pixel area covered.
+        src_area = source_mask.sum()
         back_area = back_mask.sum()
 
-        av_back = (self.data * back_mask).sum() / back_area
-        scaled_source_back_counts = self.expmap.data * av_back * source_mask
+        # Exposure correction takes into account the different exposure times of the individual pixels
+        if exp_corr:
+            # Find an average background per pixel COUNT RATE by dividing the total cr in the background region by the
+            #  number of pixels in the mask
+            av_back = (self.data * back_mask).sum() / back_area
+            # Then we use the exposure map to create a background COUNT map for the observation, by multiplying the
+            #  average background count rate by the exposure map
+            scaled_source_back_counts = self.expmap.data * av_back * source_mask
+            # Then we create a background subtracted map of the source by subtracting the background map
+            source_map = (self.image.data * source_mask) - scaled_source_back_counts
+            # Some pixels could be negative now, but if we're not allowing negative values then they get
+            #  set to zero
+            if not allow_negative:
+                source_map[source_map < 0] = 0
+            # Then we sum the source count map to find a total source count value, and divide that by the square root
+            #  of the total number of counts (NON BACKGROUND SUBTRACTED) within the source mask
+            sn = source_map.sum() / np.sqrt((self.image.data * source_mask).sum())
+        else:
+            # Calculate an area normalisation so the background counts can be scaled to the source counts properly
+            area_norm = src_area / back_area
+            # Find the total counts within the source area
+            tot_cnt = (self.image.data * source_mask).sum()
+            # Find the total counts within the background area
+            bck_cnt = (self.image.data * back_mask).sum()
 
-        source_map = (self.image.data*source_mask) - scaled_source_back_counts
-
-        if not allow_negative:
-            source_map[source_map < 0] = 0
-        sn = source_map.sum()/np.sqrt((self.image.data*source_mask).sum())
+            # Signal to noise is then just finding the source counts by subtracting the area scaled background counts
+            #  and dividing by the square root of the total counts within the source area
+            sn = (tot_cnt - bck_cnt*area_norm) / np.sqrt(tot_cnt)
 
         return sn
 
