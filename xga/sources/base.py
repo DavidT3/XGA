@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 12:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 14:33. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1416,16 +1416,17 @@ class BaseSource:
 
         return custom_mask
 
-    def get_snr(self, reg_type: str, central_coord: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
-                obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
-                psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
-                exp_corr: bool = True) -> float:
+    def get_snr(self, outer_radius: Union[Quantity, str], central_coord: Quantity = None, lo_en: Quantity = None,
+                hi_en: Quantity = None, obs_id: str = None, inst: str = None, psf_corr: bool = False,
+                psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
+                allow_negative: bool = False,  exp_corr: bool = True) -> float:
         """
         This takes a region type and central coordinate and calculates the signal to noise ratio.
         The background region is constructed using the back_inn_rad_factor and back_out_rad_factor
         values, the defaults of which are 1.05*radius and 1.5*radius respectively.
 
-        :param str reg_type: The type of region for which to calculate the signal to noise ratio.
+        :param Quantity/str outer_radius: The radius that SNR should be calculated within, this can either be a
+            named radius such as r500, or an astropy Quantity.
         :param Quantity central_coord: The central coordinate of the region.
         :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the SNR. Default is None,
             in which case the lower energy bound for peak finding will be used (default is 0.5keV).
@@ -1459,16 +1460,24 @@ class BaseSource:
         if all([obs_id is None, inst is None]):
             # Here the user hasn't set ObsID or instrument, so we use the combined data
             rt = self.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-            # Grabs the interloper removed source and background region masks
-            src_mask, bck_mask = self.get_mask(reg_type, None, central_coord)
+
         elif all([obs_id is not None, inst is not None]):
             # Both ObsID and instrument have been set by the user
             rt = self.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-            # Grabs the interloper removed source and background region masks
-            src_mask, bck_mask = self.get_mask(reg_type, obs_id, central_coord)
         else:
             raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
                              " pass both obs_id and inst.".format(s=self.name))
+
+        if isinstance(outer_radius, str):
+            # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
+            #  method understands that means it should return the mask for the combined data
+            src_mask, bck_mask = self.get_mask(outer_radius, obs_id, central_coord)
+        else:
+            # Here we have the case where the user has passed a custom outer radius, so we need to generate a
+            #  custom mask for it
+            src_mask = self.get_custom_mask(outer_radius, obs_id=obs_id, central_coord=central_coord)
+            bck_mask = self.get_custom_mask(outer_radius*self._back_out_factor, outer_radius*self._back_inn_factor,
+                                            obs_id=obs_id, central_coord=central_coord)
 
         # We use the ratemap's built in signal to noise calculation method
         sn = rt.signal_to_noise(src_mask, bck_mask, exp_corr, allow_negative)
@@ -2537,6 +2546,70 @@ class BaseSource:
 
         return matched_prods
 
+    def _get_phot_prod(self, prod_type: str, obs_id: str = None, inst: str = None, lo_en: Quantity = None,
+                       hi_en: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15) \
+            -> Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]:
+        """
+        An internal method which is the basis of the get_images, get_expmaps, and get_ratemaps methods.
+
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all images/expmaps/ratemaps matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all images/expmaps/ratemaps matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the images/expmaps/ratemaps you wish to
+            retrieve, the default is None (which will retrieve all images/expmaps/ratemaps regardless of
+            energy limit).
+        :param Quantity hi_en: The upper energy limit of the images/expmaps/ratemaps you wish to
+            retrieve, the default is None (which will retrieve all images/expmaps/ratemaps regardless of
+            energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected images/ratemaps or not.
+        :param str psf_model: If the images/ratemaps you want are PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the images/ratemaps you want are PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the images/ratemaps you want are PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the images/ratemaps you want are PSF corrected, this is the number of iterations.
+        :return: An XGA Image/RateMap/ExpMap object (if there is an exact match), or a list of XGA
+            Image/RateMap/ExpMap objects (if there were multiple matching products).
+        :rtype: Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]
+        """
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        # If we are looking for a PSF corrected image/ratemap then we assemble the extra key with PSF details
+        if psf_corr and prod_type in ["image", "ratemap"]:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
+
+        if not psf_corr and with_lims:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key)
+        elif not psf_corr and not with_lims:
+            broad_matches = self.get_products(prod_type, obs_id, inst)
+            matched_prods = [p for p in broad_matches if not p.psf_corrected]
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key + extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products(prod_type, obs_id, inst, extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any {p}s matching your input.".format(p=prod_type))
+
+        return matched_prods
+
     def get_images(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
                    psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                    psf_iter: int = 15) -> Union[Image, List[Image]]:
@@ -2563,43 +2636,8 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[Image, List[Image]]
         """
-
-        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
-        if all([lo_en is None, hi_en is None]):
-            # Sets a flag to tell the rest of the method whether we have energy lims or not
-            with_lims = False
-            energy_key = None
-        elif all([lo_en is not None, hi_en is not None]):
-            with_lims = True
-            # We have energy limits here so we assemble the key that describes the energy range
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        # If we are looking for a PSF corrected image then we assemble the extra key with PSF details
-        if psf_corr:
-            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
-
-        if not psf_corr and with_lims:
-            # Simplest case, just calling get_products and passing in our information
-            matched_prods = self.get_products('image', obs_id, inst, extra_key=energy_key)
-        elif not psf_corr and not with_lims:
-            broad_matches = self.get_products("image")
-            matched_prods = [p for p in broad_matches if not p.psf_corrected]
-        elif psf_corr and with_lims:
-            # Here we need to add the extra key to the energy key
-            matched_prods = self.get_products('image', obs_id, inst, extra_key=energy_key+extra_key)
-        elif psf_corr and not with_lims:
-            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
-            broad_matches = self.get_products('image', obs_id, inst, extra_key=None, just_obj=False)
-            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
-
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any images matching your input.")
-
-        return matched_prods
+        return self._get_phot_prod("image", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                                   psf_iter)
 
     def get_expmaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None) \
             -> Union[ExpMap, List[ExpMap]]:
@@ -2619,22 +2657,7 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[ExpMap, List[ExpMap]]
         """
-
-        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
-        if all([lo_en is None, hi_en is None]):
-            energy_key = None
-        elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        matched_prods = self.get_products('expmap', obs_id=obs_id, inst=inst, extra_key=energy_key)
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any exposure maps matching your input.")
-
-        return matched_prods
+        return self._get_phot_prod("expmap", obs_id, inst, lo_en, hi_en, False)
 
     def get_ratemaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
                      psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
@@ -2662,45 +2685,8 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[RateMap, List[RateMap]]
         """
-        # This function is essentially identical to get_images, but I'm going to be lazy and not write
-        #  a separate internal function to do both.
-
-        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
-        if all([lo_en is None, hi_en is None]):
-            # Sets a flag to tell the rest of the method whether we have energy lims or not
-            with_lims = False
-            energy_key = None
-        elif all([lo_en is not None, hi_en is not None]):
-            with_lims = True
-            # We have energy limits here so we assemble the key that describes the energy range
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        # If we are looking for a PSF corrected ratemap then we assemble the extra key with PSF details
-        if psf_corr:
-            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
-
-        if not psf_corr and with_lims:
-            # Simplest case, just calling get_products and passing in our information
-            matched_prods = self.get_products('ratemap', obs_id, inst, extra_key=energy_key)
-        elif not psf_corr and not with_lims:
-            broad_matches = self.get_products("ratemap")
-            matched_prods = [p for p in broad_matches if not p.psf_corrected]
-        elif psf_corr and with_lims:
-            # Here we need to add the extra key to the energy key
-            matched_prods = self.get_products('ratemap', obs_id, inst, extra_key=energy_key + extra_key)
-        elif psf_corr and not with_lims:
-            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
-            broad_matches = self.get_products('ratemap', obs_id, inst, extra_key=None, just_obj=False)
-            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
-
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any ratemaps matching your input.")
-
-        return matched_prods
+        return self._get_phot_prod("ratemap", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                                   psf_iter)
 
     # The combined photometric products don't really NEED their own get methods, but I figured I would just for
     #  clarity's sake
@@ -2876,13 +2862,14 @@ class BaseSource:
 
         return models
 
-    def snr_ranking(self, reg_type: str, lo_en: Quantity = None, hi_en: Quantity = None, allow_negative: bool = False) \
-            -> Tuple[np.ndarray, np.ndarray]:
+    def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
+                    allow_negative: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         """
         This method generates a list of ObsID-Instrument pairs, ordered by the signal to noise measured for the
         given region, with element zero being the lowest SNR, and element N being the highest.
 
-        :param str reg_type: The type of region for which to calculate the signal to noise ratio.
+        :param Quantity/str outer_radius: The radius that SNR should be calculated within, this can either be a
+            named radius such as r500, or an astropy Quantity.
         :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the SNR. Default is None,
             in which case the lower energy bound for peak finding will be used (default is 0.5keV).
         :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the SNR. Default is None,
@@ -2901,7 +2888,8 @@ class BaseSource:
             for inst in self.instruments[obs_id]:
                 # Use our handy get_snr method to calculate the SNRs we want, then add that and the
                 #  ObsID-inst combo into their respective lists
-                snrs.append(self.get_snr(reg_type, self.default_coord, lo_en, hi_en, obs_id, inst, allow_negative))
+                snrs.append(self.get_snr(outer_radius, self.default_coord, lo_en, hi_en, obs_id, inst,
+                                         allow_negative))
                 obs_inst.append([obs_id, inst])
 
         # Make our storage lists into arrays, easier to work with that way
