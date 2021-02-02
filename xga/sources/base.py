@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 14:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 11:23. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -283,7 +283,6 @@ class BaseSource:
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict, odf_dict
 
-    # TODO Redo how profiles are stored - I was lazy when I implemented it at first
     def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D]):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
@@ -303,7 +302,7 @@ class BaseSource:
             # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
             #  this variable with just the energy key
             en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
-        elif type(prod_obj) == Spectrum or type(prod_obj) == AnnularSpectra:
+        elif type(prod_obj) == Spectrum or type(prod_obj) == AnnularSpectra or isinstance(prod_obj, BaseProfile1D):
             extra_key = prod_obj.storage_key
         elif type(prod_obj) == PSFGrid:
             # The first part of the key is the model used (by default its ELLBETA for example), and
@@ -345,51 +344,20 @@ class BaseSource:
             # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
             if extra_key not in self._products[obs_id][inst]:
                 self._products[obs_id][inst][extra_key] = {}
-            # Most products will fall into this first conditional
-            if "profile" not in p_type:
-                self._products[obs_id][inst][extra_key][p_type] = prod_obj
-            # Profiles are stored in a list, just because there can be so many giving them all extra keys
-            #  is too much work
-            elif "profile" in p_type and p_type not in self._products[obs_id][inst][extra_key]:
-                self._products[obs_id][inst][extra_key][p_type] = [prod_obj]
-            elif "profile" in p_type and p_type in self._products[obs_id][inst][extra_key]:
-                self._products[obs_id][inst][extra_key][p_type].append(prod_obj)
+            self._products[obs_id][inst][extra_key][p_type] = prod_obj
 
         elif extra_key is None and obs_id != "combined":
-            if "profile" not in p_type:
-                self._products[obs_id][inst][p_type] = prod_obj
-            # Profiles are stored in a list, just because there can be so many giving them all extra keys
-            #  is too much work
-            elif "profile" in p_type and p_type not in self._products[obs_id][inst]:
-                self._products[obs_id][inst][p_type] = {0: prod_obj}
-            elif "profile" in p_type and p_type in self._products[obs_id][inst]:
-                self._products[obs_id][inst][p_type].update({len(self._products[obs_id][inst][p_type]): prod_obj})
+            self._products[obs_id][inst][p_type] = prod_obj
 
         # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
         #  and ObsID = 'combined'
         elif extra_key is not None and obs_id == "combined":
             if extra_key not in self._products[obs_id]:
                 self._products[obs_id][extra_key] = {}
-
-            if "profile" not in p_type:
-                self._products[obs_id][extra_key][p_type] = prod_obj
-            # Profiles are stored in a list, just because there can be so many giving them all extra keys
-            #  is too much work
-            elif "profile" in p_type and p_type not in self._products[obs_id][extra_key]:
-                self._products[obs_id][extra_key][p_type] = {0: prod_obj}
-            elif "profile" in p_type and p_type in self._products[obs_id][extra_key]:
-                self._products[obs_id][extra_key][p_type].update(
-                    {len(self._products[obs_id][extra_key][p_type]): prod_obj})
+            self._products[obs_id][extra_key][p_type] = prod_obj
 
         elif extra_key is None and obs_id == "combined":
-            if "profile" not in p_type:
-                self._products[obs_id][p_type] = prod_obj
-            # Profiles are stored in a list, just because there can be so many giving them all extra keys
-            #  is too much work
-            elif "profile" in p_type and p_type not in self._products[obs_id]:
-                self._products[obs_id][p_type] = {0: prod_obj}
-            elif "profile" in p_type and p_type in self._products[obs_id]:
-                self._products[obs_id][p_type].update({len(self._products[obs_id][p_type]): prod_obj})
+            self._products[obs_id][p_type] = prod_obj
 
         # This is for an image being added, so we look for a matching exposure map. If it exists we can
         #  make a ratemap
