@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 12:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 16:30. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -17,7 +17,7 @@ class SurfaceBrightness1D(BaseProfile1D):
     def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int,
                  min_snr: float, outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
                  background: Quantity = None, pixel_bins: np.ndarray = None, back_pixel_bin: np.ndarray = None,
-                 ann_areas: Quantity = None):
+                 ann_areas: Quantity = None, deg_radii: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
@@ -36,8 +36,12 @@ class SurfaceBrightness1D(BaseProfile1D):
         :param np.ndarray back_pixel_bin: An optional argument that provides the pixel bin used for the background
             calculation of this profile.
         :param Quantity ann_areas: The area of the annuli.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
-        super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err)
+        super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err,
+                         deg_radii=deg_radii)
 
         if type(background) != Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
@@ -80,6 +84,14 @@ class SurfaceBrightness1D(BaseProfile1D):
 
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Surface Brightness"
+
+        self._storage_key = "ra{r}_dec{d}_ro{ro}_st{ps}_minsn{ms}".format(r=centre.value[0], d=centre.value[1],
+                                                                          ro=outer_rad.value, ps=pix_step, ms=min_snr)
+        # print(self._storage_key)
+        # import sys
+        # sys.exit()
+        # np.all(centre == self._centre) and pix_step == self._pix_step \
+        # and min_snr == self._min_snr and outer_rad == self._outer_rad:
 
     @property
     def pix_step(self) -> int:
@@ -255,7 +267,7 @@ class GasMass1D(BaseProfile1D):
     This class provides an interface to a cumulative gas mass profile of a Galaxy Cluster.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None):
+                 radii_err: Quantity = None, values_err: Quantity = None, deg_radii: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
         Clusters.
@@ -268,8 +280,11 @@ class GasMass1D(BaseProfile1D):
         :param str inst: The instrument which this profile was generated from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, deg_radii=deg_radii)
         self._prof_type = "gas_mass"
 
         # As this will more often than not be generated from GasDensity1D, we have to allow an
@@ -285,7 +300,8 @@ class GasDensity1D(BaseProfile1D):
     This class provides an interface to a gas density profile of a galaxy cluster.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None):
+                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
+                 set_storage_key: str = None, deg_radii: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
         Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
@@ -299,8 +315,16 @@ class GasDensity1D(BaseProfile1D):
         :param str inst: The instrument which this profile was generated from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. It is
+            possible for a Gas Density profile to be generated from spectral or photometric information.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -423,7 +447,7 @@ class ProjectedGasTemperature1D(BaseProfile1D):
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, upper_limit: Quantity = Quantity(63, 'keV'),
-                 associated_set_id: int = None, set_storage_key: str = None):
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected temperature profile.
 
@@ -443,9 +467,12 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
         :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
             associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key)
+                         set_storage_key, deg_radii)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -520,7 +547,7 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected metallicity/abundance profile.
 
@@ -536,10 +563,13 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
         :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
             associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
         #
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key)
+                         set_storage_key, deg_radii)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -564,7 +594,7 @@ class Generic1D(BaseProfile1D):
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  y_axis_label: str, prof_type: str, radii_err: Quantity = None, values_err: Quantity = None,
-                 associated_set_id: int = None, set_storage_key: str = None):
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
         """
         The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
         to set up an XGA profile with custom data.
@@ -582,10 +612,13 @@ class Generic1D(BaseProfile1D):
         :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
         :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
             associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key)
+                         set_storage_key, deg_radii)
         self._prof_type = prof_type
         self._y_axis_name = y_axis_label
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 12:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 16:30. Copyright (c) David J Turner
 
 
 import os
@@ -1411,24 +1411,27 @@ class AnnularSpectra(BaseAggregateProduct):
         par_errs = np.average(par_errs, axis=1)
 
         mid_radii = self.proper_annulus_centres.to("kpc")
+        mid_radii_deg = self.annulus_centres.to("deg")
         # calculates radii errors, basically the extent of the bins
         rad_errors = Quantity(np.diff(self.proper_radii.to('kpc').value, axis=0) / 2, 'kpc')
 
         if par == 'kT' and upper_limit is None:
             new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
                                                  'combined', rad_errors, par_errs, associated_set_id=self.set_ident,
-                                                 set_storage_key=self.storage_key)
+                                                 set_storage_key=self.storage_key, deg_radii=mid_radii_deg)
         elif par == 'kT' and upper_limit is not None:
             new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
                                                  'combined', rad_errors, par_errs, upper_limit, self.set_ident,
-                                                 self.storage_key)
+                                                 self.storage_key, deg_radii=mid_radii_deg)
         elif par == 'Abundanc':
             new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
-                                                 'combined', rad_errors, par_errs, self.set_ident, self.storage_key)
+                                                 'combined', rad_errors, par_errs, self.set_ident, self.storage_key,
+                                                 mid_radii_deg)
         else:
             prof_type = "1d_proj_{}"
             new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined', 'combined', par,
-                                 prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key)
+                                 prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
+                                 mid_radii_deg)
 
         return new_prof
 

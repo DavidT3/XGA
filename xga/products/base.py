@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 14:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 16:30. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -560,6 +560,10 @@ class BaseProfile1D:
         elif radii.unit.is_equivalent('deg') and set_storage_key is None:
             deg_radii = radii.to('deg')
 
+        if deg_radii is not None:
+            deg_radii = deg_radii.to("deg")
+            self._deg_radii = deg_radii
+
         # Storing the key values in attributes
         self._radii = radii
         self._values = values
@@ -622,10 +626,8 @@ class BaseProfile1D:
             # Default storage key for profiles that don't implement their own storage key will include their radii
             #  and the central coordinate
             # Just being doubly sure its in degrees
-            deg_radii = deg_radii.to("deg")
-            self._deg_radii = deg_radii
             cent_chunk = "ra{r}_dec{d}_r".format(r=centre.value[0], d=centre.value[1])
-            rad_chunk = "_".join(deg_radii.value.astype(str))
+            rad_chunk = "_".join(self._deg_radii.value.astype(str))
             self._storage_key = cent_chunk + rad_chunk
 
         # The y-axis label used to be stored in a dictionary in the init of models, but it makes more sense
@@ -1522,6 +1524,16 @@ class BaseProfile1D:
         if not isinstance(new_name, str):
             raise TypeError("Axis labels must be strings!")
         self._y_axis_name = new_name
+
+    @property
+    def deg_radii(self) -> Quantity:
+        """
+        The radii in degrees if available.
+
+        :return: An astropy quantity containing the radii in degrees, or None.
+        :rtype: Quantity
+        """
+        return self._deg_radii
 
     @property
     def storage_key(self) -> str:
