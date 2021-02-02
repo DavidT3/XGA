@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 08:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 08:36. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -556,21 +556,24 @@ class Generic1D(BaseProfile1D):
     of models that I didn't build into XGA. It can also be used to make arbitrary profiles using external data.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None):
+                 y_axis_label: str, radii_err: Quantity = None, values_err: Quantity = None,
+                 associated_set_id: int = None):
         """
+        The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
+        to set up an XGA profile with custom data.
 
         :param Quantity centre: The central coordinate the profile was generated from.
         :param str source_name: The name of the source this profile is associated with.
         :param str obs_id: The observation which this profile was generated from.
         :param str inst: The instrument which this profile was generated from.
+        :param str y_axis_label: The label to apply to the y-axis of any plots generated from this profile.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
         :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
         """
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id)
-
-
+        self._y_axis_name = y_axis_label
 
 
 
