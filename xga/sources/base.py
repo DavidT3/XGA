@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 18:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 18:55. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2839,19 +2839,20 @@ class BaseSource:
         if all([lo_en is None, hi_en is None]):
             energy_key = "_"
         elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
         else:
             raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
 
         if central_coord is None:
             central_coord = self.default_coord
-        cen_chunk = "ra{r}_dec{d}".format(r=central_coord[0].value, d=central_coord[1].value)
+        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
 
         if radii is not None:
             radii = self.convert_radius(radii, 'deg')
             rad_chunk = "r" + "_".join(radii.value.astype(str))
+            rad_info = True
         else:
-            rad_chunk = "_"
+            rad_info = False
 
         search_key = profile_type + "_profile"
         if all([obs_id is None, inst is None]):
@@ -2862,8 +2863,14 @@ class BaseSource:
                           "true then you have passed an invalid profile type.")
 
         broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False)
-        matched_prods = [p[-1] for p in broad_prods if cen_chunk in p[-2] and rad_chunk in p[-2] and
-                         energy_key in p[-2]]
+        matched_prods = []
+        for p in broad_prods:
+            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
+
+            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
+                matched_prods.append(p[-1])
+            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
+                matched_prods.append(p[-1])
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
