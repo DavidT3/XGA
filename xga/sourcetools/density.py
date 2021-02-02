@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 12:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 17:22. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -7,7 +7,7 @@ from warnings import warn
 import numpy as np
 from abel.direct import direct_transform
 from astropy.constants import m_p, m_e
-from astropy.units import Quantity, pix, kpc
+from astropy.units import Quantity, kpc
 from tqdm import tqdm
 
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
@@ -163,15 +163,15 @@ def _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins
         comb_rt: RateMap
 
     if use_peak:
-        pix_centre = comb_rt.coord_conv(src.peak, pix)
+        centre = src.peak
     else:
-        pix_centre = comb_rt.coord_conv(src.ra_dec, pix)
+        centre = src.ra_dec
 
     # Grabs the mask which will remove interloper sources
     int_mask = src.get_interloper_mask()
 
     rad = src.get_radius(reg_type, 'kpc')
-    sb_prof, success = radial_brightness(comb_rt, pix_centre, rad, src.background_radius_factors[0],
+    sb_prof, success = radial_brightness(comb_rt, centre, rad, src.background_radius_factors[0],
                                          src.background_radius_factors[1], int_mask, src.redshift, pix_step, kpc,
                                          src.cosmo, min_snr)
 
