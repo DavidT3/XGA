@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/01/2021, 10:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 08:32. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -15,8 +15,7 @@ from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
-from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_YAXIS, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, \
-    PROF_TYPE_MODELS_PRIORS
+from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, PROF_TYPE_MODELS_PRIORS
 from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
@@ -579,6 +578,10 @@ class BaseProfile1D:
         #  then this will just be None
         self._set_id = associated_set_id
 
+        # The y-axis label used to be stored in a dictionary in the init of models, but it makes more sense
+        #  just declaring it in the init I think - it should be over-ridden in every subclass
+        self._y_axis_name = "Unknown"
+
     def fit(self, model: str, method: str = "mcmc", priors: list = None, start_pars: list = None,
             model_real: int = 1000, model_rad_steps: int = 300, conf_level: int = 90, num_walkers: int = 20,
             num_steps: int = 20000, progress_bar: bool = True, show_errors: bool = True):
@@ -620,7 +623,7 @@ class BaseProfile1D:
                               " is no physical context.")
         elif model not in PROF_TYPE_MODELS[self._prof_type]:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
-            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            prof_name = self._y_axis_name.lower()
             raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
                                        "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
         else:
@@ -869,7 +872,7 @@ class BaseProfile1D:
         """
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
-            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            prof_name = self._y_axis_name.lower()
             raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
                                        "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
         elif model in self._bad_model_fits:
@@ -973,7 +976,7 @@ class BaseProfile1D:
         """
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
-            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            prof_name = self._y_axis_name.lower()
             raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
                                        "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
         elif model in self._bad_model_fits:
@@ -1053,7 +1056,7 @@ class BaseProfile1D:
         frac_conf_lev = [(50 - (m_info["conf_level"] / 2))/100, 0.5, (50 + (m_info["conf_level"] / 2))/100]
         fig = corner.corner(samples, labels=m_info["par_names"], figsize=figsize, quantiles=frac_conf_lev,
                             show_titles=True)
-        t = PROF_TYPE_YAXIS[self._prof_type]
+        t = self._y_axis_name
         plt.suptitle("{m} - {s} {t} Profile - {c}% Confidence".format(m=model, s=self.src_name, t=t,
                                                                       c=m_info["conf_level"]), fontsize=14, y=1.02)
         plt.show()
@@ -1214,10 +1217,10 @@ class BaseProfile1D:
         # Setting the main plot's x label
         main_ax.set_xlabel("Radius {}".format(x_unit))
         if self._background.value == 0 or not back_sub:
-            main_ax.set_ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit))
         else:
             # If background has been subtracted it will be mentioned in the y axis label
-            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit))
 
         main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
         # This makes sure legend keys are shown, even if the data is hidden
@@ -1249,9 +1252,9 @@ class BaseProfile1D:
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
         if models and custom_title is None:
-            plt.suptitle("{l} Profile - with models".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.91)
+            plt.suptitle("{l} Profile - with models".format(l=self._y_axis_name), y=0.91)
         elif not models and custom_title is None:
-            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.91)
+            plt.suptitle("{l} Profiles".format(l=self._y_axis_name), y=0.91)
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
@@ -1449,6 +1452,27 @@ class BaseProfile1D:
         """
         return self._set_id
 
+    @property
+    def y_axis_label(self) -> str:
+        """
+        Property to return the name used for labelling the y-axis in any plot generated by a profile object.
+
+        :return: The y_axis label.
+        :rtype: str
+        """
+        return self._y_axis_name
+
+    @y_axis_label.setter
+    def y_axis_label(self, new_name: str):
+        """
+        This allows the user to set a new y axis label for any plots generated by a profile object.
+
+        :param str new_name: The new y axis label.
+        """
+        if not isinstance(new_name, str):
+            raise TypeError("Axis labels must be strings!")
+        self._y_axis_name = new_name
+
     def __len__(self):
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
@@ -1518,6 +1542,10 @@ class BaseAggregateProfile1D:
         #  type check on the first line of this init
         self._prof_type = profiles[0].type.split("_profile")[0]
         self._energy_bounds = bounds[0]
+
+        # We set the y-axis name attribute which is now expected by the plotting function, just grab it from the
+        #  first component because we've already checked that they're all the same type
+        self._y_axis_name = self._profiles[0].y_axis_label
 
     @property
     def radii_unit(self) -> Unit:
@@ -1682,10 +1710,10 @@ class BaseAggregateProfile1D:
         # Setting the main plot's x label
         main_ax.set_xlabel("Radius {}".format(x_unit))
         if not self._back_avail or not back_sub:
-            main_ax.set_ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit))
         else:
             # If background has been subtracted it will be mentioned in the y axis label
-            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit))
 
         # Adds a legend with source names to the side if the user requested it
         # I let the user decide because there could be quite a few names in it and it could get messy
@@ -1722,10 +1750,10 @@ class BaseAggregateProfile1D:
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
         if model is None and custom_title is None:
-            plt.suptitle("{l} Profiles - {m} fit".format(l=PROF_TYPE_YAXIS[self._prof_type],
+            plt.suptitle("{l} Profiles - {m} fit".format(l=self._y_axis_name,
                                                          m=MODEL_PUBLICATION_NAMES[model]), y=0.91)
         elif not model and custom_title is None:
-            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.91)
+            plt.suptitle("{l} Profiles".format(l=self._y_axis_name), y=0.91)
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
