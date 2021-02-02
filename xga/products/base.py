@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 10:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 14:46. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -9,7 +9,7 @@ from warnings import warn
 import corner
 import emcee as em
 import numpy as np
-from astropy.units import Quantity, UnitConversionError, Unit
+from astropy.units import Quantity, UnitConversionError, Unit, deg
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
@@ -490,7 +490,7 @@ class BaseProfile1D:
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -507,6 +507,9 @@ class BaseProfile1D:
             value is supplied a set_storage_key value must also be supplied.
         :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
             associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
@@ -538,6 +541,24 @@ class BaseProfile1D:
                              "as values. The shape of radii_err is {0} where radii is {1}, and the shape of "
                              "values_err is {2} where values is {3}".format(radii_err.shape, radii.shape,
                                                                             values_err.shape, values.shape))
+
+        # I'm actually going to enforce that the central coordinates passed when declaring a profile must
+        #  be RA and Dec, I need the storage keys to be predictable to make everything neater
+        if centre.unit != deg:
+            raise UnitConversionError("The central coordinate value passed into a profile on declaration must be"
+                                      " in RA and Dec coordinates.")
+
+        # I'm also going to require that the profiles have knowledge of radii in degree units, also so I can make
+        #  predictable storage strings. I don't really like to do this as it feels bodgy, but oh well
+        if not radii.unit.is_equivalent('deg') and deg_radii is None and set_storage_key is None:
+            raise ValueError("If the radii variable is not in units that are convertible to degrees, please pass "
+                             "radii in degrees to deg_radii, this profile needs knowledge of the radii in degrees"
+                             " to construct a storage key.")
+        elif not radii.unit.is_equivalent('deg') and set_storage_key is None and len(deg_radii) != len(radii):
+            raise ValueError("deg_radii is a different length to radii, they should be equivelant quantities, simply"
+                             " in different units.")
+        elif radii.unit.is_equivalent('deg') and set_storage_key is None:
+            deg_radii = radii.to('deg')
 
         # Storing the key values in attributes
         self._radii = radii
@@ -598,8 +619,14 @@ class BaseProfile1D:
             #  our storage key
             self._storage_key = self._set_storage_key
         else:
-            # Default storage key for profiles that don't implement their own storage key is just the joined radii
-            self._storage_key = "_".join(self._radii.value.astype(str))
+            # Default storage key for profiles that don't implement their own storage key will include their radii
+            #  and the central coordinate
+            # Just being doubly sure its in degrees
+            deg_radii = deg_radii.to("deg")
+            self._deg_radii = deg_radii
+            cent_chunk = "ra{r}_dec{d}_r".format(r=centre.value[0], d=centre.value[1])
+            rad_chunk = "_".join(deg_radii.value.astype(str))
+            self._storage_key = cent_chunk + rad_chunk
 
         # The y-axis label used to be stored in a dictionary in the init of models, but it makes more sense
         #  just declaring it in the init I think - it should be over-ridden in every subclass
