@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 16:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 20:21. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List
@@ -338,37 +338,33 @@ class GalaxyCluster(ExtendedSource):
         rad = self.get_radius(reg_type)
 
         # This fetches any profiles that might have already been generated to our required specifications
-        prof_prods = self.get_products("combined_brightness_profile")
-        if len(prof_prods) == 1:
-            matching_profs = [p for p in list(prof_prods[0].values())
-                              if p.check_match(comb_rt, central_coord, pix_step, min_snr, rad)]
-        else:
-            matching_profs = []
-
-        if len(matching_profs) == 0:
+        try:
+            sb_profile = self.get_1d_brightness_profile(rad, combined=True, pix_step=pix_step, min_snr=min_snr)
+            if isinstance(sb_profile, list):
+                raise ValueError("There are multiple matches for this brightness profile, and its the developers "
+                                 "fault not yours.")
+        except NoProductAvailableError:
             sb_profile, success = radial_brightness(comb_rt, central_coord, rad, self._back_inn_factor,
                                                     self._back_out_factor, int_mask, self.redshift, pix_step, kpc,
                                                     self.cosmo, min_snr)
             self.update_products(sb_profile)
-        else:
-            sb_profile = matching_profs[0]
 
         for psf_comb_rt in psf_comb_rts:
             p_rt = psf_comb_rt[-1]
 
-            if len(prof_prods) == 1:
-                matching_profs = [p for p in list(prof_prods[0].values())
-                                  if p.check_match(p_rt, central_coord, pix_step, min_snr, rad)]
-            else:
-                matching_profs = []
-
-            if len(matching_profs) == 0:
+            try:
+                psf_sb_profile = self.get_1d_brightness_profile(rad, combined=True, pix_step=pix_step, min_snr=min_snr,
+                                                                psf_corr=True, psf_model=p_rt.psf_model,
+                                                                psf_bins=p_rt.psf_bins, psf_algo=p_rt.psf_algorithm,
+                                                                psf_iter=p_rt.psf_iterations)
+                if isinstance(psf_sb_profile, list):
+                    raise ValueError("There are multiple matches for this brightness profile, and its the developers "
+                                     "fault not yours.")
+            except NoProductAvailableError:
                 psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], central_coord, rad,
                                                             self._back_inn_factor, self._back_out_factor, int_mask,
                                                             self.redshift, pix_step, kpc, self.cosmo, min_snr)
                 self.update_products(psf_sb_profile)
-            else:
-                psf_sb_profile = matching_profs[0]
 
             sb_profile += psf_sb_profile
 

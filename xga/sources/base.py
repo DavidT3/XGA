@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 19:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 20:21. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2947,7 +2947,8 @@ class BaseSource:
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any {p} profiles matching your input.".format(p=profile_type))
+            raise NoProductAvailableError("Cannot find any combined {p} profiles matching your "
+                                          "input.".format(p=profile_type))
 
         return matched_prods
 

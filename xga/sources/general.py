@@ -1,8 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 12:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 20:21. Copyright (c) David J Turner
 
 import warnings
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 import numpy as np
 from astropy import wcs
@@ -12,7 +12,8 @@ from astropy.units import Quantity, UnitBase, deg, UnitConversionError
 from numpy import ndarray
 
 from .base import BaseSource
-from ..exceptions import NotAssociatedError, PeakConvergenceFailedError, NoRegionsError, NoValidObservationsError
+from ..exceptions import NotAssociatedError, PeakConvergenceFailedError, NoRegionsError, NoValidObservationsError, \
+    NoProductAvailableError
 from ..products import RateMap
 from ..sourcetools import rad_to_ang, ang_to_rad, nh_lookup
 
@@ -266,9 +267,69 @@ class ExtendedSource(BaseSource):
 
         return chosen
 
-    def get_1d_brightness_profile(self):
-        raise NotImplementedError("This isn't implemented yet because I haven't decided what the storage key for"
-                                  " brightness profiles will contain.")
+    def get_1d_brightness_profile(self, outer_rad: Quantity, obs_id: str = None, inst: str = None,
+                                  central_coord: Quantity = None, radii: Quantity = None, lo_en: Quantity = None,
+                                  hi_en: Quantity = None, combined: bool = True, pix_step: int = 1,
+                                  min_snr: Union[float, int] = 0.0, psf_corr: bool = False, psf_model: str = "ELLBETA",
+                                  psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15):
+        """
+        A specific get method for 1D brightness profiles. Should provide a relatively simple way of retrieving
+        specific brightness profiles from XGA's storage system. Please note that there is not a separate get method
+        for brightness profiles made from combined data, instead this method has a combined parameter to set. This
+        method will provide profiles that partially match if there is not enough information to produce a unique
+        match.
+
+        :param Quantity outer_rad: The outermost radius of the profile.
+        :param str obs_id: The ObsID used to generate the profile in question, default is None. If this is set to
+            combined then this method will search for profiles based on combined data.
+        :param str inst: The instrument used to generate the profile in question, default is None. If this is set to
+            combined then this method will search for profiles based on combined data.
+        :param Quantity central_coord: The central coordinate from which the profile was generated. Default is
+            None, which means we shall use the default coordinate of this source.
+        :param Quantity radii: Specific radii to check for in the profiles.
+        :param Quantity lo_en: The lower energy bound of the RateMap used to generate the profile.
+        :param Quantity hi_en: The upper energy bound of the RateMap used to generate the profile.
+        :param bool combined: Whether this method should look for a profile generated using combined data, default is
+            True.
+        :param int pix_step: The width of each annulus in pixels used to generate the profile.
+        :param float min_snr: The minimum signal to noise imposed upon the profile.
+        :param bool psf_corr: Is the brightness profile corrected for PSF effects?
+        :param str psf_model: If PSF corrected, the PSF model used.
+        :param int psf_bins: If PSF corrected, the number of bins per side.
+        :param str psf_algo: If PSF corrected, the algorithm used.
+        :param int psf_iter: If PSF corrected, the number of algorithm iterations.
+        :return:
+        """
+        # Makes sure its in our standard unit
+        outer_rad = self.convert_radius(outer_rad, 'deg')
+
+        # Yes there are three separate ways of triggering a search for combined profiles, I know its overkill
+        if obs_id == "combined" or inst == "combined" or combined:
+            interim_prods = self.get_combined_profiles("brightness", central_coord, radii, lo_en, hi_en)
+        else:
+            interim_prods = self.get_profiles("brightness", obs_id, inst, central_coord, radii, lo_en, hi_en)
+
+        # The methods I used to get this far will already have gotten upset if there are no matches, so I don't need
+        #  to check they exist, but I do need to check if I have a list or a single object
+        if not isinstance(interim_prods, list):
+            interim_prods = [interim_prods]
+
+        matched_prods = []
+        for p in interim_prods:
+            if not psf_corr and p.outer_radius == outer_rad and p.pix_step == pix_step and p.min_snr == min_snr \
+                    and p.psf_corrected == psf_corr:
+                matched_prods.append(p)
+            elif psf_corr and p.outer_radius == outer_rad and p.pix_step == pix_step and p.min_snr == min_snr \
+                    and p.psf_corrected == psf_corr and p.psf_model == psf_model and p.psf_bins == psf_bins \
+                    and p.psf_algorithm == psf_algo and p.psf_iterations == psf_iter:
+                matched_prods.append(p)
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any brightness profiles matching your input.")
+
+        return matched_prods
 
     # Property SPECIFICALLY FOR THE COMBINED PEAK - as this is the peak we should be using mostly.
     @property
