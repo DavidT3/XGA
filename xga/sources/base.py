@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 12:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 17:28. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -297,7 +297,7 @@ class BaseSource:
             raise TypeError("Only product objects can be assigned to sources.")
 
         en_bnds = prod_obj.energy_bounds
-        if en_bnds[0] is not None and en_bnds[1] is not None:
+        if en_bnds[0] is not None and en_bnds[1] is not None and not hasattr(prod_obj, 'storage_key'):
             extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
             # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
             #  this variable with just the energy key
@@ -2806,6 +2806,8 @@ class BaseSource:
 
         return matched_prods
 
+    # TODO THIS ALSO MUST TAKE CENTRAL COORDINATE AND radii arguments
+    # TODO AND ALSO ENERGY LIMITS
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None) \
             -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
