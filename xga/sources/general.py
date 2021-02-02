@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2021, 19:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 12:34. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List
@@ -22,7 +22,11 @@ warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class ExtendedSource(BaseSource):
-    # TODO Make a view method for this class that plots the measured peaks on the combined ratemap.
+    """
+    The general extended source XGA class, for extended X-ray sources that do not have a specific source for
+    their astrophysical class. This class is subclassed by GalaxyCluster, which then adds more specific analyses,
+    for instance.
+    """
     def __init__(self, ra, dec, redshift=None, name=None, custom_region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
                  back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
@@ -262,6 +266,10 @@ class ExtendedSource(BaseSource):
 
         return chosen
 
+    def get_1d_brightness_profile(self):
+        raise NotImplementedError("This isn't implemented yet because I haven't decided what the storage key for"
+                                  " brightness profiles will contain.")
+
     # Property SPECIFICALLY FOR THE COMBINED PEAK - as this is the peak we should be using mostly.
     @property
     def peak(self) -> Quantity:
@@ -316,6 +324,10 @@ class ExtendedSource(BaseSource):
 
 
 class PointSource(BaseSource):
+    """
+    The general point source XGA class, for point X-ray sources that do not have a specific source for
+    their astrophysical class.
+    """
     def __init__(self, ra, dec, redshift=None, name=None, point_radius=Quantity(30, 'arcsec'), use_peak=False,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False,
