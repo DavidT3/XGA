@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 12:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 16:29. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List
@@ -7,7 +7,7 @@ from typing import Union, List
 import numpy as np
 from astropy import wcs
 from astropy.cosmology import Planck15
-from astropy.units import Quantity, UnitConversionError, pix, kpc
+from astropy.units import Quantity, UnitConversionError, kpc
 
 from .general import ExtendedSource
 from ..exceptions import NoRegionsError, NoProductAvailableError
@@ -290,26 +290,16 @@ class GalaxyCluster(ExtendedSource):
 
         return matched_prods
 
-    def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
-                                use_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
-                                figsize: tuple = (10, 7), xscale: str = 'log', yscale: str = 'log',
-                                back_sub: bool = True):
+    def view_brightness_profile(self, reg_type: str, central_coord: Quantity = None, pix_step: int = 1,
+                                min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
+                                yscale: str = 'log', back_sub: bool = True):
         """
-        A method that generates and displays brightness profiles for the current cluster. Brightness profiles
-        exclude point sources and either measure the average counts per second within a circular annulus (radial),
-        or an angular region of a circular annulus (pizza). All points correspond to an annulus of width 1 pixel,
-        and this method does NOT do any rebinning to maximise signal to noise.
-        If use peak is selected, the peak coordinate used will depend on the combined ratemap, so would be different
-        for PSF corrected ratemaps to the uncorrected ratemap.
+        A method that generates and displays brightness profile objects for this galaxy cluster. Interloper
+        sources are excluded, and any fits performed to pre-existing brightness profiles which are being
+        viewed will also be displayed.
 
         :param str reg_type: The region in which to view the radial brightness profile.
-        :param str profile_type: The type of brightness profile you wish to view, radial or pizza.
-        :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
-            slice will be 360 / num_slices degrees.
-        :param bool use_peak: If True then the radial profiles (including for PSF corrected ratemaps)
-            will all be constructed centered on the peak found for the 'normal' combined ratemap. If False,
-            peaks will be found for each individual combined ratemap and profiles will be constructed
-            centered on them.
+        :param Quantity central_coord: The central coordinate of the brightness profile.
         :param int pix_step: The width (in pixels) of each annular bin, default is 1.
         :param float/int min_snr: The minimum signal to noise allowed for each radial bin. This is 0 by
             default, which disables any automatic rebinning.
@@ -321,11 +311,6 @@ class GalaxyCluster(ExtendedSource):
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-
-        # Check that the passed profile type is valid
-        allowed_ptype = ["radial", "pizza"]
-        if profile_type not in allowed_ptype:
-            raise ValueError("The only allowed profile types are {}".format(", ".join(allowed_ptype)))
 
         # Check that the valid region choice actually has an entry that is not None
         if reg_type == "custom" and self._custom_region_radius is None:
@@ -346,58 +331,46 @@ class GalaxyCluster(ExtendedSource):
         # Fetch the mask that will remove all interloper sources from the combined ratemap
         int_mask = self.get_interloper_mask()
 
-        if use_peak:
-            pix_central = comb_rt.coord_conv(self.peak, pix)
-        else:
-            pix_central = comb_rt.coord_conv(self.ra_dec, pix)
+        if central_coord is None:
+            central_coord = self.default_coord
 
         # Read out the radii
         rad = self.get_radius(reg_type)
 
-        # The plotting will be slightly different based on the profile type, also have to call the methods
-        #  to generate the profiles as I don't currently store the data.
-        if profile_type == "radial":
-            # This fetches any profiles that might have already been generated to our required specifications
-            prof_prods = self.get_products("combined_brightness_profile")
+        # This fetches any profiles that might have already been generated to our required specifications
+        prof_prods = self.get_products("combined_brightness_profile")
+        if len(prof_prods) == 1:
+            matching_profs = [p for p in list(prof_prods[0].values())
+                              if p.check_match(comb_rt, central_coord, pix_step, min_snr, rad)]
+        else:
+            matching_profs = []
+
+        if len(matching_profs) == 0:
+            sb_profile, success = radial_brightness(comb_rt, central_coord, rad, self._back_inn_factor,
+                                                    self._back_out_factor, int_mask, self.redshift, pix_step, kpc,
+                                                    self.cosmo, min_snr)
+            self.update_products(sb_profile)
+        else:
+            sb_profile = matching_profs[0]
+
+        for psf_comb_rt in psf_comb_rts:
+            p_rt = psf_comb_rt[-1]
+
             if len(prof_prods) == 1:
                 matching_profs = [p for p in list(prof_prods[0].values())
-                                  if p.check_match(comb_rt, pix_central, pix_step, min_snr, rad)]
+                                  if p.check_match(p_rt, central_coord, pix_step, min_snr, rad)]
             else:
                 matching_profs = []
 
             if len(matching_profs) == 0:
-                sb_profile, success = radial_brightness(comb_rt, pix_central, rad, self._back_inn_factor,
-                                                        self._back_out_factor, int_mask, self.redshift, pix_step, kpc,
-                                                        self.cosmo, min_snr)
-                self.update_products(sb_profile)
+                psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], central_coord, rad,
+                                                            self._back_inn_factor, self._back_out_factor, int_mask,
+                                                            self.redshift, pix_step, kpc, self.cosmo, min_snr)
+                self.update_products(psf_sb_profile)
             else:
-                sb_profile = matching_profs[0]
+                psf_sb_profile = matching_profs[0]
 
-            for psf_comb_rt in psf_comb_rts:
-                p_rt = psf_comb_rt[-1]
-                if use_peak:
-                    pix_central = self.find_peak(p_rt)[0]
-                else:
-                    pix_central = comb_rt.coord_conv(self.ra_dec, pix)
-
-                if len(prof_prods) == 1:
-                    matching_profs = [p for p in list(prof_prods[0].values())
-                                      if p.check_match(p_rt, pix_central, pix_step, min_snr, rad)]
-                else:
-                    matching_profs = []
-
-                if len(matching_profs) == 0:
-                    psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], pix_central, rad,
-                                                                self._back_inn_factor, self._back_out_factor, int_mask,
-                                                                self.redshift, pix_step, kpc, self.cosmo, min_snr)
-                    self.update_products(psf_sb_profile)
-                else:
-                    psf_sb_profile = matching_profs[0]
-
-                sb_profile += psf_sb_profile
-        elif profile_type == "pizza":
-            raise NotImplementedError("This was implemented but so many things have changed and I haven't "
-                                      "adapted pizza profiles yet")
+            sb_profile += psf_sb_profile
 
         draw_rads = {}
         for r_name in self._radii:
