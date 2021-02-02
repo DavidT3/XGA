@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 18:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 20:01. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -66,6 +66,11 @@ class SurfaceBrightness1D(BaseProfile1D):
         # Useful quantities from generation of surface brightness profile
         self._pix_step = pix_step
         self._min_snr = min_snr
+
+        # This is the type of compromise I make when I am utterly exhausted, I am just going to require this be in
+        #  degrees
+        if not outer_rad.unit.is_equivalent('deg'):
+            raise UnitConversionError("outer_rad must be convertible to degrees.")
         self._outer_rad = outer_rad
 
         # This is an attribute that doesn't matter enough to be passed in, but can be set externally if it is relevant
@@ -91,11 +96,9 @@ class SurfaceBrightness1D(BaseProfile1D):
         else:
             psf_key = ""
 
-        self._storage_key = en_key + psf_key + self._storage_key + "_st{ps}_minsn{ms}".format(r=centre.value[0],
-                                                                                              d=centre.value[1],
-                                                                                              ro=outer_rad.value,
-                                                                                              ps=int(pix_step),
-                                                                                              ms=min_snr)
+        ro = outer_rad.to('deg').value
+        self._storage_key = en_key + psf_key + self._storage_key + "_st{ps}_minsn{ms}_ro{ro}".format(ps=int(pix_step),
+                                                                                                     ms=min_snr, ro=ro)
 
     @property
     def pix_step(self) -> int:

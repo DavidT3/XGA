@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 17:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 20:01. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -8,7 +8,7 @@ import numpy as np
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, UnitBase, pix, deg, arcsec, UnitConversionError
 
-from .misc import pix_deg_scale, pix_rad_to_physical, physical_rad_to_pix
+from .misc import pix_deg_scale, pix_rad_to_physical, physical_rad_to_pix, rad_to_ang
 from ..products import Image, RateMap
 from ..products.profile import SurfaceBrightness1D
 
@@ -360,9 +360,14 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         deg_cen_rads[0] = Quantity(0, 'deg')
     rad_err = (final_out_rads-final_inn_rads) / 2
 
+    if not outer_rad.unit.is_equivalent('deg'):
+        deg_outer_rad = rad_to_ang(outer_rad, z, cosmo).to('deg')
+    else:
+        deg_outer_rad = outer_rad.to("deg")
+
     # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product
     br_prof = SurfaceBrightness1D(rt, cen_rads, Quantity(br_prof, 'ct/(s*arcmin**2)'), centre, pix_step, min_snr,
-                                  outer_rad, rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'),
+                                  deg_outer_rad, rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'),
                                   Quantity(countrate_bg_per_area, 'ct/(s*arcmin**2)'),
                                   np.insert(out_rads, 0, inn_rads[0]), np.concatenate([back_inn_rad, back_out_rad]),
                                   Quantity(areas, 'arcmin**2'), deg_cen_rads)
