@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/01/2021, 12:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 17:14. Copyright (c) David J Turner
 
 
 from typing import Tuple
@@ -109,7 +109,7 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
 
 
 def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, pix_step: int = 1,
-              cen_rad_units: UnitBase = arcsec, cosmo=Planck15, min_central_pix_rad: int = 3,
+              rad_units: UnitBase = arcsec, cosmo=Planck15, min_central_pix_rad: int = 3,
               start_pix_rad: int = 0) -> Tuple[np.ndarray, np.ndarray, Quantity]:
     """
     Will probably only ever be called by an internal brightness calculation, but two different methods
@@ -121,7 +121,7 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     :param float z: The redshift of the source of interest, required if the output radius units are
         a proper radius.
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
-    :param UnitBase cen_rad_units: The output units for the centres of the annulli returned by
+    :param UnitBase rad_units: The output units for the centres of the annulli returned by
         this function. The inner and outer radii will always be in pixels.
     :param cosmo: An instance of an astropy cosmology, the default is Planck15.
     :param int start_pix_rad: The pixel radius at which the innermost annulus starts, default is zero.
@@ -160,19 +160,19 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     out_rads = rads[1:len(rads)]
 
     pix_cen_rads = Quantity((inn_rads + out_rads)/2, pix)
-    cen_rads = pix_rad_to_physical(im_prod, pix_cen_rads, cen_rad_units, deg_cen, z, cosmo)
+    cen_rads = pix_rad_to_physical(im_prod, pix_cen_rads, rad_units, deg_cen, z, cosmo)
 
     # If the innermost radius is zero then the innermost annulus is actually a circle and we don't want
     #  the central radius to be between it and the next radius, as that wouldn't be strictly accurate
     if rads[0] == 0:
-        cen_rads[0] = Quantity(0, cen_rad_units)
+        cen_rads[0] = Quantity(0, rad_units)
 
     return inn_rads, out_rads, cen_rads
 
 
 def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_inn_rad_factor: float = 1.05,
                       back_out_rad_factor: float = 1.5, interloper_mask: np.ndarray = None,
-                      z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
+                      z: float = None, pix_step: int = 1, rad_units: UnitBase = arcsec,
                       cosmo=Planck15, min_snr: float = 0.0, min_central_pix_rad: int = 3,
                       start_pix_rad: int = 0) -> Tuple[SurfaceBrightness1D, bool]:
     """
@@ -190,7 +190,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     :param np.ndarray interloper_mask: A numpy array that masks out any interloper sources.
     :param float z: The redshift of the source of interest.
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
-    :param BaseUnit cen_rad_units: The desired output units for the central radii of the annuli.
+    :param BaseUnit rad_units: The desired output units for the central radii of the annuli.
     :param cosmo: An astropy cosmology object for source coordinate conversions.
     :param float min_snr: The minimum signal to noise allowed for each bin in the profile. If any point is
         below this threshold the profile will be rebinned. Default is 0.0
@@ -279,7 +279,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     pix_cen = rt.coord_conv(centre, pix)
 
     # This sets up the initial annular bin radii, as well as finding the central radii of the bins in the chosen units.
-    inn_rads, out_rads, cen_rads = ann_radii(rt, centre, outer_rad, z, pix_step, cen_rad_units, cosmo,
+    inn_rads, out_rads, cen_rads = ann_radii(rt, centre, outer_rad, z, pix_step, rad_units, cosmo,
                                              min_central_pix_rad, start_pix_rad)
 
     # These calculate the inner and out pixel radii for the background mask - placed in arrays because the
@@ -345,11 +345,19 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     else:
         succeeded = True
 
-    final_inn_rads = pix_rad_to_physical(rt, Quantity(inn_rads, pix), cen_rad_units, centre, z, cosmo)
-    final_out_rads = pix_rad_to_physical(rt, Quantity(out_rads, pix), cen_rad_units, centre, z, cosmo)
+    final_inn_rads = pix_rad_to_physical(rt, Quantity(inn_rads, pix), rad_units, centre, z, cosmo)
+    final_out_rads = pix_rad_to_physical(rt, Quantity(out_rads, pix), rad_units, centre, z, cosmo)
+
+    # Need these simply because the brightness profile must always be aware of the radii in degrees in order to
+    #  to assemble a storage key properly
+    deg_inn_rads = pix_rad_to_physical(rt, Quantity(inn_rads, pix), deg, centre, z, cosmo)
+    deg_out_rads = pix_rad_to_physical(rt, Quantity(out_rads, pix), deg, centre, z, cosmo)
+
     cen_rads = (final_inn_rads + final_out_rads) / 2
+    deg_cen_rads = (deg_inn_rads + deg_out_rads) / 2
     if final_inn_rads[0].value == 0:
         cen_rads[0] = Quantity(0, cen_rads.unit)
+        deg_cen_rads[0] = Quantity(0, 'deg')
     rad_err = (final_out_rads-final_inn_rads) / 2
 
     # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product
@@ -357,80 +365,20 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
                                   outer_rad, rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'),
                                   Quantity(countrate_bg_per_area, 'ct/(s*arcmin**2)'),
                                   np.insert(out_rads, 0, inn_rads[0]), np.concatenate([back_inn_rad, back_out_rad]),
-                                  Quantity(areas, 'arcmin**2'))
+                                  Quantity(areas, 'arcmin**2'), deg_cen_rads)
     # Set the success property
     br_prof.min_snr_succeeded = succeeded
 
     return br_prof, succeeded
 
 
-# TODO At some point implement minimum SNR for this also
+# TODO REWRITE THESE AT SOME POINT
 def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray,
                      centre: Quantity, rad: Quantity, num_slices: int = 4,
                      z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
                      cosmo=Planck15) -> Tuple[np.ndarray, Quantity, Quantity, np.float64, np.ndarray, np.ndarray]:
-    """
-    A different type of brightness profile that allows you to divide the cluster up azimuthally as
-    well as radially. It performs the same calculation as radial_brightness, but for N angular bins,
-    and as such returns N separate profiles.
 
-    :param Image im_prod: An Image or RateMap object that you wish to construct a brightness profile from.
-    :param np.ndarray src_mask: A numpy array that masks out everything but the source, including interlopers.
-    :param np.ndarray back_mask: A numpy array that masks out everything but the background, including interlopers.
-    :param Quantity centre: The coordinates for the centre of the brightness profile.
-    :param Quantity rad: The outer radius of the brightness profile (THIS SHOULD BE THE SAME RADIUS AS THE REGION
-        YOUR SRC_MASK IS BASED ON, OTHERWISE YOU'LL GET AN INVALID BACKGROUND MEASUREMENT).
-    :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
-    :param float z: The redshift of the source of interest.
-    :param int pix_step: The width (in pixels) of each annular bin, default is 1.
-    :param BaseUnit cen_rad_units: The desired output units for the central radii of the annuli.
-    :param cosmo: An astropy cosmology object for source coordinate conversions.
-        slice will be 360 / num_slices degrees.
-    :return: The brightness is returned in a numpy array with a column per pizza slice, then the
-        radii at the centre of the bins are returned in units of kpc, then the angle boundaries of each slice,
-        and finally the average brightness in the background region is returned.
-    :rtype: Tuple[ndarray, Quantity, Quantity, np.float64, ndarray, ndarray]
-    """
     raise NotImplementedError("The supporting infrastructure to allow pizza profile product objects hasn't been"
                               " written yet sorry!")
-    if im_prod.shape != src_mask.shape:
-        raise ValueError("The shape of the src_mask array ({0}) must be the same as that of im_prod "
-                         "({1}).".format(src_mask.shape, im_prod.shape))
-
-    # Just making sure we have the centre in pixel coordinates
-    pix_cen = im_prod.coord_conv(centre, pix)
-
-    # This sets up the annular bin radii, as well as finding the central radii of the bins in the chosen units.
-    inn_rads, out_rads, cen_rads = ann_radii(im_prod, centre, rad, z, pix_step, cen_rad_units, cosmo)
-
-    # Setup the angular limits for the slices
-    angs = Quantity(np.linspace(0, 360, int(num_slices)+1), deg)
-    start_angs = angs[:-1]
-    stop_angs = angs[1:]
-
-    br = np.zeros((len(inn_rads), len(start_angs)))
-    # TODO Find a way to fail gracefully if weights are all zeros maybe - hopefully shouldn't
-    #  happen anymore but can't promise
-    for ang_ind in range(len(start_angs)):
-        if im_prod.type == 'image':
-            masks = annular_mask(pix_cen, inn_rads, out_rads, im_prod.shape, start_angs[ang_ind],
-                                 stop_angs[ang_ind]) * src_mask[..., None]
-        elif im_prod.type == 'ratemap':
-            masks = annular_mask(pix_cen, inn_rads, out_rads, im_prod.shape, start_angs[ang_ind],
-                                 stop_angs[ang_ind]) * src_mask[..., None] * im_prod.sensor_mask[..., None]
-
-        masked_data = masks * im_prod.data[..., None]
-
-        # Calculates the average for each radius, use the masks array as weights to only include unmasked
-        #  areas in the average for each radius.
-        br[:, ang_ind] = np.average(masked_data, axis=(0, 1), weights=masks)
-
-    # Finds the average of the background region
-    bg = np.average(im_prod.data * back_mask, axis=(0, 1), weights=back_mask)
-
-    # Just packaging the angles nicely
-    return_angs = Quantity(np.stack([start_angs.value, stop_angs.value]).T, deg)
-
-    return br, cen_rads, return_angs, bg, inn_rads, out_rads
 
 
