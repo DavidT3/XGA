@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 20:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 20:40. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List
@@ -292,11 +292,13 @@ class GalaxyCluster(ExtendedSource):
 
     def view_brightness_profile(self, reg_type: str, central_coord: Quantity = None, pix_step: int = 1,
                                 min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
-                                yscale: str = 'log', back_sub: bool = True):
+                                yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
+                                hi_en: Quantity = Quantity(2.0, 'keV')):
         """
         A method that generates and displays brightness profile objects for this galaxy cluster. Interloper
         sources are excluded, and any fits performed to pre-existing brightness profiles which are being
-        viewed will also be displayed.
+        viewed will also be displayed. The profile will be generated using a RateMap between the energy bounds
+        specified by lo_en and hi_en.
 
         :param str reg_type: The region in which to view the radial brightness profile.
         :param Quantity central_coord: The central coordinate of the brightness profile.
@@ -307,6 +309,8 @@ class GalaxyCluster(ExtendedSource):
         :param str xscale: The scaling to be applied to the x axis, default is log.
         :param str yscale: The scaling to be applied to the y axis, default is log.
         :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param Quantity lo_en: The lower energy bound of the RateMap to generate the profile from.
+        :param Quantity hi_en: The upper energy bound of the RateMap to generate the profile from.
         """
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
@@ -322,9 +326,10 @@ class GalaxyCluster(ExtendedSource):
         elif reg_type == "r2500" and self._r2500 is None:
             raise NoRegionsError("No R2500 region has been setup for this cluster")
 
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
+        comb_rt = self.get_combined_ratemaps(lo_en, hi_en)
         # If there have been PSF deconvolutions of the above data, then we can grab them too
+        # I still do it this way rather than with get_combined_ratemaps because I want ALL PSF corrected ratemaps
+        en_key = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
         psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", just_obj=False)
                         if en_key + "_" in rt[-2]]
 
@@ -339,7 +344,8 @@ class GalaxyCluster(ExtendedSource):
 
         # This fetches any profiles that might have already been generated to our required specifications
         try:
-            sb_profile = self.get_1d_brightness_profile(rad, combined=True, pix_step=pix_step, min_snr=min_snr)
+            sb_profile = self.get_1d_brightness_profile(rad, combined=True, pix_step=pix_step, min_snr=min_snr,
+                                                        lo_en=lo_en, hi_en=hi_en)
             if isinstance(sb_profile, list):
                 raise ValueError("There are multiple matches for this brightness profile, and its the developers "
                                  "fault not yours.")
@@ -356,7 +362,7 @@ class GalaxyCluster(ExtendedSource):
                 psf_sb_profile = self.get_1d_brightness_profile(rad, combined=True, pix_step=pix_step, min_snr=min_snr,
                                                                 psf_corr=True, psf_model=p_rt.psf_model,
                                                                 psf_bins=p_rt.psf_bins, psf_algo=p_rt.psf_algorithm,
-                                                                psf_iter=p_rt.psf_iterations)
+                                                                psf_iter=p_rt.psf_iterations, lo_en=lo_en, hi_en=hi_en)
                 if isinstance(psf_sb_profile, list):
                     raise ValueError("There are multiple matches for this brightness profile, and its the developers "
                                      "fault not yours.")
