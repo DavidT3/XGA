@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 12:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 07:49. Copyright (c) David J Turner
 
 
 import warnings
@@ -1114,8 +1114,8 @@ class RateMap(Image):
 
         # Find the total mask areas. As the mask is just an array of ones and zeros we can just sum the
         #  whole thing to find the total pixel area covered.
-        src_area = source_mask.sum()
-        back_area = back_mask.sum()
+        src_area = (source_mask*self.sensor_mask).sum()
+        back_area = (back_mask*self.sensor_mask).sum()
 
         # Exposure correction takes into account the different exposure times of the individual pixels
         if exp_corr:
