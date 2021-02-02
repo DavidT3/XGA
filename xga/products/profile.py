@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 17:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 18:36. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -86,10 +86,16 @@ class SurfaceBrightness1D(BaseProfile1D):
         self._y_axis_name = "Surface Brightness"
 
         en_key = "bound_{l}-{h}_".format(l=rt.energy_bounds[0].to('keV').value, h=rt.energy_bounds[1].to('keV').value)
-        self._storage_key = en_key + self._storage_key + "_st{ps}_minsn{ms}".format(r=centre.value[0],
-                                                                                    d=centre.value[1],
-                                                                                    ro=outer_rad.value,
-                                                                                    ps=int(pix_step), ms=min_snr)
+        if rt.psf_corrected:
+            psf_key = "_" + rt.psf_model + "_" + str(rt.psf_bins) + "_" + rt.psf_algorithm + str(rt.psf_iterations)
+        else:
+            psf_key = ""
+
+        self._storage_key = en_key + psf_key + self._storage_key + "_st{ps}_minsn{ms}".format(r=centre.value[0],
+                                                                                              d=centre.value[1],
+                                                                                              ro=outer_rad.value,
+                                                                                              ps=int(pix_step),
+                                                                                              ms=min_snr)
 
     @property
     def pix_step(self) -> int:
