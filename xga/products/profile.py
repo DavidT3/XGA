@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 08:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 10:47. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -423,7 +423,7 @@ class ProjectedGasTemperature1D(BaseProfile1D):
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, upper_limit: Quantity = Quantity(63, 'keV'),
-                 associated_set_id: int = None):
+                 associated_set_id: int = None, set_storage_key: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected temperature profile.
 
@@ -441,8 +441,11 @@ class ProjectedGasTemperature1D(BaseProfile1D):
             any points over that value will have their value and uncertainty set to NaN. Default is 63keV, which
             won't have much of an effect.
         :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -516,7 +519,8 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
     from a set of annular spectra by XSPEC. These are typically only defined by XGA methods.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None):
+                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
+                 set_storage_key: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected metallicity/abundance profile.
 
@@ -530,9 +534,12 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
         :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
         """
         #
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -557,7 +564,7 @@ class Generic1D(BaseProfile1D):
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  y_axis_label: str, radii_err: Quantity = None, values_err: Quantity = None,
-                 associated_set_id: int = None):
+                 associated_set_id: int = None, set_storage_key: str = None):
         """
         The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
         to set up an XGA profile with custom data.
@@ -570,9 +577,12 @@ class Generic1D(BaseProfile1D):
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
         :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
         """
 
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key)
         self._y_axis_name = y_axis_label
 
 

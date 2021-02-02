@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/01/2021, 10:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 10:47. Copyright (c) David J Turner
 
 
 import os
@@ -16,7 +16,7 @@ from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
 from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError
-from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D
+from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D
 from ..utils import dict_search
 
 
@@ -1132,8 +1132,8 @@ class AnnularSpectra(BaseAggregateProduct):
     @property
     def storage_key(self) -> str:
         """
-        This property returns the storage key which this object assembles to place the AnnularSpectrum in
-        an XGA source's storage structure. The key is based on the properties of the AnnularSpectrum, and
+        This property returns the storage key which this object assembles to place the AnnularSpectra in
+        an XGA source's storage structure. The key is based on the properties of the AnnularSpectra, and
         some of the configuration options, and is basically human readable.
 
         :return: String storage key.
@@ -1416,15 +1416,19 @@ class AnnularSpectra(BaseAggregateProduct):
 
         if par == 'kT' and upper_limit is None:
             new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
-                                                 'combined', rad_errors, par_errs, associated_set_id=self.set_ident)
+                                                 'combined', rad_errors, par_errs, associated_set_id=self.set_ident,
+                                                 set_storage_key=self.storage_key)
         elif par == 'kT' and upper_limit is not None:
             new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
-                                                 'combined', rad_errors, par_errs, upper_limit, self.set_ident)
+                                                 'combined', rad_errors, par_errs, upper_limit, self.set_ident,
+                                                 self.storage_key)
         elif par == 'Abundanc':
             new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
-                                                 'combined', rad_errors, par_errs, self.set_ident)
+                                                 'combined', rad_errors, par_errs, self.set_ident, self.storage_key)
         else:
-            raise NotImplementedError("I cannot yet generate generic profiles, but soon!")
+            new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined', 'combined', par,
+                                 rad_errors, par_errs, associated_set_id=self.set_ident,
+                                 set_storage_key=self.storage_key)
 
         return new_prof
 
