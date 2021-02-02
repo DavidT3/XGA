@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 10:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 12:06. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -563,7 +563,7 @@ class Generic1D(BaseProfile1D):
     of models that I didn't build into XGA. It can also be used to make arbitrary profiles using external data.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 y_axis_label: str, radii_err: Quantity = None, values_err: Quantity = None,
+                 y_axis_label: str, prof_type: str, radii_err: Quantity = None, values_err: Quantity = None,
                  associated_set_id: int = None, set_storage_key: str = None):
         """
         The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
@@ -574,6 +574,9 @@ class Generic1D(BaseProfile1D):
         :param str obs_id: The observation which this profile was generated from.
         :param str inst: The instrument which this profile was generated from.
         :param str y_axis_label: The label to apply to the y-axis of any plots generated from this profile.
+        :param str prof_type: This is a string description of the profile, used to store it in an XGA source (with
+            _profile appended). For instance the prof_type of a ProjectedGasTemperature1D instance is
+            1d_proj_temperature, and it would be stored under 1d_proj_temperature_profile.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
         :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
@@ -583,6 +586,7 @@ class Generic1D(BaseProfile1D):
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
                          set_storage_key)
+        self._prof_type = prof_type
         self._y_axis_name = y_axis_label
 
 

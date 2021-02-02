@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 10:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 12:06. Copyright (c) David J Turner
 
 
 import os
@@ -1426,9 +1426,9 @@ class AnnularSpectra(BaseAggregateProduct):
             new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
                                                  'combined', rad_errors, par_errs, self.set_ident, self.storage_key)
         else:
+            prof_type = "1d_proj_{}"
             new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined', 'combined', par,
-                                 rad_errors, par_errs, associated_set_id=self.set_ident,
-                                 set_storage_key=self.storage_key)
+                                 prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key)
 
         return new_prof
 

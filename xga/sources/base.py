@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 11:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 12:06. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -20,7 +20,7 @@ from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRe
 from regions import read_ds9, PixelRegion, CompoundSkyRegion
 
 from .. import xga_conf
-from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, MultipleMatchError, \
+from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
@@ -804,12 +804,7 @@ class BaseSource:
                     # so we call this function recursively.
                     unpack_list(entry)
 
-        # Only certain product identifier are allowed
-        if p_type not in ALLOWED_PRODUCTS:
-            prod_str = ", ".join(ALLOWED_PRODUCTS)
-            raise UnknownProductError("{p} is not a recognised product type. Allowed product types are "
-                                      "{l}".format(p=p_type, l=prod_str))
-        elif obs_id not in self._products and obs_id is not None:
+        if obs_id not in self._products and obs_id is not None:
             raise NotAssociatedError("{0} is not associated with {1} .".format(obs_id, self.name))
         elif (obs_id is not None and obs_id in self._products) and \
                 (inst is not None and inst not in self._products[obs_id]):
@@ -2811,9 +2806,42 @@ class BaseSource:
 
         return matched_prods
 
-    def get_profiles(self):
-        raise NotImplementedError("This will be implemented soon, but I think I need to rejig how I store"
-                                  " profiles first")
+    def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None) \
+            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+        """
+        This is the generic get method for XGA profile objects stored in this source. You still must remember
+        the profile type value to use it, but once entered it will return a list of all matching profiles (or a
+        single object if only one match is found).
+
+        :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
+            were multiple matching products).
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if "profile" in profile_type:
+            warnings.warn("The profile_type you passed contains the word 'profile', which is appended onto "
+                          "a profile type by XGA, you need to try this again without profile on the end, unless"
+                          " you gave a generic profile a type with 'profile' in.")
+
+        search_key = profile_type + "_profile"
+        if all([obs_id is None, inst is None]):
+            search_key = "combined_" + search_key
+
+        if search_key not in ALLOWED_PRODUCTS:
+            warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.")
+
+        matched_prods = self.get_products(search_key, obs_id, inst)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any {p} profiles matching your input.".format(p=profile_type))
+
+        return matched_prods
 
     @property
     def fitted_models(self) -> List[str]:
@@ -3205,12 +3233,7 @@ class NullSource:
                     # so we call this function recursively.
                     unpack_list(entry)
 
-        # Only certain product identifier are allowed
-        if p_type not in ALLOWED_PRODUCTS:
-            prod_str = ", ".join(ALLOWED_PRODUCTS)
-            raise UnknownProductError("{p} is not a recognised product type. Allowed product types are "
-                                      "{l}".format(p=p_type, l=prod_str))
-        elif obs_id not in self._products and obs_id is not None:
+        if obs_id not in self._products and obs_id is not None:
             raise NotAssociatedError("{o} is not associated with {s}.".format(o=obs_id, s=self.name))
         elif inst not in XMM_INST and inst is not None:
             raise ValueError("{} is not an allowed instrument".format(inst))
