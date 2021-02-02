@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 18:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 19:20. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2806,6 +2806,64 @@ class BaseSource:
 
         return matched_prods
 
+    def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
+                       radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+        """
+        The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
+        searches for full and partial matches in this source's product storage structure.
+
+        :param str search_key: The exact search key which defined profile type, and whether it is combined or not.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
+            is None which means the method will use the default coordinate of this source.
+        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
+            used often as you likely won't know the radial values a priori.
+        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed hi_en must be too.
+        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed lo_en must be too.
+        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
+            were multiple matching products).
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if all([lo_en is None, hi_en is None]):
+            energy_key = "_"
+        elif all([lo_en is not None, hi_en is not None]):
+            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        if central_coord is None:
+            central_coord = self.default_coord
+        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
+
+        if radii is not None:
+            radii = self.convert_radius(radii, 'deg')
+            rad_chunk = "r" + "_".join(radii.value.astype(str))
+            rad_info = True
+        else:
+            rad_info = False
+
+        if search_key not in ALLOWED_PRODUCTS:
+            warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.")
+
+        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False)
+        matched_prods = []
+        for p in broad_prods:
+            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
+
+            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
+                matched_prods.append(p[-1])
+            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
+                matched_prods.append(p[-1])
+
+        return matched_prods
+
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
                      radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
             -> Union[BaseProfile1D, List[BaseProfile1D]]:
@@ -2836,24 +2894,6 @@ class BaseSource:
                           "a profile type by XGA, you need to try this again without profile on the end, unless"
                           " you gave a generic profile a type with 'profile' in.")
 
-        if all([lo_en is None, hi_en is None]):
-            energy_key = "_"
-        elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        if central_coord is None:
-            central_coord = self.default_coord
-        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
-
-        if radii is not None:
-            radii = self.convert_radius(radii, 'deg')
-            rad_chunk = "r" + "_".join(radii.value.astype(str))
-            rad_info = True
-        else:
-            rad_info = False
-
         search_key = profile_type + "_profile"
         if all([obs_id is None, inst is None]):
             search_key = "combined_" + search_key
@@ -2862,16 +2902,48 @@ class BaseSource:
             warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
                           "true then you have passed an invalid profile type.")
 
-        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False)
-        matched_prods = []
-        for p in broad_prods:
-            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
+        search_key = profile_type + "_profile"
+        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any {p} profiles matching your input.".format(p=profile_type))
 
-            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
-                matched_prods.append(p[-1])
-            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
-                matched_prods.append(p[-1])
+        return matched_prods
 
+    def get_combined_profiles(self, profile_type: str, central_coord: Quantity = None, radii: Quantity = None,
+                              lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+        """
+        The generic get method for XGA profiles made using all available data which are stored in this source.
+        You still must remember the profile type value to use it, but once entered it will return a list
+        of all matching profiles (or a single object if only one match is found).
+
+        :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
+        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
+            is None which means the method will use the default coordinate of this source.
+        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
+            used often as you likely won't know the radial values a priori.
+        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed hi_en must be too.
+        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed lo_en must be too.
+        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
+            were multiple matching products).
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if "profile" in profile_type:
+            warnings.warn("The profile_type you passed contains the word 'profile', which is appended onto "
+                          "a profile type by XGA, you need to try this again without profile on the end, unless"
+                          " you gave a generic profile a type with 'profile' in.")
+
+        search_key = "combined_" + profile_type + "_profile"
+
+        if search_key not in ALLOWED_PRODUCTS:
+            warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.")
+
+        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en, hi_en)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
