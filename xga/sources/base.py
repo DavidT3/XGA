@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 13:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:09. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -648,6 +648,7 @@ class BaseSource:
 
         # Now loading in previous fits
         if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
+            ann_obs_order = {}
             ann_results = {}
             ann_lums = {}
             prev_fits = [OUTPUT + "XSPEC/" + self.name + "/" + f
@@ -670,16 +671,20 @@ class BaseSource:
                     if set_id not in ann_results:
                         ann_results[set_id] = {}
                         ann_lums[set_id] = {}
+                        ann_obs_order[set_id] = {}
 
                     if model not in ann_results[set_id]:
                         ann_results[set_id][model] = {}
                         ann_lums[set_id][model] = {}
+                        ann_obs_order[set_id][model] = {}
+
                 else:
                     set_id = None
                     ann_id = None
 
                 try:
                     inst_lums = {}
+                    obs_order = []
                     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
                         sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                         # Want to derive the spectra storage key from the file name, this strips off some
@@ -697,6 +702,7 @@ class BaseSource:
                             sp_key = 'ra' + sp_key.split('_ident')[0]
                             ann_spec = self.get_annular_spectra(set_id=set_id)
                             spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                            obs_order.append([sp_info[0], sp_info[1]])
 
                         # Adds information from this fit to the spectrum object.
                         spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
@@ -723,6 +729,7 @@ class BaseSource:
                     if set_id is not None:
                         ann_results[set_id][model][spec.annulus_ident] = global_results
                         ann_lums[set_id][model][spec.annulus_ident] = chosen_lums
+                        ann_obs_order[set_id][model][spec.annulus_ident] = obs_order
                     else:
                         # Push global fit results, luminosities etc. into the corresponding source object.
                         self.add_fit_data(model, global_results, chosen_lums, sp_key)
@@ -735,7 +742,8 @@ class BaseSource:
                 for set_id in ann_results:
                     rel_ann_spec = self.get_annular_spectra(set_id=set_id)
                     for model in ann_results[set_id]:
-                        rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model])
+                        rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model], 
+                                                  ann_obs_order[set_id][model])
                         if model == "tbabs*apec":
                             temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
                             self.update_products(temp_prof)

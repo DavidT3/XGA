@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 16:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:09. Copyright (c) David J Turner
 
 
 import os
@@ -901,6 +901,10 @@ class AnnularSpectra(BaseAggregateProduct):
         self._fit_results = {ai: {} for ai in range(self._num_ann)}
         self._luminosities = {ai: {} for ai in range(self._num_ann)}
 
+        # Observation order for an annulus describes, for results with multiple entries like normalisation can if
+        #  it is not linked across multiple spectra during fitting, what order the fit results are in.
+        self._obs_order = {ai: {} for ai in range(self._num_ann)}
+
     @property
     def central_coord(self) -> Quantity:
         """
@@ -1195,7 +1199,7 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self._over_sample
 
-    def add_fit_data(self, model: str, tab_line: dict, lums: dict):
+    def add_fit_data(self, model: str, tab_line: dict, lums: dict, obs_order: dict):
         """
         An equivelant to the add_fit_data method built into all source objects. The final fit results
         and luminosities are housed in a storage structure within the AnnularSpectra, which makes sense
@@ -1207,6 +1211,10 @@ class AnnularSpectra(BaseAggregateProduct):
             the relevant annulus ID for the fit.
         :param dict lums: A dictionary of the luminosities measured during the fits, the keys of the
             outermost dictionary being annulus IDs, and the luminosity dictionaries being energy based.
+        :param dict obs_order: A dictionary (with keys being annuli idents) of lists of lists describing the order
+            the data is being passed, so that specific results can be related back to specific observations later
+            (if applicable). The lists should be structured like [[obsid1, inst1], [obsid1, inst2], [obsid1, inst3]]
+            for instance.
         """
         # Just headers that will always be present in tab_line that are not fit parameters
         not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
@@ -1227,6 +1235,7 @@ class AnnularSpectra(BaseAggregateProduct):
                                                  float(tab_line[ai]["TOTAL_COUNT_RATE_ERR"])]
             self._test_stat[ai][model] = float(tab_line[ai]["TEST_STATISTIC"])
             self._dof[ai][model] = float(tab_line[ai]["DOF"])
+            self._obs_order[ai][model] = obs_order[ai]
 
             # The parameters available will obviously be dynamic, so have to find out what they are and then
             #  then for each result find the +- errors.
@@ -1395,9 +1404,29 @@ class AnnularSpectra(BaseAggregateProduct):
             raise UnitConversionError("Currently proper radius units are required to generate "
                                       "profiles, please assign some using the proper_radii property.")
 
-        par_data = []
+        par_data = {}
         for ai in range(self._num_ann):
-            par_data.append(self.get_results(ai, model, par))
+            # We read it out into an interim parameter
+            cur_data = self.get_results(ai, model, par)
+            # In cases where the parameter in question wasn't linked across separate spectra there will be a
+            #  measurement for each spectrum per annulus
+            if cur_data.ndim != 1:
+                # There are multiple values available here, and we want to sort them out into the ObsID-instrument
+                #  combinations
+                obs_order = self._obs_order[ai][model]
+                for i in range(cur_data.shape[0]):
+                    print(i)
+                import sys
+                sys.exit()
+
+            elif cur_data.ndim == 1 and 'combined' not in par_data:
+                par_data['combined'] = [cur_data]
+            elif cur_data.ndim == 1 and 'combined' in par_data:
+                par_data['combined'].append(cur_data)
+
+        # TODO REMOVE THIS BODGE
+        if 'combined' in par_data:
+            par_data = par_data['combined']
 
         if isinstance(par_data[0], dict):
             raise ValueError("Unfortunately {} has been stored on a per-spectrum level, and cannot be made into"
@@ -1427,6 +1456,7 @@ class AnnularSpectra(BaseAggregateProduct):
             new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
                                                  'combined', rad_errors, par_errs, self.set_ident, self.storage_key,
                                                  mid_radii_deg)
+        # elif par == 'norm':
         else:
             prof_type = "1d_proj_{}"
             new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined', 'combined', par,
