@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/02/2021, 16:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:38. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -10,9 +10,9 @@ from astropy.units import Quantity
 from .. import NUM_CORES
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.profile import annular_mask
-from ..samples import BaseSample
+from ..samples import BaseSample, ClusterSample
 from ..sas import region_setup
-from ..sources import BaseSource
+from ..sources import BaseSource, GalaxyCluster
 from ..xspec.fit import single_temp_apec_profile
 
 
@@ -140,13 +140,14 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     return final_rads, snrs, max_ann
 
 
-def min_snr_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii: Union[Quantity, List[Quantity]],
+def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
                            min_snr: float = 20, min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
                            use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                           over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES):
+                           over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
+                           num_cores: int = NUM_CORES):
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using signal to noise measurements
@@ -154,7 +155,8 @@ def min_snr_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii: 
     in depth variables, so if you want more control then use single_temp_apec_profile directly. The projected
     temperature profiles which are generated are added to their source's storage structure.
 
-    :param sources:
+    :param GalaxyCluster/ClusterSample sources: An individual or sample of sources to measure projected
+        temperature profiles for.
     :param str/Quantity outer_radii: The name or value of the outer radius to use for the generation of
         the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
@@ -189,6 +191,9 @@ def min_snr_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii: 
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
+    :param bool link_norm: Sets whether the normalisation parameter is linked across the spectra in an individual
+        annulus during the XSPEC fit. Normally the default is False, but here I have set it to True so one global
+        normalisation profile is produced rather than separate profiles for individual ObsID-inst combinations.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     """
 
@@ -227,10 +232,89 @@ def min_snr_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii: 
         all_rads.append(rads)
 
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                             over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, link_norm=link_norm)
+
+
+def grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii: Union[Quantity, List[Quantity]],
+                            growth_factor: float = 1.3, start_radius: Quantity = Quantity(20, 'arcsec'),
+                            num_ann: int = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                            over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES):
+    """
+    This is a convenience function that allows you to quickly and easily start measuring projected temperature
+    profiles of galaxy clusters where the outer radius of each annulus is some factor larger than that of the
+    last annulus:
+        .. math::
+             R_{i+1} = R_{i}F
+
+    If a growth factor is passed then the start radius and outer radius of a particular source will be used to solve
+    for the number of annuli which should be generated. However if a number of annuli is passed (through num_ann),
+    then this function will again use the start and outer radii and solve for the growth factor instead, over-riding
+    any growth factor that may have been passed in.
+
+    This function calls single_temp_apec_profile, but doesn't expose all of the more
+    in depth variables, so if you want more control then use single_temp_apec_profile directly. The projected
+    temperature profiles which are generated are added to their source's storage structure.
+
+    :param GalaxyCluster/ClusterSample sources: An individual or sample of sources to measure projected
+        temperature profiles for.
+    :param str/Quantity outer_radii: The name or value of the outer radius to use for the generation of
+        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+        'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
+        generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param float growth_factor: The factor by which the outer radius of the Nth annulus should be larger than
+        the outer radius of the N-1th annulus. This will be over-ridden by a re-calculated value if a value
+        is passed to num_ann.
+    :param Quantity start_radius: The radius of the innermost circular annulus, the default is 20 arcseconds, which
+        was chosen to try and avoid PSF effects.
+    :param int num_ann: The number of annuli which should be used, default is None, in which case the value will be
+        calculated using the growth factor, outer radius, and start radius. If this parameter is passed then
+        growth_factor will be overridden by a recalculated value.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
+    :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    """
+
+    raise NotImplementedError("This doesn't work yet because I got bored")
+
+    if outer_radii != 'region':
+        inn_rad_vals, out_rad_vals = region_setup(sources, outer_radii, Quantity(0, 'arcsec'), True, '')[1:]
+    else:
+        raise NotImplementedError("I don't currently support fitting region spectra")
+
+    all_rads = []
+    for src_ind, src in enumerate(sources):
+        cur_start = src.convert_radius(start_radius, 'arcsec')
+        if num_ann is None:
+            cur_num_ann = int(np.ceil(np.log(out_rad_vals[src_ind].to('arcsec').value / cur_start.value)
+                                      / np.log(growth_factor)))
+            cur_growth_factor = growth_factor
+        else:
+            cur_growth_factor = np.power(out_rad_vals[src_ind].to('arcsec').value / cur_start.value, 1/num_ann)
+            cur_num_ann = num_ann
+
+        rads = [cur_start.value]
+        rads += [cur_start.value*ann_ind*cur_growth_factor for ann_ind in range(1, cur_num_ann+1)]
+        print(Quantity(rads, 'arcsec'))
+        print('')
+
+    single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                              over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores)
 
 
+# TODO CHECK FOR EXISTING PROJECTED PROFILES
 def onion_deproj_temp_prof():
+    """
+    https://doi.org/10.1051/0004-6361/201731748
+    :return:
+    """
     raise NotImplementedError("I'll begin work on this soon")
 
 
