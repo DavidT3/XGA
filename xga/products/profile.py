@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 12:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:43. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -584,7 +584,7 @@ class XSPECNormalisation1D(BaseProfile1D):
             raise UnitConversionError("Values unit cannot be converted to keV")
 
         # Setting the type
-        self._prof_type = "xspec_norm"
+        self._prof_type = "1d_xspec_norm"
 
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "XSPEC Normalisation"
