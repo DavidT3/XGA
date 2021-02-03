@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 20:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 12:13. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -483,9 +483,6 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
                          set_storage_key, deg_radii)
 
-        # Actually imposing limits on what units are allowed for the radii and values for this - just
-        #  to make things like the gas mass integration easier and more reliable. Also this is for mass
-        #  density, not number density.
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
 
@@ -547,6 +544,50 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         :rtype: Quantity
         """
         return self._upper_lim
+
+
+class XSPECNormalisation1D(BaseProfile1D):
+    """
+    A profile product meant to hold a radial profile of XSPEC normalisation, as measured from a set of annular spectra
+    by XSPEC. These are typically only defined by XGA methods. This is a useful profile because it allows to not
+    only infer 3D profiles of temperature and metallicity, but can also allow us to infer the 3D density profile.
+    """
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
+                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
+                 set_storage_key: str = None, deg_radii: Quantity = None):
+        """
+        The init of a subclass of BaseProfile1D which will hold a 1D XSPEC normalisation profile.
+
+        :param Quantity radii: The radii at which the XSPEC normalisations have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The XSPEC normalisations that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        """
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
+
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+
+        if not values.unit.is_equivalent("cm^-5"):
+            raise UnitConversionError("Values unit cannot be converted to keV")
+
+        # Setting the type
+        self._prof_type = "xspec_norm"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "XSPEC Normalisation"
 
 
 class ProjectedGasMetallicity1D(BaseProfile1D):
