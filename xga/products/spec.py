@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:37. Copyright (c) David J Turner
 
 
 import os
@@ -16,7 +16,7 @@ from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
 from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError
-from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D
+from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D, XSPECNormalisation1D
 from ..utils import dict_search
 
 
@@ -1415,55 +1415,70 @@ class AnnularSpectra(BaseAggregateProduct):
                 #  combinations
                 obs_order = self._obs_order[ai][model]
                 for i in range(cur_data.shape[0]):
-                    print(i)
-                import sys
-                sys.exit()
-
+                    obs_inst = "-".join(obs_order[i])
+                    # This was we create a profile for each ObsID-Instrument combination
+                    if obs_inst not in par_data:
+                        par_data[obs_inst] = [cur_data[i, :]]
+                    else:
+                        par_data[obs_inst].append(cur_data[i, :])
+            # If the quantity of interest was linked across spectra then we just store it under a 'combined' key
             elif cur_data.ndim == 1 and 'combined' not in par_data:
                 par_data['combined'] = [cur_data]
             elif cur_data.ndim == 1 and 'combined' in par_data:
                 par_data['combined'].append(cur_data)
 
-        # TODO REMOVE THIS BODGE
-        if 'combined' in par_data:
-            par_data = par_data['combined']
+        # For storing the profiles generated here
+        profs = []
+        # If there is only one profile to be generated (which means the quantity of interest was linked across
+        #  spectra during the fit), then this will just iterate once and obs_key will be combined
+        for obs_key in par_data:
+            # Just makes the read out values into an astropy quantity
+            par_quant = Quantity(par_data[obs_key], par_unit)
+            par_val = par_quant[:, 0]
+            # Extract the parameter uncertainties, and average because profiles currently only accept 1D errors
+            par_errs = par_quant[:, 1:]
+            par_errs = np.average(par_errs, axis=1)
 
-        if isinstance(par_data[0], dict):
-            raise ValueError("Unfortunately {} has been stored on a per-spectrum level, and cannot be made into"
-                             " a profile at the current time.")
+            mid_radii = self.proper_annulus_centres.to("kpc")
+            mid_radii_deg = self.annulus_centres.to("deg")
+            # calculates radii errors, basically the extent of the bins
+            rad_errors = Quantity(np.diff(self.proper_radii.to('kpc').value, axis=0) / 2, 'kpc')
 
-        # Just makes the read out values into an astropy quantity
-        par_quant = Quantity(par_data, par_unit)
-        par_val = par_quant[:, 0]
-        # Extract the parameter uncertainties, and average because profiles currently only accept 1D errors
-        par_errs = par_quant[:, 1:]
-        par_errs = np.average(par_errs, axis=1)
+            # Here we set up the ObsID and instrument information
+            if obs_key == 'combined':
+                obs_id = 'combined'
+                inst = 'combined'
+            else:
+                # The obs key was made up of the ObsID and instrument joined by a -
+                obs_id, inst = obs_key.split('-')
 
-        mid_radii = self.proper_annulus_centres.to("kpc")
-        mid_radii_deg = self.annulus_centres.to("deg")
-        # calculates radii errors, basically the extent of the bins
-        rad_errors = Quantity(np.diff(self.proper_radii.to('kpc').value, axis=0) / 2, 'kpc')
+            if par == 'kT' and upper_limit is None:
+                new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
+                                                     inst, rad_errors, par_errs, associated_set_id=self.set_ident,
+                                                     set_storage_key=self.storage_key, deg_radii=mid_radii_deg)
+            elif par == 'kT' and upper_limit is not None:
+                new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
+                                                     inst, rad_errors, par_errs, upper_limit, self.set_ident,
+                                                     self.storage_key, deg_radii=mid_radii_deg)
+            elif par == 'Abundanc':
+                new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
+                                                     inst, rad_errors, par_errs, self.set_ident, self.storage_key,
+                                                     mid_radii_deg)
+            elif par == 'norm':
+                new_prof = XSPECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
+                                                rad_errors, par_errs, self.set_ident, self.storage_key, mid_radii_deg)
+            else:
+                prof_type = "1d_proj_{}"
+                new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst, par,
+                                     prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
+                                     mid_radii_deg)
 
-        if par == 'kT' and upper_limit is None:
-            new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
-                                                 'combined', rad_errors, par_errs, associated_set_id=self.set_ident,
-                                                 set_storage_key=self.storage_key, deg_radii=mid_radii_deg)
-        elif par == 'kT' and upper_limit is not None:
-            new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
-                                                 'combined', rad_errors, par_errs, upper_limit, self.set_ident,
-                                                 self.storage_key, deg_radii=mid_radii_deg)
-        elif par == 'Abundanc':
-            new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined',
-                                                 'combined', rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                 mid_radii_deg)
-        # elif par == 'norm':
-        else:
-            prof_type = "1d_proj_{}"
-            new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, 'combined', 'combined', par,
-                                 prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
-                                 mid_radii_deg)
+            profs.append(new_prof)
 
-        return new_prof
+        if len(profs) == 1:
+            profs = profs[0]
+
+        return profs
 
     def view_annulus(self, ann_ident: int, model: str, figsize: Tuple = (12, 8)):
         """
