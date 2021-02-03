@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 20:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 13:04. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -739,6 +739,18 @@ class BaseSource:
                         if model == "tbabs*apec":
                             temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
                             self.update_products(temp_prof)
+
+                            # Normalisation profiles can be useful for many things, so we generate them too
+                            norm_profs = rel_ann_spec.generate_profile(model, 'norm', 'cm^-5')
+                            # If the normalisation were not linked across spectra then there will be multiple
+                            #  profiles returned, and so we'll need to iterate through them
+                            if isinstance(norm_profs, list):
+                                for norm_prof in norm_profs:
+                                    self.update_products(norm_prof)
+                            else:
+                                # Otherwise we can just add a single normalisation profile
+                                self.update_products(norm_profs)
+
                             if 'Abundanc' in rel_ann_spec.get_results(0, 'tbabs*apec'):
                                 met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
                                 self.update_products(met_prof)
