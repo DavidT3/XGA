@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 12:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 13:01. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -570,6 +570,18 @@ class BaseProfile1D:
         self._radii_err = radii_err
         self._values_err = values_err
         self._centre = centre
+
+        # This generates an array containing (hopefully) the original annular boundaries of the profile
+        if self._radii_err is not None:
+            upper_bounds = self._radii + self._radii_err
+            bounds = np.insert(upper_bounds, 0, self._radii[0]-self._radii_err[0])
+
+            if self._radii[0].value == 0:
+                bounds[0] = self._radii[0]
+                bounds[1] = bounds[1] + self._radii_err[0]
+            self._rad_ann_bounds = bounds
+        else:
+            self._rad_ann_bounds = None
 
         # Just checking that if one of these values is combined, then both are. Doesn't make sense otherwise.
         if (obs_id == "combined" and inst != "combined") or (inst == "combined" and obs_id != "combined"):
@@ -1402,6 +1414,17 @@ class BaseProfile1D:
         :rtype: Unit
         """
         return self._radii.unit
+
+    @property
+    def annulus_bounds(self) -> Quantity:
+        """
+        Getter for the original boundary radii of the annuli this profile may have been generated from. Only
+        available if radii errors were passed on init.
+
+        :return: An astropy quantity containing the boundary radii of the annuli, or None if not available.
+        :rtype: Quantity
+        """
+        return self._rad_ann_bounds
 
     @property
     def values(self) -> Quantity:
