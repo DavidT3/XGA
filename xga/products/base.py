@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 11:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 12:29. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1159,6 +1159,32 @@ class BaseProfile1D:
         self._realisations[real_type] = {"mod_real": realisation, "mod_radii": radii, "conf_level": conf_level,
                                          "mod_real_mean": model_mean, "mod_real_lower": model_lower,
                                          "mod_real_upper": model_upper}
+
+    def generate_data_realisations(self, num_real: int):
+        """
+        A method to generate random realisations of the data points in this profile, using their y-axis values
+        and uncertainties. This can be useful for error propagation for instance, and does not require a model fit
+        to work. This method assumes that the y-errors are 1-sigma, which isn't necessarily the case.
+
+        :param int num_real: The number of random realisations to generate.
+        :return: An N x R astropy quantity, where N is the number of realisations and R is the number of radii
+            at which there are data points in this profile.
+        :rtype: Quantity
+        """
+        if self.values_err is None:
+            raise ValueError("This profile has no y-error information, and as such you cannot generate random"
+                             " realisations of the data.")
+
+        # Here I copy the values and value uncertainties N times, where N is the number of realisations
+        #  the user wants
+        ext_values = np.repeat(self.values[..., None], num_real, axis=1).T
+        ext_value_errs = np.repeat(self.values_err[..., None], num_real, axis=1).T
+
+        # Then I just generate N realisations of the profiles using a normal distribution, though this does assume
+        #  that the errors are one sigma which isn't necessarily true
+        realisations = np.random.normal(ext_values, ext_value_errs)
+
+        return realisations
 
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {}):
