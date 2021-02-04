@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 13:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 13:52. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1195,6 +1195,7 @@ class BaseProfile1D:
         # Then I just generate N realisations of the profiles using a normal distribution, though this does assume
         #  that the errors are one sigma which isn't necessarily true
         realisations = np.random.normal(ext_values, ext_value_errs)
+        realisations = Quantity(realisations, self.values_unit)
 
         return realisations
 
