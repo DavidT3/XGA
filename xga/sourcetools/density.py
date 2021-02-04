@@ -1,12 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 17:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 10:34. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
 
 import numpy as np
 from abel.direct import direct_transform
-from astropy.constants import m_p, m_e
 from astropy.units import Quantity, kpc
 from tqdm import tqdm
 
@@ -17,13 +16,9 @@ from ..products.profile import SurfaceBrightness1D, GasDensity1D
 from ..samples.extended import ClusterSample
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
-from ..utils import NHC, ABUND_TABLES
-from ..utils import NUM_CORES
+from ..utils import NHC, ABUND_TABLES, HY_MASS, NUM_CORES
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
-
-# I know this is practically pointless, I could just use m_p, but I like doing things properly.
-HY_MASS = m_p + m_e
 
 
 def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],

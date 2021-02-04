@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 16:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 10:34. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1306,7 +1306,7 @@ class BaseProfile1D:
         if models and custom_title is None:
             plt.suptitle("{l} Profile - with models".format(l=self._y_axis_name), y=0.91)
         elif not models and custom_title is None:
-            plt.suptitle("{l} Profiles".format(l=self._y_axis_name), y=0.91)
+            plt.suptitle("{l} Profile".format(l=self._y_axis_name), y=0.91)
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)

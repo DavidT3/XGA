@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 10:34. Copyright (c) David J Turner
 
 import json
 import os
@@ -8,6 +8,7 @@ from typing import List, Tuple
 
 import pandas as pd
 import pkg_resources
+from astropy.constants import m_p, m_e
 from astropy.units import Quantity, def_unit
 from astropy.wcs import WCS
 from fitsio import read_header
@@ -78,6 +79,9 @@ ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
 # Conversion from Hydrogen number density to electron number density
 NHC = {"angr": 1.199}
 XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
+
+# I know this is practically pointless, I could just use m_p, but I like doing things properly.
+HY_MASS = m_p + m_e
 
 # A centralised constant to define what radius labels are allowed
 RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
