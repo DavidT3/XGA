@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 11:23. Copyright (c) David J Turner
 
 
 import os
@@ -16,7 +16,7 @@ from matplotlib.ticker import ScalarFormatter, FuncFormatter
 
 from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError
-from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D, XSPECNormalisation1D
+from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D, APECNormalisation1D
 from ..utils import dict_search
 
 
@@ -1465,8 +1465,8 @@ class AnnularSpectra(BaseAggregateProduct):
                                                      inst, rad_errors, par_errs, self.set_ident, self.storage_key,
                                                      mid_radii_deg)
             elif par == 'norm':
-                new_prof = XSPECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
-                                                rad_errors, par_errs, self.set_ident, self.storage_key, mid_radii_deg)
+                new_prof = APECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
+                                               rad_errors, par_errs, self.set_ident, self.storage_key, mid_radii_deg)
             else:
                 prof_type = "1d_proj_{}"
                 new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst, par,

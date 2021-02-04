@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 11:23. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -546,7 +546,7 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         return self._upper_lim
 
 
-class XSPECNormalisation1D(BaseProfile1D):
+class APECNormalisation1D(BaseProfile1D):
     """
     A profile product meant to hold a radial profile of XSPEC normalisation, as measured from a set of annular spectra
     by XSPEC. These are typically only defined by XGA methods. This is a useful profile because it allows to not
@@ -584,10 +584,10 @@ class XSPECNormalisation1D(BaseProfile1D):
             raise UnitConversionError("Values unit cannot be converted to keV")
 
         # Setting the type
-        self._prof_type = "1d_xspec_norm"
+        self._prof_type = "1d_apec_norm"
 
         # This is what the y-axis is labelled as during plotting
-        self._y_axis_name = "XSPEC Normalisation"
+        self._y_axis_name = "APEC Normalisation"
 
 
 class ProjectedGasMetallicity1D(BaseProfile1D):

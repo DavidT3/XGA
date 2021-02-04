@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 10:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 11:23. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1524,6 +1524,17 @@ class BaseProfile1D:
         if not isinstance(new_name, str):
             raise TypeError("Axis labels must be strings!")
         self._y_axis_name = new_name
+
+    @property
+    def associated_set_storage_key(self) -> str:
+        """
+        This property provides the storage key of the associated AnnularSpectra object, if the profile was generated
+        from an AnnularSpectra. If it was not then a None value is returned.
+
+        :return: The storage key of the associated AnnularSpectra, or None if not applicable.
+        :rtype: str
+        """
+        return self._set_storage_key
 
     @property
     def deg_radii(self) -> Quantity:
