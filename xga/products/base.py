@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 13:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 15:56. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1306,12 +1306,12 @@ class BaseProfile1D:
         y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
 
         # Setting the main plot's x label
-        main_ax.set_xlabel("Radius {}".format(x_unit))
+        main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
         if self._background.value == 0 or not back_sub:
-            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit))
+            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
         else:
             # If background has been subtracted it will be mentioned in the y axis label
-            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit))
+            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
 
         main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
         # This makes sure legend keys are shown, even if the data is hidden
@@ -1332,14 +1332,14 @@ class BaseProfile1D:
             # We want the residual x axis limits to be identical to the main axis, as the
             # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
-            res_ax.set_xlabel("Radius {}".format(x_unit))
+            res_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
             res_ax.set_xscale(xscale)
             # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
             #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
             # That way its symmetrical
             outer_ylim = 1.1 * max([abs(lim) for lim in res_ax.get_ylim()])
             res_ax.set_ylim(-outer_ylim, outer_ylim)
-            res_ax.set_ylabel("Model - Data")
+            res_ax.set_ylabel("Model - Data", fontsize=13)
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
         if models and custom_title is None:
@@ -1843,12 +1843,12 @@ class BaseAggregateProfile1D:
         y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
 
         # Setting the main plot's x label
-        main_ax.set_xlabel("Radius {}".format(x_unit))
+        main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
         if not self._back_avail or not back_sub:
-            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit))
+            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
         else:
             # If background has been subtracted it will be mentioned in the y axis label
-            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit))
+            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
 
         # Adds a legend with source names to the side if the user requested it
         # I let the user decide because there could be quite a few names in it and it could get messy
@@ -1874,7 +1874,7 @@ class BaseAggregateProfile1D:
             # We want the residual x axis limits to be identical to the main axis, as the
             # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
-            res_ax.set_xlabel("Radius {}".format(x_unit))
+            res_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
             res_ax.set_xscale(xscale)
             # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
             #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
