@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 10:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 10:18. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -24,6 +24,8 @@ def shell_ann_vol_intersect(shell_radii: Union[np.ndarray, Quantity], ann_radii:
     """
     if all([type(shell_radii) == Quantity, type(ann_radii) == Quantity]) and shell_radii.unit != ann_radii.unit:
         raise UnitConversionError("If quantities are passed, they must be in the same units.")
+    elif all([type(shell_radii) == Quantity, type(ann_radii) == Quantity]):
+        pass
     elif all([type(shell_radii) == np.ndarray, type(ann_radii) == np.ndarray]):
         pass
     else:
