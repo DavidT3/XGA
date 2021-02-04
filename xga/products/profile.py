@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 14:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 15:33. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
@@ -592,6 +592,53 @@ class APECNormalisation1D(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "APEC Normalisation"
 
+    def _gen_profile_setup(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr') \
+            -> Tuple[Quantity, Quantity, float]:
+        """
+        There are many common steps in the gas_density_profile and emission_measure_profile methods, so I decided to
+        put some of the common setup steps in this internal function
+
+        :param float redshift: The redshift of the source that this profile was generated from.
+        :param cosmo: The chosen cosmology.
+        :param str abund_table: The abundance table to used for the conversion from n_e x n_H to n_e^2 during density
+            calculation. Default is the famous Anders & Grevesse table.
+        :return:
+        :rtype: Tuple[Quantity, Quantity, float]
+        """
+        # We need radii errors so that BaseProfile init can calculate the annular radii. The only possible time
+        #  this would be triggered is if a user defines their own normalisation profile.
+        if self.radii_err is None:
+            raise ValueError("There are no radii uncertainties available for this APEC normalisation profile, they"
+                             " are required to generate a profile.")
+
+        # This just checks that the input abundance table is legal
+        if abund_table in NHC and abund_table in ABUND_TABLES:
+            hy_to_elec = NHC[abund_table]
+        elif abund_table in ABUND_TABLES and abund_table not in NHC:
+            avail_nhc = ", ".join(list(NHC.keys()))
+            raise ValueError(
+                "{a} is a valid choice of XSPEC abundance table, but XGA doesn't have an electron to hydrogen "
+                "ratio for that table yet, this is the developers fault so please remind him if you see this "
+                "error. Please select from one of these in the meantime; {av}".format(a=abund_table, av=avail_nhc))
+        elif abund_table not in ABUND_TABLES:
+            avail_abund = ", ".join(ABUND_TABLES)
+            raise ValueError("{a} is not a valid abundance table choice, please use one of the "
+                             "following; {av}".format(a=abund_table, av=avail_abund))
+
+        # Converts the radii to cm so that the volume intersections are in the right units.
+        if self.annulus_bounds.unit.is_equivalent('kpc'):
+            cur_rads = self.annulus_bounds.to('cm')
+        elif self.annulus_bounds.unit.is_equivalent('deg'):
+            cur_rads = ang_to_rad(self.annulus_bounds.to('deg'), redshift, cosmo).to('cm')
+        else:
+            raise UnitConversionError("Somehow you have an unrecognised distance unit for the radii of this profile")
+
+        # Calculate the angular diameter distance to the source (in cm), just need the redshift and the cosmology
+        #  which has chosen for analysis
+        ang_dist = cosmo.angular_diameter_distance(redshift).to("cm")
+
+        return cur_rads, ang_dist, hy_to_elec
+
     def gas_density_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr', num_real: int = 100,
                             sigma: int = 2) -> GasDensity1D:
         """
@@ -607,37 +654,9 @@ class APECNormalisation1D(BaseProfile1D):
         :return: The gas density profile which has been calculated from the APEC normalisation profile.
         :rtype: GasDensity1D
         """
-        # We need radii errors so that BaseProfile init can calculate the annular radii. The only possible time
-        #  this would be triggered is if a user defines their own normalisation profile.
-        if self.radii_err is None:
-            raise ValueError("There are no radii uncertainties available for this APEC normalisation profile, they"
-                             " are required to generate a gas density profile.")
-
-        # This just checks that the input abundance table is legal
-        if abund_table in NHC and abund_table in ABUND_TABLES:
-            hy_to_elec = NHC[abund_table]
-        elif abund_table in ABUND_TABLES and abund_table not in NHC:
-            avail_nhc = ", ".join(list(NHC.keys()))
-            raise ValueError(
-                "{a} is a valid choice of XSPEC abundance table, but XGA doesn't have an electron to hydrogen "
-                "ratio for that table yet, this is the developers fault so please remind him if you see this "
-                "error. Please select from one of these in the meantime; {av}".format(a=abund_table, av=avail_nhc))
-        elif abund_table not in ABUND_TABLES:
-            avail_abund = ", ".join(list(ABUND_TABLES.keys()))
-            raise ValueError("{a} is not a valid abundance table choice, please use one of the "
-                             "following; {av}".format(a=abund_table, av=avail_abund))
-
-        # Converts the radii to cm so that the volume intersections are in the right units.
-        if self.annulus_bounds.unit.is_equivalent('kpc'):
-            cur_rads = self.annulus_bounds.to('cm')
-        elif self.annulus_bounds.unit.is_equivalent('deg'):
-            cur_rads = ang_to_rad(self.annulus_bounds.to('deg'), redshift, cosmo).to('cm')
-        else:
-            raise UnitConversionError("Somehow you have an unrecognised distance unit for the radii of this profile")
-
-        # Calculate the angular diameter distance to the source (in cm), just need the redshift and the cosmology
-        #  which has chosen for analysis
-        ang_dist = cosmo.angular_diameter_distance(redshift).to("cm")
+        # There are commonalities between this method and others in this class, so I shifted some steps into an
+        #  internal method which we will call now
+        cur_rads, ang_dist, hy_to_elec = self._gen_profile_setup(redshift, cosmo, abund_table)
 
         # This uses a handy function I defined a while back to calculate the volume intersections between the annuli
         #  and spherical shells
@@ -667,6 +686,124 @@ class APECNormalisation1D(BaseProfile1D):
                                  self.radii_err, dens_sigma, self.set_ident, self.associated_set_storage_key,
                                  self.deg_radii)
         return dens_prof
+
+    def emission_measure_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr',
+                                 num_real: int = 100, sigma: int = 2):
+        """
+
+
+        :param float redshift: The redshift of the source that this profile was generated from.
+        :param cosmo: The chosen cosmology.
+        :param str abund_table: The abundance table to used for the conversion from n_e x n_H to n_e^2 during density
+            calculation. Default is the famous Anders & Grevesse table.
+        :param int num_real: The number of data realisations which should be generated to infer density errors.
+        :param int sigma: What sigma of error should the density profile be created with, the default is 2σ.
+        :return:
+        :rtype:
+        """
+        raise NotImplementedError('This is being worked on right now, will be ready very soon')
+        # # We need radii errors so that BaseProfile init can calculate the annular radii. The only possible time
+        # #  this would be triggered is if a user defines their own normalisation profile.
+        # if self.radii_err is None:
+        #     raise ValueError("There are no radii uncertainties available for this APEC normalisation profile, they"
+        #                      " are required to generate a gas density profile.")
+        #
+        # # This just checks that the input abundance table is legal
+        # if abund_table in NHC and abund_table in ABUND_TABLES:
+        #     hy_to_elec = NHC[abund_table]
+        # elif abund_table in ABUND_TABLES and abund_table not in NHC:
+        #     avail_nhc = ", ".join(list(NHC.keys()))
+        #     raise ValueError(
+        #         "{a} is a valid choice of XSPEC abundance table, but XGA doesn't have an electron to hydrogen "
+        #         "ratio for that table yet, this is the developers fault so please remind him if you see this "
+        #         "error. Please select from one of these in the meantime; {av}".format(a=abund_table, av=avail_nhc))
+        # elif abund_table not in ABUND_TABLES:
+        #     avail_abund = ", ".join(ABUND_TABLES)
+        #     raise ValueError("{a} is not a valid abundance table choice, please use one of the "
+        #                      "following; {av}".format(a=abund_table, av=avail_abund))
+        #
+        # # Converts the radii to cm so that the volume intersections are in the right units.
+        # if self.annulus_bounds.unit.is_equivalent('kpc'):
+        #     cur_rads = self.annulus_bounds.to('cm')
+        # elif self.annulus_bounds.unit.is_equivalent('deg'):
+        #     cur_rads = ang_to_rad(self.annulus_bounds.to('deg'), redshift, cosmo).to('cm')
+        # else:
+        #     raise UnitConversionError("Somehow you have an unrecognised distance unit for the radii of this profile")
+        #
+        # # Calculate the angular diameter distance to the source (in cm), just need the redshift and the cosmology
+        # #  which has chosen for analysis
+        # ang_dist = cosmo.angular_diameter_distance(redshift).to("cm")
+        #
+        # # This uses a handy function I defined a while back to calculate the volume intersections between the annuli
+        # #  and spherical shells
+        # vol_intersects = shell_ann_vol_intersect(cur_rads, cur_rads)
+        #
+        # # This is essentially the constants bit of the XSPEC APEC normalisation
+        # # Angular diameter distance is calculated using the cosmology which was associated with the cluster
+        # #  at definition
+        # conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (hy_to_elec * 10 ** -14)
+        # gas_dens = np.sqrt(np.linalg.inv(vol_intersects.T) @ self.values * conv_factor) * HY_MASS
+        #
+        # norm_real = self.generate_data_realisations(num_real)
+        # gas_dens_reals = Quantity(np.zeros(norm_real.shape), gas_dens.unit)
+        # # Using a loop here is ugly and relatively slow, but it should be okay
+        # for i in range(0, num_real):
+        #     gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @ norm_real[i, :] * conv_factor) * HY_MASS
+        #
+        # # Convert the profile and the realisations to the correct unit
+        # gas_dens = gas_dens.to("Msun/Mpc^3")
+        # gas_dens_reals = gas_dens_reals.to("Msun/Mpc^3")
+        #
+        # # Calculates the standard deviation of each data point, this is how we estimate the density errors
+        # dens_sigma = np.std(gas_dens_reals, axis=0)*sigma
+        #
+        # # Set up the actual profile object and return it
+        # dens_prof = GasDensity1D(self.radii, gas_dens, self.centre, self.src_name, self.obs_id, self.instrument,
+        #                          self.radii_err, dens_sigma, self.set_ident, self.associated_set_storage_key,
+        #                          self.deg_radii)
+        # return dens_prof
+
+
+class EmissionMeasure1D(BaseProfile1D):
+    """
+    A profile product meant to hold a radial profile of X-ray emission measure.
+    """
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
+                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
+                 set_storage_key: str = None, deg_radii: Quantity = None):
+        """
+        The init of a subclass of BaseProfile1D which will hold a radial emission measure profile.
+
+        :param Quantity radii: The radii at which the emission measures have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The emission measures that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        """
+        #
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+
+        if not values.unit.is_equivalent("cm^-3"):
+            raise UnitConversionError("Values unit cannot be converted to cm^-3")
+
+        # Setting the type
+        self._prof_type = "1d_emission_measure"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "Emission Measure"
 
 
 class ProjectedGasMetallicity1D(BaseProfile1D):
