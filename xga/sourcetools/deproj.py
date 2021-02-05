@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 10:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:57. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -47,6 +47,30 @@ def shell_ann_vol_intersect(shell_radii: Union[np.ndarray, Quantity], ann_radii:
     return (4 / 3) * np.pi * main_term
 
 
+def shell_volume(inn_radius: Quantity, out_radius: Quantity) -> Union[Quantity, np.ndarray]:
+    """
+    Silly little function that calculates the volume of a spherical shell with inner radius inn_radius and outer
+    radius out_radius.
+
+    :param Quantity/np.ndarray inn_radius: The inner radius of the spherical shell.
+    :param Quantity/np.ndarray out_radius: The outer radius of the spherical shell.
+    :return: The volume of the specified shell
+    :rtype: Union[Quantity, np.ndarray]
+    """
+    if all([type(inn_radius) == Quantity, type(out_radius) == Quantity]) and inn_radius.unit != out_radius.unit:
+        raise UnitConversionError("If quantities are passed, they must be in the same units.")
+    elif all([type(inn_radius) == Quantity, type(out_radius) == Quantity]):
+        pass
+    elif all([type(inn_radius) == np.ndarray, type(out_radius) == np.ndarray]):
+        pass
+    else:
+        raise TypeError("inn_radius and out_radius must either both be astropy quantities or numpy arrays, "
+                        "you cannot mix the two")
+
+    outer_vol = (4/3) * np.pi * out_radius**3
+    inner_vol = (4/3) * np.pi * inn_radius**3
+
+    return outer_vol - inner_vol
 
 
 

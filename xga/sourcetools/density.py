@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 10:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:57. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -12,7 +12,7 @@ from tqdm import tqdm
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.profile import radial_brightness
 from ..products import RateMap
-from ..products.profile import SurfaceBrightness1D, GasDensity1D
+from ..products.profile import SurfaceBrightness1D, GasDensity3D
 from ..samples.extended import ClusterSample
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
@@ -248,7 +248,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         density = (Quantity(num_density, "1/cm^3") * HY_MASS).to("Msun/Mpc^3")
 
         # TODO Figure out how to convert the surface brightness uncertainties
-        dens_prof = GasDensity1D(cen_rad.to("kpc"), density, sb_prof.centre, src.name, "combined", "combined",
+        dens_prof = GasDensity3D(cen_rad.to("kpc"), density, sb_prof.centre, src.name, "combined", "combined",
                                  rad_bins.to("kpc"))
         src.update_products(dens_prof)
 
@@ -360,7 +360,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
             # Now we convert to an actual mass
             density = (Quantity(num_density, "1/cm^3") * HY_MASS).to("Msun/Mpc^3").T
             mean_dens = np.mean(density, axis=1)
-            dens_prof = GasDensity1D(radii.to("kpc"), mean_dens, sb_prof.centre, src.name, "combined", "combined")
+            dens_prof = GasDensity3D(radii.to("kpc"), mean_dens, sb_prof.centre, src.name, "combined", "combined")
             dens_prof.add_realisation("inv_abel_model", radii.to("kpc"), density)
 
             src.update_products(dens_prof)
