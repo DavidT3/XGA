@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 15:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:52. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1257,18 +1257,26 @@ class BaseProfile1D:
         if back_sub:
             sub_values -= self.background.value
 
+        # As we plot on a log-log scale, it can be annoying if there is a radius value (because of course
+        #  log scaled don't like 0 values) - so I'm going to perturb it slightly if there is an r=0 value
+        # TODO DECIDE HOW TO ACTUALLY DO THIS
+        rad_vals = self.radii.value
+        # if rad_vals[0] == 0:
+        #     # This makes the value of the first radius 1% of the maximum radius
+        #     rad_vals[0] = rad_vals[1] * 0.01
+
         # Now the actual plotting of the data
         if self.radii_err is not None and self.values_err is None:
-            line = main_ax.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value, fmt="x", capsize=2,
+            line = main_ax.errorbar(rad_vals, sub_values, xerr=self.radii_err.value, fmt="x", capsize=2,
                                     label=leg_label)
         elif self.radii_err is None and self.values_err is not None:
-            line = main_ax.errorbar(self.radii.value, sub_values, yerr=self.values_err.value, fmt="x", capsize=2,
+            line = main_ax.errorbar(rad_vals, sub_values, yerr=self.values_err.value, fmt="x", capsize=2,
                                     label=leg_label)
         elif self.radii_err is not None and self.values_err is not None:
-            line = main_ax.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value,
+            line = main_ax.errorbar(rad_vals, sub_values, xerr=self.radii_err.value,
                                     yerr=self.values_err.value, fmt="x", capsize=2, label=leg_label)
         else:
-            line = main_ax.plot(self.radii.value, sub_values, 'x', label=leg_label)
+            line = main_ax.plot(rad_vals, sub_values, 'x', label=leg_label)
 
         if just_models and models:
             line[0].set_visible(False)

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 11:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:52. Copyright (c) David J Turner
 
 import json
 import os
@@ -54,7 +54,8 @@ ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combin
 # List of all XMM products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "brightness_profile",
                     "gas_density_profile", "gas_mass_profile", "1d_apec_norm_profile", "combined_spectrum",
-                    "combined_1d_apec_norm_profile", "combined_1d_proj_temperature_profile"] + ENERGY_BOUND_PRODUCTS
+                    "combined_1d_apec_norm_profile", "combined_1d_proj_temperature_profile", "gas_temperature_profile",
+                    "combined_gas_temperature_profile"] + ENERGY_BOUND_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]
 
 # Here we read in files that list the errors and warnings in SAS
