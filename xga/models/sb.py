@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:59. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -7,8 +7,6 @@ import numpy as np
 
 
 # Here we define models that can be used to describe surface brightness profiles of Galaxy Clusters
-
-
 def beta_profile(r_values: Union[np.ndarray, float], beta: float, r_core: float, norm: float) \
         -> Union[np.ndarray, float]:
     """
@@ -45,6 +43,7 @@ def double_beta_profile(r_values: Union[np.ndarray, float], beta_one: float, r_c
                                                                                           r_core_two, 1)))
 
 
+# TODO PRETTY SURE THIS SHOULD ACTUALLY BE IN DENSITY
 def simple_vikhlinin(r_values: Union[np.ndarray, float], beta: float, r_core: float, alpha: float, r_s: float,
                      epsilon: float, gamma: float, norm: float) -> Union[np.ndarray, float]:
     """
@@ -81,4 +80,5 @@ SB_MODELS_PRIORS = {"beta_profile": [[0, 3], [0, 300], [0, 10]],
                     "simple_vikhlinin": [[0, 1000], [0, 2000], [-100, 100], [0, 2000], [-100, 100],
                                          [-100, 100], [0, 100]]}
 
-
+SB_MODELS_PUB_NAMES = {"beta_profile": "Beta Profile", 'double_beta_profile': 'Double Beta Profile',
+                       'simple_vikhlinin': 'Simplified Vikhlinin'}

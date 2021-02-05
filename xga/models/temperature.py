@@ -1,7 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:59. Copyright (c) David J Turner
 
-def vikhlinin_3d_temp():
+def vikhlinin_full_temp():
     pass
 
 
@@ -9,6 +9,7 @@ def vikhlinin_3d_temp():
 TEMP_MODELS = {}
 TEMP_MODELS_STARTS = {}
 TEMP_MODELS_PRIORS = {}
+TEMP_MODELS_PUB_NAMES = {}
 
 
 # SB_MODELS = {"beta_profile": beta_profile, "double_beta_profile": double_beta_profile,
