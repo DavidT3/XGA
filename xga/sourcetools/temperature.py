@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 18:43. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -7,9 +7,11 @@ from warnings import warn
 import numpy as np
 from astropy.units import Quantity
 
-from .. import NUM_CORES
+from .deproj import shell_ann_vol_intersect
+from .. import NUM_CORES, ABUND_TABLES
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.profile import annular_mask
+from ..products.profile import GasTemperature3D
 from ..samples import BaseSample, ClusterSample
 from ..sas import region_setup
 from ..sources import BaseSource, GalaxyCluster
@@ -147,7 +149,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
-                           num_cores: int = NUM_CORES):
+                           abund_table: str = "angr", num_cores: int = NUM_CORES) -> List[Quantity]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using signal to noise measurements
@@ -194,7 +196,12 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param bool link_norm: Sets whether the normalisation parameter is linked across the spectra in an individual
         annulus during the XSPEC fit. Normally the default is False, but here I have set it to True so one global
         normalisation profile is produced rather than separate profiles for individual ObsID-inst combinations.
+    :param str abund_table: The abundance table to use during the XSPEC fits.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :return: A list of non-scalar astropy quantities containing the annular radii used to generate the
+        projected temperature profiles created by this function. Each Quantity element of the list corresponds
+        to a source.
+    :rtype: List[Quantity]
     """
 
     if outer_radii != 'region':
@@ -210,6 +217,11 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         warn("You have passed both use_combined and use_worst as False. One of them must be True, so here we default"
              " to using the combined data to decide on the annuli.")
         use_combined = True
+
+    if abund_table not in ABUND_TABLES:
+        avail_abund = ", ".join(ABUND_TABLES)
+        raise ValueError("{a} is not a valid abundance table choice, please use one of the "
+                         "following; {av}".format(a=abund_table, av=avail_abund))
 
     all_rads = []
     for src_ind, src in enumerate(sources):
@@ -232,7 +244,10 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         all_rads.append(rads)
 
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                             over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, link_norm=link_norm)
+                             over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, link_norm=link_norm,
+                             abund_table=abund_table)
+
+    return all_rads
 
 
 def grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii: Union[Quantity, List[Quantity]],
@@ -309,13 +324,131 @@ def grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii:
                              over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores)
 
 
-# TODO CHECK FOR EXISTING PROJECTED PROFILES
-def onion_deproj_temp_prof():
+def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
+                           annulus_method: str = 'min_snr', min_snr: float = 20,
+                           min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
+                           use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
+                           hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
+                           psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
+                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                           over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
+                           abund_table: str = "angr", num_data_real: int = 100, sigma: int = 2,
+                           num_cores: int = NUM_CORES):
     """
     https://doi.org/10.1051/0004-6361/201731748
+
+    :param sources:
+    :param outer_radii:
+    :param annulus_method:
+    :param min_snr:
+    :param min_width:
+    :param use_combined:
+    :param use_worst:
+    :param lo_en:
+    :param hi_en:
+    :param psf_corr:
+    :param psf_model:
+    :param psf_bins:
+    :param psf_algo:
+    :param psf_iter:
+    :param allow_negative:
+    :param exp_corr:
+    :param group_spec:
+    :param min_counts:
+    :param min_sn:
+    :param over_sample:
+    :param one_rmf:
+    :param link_norm:
+    :param str abund_table: The abundance table to use both for the conversion from n_exn_p to n_e^2 during density
+        calculation, and the XSPEC fit.
+    :param int num_data_real:
+    :param int sigma:
+    :param num_cores:
     :return:
     """
-    raise NotImplementedError("I'll begin work on this soon")
+    allowed_methods = ['min_snr', 'growth']
+    if annulus_method not in allowed_methods:
+        a_meth = ", ".join(allowed_methods)
+        raise ValueError("That is not a valid method for deciding where to place annuli, please use one of "
+                         "these; {}".format(a_meth))
+
+    if annulus_method == 'min_snr':
+        # This returns the boundary radii for the annuli
+        ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined, use_worst, lo_en,
+                                          hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
+                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, link_norm,
+                                          abund_table, num_cores)
+    elif annulus_method == "growth":
+        raise NotImplementedError("This method isn't implemented yet")
+
+    # So we can iterate through sources without worrying if there's more than one cluster
+    if not isinstance(sources, BaseSample):
+        sources = [sources]
+
+    # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and the
+    #  gas_density_profile method of APECNormalisation1D
+    for src_ind, src in enumerate(sources):
+        cur_rads = ann_rads[src_ind]
+
+        # The projected temperature profile we're going to use
+        proj_temp = src.get_proj_temp_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample)
+        # The normalisation profile(s) from the fit that produced the projected temperature profile. Possible
+        #  this will be a list of profiles if link_norm == False
+        apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn, over_sample)
+
+        if not link_norm:
+            # obs_id =
+            # inst =
+            raise NotImplementedError("I haven't decided on what the behaviour will be when there are multiple "
+                                      "normalisation profiles.")
+        else:
+            obs_id = 'combined'
+            inst = 'combined'
+
+        # Seeing as we're here, I might as well make a  density profile from the apec normalisation profile
+        dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real, sigma)
+        # Then I store it in the source
+        src.update_products(dens_prof)
+
+        # Also make an Emission Measure profile, used for weighting the contributions from different shells to annuli
+        em_prof = apec_norm_prof.emission_measure_profile(src.redshift, src.cosmo, abund_table, num_data_real, sigma)
+        src.update_products(em_prof)
+
+        # Need to make sure the annular boundaries are a) in a proper distance unit rather than degrees, and b)
+        #  in units of centimeters
+        cur_rads = src.convert_radius(cur_rads, 'cm')
+        # Use a handy function I wrote to calculate the volume intersections of spherical shells and
+        #  projected annuli
+        vol_intersects = shell_ann_vol_intersect(cur_rads, cur_rads)
+
+        # Then its a simple inverse problem to recover the 3D temperatures
+        temp_3d = (np.linalg.inv(vol_intersects.T)@(proj_temp.values*em_prof.values)) / (np.linalg.inv(
+            vol_intersects.T)@em_prof.values)
+
+        # I generate random realisations of the projected temperature profile and the emission measure profile
+        #  to help me with error propagation
+        proj_temp_reals = proj_temp.generate_data_realisations(num_data_real)
+        em_reals = em_prof.generate_data_realisations(num_data_real)
+
+        # Set up an N x R array for the random realisations of the 3D temperature, where N is the number
+        #  of realisations and R is the number of radius data points
+        temp_3d_reals = Quantity(np.zeros(proj_temp_reals.shape), proj_temp_reals.unit)
+        for i in range(0, num_data_real):
+            # Calculate and store the 3D temperature profile realisations
+            interim = (np.linalg.inv(vol_intersects.T)@(proj_temp_reals[i, :]*em_reals[i, :])) / (np.linalg.inv(
+                vol_intersects.T)@em_reals[i, :])
+            temp_3d_reals[i, :] = interim
+
+        # Calculate a standard deviation for each bin to use as the uncertainty
+        temp_3d_sigma = np.std(temp_3d_reals, axis=0)*sigma
+
+        # And finally actually set up a 3D temperature profile
+        temp_3d_prof = GasTemperature3D(proj_temp.radii, temp_3d, proj_temp.centre, src.name, obs_id, inst,
+                                        proj_temp.radii_err, temp_3d_sigma, proj_temp.set_ident,
+                                        proj_temp.associated_set_storage_key, proj_temp.deg_radii)
+        src.update_products(temp_3d_prof)
+
+
 
 
 
