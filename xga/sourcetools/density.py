@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/02/2021, 15:05. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -9,11 +9,12 @@ from abel.direct import direct_transform
 from astropy.units import Quantity, kpc
 from tqdm import tqdm
 
+from .temperature import min_snr_proj_temp_prof, ALLOWED_ANN_METHODS
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.profile import radial_brightness
 from ..products import RateMap
 from ..products.profile import SurfaceBrightness1D, GasDensity3D
-from ..samples.extended import ClusterSample
+from ..samples.extended import ClusterSample,
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
 from ..utils import NHC, ABUND_TABLES, HY_MASS, NUM_CORES
@@ -368,3 +369,108 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
         dens_prog.update(1)
     dens_prog.close()
     return sources
+
+
+def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
+                          annulus_method: str = 'min_snr', min_snr: float = 20,
+                          min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
+                          use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
+                          hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
+                          psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
+                          exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                          over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
+                          abund_table: str = "angr", num_data_real: int = 100, sigma: int = 2,
+                          num_cores: int = NUM_CORES):
+    """
+    A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First checks whether the
+    required annular spectra already exist and have been fit using XSPEC, if not then they are generated and fitted,
+    and APEC normalisation profiles will be produced (with projected temperature profiles also being made as a useful
+    extra). Then the apec normalisation profile will be used, with knowledge of the source's redshift and chosen
+    analysis cosmology, to produce a density profile from the APEC normalisation.
+
+    :param GalaxyCluster/ClusterSample sources: An individual or sample of sources to calculate 3D gas
+        density profiles for.
+    :param str/Quantity outer_radii: The name or value of the outer radius to use for the generation of
+        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+        'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
+        generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param str annulus_method:
+    :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
+    :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
+        and avoid PSF effects.
+    :param bool use_combined: If True then the combined RateMap will be used for signal to noise annulus
+        calculations, this is overridden by use_worst.
+    :param bool use_worst: If True then the worst observation of the cluster (ranked by global signal to noise) will
+        be used for signal to noise annulus calculations.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+    :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+    :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+        side in the PSF grid.
+    :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+    :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
+        zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+    :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+            recommend that this be true for combined observations, as exposure time could change quite dramatically
+            across the combined product.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
+    :param bool link_norm: Sets whether the normalisation parameter is linked across the spectra in an individual
+        annulus during the XSPEC fit. Normally the default is False, but here I have set it to True so one global
+        normalisation profile is produced rather than separate profiles for individual ObsID-inst combinations.
+    :param str abund_table: The abundance table to use both for the conversion from n_exn_p to n_e^2 during density
+        calculation, and the XSPEC fit.
+    :param int num_data_real: The number of random realisations to generate when propagating profile uncertainties.
+    :param int sigma: What sigma uncertainties should newly created profiles have, the default is 2σ.
+    :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    """
+    if annulus_method not in ALLOWED_ANN_METHODS:
+        a_meth = ", ".join(ALLOWED_ANN_METHODS)
+        raise ValueError("That is not a valid method for deciding where to place annuli, please use one of "
+                         "these; {}".format(a_meth))
+
+    if annulus_method == 'min_snr':
+        # This returns the boundary radii for the annuli
+        ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined, use_worst, lo_en,
+                                          hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
+                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, link_norm,
+                                          abund_table, num_cores)
+    elif annulus_method == "growth":
+        raise NotImplementedError("This method isn't implemented yet")
+
+    # So we can iterate through sources without worrying if there's more than one cluster
+    if not isinstance(sources, ClusterSample):
+        sources = [sources]
+
+    # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and the
+    #  gas_density_profile method of APECNormalisation1D
+    for src_ind, src in enumerate(sources):
+        cur_rads = ann_rads[src_ind]
+
+        # The normalisation profile(s) from the fit that produced the projected temperature profile. Possible
+        #  this will be a list of profiles if link_norm == False
+        apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn, over_sample)
+
+        if not link_norm:
+            # obs_id =
+            # inst =
+            raise NotImplementedError("I haven't decided on what the behaviour will be when there are multiple "
+                                      "normalisation profiles.")
+        else:
+            obs_id = 'combined'
+            inst = 'combined'
+
+        # Seeing as we're here, I might as well make a  density profile from the apec normalisation profile
+        dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real, sigma)
+        # Then I store it in the source
+        src.update_products(dens_prof)
