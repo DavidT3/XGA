@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/02/2021, 15:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/02/2021, 15:06. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -14,7 +14,7 @@ from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, Param
 from ..imagetools.profile import radial_brightness
 from ..products import RateMap
 from ..products.profile import SurfaceBrightness1D, GasDensity3D
-from ..samples.extended import ClusterSample,
+from ..samples.extended import ClusterSample
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
 from ..utils import NHC, ABUND_TABLES, HY_MASS, NUM_CORES

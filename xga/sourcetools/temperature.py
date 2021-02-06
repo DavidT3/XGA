@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 18:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/02/2021, 15:06. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -16,6 +16,8 @@ from ..samples import BaseSample, ClusterSample
 from ..sas import region_setup
 from ..sources import BaseSource, GalaxyCluster
 from ..xspec.fit import single_temp_apec_profile
+
+ALLOWED_ANN_METHODS = ['min_snr', 'growth']
 
 
 def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width: Quantity, lo_en: Quantity,
@@ -160,7 +162,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param GalaxyCluster/ClusterSample sources: An individual or sample of sources to measure projected
         temperature profiles for.
     :param str/Quantity outer_radii: The name or value of the outer radius to use for the generation of
-        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+        the spectra (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
         generating for multiple sources then you can also pass a Quantity with one entry per source.
     :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
@@ -273,7 +275,7 @@ def grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii:
     :param GalaxyCluster/ClusterSample sources: An individual or sample of sources to measure projected
         temperature profiles for.
     :param str/Quantity outer_radii: The name or value of the outer radius to use for the generation of
-        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+        the spectra (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
         generating for multiple sources then you can also pass a Quantity with one entry per source.
     :param float growth_factor: The factor by which the outer radius of the Nth annulus should be larger than
@@ -335,40 +337,62 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            abund_table: str = "angr", num_data_real: int = 100, sigma: int = 2,
                            num_cores: int = NUM_CORES):
     """
-    https://doi.org/10.1051/0004-6361/201731748
+    This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using
+    the 'onion peeling' deprojection method. It will also generate any projected temperature profiles that may be
+    necessary, using the method specified in the function call (the default is the minimum signal to noise annuli
+    method). As a side effect of that process APEC normalisation profiles will also be created, as well as Emission
+    Measure profiles. The function is an implementation of a fairly old technique, though it has been used recently
+    in https://doi.org/10.1051/0004-6361/201731748. For a more in depth discussion of this technique and its uses
+    I would currently recommend https://doi.org/10.1051/0004-6361:20020905.
 
-    :param sources:
-    :param outer_radii:
-    :param annulus_method:
-    :param min_snr:
-    :param min_width:
-    :param use_combined:
-    :param use_worst:
-    :param lo_en:
-    :param hi_en:
-    :param psf_corr:
-    :param psf_model:
-    :param psf_bins:
-    :param psf_algo:
-    :param psf_iter:
-    :param allow_negative:
-    :param exp_corr:
-    :param group_spec:
-    :param min_counts:
-    :param min_sn:
-    :param over_sample:
-    :param one_rmf:
-    :param link_norm:
+    :param GalaxyCluster/ClusterSample sources: An individual or sample of sources to calculate 3D temperature
+        profiles for.
+    :param str/Quantity outer_radii: The name or value of the outer radius to use for the generation of
+        the spectra (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+        'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
+        generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param str annulus_method:
+    :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
+    :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
+        and avoid PSF effects.
+    :param bool use_combined: If True then the combined RateMap will be used for signal to noise annulus
+        calculations, this is overridden by use_worst.
+    :param bool use_worst: If True then the worst observation of the cluster (ranked by global signal to noise) will
+        be used for signal to noise annulus calculations.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+    :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+    :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+        side in the PSF grid.
+    :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+    :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
+        zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+    :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+            recommend that this be true for combined observations, as exposure time could change quite dramatically
+            across the combined product.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
+    :param bool link_norm: Sets whether the normalisation parameter is linked across the spectra in an individual
+        annulus during the XSPEC fit. Normally the default is False, but here I have set it to True so one global
+        normalisation profile is produced rather than separate profiles for individual ObsID-inst combinations.
     :param str abund_table: The abundance table to use both for the conversion from n_exn_p to n_e^2 during density
         calculation, and the XSPEC fit.
-    :param int num_data_real:
-    :param int sigma:
-    :param num_cores:
-    :return:
+    :param int num_data_real: The number of random realisations to generate when propagating profile uncertainties.
+    :param int sigma: What sigma uncertainties should newly created profiles have, the default is 2σ.
+    :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     """
-    allowed_methods = ['min_snr', 'growth']
-    if annulus_method not in allowed_methods:
-        a_meth = ", ".join(allowed_methods)
+    if annulus_method not in ALLOWED_ANN_METHODS:
+        a_meth = ", ".join(ALLOWED_ANN_METHODS)
         raise ValueError("That is not a valid method for deciding where to place annuli, please use one of "
                          "these; {}".format(a_meth))
 
@@ -385,8 +409,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     if not isinstance(sources, BaseSample):
         sources = [sources]
 
-    # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and the
-    #  gas_density_profile method of APECNormalisation1D
+    # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof
     for src_ind, src in enumerate(sources):
         cur_rads = ann_rads[src_ind]
 
@@ -404,11 +427,6 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         else:
             obs_id = 'combined'
             inst = 'combined'
-
-        # Seeing as we're here, I might as well make a  density profile from the apec normalisation profile
-        dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real, sigma)
-        # Then I store it in the source
-        src.update_products(dens_prof)
 
         # Also make an Emission Measure profile, used for weighting the contributions from different shells to annuli
         em_prof = apec_norm_prof.emission_measure_profile(src.redshift, src.cosmo, abund_table, num_data_real, sigma)
