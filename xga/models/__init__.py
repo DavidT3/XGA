@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 16:41. Copyright (c) David J Turner
 
 import inspect
 from types import FunctionType
@@ -15,6 +15,8 @@ from .temperature import *
 # This method of merging dictionaries only works in Python 3.5+, but that should be fine
 MODEL_PUBLICATION_NAMES = {**DENS_MODELS_PUB_NAMES, **MISC_MODELS_PUB_NAMES, **SB_MODELS_PUB_NAMES,
                            **TEMP_MODELS_PUB_NAMES}
+MODEL_PUBLICATION_PAR_NAMES = {**DENS_MODELS_PAR_NAMES, **MISC_MODELS_PAR_NAMES, **SB_MODELS_PAR_NAMES,
+                               **TEMP_MODELS_PAR_NAMES}
 
 # These dictionaries tell the profile fitting function what models, start pars, and priors are allowed
 PROF_TYPE_MODELS = {"brightness": SB_MODELS, "gas_density": DENS_MODELS, "gas_temperature": TEMP_MODELS}

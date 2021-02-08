@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 16:41. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -61,6 +61,8 @@ def simple_vikhlinin(r_values: Union[np.ndarray, float], beta: float, r_core: fl
     :return: The y values corresponding to the input x values.
     :rtype: Union[np.ndarray, float]
     """
+    raise NotImplementedError("I haven't decided if this is in the right place yet, so this model is currently"
+                              " disabled")
     first_expr = np.power(r_values / r_core, -alpha)
     second_expr = np.power((1 + np.power(r_values / r_core, 2)), ((-3 * beta) + (alpha / 2)))
     third_expr = np.power(1 + np.power(r_values / r_s, gamma), -epsilon / gamma)
@@ -82,3 +84,7 @@ SB_MODELS_PRIORS = {"beta_profile": [[0, 3], [0, 300], [0, 10]],
 
 SB_MODELS_PUB_NAMES = {"beta_profile": "Beta Profile", 'double_beta_profile': 'Double Beta Profile',
                        'simple_vikhlinin': 'Simplified Vikhlinin'}
+
+SB_MODELS_PAR_NAMES = {"beta_profile": [],
+                       "double_beta_profile": [],
+                       "simple_vikhlinin": []}
