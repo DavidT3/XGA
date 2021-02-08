@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 16:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 16:48. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -42,7 +42,7 @@ MISC_MODELS_STARTS = {'straight_line': [1, 1], 'power_law': [1, 1]}
 MISC_MODELS_PRIORS = {"straight_line": [[0, 100], [0, 100]], "power_law": [[0, 100], [0, 100]]}
 
 MISC_MODELS_PUB_NAMES = {'power_law': 'Power Law', 'straight_line': "Straight Line"}
-MISC_MODELS_PAR_NAMES = {"straight_line": ['m', 'c'], "power_law": ['slope', 'norm']}
+MISC_MODELS_PAR_NAMES = {"straight_line": ['m', 'c'], "power_law": ['Slope', 'Norm']}
 
 
 
