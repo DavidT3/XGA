@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 17:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 19:05. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -757,12 +757,8 @@ class BaseProfile1D:
                 fit_par_err = np.full(len(start_pars), np.nan)
 
         elif method == "mcmc" and not already_done:
-            # TODO THIS PROBABLY SHOULDN'T BE HERE, IF IT IS TO BE ANYWHERE
-            r_dat = self.radii.value
-            if r_dat[0] == 0:
-                r_dat[0] = r_dat[1]*0.01
-
             # I'm just defining these here so that the lines don't get too long for PEP standards
+            r_dat = self.radii.value
             v_dat = self.values.value - self.background.value
             v_err = self.values_err.value
             n_par = len(priors)
