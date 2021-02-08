@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 16:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 16:32. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -51,7 +51,7 @@ def outer_region(r_values: Union[np.ndarray, float], r_transition: float, a_powe
     # The ratio of the input radius (or radii) to the transition radius
     rad_ratio = r_values / r_transition
 
-    return np.power(rad_ratio, -a_power) / np.power((1 + np.power(rad_ratio, b_power)), (c_power/b_power))
+    return np.power(rad_ratio, -a_power) / np.power((1 + np.power(rad_ratio, b_power)), (c_power/b_power)) * t_zero
 
 
 def full_vikhlinin_temp(r_values: Union[np.ndarray, float], r_cool: float, a_cool: float, t_min: float, t_zero: float,
@@ -77,8 +77,8 @@ def full_vikhlinin_temp(r_values: Union[np.ndarray, float], r_cool: float, a_coo
                                                                                            a_power, b_power, c_power)
 
 
-def simplified_vikhlinin_temp(r_values: Union[np.ndarray, float], r_cool: float, a_cool: float,
-                              t_min: float, t_zero: float, r_transition: float, c_power: float) \
+def simplified_vikhlinin_temp(r_values: Union[np.ndarray, float], r_cool: float, a_cool: float, t_min: float,
+                              t_zero: float, r_transition: float, c_power: float) \
         -> Union[np.ndarray, float]:
     """
     A simplified, 'functional', form of Vikhlinin's temperature model. This model has 6  free parameters rather
@@ -110,7 +110,7 @@ TEMP_MODELS = {"central_region": central_region, "outer_region": outer_region, "
                "simple_vikhlinin_temp": simplified_vikhlinin_temp}
 
 TEMP_MODELS_STARTS = {"central_region": [100, 1, 1, 1],
-                      "outer_region": [400, 1, 2, 1, 1, 1],
+                      "outer_region": [400, 1, 2, 1, 1],
                       "vikhlinin_temp": [100, 1, 1, 1, 400, 1, 2, 1],
                       "simple_vikhlinin_temp": [100, 1, 1, 1, 400, 1]}
 
@@ -121,3 +121,14 @@ TEMP_MODELS_PRIORS = {"central_region": [[0, 400], [0, 3], [0, 3], [0, 2]],
                       }
 TEMP_MODELS_PUB_NAMES = {"central_region": "Central Region Cooling", "outer_region": "Outer Region",
                          "vikhlinin_temp": "Full Vikhlinin", "simple_vikhlinin_temp": "Simplified Vikhlinin"}
+
+TEMP_MODELS_PAR_NAMES = {"central_region": [r"R$_{\rm{cool}}$", r"a$_{\rm{cool}}$", r"T$_{\rm{min}}$", "T$_{0}$"],
+                         "outer_region": [r"R$_{\rm{T}}$", "a", "b", "c", "T$_{0}$"],
+                         "vikhlinin_temp": [r"R$_{\rm{cool}}$", r"a$_{\rm{cool}}$", r"T$_{\rm{min}}$", "T$_{0}$",
+                                            r"R$_{\rm{T}}$", "a", "b", "c"],
+                         "simple_vikhlinin_temp": [r"R$_{\rm{cool}}$", r"a$_{\rm{cool}}$", r"T$_{\rm{min}}$", "T$_{0}$",
+                                                   r"R$_{\rm{T}}$", "c"]}
+
+
+
+
