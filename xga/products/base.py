@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 16:42. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -15,7 +15,8 @@ from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
-from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, PROF_TYPE_MODELS_PRIORS
+from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, PROF_TYPE_MODELS_PRIORS, \
+    MODEL_PUBLICATION_PAR_NAMES
 from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
@@ -697,11 +698,9 @@ class BaseProfile1D:
         upper = 50 + (conf_level / 2)
         lower = 50 - (conf_level / 2)
 
-        # This inspect module lets me grab the parameters expected by the model dynamically, and check
-        #  what the user might have passed in the start_pars variable against it
-        model_sig = inspect.signature(model_func)
-        # Ignore the first argument, as it will be radius
-        model_par_names = [p.name for p in list(model_sig.parameters.values())[1:]]
+        # I used to grab the variable names from the function signature, but now I've implemented dictionaries
+        #  that contain 'nice' parameter names for all the models (nice as in LaTeX formatted etc.)
+        model_par_names = MODEL_PUBLICATION_PAR_NAMES[model]
         if start_pars is not None and len(start_pars) != len(model_par_names):
             raise ValueError("start_pars must either be None, or have an entry for each parameter expected by"
                              " the chosen model; {0} expects {1}".format(model, ", ".join(model_par_names)))
@@ -758,8 +757,12 @@ class BaseProfile1D:
                 fit_par_err = np.full(len(start_pars), np.nan)
 
         elif method == "mcmc" and not already_done:
-            # I'm just defining these here so that the lines don't get too long for PEP standards
+            # TODO THIS PROBABLY SHOULDN'T BE HERE, IF IT IS TO BE ANYWHERE
             r_dat = self.radii.value
+            if r_dat[0] == 0:
+                r_dat[0] = r_dat[1]*0.01
+
+            # I'm just defining these here so that the lines don't get too long for PEP standards
             v_dat = self.values.value - self.background.value
             v_err = self.values_err.value
             n_par = len(priors)
@@ -804,7 +807,7 @@ class BaseProfile1D:
                 success = True
             except ValueError as bugger:
                 if show_errors:
-                    print(bugger)
+                    print("SAMPLER ERROR", bugger)
                 success = False
 
             if success:
@@ -818,12 +821,11 @@ class BaseProfile1D:
                     success = True
                 except ValueError as bugger:
                     if show_errors:
-                        print(bugger)
+                        print("AUTOCORRELATION VALUE ERROR", bugger)
                     success = False
                 except em.autocorr.AutocorrError as bugger:
-                    warn(str(bugger))
+                    warn("AUTOCORRELATION ERROR " + str(bugger))
                     cut_off = int(0.1 * num_steps)
-
         # Now do some checks after the fit has run, primarily for any infinite values
         if not already_done and method == "curve_fit" and ((np.inf in fit_par or np.inf in fit_par_err)
                                  or (True in np.isnan(fit_par) or True in np.isnan(fit_par_err))):
@@ -873,7 +875,6 @@ class BaseProfile1D:
         elif not already_done and success and method == "mcmc":
             thinning = int(num_steps / model_real)
             flat_samp = sampler.get_chain(discard=cut_off, thin=thinning, flat=True)
-
             pars_lower = np.percentile(flat_samp, lower, axis=0)
             pars_upper = np.percentile(flat_samp, upper, axis=0)
             fit_par = np.mean(flat_samp, axis=0)
