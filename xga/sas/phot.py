@@ -1,7 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/01/2021, 17:17. Copyright (c) David J Turner
 
 import os
+from random import randint
 from shutil import rmtree
 from typing import Union
 
@@ -265,7 +266,8 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
     if not isinstance(sources, (list, BaseSample)):
         sources = [sources]
 
-    mosaic_cmd = "cd {d}; emosaic imagesets='{ims}' mosaicedset={mim}"
+    # The bit on the end takes everything up out of the temporary folder and removes it
+    mosaic_cmd = "cd {d}; emosaic imagesets='{ims}' mosaicedset={mim}; mv * ../; cd ..; rm -r {d}"
 
     sources_cmds = []
     sources_paths = []
@@ -305,7 +307,11 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
         # The problem I have here is that merged images don't belong to a particular ObsID, so where do they
         # go in the xga_output folder? I've arbitrarily decided to save it in the folder of the first ObsID
         # associated with a given source.
-        dest_dir = OUTPUT + "{o}/".format(o=obs_ids_set[0])
+        final_dest_dir = OUTPUT + "{o}/".format(o=obs_ids_set[0])
+        rand_ident = randint(0, 1e+8)
+        dest_dir = os.path.join(final_dest_dir, "temp_emosaic_{}".format(rand_ident))
+        os.mkdir(dest_dir)
+
         if not psf_corr:
             mosaic = "{os}_{l}-{u}keVmerged_{t}.fits".format(os="_".join(obs_ids_set), l=lo_en.value, u=hi_en.value,
                                                              t=for_name)
@@ -315,7 +321,7 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
                                    a=psf_algo, m=psf_model)
 
         sources_cmds.append(np.array([mosaic_cmd.format(ims=" ".join(paths), mim=mosaic, d=dest_dir)]))
-        sources_paths.append(np.array([dest_dir + mosaic]))
+        sources_paths.append(np.array([os.path.join(final_dest_dir, mosaic)]))
         # This contains any other information that will be needed to instantiate the class
         # once the SAS cmd has run
         # The 'combined' values for obs and inst here are crucial, they will tell the source object that the final

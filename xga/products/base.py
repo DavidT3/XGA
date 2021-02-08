@@ -1,6 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
-
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 19:05. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -10,13 +9,14 @@ from warnings import warn
 import corner
 import emcee as em
 import numpy as np
-from astropy.units import Quantity, UnitConversionError, Unit
+from astropy.units import Quantity, UnitConversionError, Unit, deg
 from matplotlib import pyplot as plt
+from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
-from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_YAXIS, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, \
-    PROF_TYPE_MODELS_PRIORS
+from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, PROF_TYPE_MODELS_PRIORS, \
+    MODEL_PUBLICATION_PAR_NAMES
 from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
@@ -490,7 +490,28 @@ class BaseProfile1D:
     functionality. Classes derived from BaseProfile1D can be added together to create Aggregate Profiles.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
-                 inst: str, radii_err: Quantity = None, values_err: Quantity = None):
+                 inst: str, radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
+                 set_storage_key: str = None, deg_radii: Quantity = None):
+        """
+        The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
+        of all other 1D profiles in XGA - contains many useful functions.
+
+        :param Quantity radii: The radii at which the y values of this profile have been measured.
+        :param Quantity values: The y values of this profile.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. If this
+            value is supplied a set_storage_key value must also be supplied.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        """
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
                             "be astropy quantities.")
@@ -522,12 +543,46 @@ class BaseProfile1D:
                              "values_err is {2} where values is {3}".format(radii_err.shape, radii.shape,
                                                                             values_err.shape, values.shape))
 
+        # I'm actually going to enforce that the central coordinates passed when declaring a profile must
+        #  be RA and Dec, I need the storage keys to be predictable to make everything neater
+        if centre.unit != deg:
+            raise UnitConversionError("The central coordinate value passed into a profile on declaration must be"
+                                      " in RA and Dec coordinates.")
+
+        # I'm also going to require that the profiles have knowledge of radii in degree units, also so I can make
+        #  predictable storage strings. I don't really like to do this as it feels bodgy, but oh well
+        if not radii.unit.is_equivalent('deg') and deg_radii is None and set_storage_key is None:
+            raise ValueError("If the radii variable is not in units that are convertible to degrees, please pass "
+                             "radii in degrees to deg_radii, this profile needs knowledge of the radii in degrees"
+                             " to construct a storage key.")
+        elif not radii.unit.is_equivalent('deg') and set_storage_key is None and len(deg_radii) != len(radii):
+            raise ValueError("deg_radii is a different length to radii, they should be equivelant quantities, simply"
+                             " in different units.")
+        elif radii.unit.is_equivalent('deg') and set_storage_key is None:
+            deg_radii = radii.to('deg')
+
+        if deg_radii is not None:
+            deg_radii = deg_radii.to("deg")
+            self._deg_radii = deg_radii
+
         # Storing the key values in attributes
         self._radii = radii
         self._values = values
         self._radii_err = radii_err
         self._values_err = values_err
         self._centre = centre
+
+        # This generates an array containing (hopefully) the original annular boundaries of the profile
+        if self._radii_err is not None:
+            upper_bounds = self._radii + self._radii_err
+            bounds = np.insert(upper_bounds, 0, self._radii[0]-self._radii_err[0])
+
+            if self._radii[0].value == 0:
+                bounds[0] = self._radii[0]
+                bounds[1] = bounds[1] + self._radii_err[0]
+            self._rad_ann_bounds = bounds
+        else:
+            self._rad_ann_bounds = None
 
         # Just checking that if one of these values is combined, then both are. Doesn't make sense otherwise.
         if (obs_id == "combined" and inst != "combined") or (inst == "combined" and obs_id != "combined"):
@@ -561,9 +616,62 @@ class BaseProfile1D:
         # This is where allowed realisation types are stored, but there are none for the base profile
         self._allowed_real_types = []
 
-    def fit(self, model: str, method: str = "mcmc", priors=None, start_pars=None, model_real=1000,
-            model_rad_steps=300, conf_level=90, num_walkers: int = 20, num_steps: int = 20000,
-            progress_bar: bool = True, show_errors: bool = True):
+        # Checking the if associated_set_id is supplied, so is set_storage_key, and vica versa
+        if not all([associated_set_id is None, set_storage_key is None]) and \
+                not all([associated_set_id is not None, set_storage_key is not None]):
+            raise ValueError("Both associated_set_id and set_storage_key must be None, or both must be not None.")
+
+        # Putting the associated set ID into an attribute, if this profile wasn't generated by an AnnularSpectra
+        #  then this will just be None. Same for the set_storage_key
+        self._set_id = associated_set_id
+        # Don't think this one will get a property, I can't see why the user would need it.
+        self._set_storage_key = set_storage_key
+
+        # Here we generate a storage key for the profile to use to place itself in XGA's storage structure
+        if self._set_storage_key is not None:
+            # If there is a storage key for a spectrum which generated this available, then our life becomes
+            #  quite simple, as it has a lot of information in it.
+
+            # In fact as the profile will also be indexed under the profile type name, we can just use this as
+            #  our storage key
+            self._storage_key = self._set_storage_key
+        else:
+            # Default storage key for profiles that don't implement their own storage key will include their radii
+            #  and the central coordinate
+            # Just being doubly sure its in degrees
+            cent_chunk = "ra{r}_dec{d}_r".format(r=centre.value[0], d=centre.value[1])
+            rad_chunk = "_".join(self._deg_radii.value.astype(str))
+            self._storage_key = cent_chunk + rad_chunk
+
+        # The y-axis label used to be stored in a dictionary in the init of models, but it makes more sense
+        #  just declaring it in the init I think - it should be over-ridden in every subclass
+        self._y_axis_name = "Unknown"
+
+    def fit(self, model: str, method: str = "mcmc", priors: list = None, start_pars: list = None,
+            model_real: int = 1000, model_rad_steps: int = 300, conf_level: int = 90, num_walkers: int = 20,
+            num_steps: int = 20000, progress_bar: bool = True, show_errors: bool = True):
+        """
+        The fitting method for 1D XGA profile products, it uses the type of profile which is calling the method
+        to determine what models are allowed to be fit to the data. It also allowed for different fit methods,
+        including scipy's curve_fit implementation of non-linear least squares, and emcee's ensemble MCMC fitter.
+
+        :param str model: The name of the model to fit to the profile, the allowed_models method can be used to
+            find a list of legal models for a specific type of profile.
+        :param str method: Which fitting method should be used, default is "mcmc".
+        :param list priors: The priors to use for the given model (IF USING MCMC FITTING), though default values
+            will be used if no priors are passed. This should be a nested list, with one entry per parameter, and each
+            entry being a list with two values, a lower limit and an upper limit (in that order).
+        :param list start_pars: The start parameters to use for the given model (IF USING CURVE FIT), though default
+            values will be used if no start parameters are passed. This should be a list, with one entry per model
+            parameter.
+        :param int model_real: The number of realisations of the fitted model to generate for uncertainty measurement.
+        :param int model_rad_steps: The number of radial steps to use to generate realisations of the model.
+        :param int conf_level: The confidence level to calculate uncertainties at.
+        :param int num_walkers: The number of walkers for the emcee ensemble MCMC fitter to use, if using MCMC fitting.
+        :param int num_steps: The number of steps for each walker to take, if using MCMC fitting.
+        :param bool progress_bar: Controls whether a progress bar should be shown for MCMC fitting.
+        :param bool show_errors: If there are errors during MCMC fitting, should they be displayed.
+        """
         # These are the currently allowed fitting methods
         method = method.lower()
         fit_methods = ["curve_fit", "mcmc"]
@@ -580,7 +688,7 @@ class BaseProfile1D:
                               " is no physical context.")
         elif model not in PROF_TYPE_MODELS[self._prof_type]:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
-            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            prof_name = self._y_axis_name.lower()
             raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
                                        "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
         else:
@@ -590,11 +698,9 @@ class BaseProfile1D:
         upper = 50 + (conf_level / 2)
         lower = 50 - (conf_level / 2)
 
-        # This inspect module lets me grab the parameters expected by the model dynamically, and check
-        #  what the user might have passed in the start_pars variable against it
-        model_sig = inspect.signature(model_func)
-        # Ignore the first argument, as it will be radius
-        model_par_names = [p.name for p in list(model_sig.parameters.values())[1:]]
+        # I used to grab the variable names from the function signature, but now I've implemented dictionaries
+        #  that contain 'nice' parameter names for all the models (nice as in LaTeX formatted etc.)
+        model_par_names = MODEL_PUBLICATION_PAR_NAMES[model]
         if start_pars is not None and len(start_pars) != len(model_par_names):
             raise ValueError("start_pars must either be None, or have an entry for each parameter expected by"
                              " the chosen model; {0} expects {1}".format(model, ", ".join(model_par_names)))
@@ -697,7 +803,7 @@ class BaseProfile1D:
                 success = True
             except ValueError as bugger:
                 if show_errors:
-                    print(bugger)
+                    print("SAMPLER ERROR", bugger)
                 success = False
 
             if success:
@@ -711,12 +817,11 @@ class BaseProfile1D:
                     success = True
                 except ValueError as bugger:
                     if show_errors:
-                        print(bugger)
+                        print("AUTOCORRELATION VALUE ERROR", bugger)
                     success = False
                 except em.autocorr.AutocorrError as bugger:
-                    warn(str(bugger))
+                    warn("AUTOCORRELATION ERROR " + str(bugger))
                     cut_off = int(0.1 * num_steps)
-
         # Now do some checks after the fit has run, primarily for any infinite values
         if not already_done and method == "curve_fit" and ((np.inf in fit_par or np.inf in fit_par_err)
                                  or (True in np.isnan(fit_par) or True in np.isnan(fit_par_err))):
@@ -766,7 +871,6 @@ class BaseProfile1D:
         elif not already_done and success and method == "mcmc":
             thinning = int(num_steps / model_real)
             flat_samp = sampler.get_chain(discard=cut_off, thin=thinning, flat=True)
-
             pars_lower = np.percentile(flat_samp, lower, axis=0)
             pars_upper = np.percentile(flat_samp, upper, axis=0)
             fit_par = np.mean(flat_samp, axis=0)
@@ -829,7 +933,7 @@ class BaseProfile1D:
         """
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
-            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            prof_name = self._y_axis_name.lower()
             raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
                                        "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
         elif model in self._bad_model_fits:
@@ -933,7 +1037,7 @@ class BaseProfile1D:
         """
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
-            prof_name = PROF_TYPE_YAXIS[self._prof_type].lower()
+            prof_name = self._y_axis_name.lower()
             raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
                                        "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
         elif model in self._bad_model_fits:
@@ -976,7 +1080,8 @@ class BaseProfile1D:
 
     def view_chains(self, model: str, figsize: Tuple = None):
         """
-        Simple view method to quickly look at the MCMC chains for a given model fit.
+        Simple view method to quickly look at the MCMC chains for a given model fit, though bear in the mind that
+        these chains have already been thinned.
 
         :param str model: The name of the model for which to view the MCMC chains.
         :param Tuple figsize: Desired size of the figure, if None will be set automatically.
@@ -990,14 +1095,17 @@ class BaseProfile1D:
         else:
             fig, axes = plt.subplots(len(m_info["par_names"]), figsize=figsize, sharex='col')
 
+        plt.suptitle("{m} Parameter Chains".format(m=MODEL_PUBLICATION_NAMES[model]), fontsize=14, y=1.02)
+
         for i in range(len(m_info["par_names"])):
             ax = axes[i]
             ax.plot(chains[:, :, i], "k", alpha=0.3)
             ax.set_xlim(0, len(chains))
-            ax.set_ylabel(m_info["par_names"][i])
+            ax.set_ylabel(m_info["par_names"][i], fontsize=13)
             ax.yaxis.set_label_coords(-0.1, 0.5)
 
-        axes[-1].set_xlabel("step number")
+        axes[-1].set_xlabel("Thinned Step Number", fontsize=13)
+        plt.tight_layout()
         plt.show()
 
     def view_corner(self, model: str, figsize: Tuple = (8, 8)):
@@ -1013,9 +1121,9 @@ class BaseProfile1D:
         frac_conf_lev = [(50 - (m_info["conf_level"] / 2))/100, 0.5, (50 + (m_info["conf_level"] / 2))/100]
         fig = corner.corner(samples, labels=m_info["par_names"], figsize=figsize, quantiles=frac_conf_lev,
                             show_titles=True)
-        t = PROF_TYPE_YAXIS[self._prof_type]
-        plt.suptitle("{m} - {s} {t} Profile - {c}% Confidence".format(m=model, s=self.src_name, t=t,
-                                                                      c=m_info["conf_level"]), fontsize=14, y=1.02)
+        t = self._y_axis_name
+        plt.suptitle("{m} - {s} {t} Profile - {c}% Confidence".format(m=MODEL_PUBLICATION_NAMES[model], s=self.src_name,
+                                                                      t=t, c=m_info["conf_level"]), fontsize=14, y=1.02)
         plt.show()
 
     def add_realisation(self, real_type: str, radii: Quantity, realisation: Quantity, conf_level: int = 90):
@@ -1064,6 +1172,33 @@ class BaseProfile1D:
         self._realisations[real_type] = {"mod_real": realisation, "mod_radii": radii, "conf_level": conf_level,
                                          "mod_real_mean": model_mean, "mod_real_lower": model_lower,
                                          "mod_real_upper": model_upper}
+
+    def generate_data_realisations(self, num_real: int):
+        """
+        A method to generate random realisations of the data points in this profile, using their y-axis values
+        and uncertainties. This can be useful for error propagation for instance, and does not require a model fit
+        to work. This method assumes that the y-errors are 1-sigma, which isn't necessarily the case.
+
+        :param int num_real: The number of random realisations to generate.
+        :return: An N x R astropy quantity, where N is the number of realisations and R is the number of radii
+            at which there are data points in this profile.
+        :rtype: Quantity
+        """
+        if self.values_err is None:
+            raise ValueError("This profile has no y-error information, and as such you cannot generate random"
+                             " realisations of the data.")
+
+        # Here I copy the values and value uncertainties N times, where N is the number of realisations
+        #  the user wants
+        ext_values = np.repeat(self.values[..., None], num_real, axis=1).T
+        ext_value_errs = np.repeat(self.values_err[..., None], num_real, axis=1).T
+
+        # Then I just generate N realisations of the profiles using a normal distribution, though this does assume
+        #  that the errors are one sigma which isn't necessarily true
+        realisations = np.random.normal(ext_values, ext_value_errs)
+        realisations = Quantity(realisations, self.values_unit)
+
+        return realisations
 
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {}):
@@ -1123,18 +1258,26 @@ class BaseProfile1D:
         if back_sub:
             sub_values -= self.background.value
 
+        # As we plot on a log-log scale, it can be annoying if there is a radius value (because of course
+        #  log scaled don't like 0 values) - so I'm going to perturb it slightly if there is an r=0 value
+        # TODO DECIDE HOW TO ACTUALLY DO THIS
+        rad_vals = self.radii.value
+        # if rad_vals[0] == 0:
+        #     # This makes the value of the first radius 1% of the maximum radius
+        #     rad_vals[0] = rad_vals[1] * 0.01
+
         # Now the actual plotting of the data
         if self.radii_err is not None and self.values_err is None:
-            line = main_ax.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value, fmt="x", capsize=2,
+            line = main_ax.errorbar(rad_vals, sub_values, xerr=self.radii_err.value, fmt="x", capsize=2,
                                     label=leg_label)
         elif self.radii_err is None and self.values_err is not None:
-            line = main_ax.errorbar(self.radii.value, sub_values, yerr=self.values_err.value, fmt="x", capsize=2,
+            line = main_ax.errorbar(rad_vals, sub_values, yerr=self.values_err.value, fmt="x", capsize=2,
                                     label=leg_label)
         elif self.radii_err is not None and self.values_err is not None:
-            line = main_ax.errorbar(self.radii.value, sub_values, xerr=self.radii_err.value,
+            line = main_ax.errorbar(rad_vals, sub_values, xerr=self.radii_err.value,
                                     yerr=self.values_err.value, fmt="x", capsize=2, label=leg_label)
         else:
-            line = main_ax.plot(self.radii.value, sub_values, 'x', label=leg_label)
+            line = main_ax.plot(rad_vals, sub_values, 'x', label=leg_label)
 
         if just_models and models:
             line[0].set_visible(False)
@@ -1172,12 +1315,12 @@ class BaseProfile1D:
         y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
 
         # Setting the main plot's x label
-        main_ax.set_xlabel("Radius {}".format(x_unit))
+        main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
         if self._background.value == 0 or not back_sub:
-            main_ax.set_ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
         else:
             # If background has been subtracted it will be mentioned in the y axis label
-            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
 
         main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
         # This makes sure legend keys are shown, even if the data is hidden
@@ -1198,32 +1341,44 @@ class BaseProfile1D:
             # We want the residual x axis limits to be identical to the main axis, as the
             # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
-            res_ax.set_xlabel("Radius {}".format(x_unit))
+            res_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
             res_ax.set_xscale(xscale)
             # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
             #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
             # That way its symmetrical
             outer_ylim = 1.1 * max([abs(lim) for lim in res_ax.get_ylim()])
             res_ax.set_ylim(-outer_ylim, outer_ylim)
-            res_ax.set_ylabel("Model - Data")
+            res_ax.set_ylabel("Model - Data", fontsize=13)
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
         if models and custom_title is None:
-            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
-        elif custom_title is None:
-            plt.suptitle("{l} Profile - with models".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.91)
+            plt.suptitle("{l} Profile - with models".format(l=self._y_axis_name), y=0.91)
+        elif not models and custom_title is None:
+            plt.suptitle("{l} Profile".format(l=self._y_axis_name), y=0.91)
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
 
         # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
         main_ylims = main_ax.get_ylim()
-        y_mid = (main_ylims[1] - main_ylims[0]) / 2
+        y_pos = main_ylims[1]*0.90
         # If the user has passed radii to plot, then we plot them
         for r_name in draw_rads:
             main_ax.axvline(draw_rads[r_name].value, linestyle='dashed', color='black')
-            main_ax.text(draw_rads[r_name].value * 1.01, y_mid, r_name, rotation=90, verticalalignment='center',
+            main_ax.text(draw_rads[r_name].value * 1.01, y_pos, r_name, rotation=90, verticalalignment='center',
                          color='black', fontsize=14)
+
+        # Use the axis limits quite a lot in this next bit, so read them out into variables
+        x_axis_lims = main_ax.get_xlim()
+        y_axis_lims = main_ax.get_ylim()
+
+        # This dynamically changes how tick labels are formatted depending on the values displayed
+        if max(x_axis_lims) < 1000:
+            main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        if max(y_axis_lims) < 1000:
+            main_ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         # And of course actually showing it
         plt.show()
@@ -1269,6 +1424,17 @@ class BaseProfile1D:
         :rtype: Unit
         """
         return self._radii.unit
+
+    @property
+    def annulus_bounds(self) -> Quantity:
+        """
+        Getter for the original boundary radii of the annuli this profile may have been generated from. Only
+        available if radii errors were passed on init.
+
+        :return: An astropy quantity containing the boundary radii of the annuli, or None if not available.
+        :rtype: Quantity
+        """
+        return self._rad_ann_bounds
 
     @property
     def values(self) -> Quantity:
@@ -1386,6 +1552,71 @@ class BaseProfile1D:
         """
         return self._energy_bounds
 
+    @property
+    def set_ident(self) -> int:
+        """
+        If this profile was generated from an annular spectrum, this will contain the set_id of that annular spectrum.
+
+        :return: The integer set ID of the annular spectrum that generated this, or None if it wasn't generated
+            from an AnnularSpectra object.
+        :rtype: int
+        """
+        return self._set_id
+
+    @property
+    def y_axis_label(self) -> str:
+        """
+        Property to return the name used for labelling the y-axis in any plot generated by a profile object.
+
+        :return: The y_axis label.
+        :rtype: str
+        """
+        return self._y_axis_name
+
+    @y_axis_label.setter
+    def y_axis_label(self, new_name: str):
+        """
+        This allows the user to set a new y axis label for any plots generated by a profile object.
+
+        :param str new_name: The new y axis label.
+        """
+        if not isinstance(new_name, str):
+            raise TypeError("Axis labels must be strings!")
+        self._y_axis_name = new_name
+
+    @property
+    def associated_set_storage_key(self) -> str:
+        """
+        This property provides the storage key of the associated AnnularSpectra object, if the profile was generated
+        from an AnnularSpectra. If it was not then a None value is returned.
+
+        :return: The storage key of the associated AnnularSpectra, or None if not applicable.
+        :rtype: str
+        """
+        return self._set_storage_key
+
+    @property
+    def deg_radii(self) -> Quantity:
+        """
+        The radii in degrees if available.
+
+        :return: An astropy quantity containing the radii in degrees, or None.
+        :rtype: Quantity
+        """
+        return self._deg_radii
+
+    @property
+    def storage_key(self) -> str:
+        """
+        This property returns the storage key which this object assembles to place the profile in
+        an XGA source's storage structure. If the profile was generated from an AnnularSpectra then the key is based
+        on the properties of the AnnularSpectra, otherwise it is based upon the properties of the specific profile.
+
+        :return: String storage key.
+        :rtype: str
+        """
+        return self._storage_key
+
     def __len__(self):
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
@@ -1410,6 +1641,10 @@ class BaseProfile1D:
 
 
 class BaseAggregateProfile1D:
+    """
+    Quite a simple class that is generated when multiple 1D radial profile objects are added together. The
+    purpose of instances of this class is simply to make it easy to view 1D radial profiles on the same axes.
+    """
     def __init__(self, profiles: List[BaseProfile1D]):
         # This checks that all types of profiles in the profiles list are the same
         types = [type(p) for p in profiles]
@@ -1451,6 +1686,10 @@ class BaseAggregateProfile1D:
         #  type check on the first line of this init
         self._prof_type = profiles[0].type.split("_profile")[0]
         self._energy_bounds = bounds[0]
+
+        # We set the y-axis name attribute which is now expected by the plotting function, just grab it from the
+        #  first component because we've already checked that they're all the same type
+        self._y_axis_name = self._profiles[0].y_axis_label
 
     @property
     def radii_unit(self) -> Unit:
@@ -1613,12 +1852,12 @@ class BaseAggregateProfile1D:
         y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
 
         # Setting the main plot's x label
-        main_ax.set_xlabel("Radius {}".format(x_unit))
+        main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
         if not self._back_avail or not back_sub:
-            main_ax.set_ylabel(r"{l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
         else:
             # If background has been subtracted it will be mentioned in the y axis label
-            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=PROF_TYPE_YAXIS[self._prof_type], u=y_unit))
+            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
 
         # Adds a legend with source names to the side if the user requested it
         # I let the user decide because there could be quite a few names in it and it could get messy
@@ -1644,7 +1883,7 @@ class BaseAggregateProfile1D:
             # We want the residual x axis limits to be identical to the main axis, as the
             # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
-            res_ax.set_xlabel("Radius {}".format(x_unit))
+            res_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
             res_ax.set_xscale(xscale)
             # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
             #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
@@ -1654,11 +1893,11 @@ class BaseAggregateProfile1D:
             res_ax.set_ylabel("Model - Data")
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
-        if model is None and custom_title is None:
-            plt.suptitle("{l} Profiles".format(l=PROF_TYPE_YAXIS[self._prof_type]), y=0.90)
-        elif custom_title is None:
-            plt.suptitle("{l} Profiles - {m} fit".format(l=PROF_TYPE_YAXIS[self._prof_type],
+        if model is not None and custom_title is None:
+            plt.suptitle("{l} Profiles - {m} fit".format(l=self._y_axis_name,
                                                          m=MODEL_PUBLICATION_NAMES[model]), y=0.91)
+        elif model is None and custom_title is None:
+            plt.suptitle("{l} Profiles".format(l=self._y_axis_name), y=0.91)
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)

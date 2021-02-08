@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/01/2021, 09:08. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -426,7 +426,8 @@ class ScalingRelation:
         return predicted_y
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
-             data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90):
+             data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90,
+             custom_x_label: str = None, custom_y_label: str = None):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -440,6 +441,10 @@ class ScalingRelation:
         :param str model_colour: The colour to use for the model in the plot, default is grey.
         :param bool grid_on: If True then a grid will be included on the plot. Default is True.
         :param int conf_level: The confidence level to use when plotting the model.
+        :param str custom_x_label: Passing a string to this variable will override the x axis label
+            of this plot, including the unit string.
+        :param str custom_y_label: Passing a string to this variable will override the y axis label
+            of this plot, including the unit string.
         """
         # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
@@ -532,9 +537,17 @@ class ScalingRelation:
         if y_unit == '[]':
             y_unit = ''
 
-        # The scaling relation object knows what its x and y axes are called
-        plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=12)
-        plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=12)
+        # The scaling relation object knows what its x and y axes are called, though the user may pass
+        #  their own if they wish
+        if custom_x_label is None:
+            plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=12)
+        else:
+            plt.xlabel(custom_x_label, fontsize=12)
+
+        if custom_y_label is None:
+            plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=12)
+        else:
+            plt.ylabel(custom_y_label, fontsize=12)
 
         # The user can also pass a plot title, but if they don't then I construct one automatically
         if plot_title is None and self._fit_method != 'unknown':

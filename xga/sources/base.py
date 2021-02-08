@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 14:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:09. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -20,9 +20,11 @@ from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRe
 from regions import read_ds9, PixelRegion, CompoundSkyRegion
 
 from .. import xga_conf
-from ..exceptions import NotAssociatedError, UnknownProductError, NoValidObservationsError, MultipleMatchError, \
+from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
+from ..imagetools.profile import annular_mask
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
@@ -281,7 +283,6 @@ class BaseSource:
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict, odf_dict
 
-    # TODO Redo how profiles are stored - I was lazy when I implemented it at first
     def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D]):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
@@ -296,12 +297,12 @@ class BaseSource:
             raise TypeError("Only product objects can be assigned to sources.")
 
         en_bnds = prod_obj.energy_bounds
-        if en_bnds[0] is not None and en_bnds[1] is not None:
+        if en_bnds[0] is not None and en_bnds[1] is not None and not hasattr(prod_obj, 'storage_key'):
             extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
             # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
             #  this variable with just the energy key
             en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
-        elif type(prod_obj) == Spectrum or type(prod_obj) == AnnularSpectra:
+        elif type(prod_obj) == Spectrum or type(prod_obj) == AnnularSpectra or isinstance(prod_obj, BaseProfile1D):
             extra_key = prod_obj.storage_key
         elif type(prod_obj) == PSFGrid:
             # The first part of the key is the model used (by default its ELLBETA for example), and
@@ -343,51 +344,20 @@ class BaseSource:
             # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
             if extra_key not in self._products[obs_id][inst]:
                 self._products[obs_id][inst][extra_key] = {}
-            # Most products will fall into this first conditional
-            if "profile" not in p_type:
-                self._products[obs_id][inst][extra_key][p_type] = prod_obj
-            # Profiles are stored in a list, just because there can be so many giving them all extra keys
-            #  is too much work
-            elif "profile" in p_type and p_type not in self._products[obs_id][inst][extra_key]:
-                self._products[obs_id][inst][extra_key][p_type] = [prod_obj]
-            elif "profile" in p_type and p_type in self._products[obs_id][inst][extra_key]:
-                self._products[obs_id][inst][extra_key][p_type].append(prod_obj)
+            self._products[obs_id][inst][extra_key][p_type] = prod_obj
 
         elif extra_key is None and obs_id != "combined":
-            if "profile" not in p_type:
-                self._products[obs_id][inst][p_type] = prod_obj
-            # Profiles are stored in a list, just because there can be so many giving them all extra keys
-            #  is too much work
-            elif "profile" in p_type and p_type not in self._products[obs_id][inst]:
-                self._products[obs_id][inst][p_type] = {0: prod_obj}
-            elif "profile" in p_type and p_type in self._products[obs_id][inst]:
-                self._products[obs_id][inst][p_type].update({len(self._products[obs_id][inst][p_type]): prod_obj})
+            self._products[obs_id][inst][p_type] = prod_obj
 
         # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
         #  and ObsID = 'combined'
         elif extra_key is not None and obs_id == "combined":
             if extra_key not in self._products[obs_id]:
                 self._products[obs_id][extra_key] = {}
-
-            if "profile" not in p_type:
-                self._products[obs_id][extra_key][p_type] = prod_obj
-            # Profiles are stored in a list, just because there can be so many giving them all extra keys
-            #  is too much work
-            elif "profile" in p_type and p_type not in self._products[obs_id][extra_key]:
-                self._products[obs_id][extra_key][p_type] = {0: prod_obj}
-            elif "profile" in p_type and p_type in self._products[obs_id][extra_key]:
-                self._products[obs_id][extra_key][p_type].update(
-                    {len(self._products[obs_id][extra_key][p_type]): prod_obj})
+            self._products[obs_id][extra_key][p_type] = prod_obj
 
         elif extra_key is None and obs_id == "combined":
-            if "profile" not in p_type:
-                self._products[obs_id][p_type] = prod_obj
-            # Profiles are stored in a list, just because there can be so many giving them all extra keys
-            #  is too much work
-            elif "profile" in p_type and p_type not in self._products[obs_id]:
-                self._products[obs_id][p_type] = {0: prod_obj}
-            elif "profile" in p_type and p_type in self._products[obs_id]:
-                self._products[obs_id][p_type].update({len(self._products[obs_id][p_type]): prod_obj})
+            self._products[obs_id][p_type] = prod_obj
 
         # This is for an image being added, so we look for a matching exposure map. If it exists we can
         #  make a ratemap
@@ -678,6 +648,7 @@ class BaseSource:
 
         # Now loading in previous fits
         if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
+            ann_obs_order = {}
             ann_results = {}
             ann_lums = {}
             prev_fits = [OUTPUT + "XSPEC/" + self.name + "/" + f
@@ -700,16 +671,20 @@ class BaseSource:
                     if set_id not in ann_results:
                         ann_results[set_id] = {}
                         ann_lums[set_id] = {}
+                        ann_obs_order[set_id] = {}
 
                     if model not in ann_results[set_id]:
                         ann_results[set_id][model] = {}
                         ann_lums[set_id][model] = {}
+                        ann_obs_order[set_id][model] = {}
+
                 else:
                     set_id = None
                     ann_id = None
 
                 try:
                     inst_lums = {}
+                    obs_order = []
                     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
                         sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                         # Want to derive the spectra storage key from the file name, this strips off some
@@ -727,6 +702,7 @@ class BaseSource:
                             sp_key = 'ra' + sp_key.split('_ident')[0]
                             ann_spec = self.get_annular_spectra(set_id=set_id)
                             spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                            obs_order.append([sp_info[0], sp_info[1]])
 
                         # Adds information from this fit to the spectrum object.
                         spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
@@ -753,6 +729,7 @@ class BaseSource:
                     if set_id is not None:
                         ann_results[set_id][model][spec.annulus_ident] = global_results
                         ann_lums[set_id][model][spec.annulus_ident] = chosen_lums
+                        ann_obs_order[set_id][model][spec.annulus_ident] = obs_order
                     else:
                         # Push global fit results, luminosities etc. into the corresponding source object.
                         self.add_fit_data(model, global_results, chosen_lums, sp_key)
@@ -765,10 +742,23 @@ class BaseSource:
                 for set_id in ann_results:
                     rel_ann_spec = self.get_annular_spectra(set_id=set_id)
                     for model in ann_results[set_id]:
-                        rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model])
+                        rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model], 
+                                                  ann_obs_order[set_id][model])
                         if model == "tbabs*apec":
                             temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
                             self.update_products(temp_prof)
+
+                            # Normalisation profiles can be useful for many things, so we generate them too
+                            norm_profs = rel_ann_spec.generate_profile(model, 'norm', 'cm^-5')
+                            # If the normalisation were not linked across spectra then there will be multiple
+                            #  profiles returned, and so we'll need to iterate through them
+                            if isinstance(norm_profs, list):
+                                for norm_prof in norm_profs:
+                                    self.update_products(norm_prof)
+                            else:
+                                # Otherwise we can just add a single normalisation profile
+                                self.update_products(norm_profs)
+
                             if 'Abundanc' in rel_ann_spec.get_results(0, 'tbabs*apec'):
                                 met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
                                 self.update_products(met_prof)
@@ -834,12 +824,7 @@ class BaseSource:
                     # so we call this function recursively.
                     unpack_list(entry)
 
-        # Only certain product identifier are allowed
-        if p_type not in ALLOWED_PRODUCTS:
-            prod_str = ", ".join(ALLOWED_PRODUCTS)
-            raise UnknownProductError("{p} is not a recognised product type. Allowed product types are "
-                                      "{l}".format(p=p_type, l=prod_str))
-        elif obs_id not in self._products and obs_id is not None:
+        if obs_id not in self._products and obs_id is not None:
             raise NotAssociatedError("{0} is not associated with {1} .".format(obs_id, self.name))
         elif (obs_id is not None and obs_id in self._products) and \
                 (inst is not None and inst not in self._products[obs_id]):
@@ -1361,31 +1346,126 @@ class BaseSource:
 
         return total_src_mask, total_bck_mask
 
-    def get_snr(self, reg_type: str, central_coord: Quantity = None) -> float:
+    def get_custom_mask(self, outer_rad: Quantity, inner_rad: Quantity = Quantity(0, 'arcsec'), obs_id: str = None,
+                        central_coord: Quantity = None, remove_interlopers: bool = True) -> np.ndarray:
+        """
+        A simple, but powerful method, to generate mask a mask within a custom radius for a given ObsID.
+
+        :param Quantity outer_rad: The outer radius of the mask.
+        :param Quantity inner_rad: The inner radius of the mask, the default is zero arcseconds.
+        :param str obs_id: The ObsID for which to generate the mask, default is None which will return a mask
+            generated from a combined image.
+        :param Quantity central_coord: The central coordinates of the mask, the default is None which
+            will use the default coordinates of the source.
+        :param bool remove_interlopers: Whether an interloper mask should be combined with the custom mask to
+            remove interloper point sources.
+        :return: A numpy array containing the desired mask.
+        :rtype: np.ndarray
+        """
+        if central_coord is None:
+            central_coord = self._default_coord
+
+        if obs_id is None:
+            # Doesn't matter which combined ratemap, just need the size and coord conversion powers
+            rt = self.get_combined_ratemaps()
+        else:
+            # Again so long as the image matches the ObsID passed in by the user I don't care what instrument
+            #  its from
+            rt = self.get_ratemaps(obs_id=obs_id)
+
+        # If its not an instance of RateMap that means a list of RateMaps has been returned, and as I only want
+        #  the WCS information and the shape of the image I don't care which one we use
+        if not isinstance(rt, RateMap):
+            rt = rt[0]
+
+        # Convert the inner and outer radii to degrees so they can be easily converted to pixels
+        outer_rad = self.convert_radius(outer_rad, 'deg')
+        inner_rad = self.convert_radius(inner_rad, 'deg')
+        pix_to_deg = pix_deg_scale(central_coord, rt.radec_wcs)
+
+        # Making sure the inner and outer radii are whole integer numbers, as they are now in pixel units
+        outer_rad = np.array([int(np.ceil(outer_rad / pix_to_deg).value)])
+        inner_rad = np.array([int(np.floor(inner_rad / pix_to_deg).value)])
+        # Convert the chosen central coordinates to pixels
+        pix_centre = rt.coord_conv(central_coord, 'pix')
+
+        # Generate our custom mask
+        custom_mask = annular_mask(pix_centre, inner_rad, outer_rad, rt.shape)
+
+        # And applying an interloper mask if the user wants that.
+        if remove_interlopers:
+            interloper_mask = self.get_interloper_mask(obs_id)
+            custom_mask = custom_mask*interloper_mask
+
+        return custom_mask
+
+    def get_snr(self, outer_radius: Union[Quantity, str], central_coord: Quantity = None, lo_en: Quantity = None,
+                hi_en: Quantity = None, obs_id: str = None, inst: str = None, psf_corr: bool = False,
+                psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
+                allow_negative: bool = False,  exp_corr: bool = True) -> float:
         """
         This takes a region type and central coordinate and calculates the signal to noise ratio.
         The background region is constructed using the back_inn_rad_factor and back_out_rad_factor
         values, the defaults of which are 1.05*radius and 1.5*radius respectively.
 
-        :param str reg_type: The type of region for which to calculate the signal to noise ratio.
+        :param Quantity/str outer_radius: The radius that SNR should be calculated within, this can either be a
+            named radius such as r500, or an astropy Quantity.
         :param Quantity central_coord: The central coordinate of the region.
+        :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the SNR. Default is None,
+            in which case the lower energy bound for peak finding will be used (default is 0.5keV).
+        :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the SNR. Default is None,
+            in which case the upper energy bound for peak finding will be used (default is 2.0keV).
+        :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculation. Default is None, which
+            means the combined ratemap will be used. Please note that inst must also be set to use this option.
+        :param str inst: The instrument of a specific ratemap to use for the SNR calculation. Default is None, which
+            means the combined ratemap will be used.
+        :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+        :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+        :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
+            zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+        :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+            recommend that this be true for combined observations, as exposure time could change quite dramatically
+            across the combined product.
         :return: The signal to noise ratio.
         :rtype: float
         """
-        # Grabs the interloper corrected source masks
-        src_mask, bck_mask = self.get_mask(reg_type, None, central_coord)
+        # Checking if the user passed any energy limits of their own
+        if lo_en is None:
+            lo_en = self._peak_lo_en
+        if hi_en is None:
+            hi_en = self._peak_hi_en
 
-        # Finds an appropriate ratemap
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = self.get_products("combined_ratemap", extra_key=en_key)[0]
+        # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
+        if all([obs_id is None, inst is None]):
+            # Here the user hasn't set ObsID or instrument, so we use the combined data
+            rt = self.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
 
-        # Sums the areas of the source and background masks
-        src_area = src_mask.sum()
-        bck_area = bck_mask.sum()
-        # Calculates signal to noise
-        ratio = ((comb_rt.data * src_mask).sum() / (comb_rt.data * bck_mask).sum()) * (bck_area / src_area)
+        elif all([obs_id is not None, inst is not None]):
+            # Both ObsID and instrument have been set by the user
+            rt = self.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+        else:
+            raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
+                             " pass both obs_id and inst.".format(s=self.name))
 
-        return ratio
+        if isinstance(outer_radius, str):
+            # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
+            #  method understands that means it should return the mask for the combined data
+            src_mask, bck_mask = self.get_mask(outer_radius, obs_id, central_coord)
+        else:
+            # Here we have the case where the user has passed a custom outer radius, so we need to generate a
+            #  custom mask for it
+            src_mask = self.get_custom_mask(outer_radius, obs_id=obs_id, central_coord=central_coord)
+            bck_mask = self.get_custom_mask(outer_radius*self._back_out_factor, outer_radius*self._back_inn_factor,
+                                            obs_id=obs_id, central_coord=central_coord)
+
+        # We use the ratemap's built in signal to noise calculation method
+        sn = rt.signal_to_noise(src_mask, bck_mask, exp_corr, allow_negative)
+
+        return sn
 
     def get_sas_region(self, reg_type: str, obs_id: str, inst: str, output_unit: UnitBase = xmm_sky) \
             -> Tuple[str, str]:
@@ -1624,7 +1704,7 @@ class BaseSource:
                                       "supported for generating SAS region strings.")
 
         cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
-        sky_to_deg = sky_deg_scale(im, cen)
+        sky_to_deg = sky_deg_scale(im, cen).value
         conv_cen = im.coord_conv(cen, output_unit)
         # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
         #  from degrees to XMM sky coordinates using the factor we calculated in the main function
@@ -1697,7 +1777,7 @@ class BaseSource:
         # We need a matching image to perform the coordinate conversion we require
         rel_im = self.get_products("image", obs_id, inst)[0]
         # We can set our own offset value when we call this function, but I don't think I need to
-        sky_to_deg = sky_deg_scale(rel_im, central_coord)
+        sky_to_deg = sky_deg_scale(rel_im, central_coord).value
 
         # We need our chosen central coordinates in the right units of course
         xmm_central_coord = rel_im.coord_conv(central_coord, output_unit)
@@ -2262,7 +2342,7 @@ class BaseSource:
 
             for ex in exp_maps:
                 # Grabs exposure map data, then alters it so anything that isn't zero is a one
-                ex_data = ex.data
+                ex_data = ex.data.copy()
                 ex_data[ex_data > 0] = 1
                 # We do this because it then becomes very easy to calculate the intersection area of the mask
                 #  with the XMM chips. Just mask the modified expmap, then sum.
@@ -2449,6 +2529,70 @@ class BaseSource:
 
         return matched_prods
 
+    def _get_phot_prod(self, prod_type: str, obs_id: str = None, inst: str = None, lo_en: Quantity = None,
+                       hi_en: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15) \
+            -> Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]:
+        """
+        An internal method which is the basis of the get_images, get_expmaps, and get_ratemaps methods.
+
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all images/expmaps/ratemaps matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all images/expmaps/ratemaps matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the images/expmaps/ratemaps you wish to
+            retrieve, the default is None (which will retrieve all images/expmaps/ratemaps regardless of
+            energy limit).
+        :param Quantity hi_en: The upper energy limit of the images/expmaps/ratemaps you wish to
+            retrieve, the default is None (which will retrieve all images/expmaps/ratemaps regardless of
+            energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected images/ratemaps or not.
+        :param str psf_model: If the images/ratemaps you want are PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the images/ratemaps you want are PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the images/ratemaps you want are PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the images/ratemaps you want are PSF corrected, this is the number of iterations.
+        :return: An XGA Image/RateMap/ExpMap object (if there is an exact match), or a list of XGA
+            Image/RateMap/ExpMap objects (if there were multiple matching products).
+        :rtype: Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]
+        """
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        # If we are looking for a PSF corrected image/ratemap then we assemble the extra key with PSF details
+        if psf_corr and prod_type in ["image", "ratemap"]:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
+
+        if not psf_corr and with_lims:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key)
+        elif not psf_corr and not with_lims:
+            broad_matches = self.get_products(prod_type, obs_id, inst)
+            matched_prods = [p for p in broad_matches if not p.psf_corrected]
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key + extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products(prod_type, obs_id, inst, extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any {p}s matching your input.".format(p=prod_type))
+
+        return matched_prods
+
     def get_images(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
                    psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                    psf_iter: int = 15) -> Union[Image, List[Image]]:
@@ -2475,43 +2619,8 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[Image, List[Image]]
         """
-
-        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
-        if all([lo_en is None, hi_en is None]):
-            # Sets a flag to tell the rest of the method whether we have energy lims or not
-            with_lims = False
-            energy_key = None
-        elif all([lo_en is not None, hi_en is not None]):
-            with_lims = True
-            # We have energy limits here so we assemble the key that describes the energy range
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        # If we are looking for a PSF corrected image then we assemble the extra key with PSF details
-        if psf_corr:
-            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
-
-        if not psf_corr and with_lims:
-            # Simplest case, just calling get_products and passing in our information
-            matched_prods = self.get_products('image', obs_id, inst, extra_key=energy_key)
-        elif not psf_corr and not with_lims:
-            broad_matches = self.get_products("image")
-            matched_prods = [p for p in broad_matches if not p.psf_corrected]
-        elif psf_corr and with_lims:
-            # Here we need to add the extra key to the energy key
-            matched_prods = self.get_products('image', obs_id, inst, extra_key=energy_key+extra_key)
-        elif psf_corr and not with_lims:
-            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
-            broad_matches = self.get_products('image', obs_id, inst, extra_key=None, just_obj=False)
-            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
-
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any images matching your input.")
-
-        return matched_prods
+        return self._get_phot_prod("image", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                                   psf_iter)
 
     def get_expmaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None) \
             -> Union[ExpMap, List[ExpMap]]:
@@ -2531,22 +2640,7 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[ExpMap, List[ExpMap]]
         """
-
-        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
-        if all([lo_en is None, hi_en is None]):
-            energy_key = None
-        elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        matched_prods = self.get_products('expmap', obs_id=obs_id, inst=inst, extra_key=energy_key)
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any exposure maps matching your input.")
-
-        return matched_prods
+        return self._get_phot_prod("expmap", obs_id, inst, lo_en, hi_en, False)
 
     def get_ratemaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
                      psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
@@ -2574,45 +2668,8 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[RateMap, List[RateMap]]
         """
-        # This function is essentially identical to get_images, but I'm going to be lazy and not write
-        #  a separate internal function to do both.
-
-        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
-        if all([lo_en is None, hi_en is None]):
-            # Sets a flag to tell the rest of the method whether we have energy lims or not
-            with_lims = False
-            energy_key = None
-        elif all([lo_en is not None, hi_en is not None]):
-            with_lims = True
-            # We have energy limits here so we assemble the key that describes the energy range
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        # If we are looking for a PSF corrected ratemap then we assemble the extra key with PSF details
-        if psf_corr:
-            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
-
-        if not psf_corr and with_lims:
-            # Simplest case, just calling get_products and passing in our information
-            matched_prods = self.get_products('ratemap', obs_id, inst, extra_key=energy_key)
-        elif not psf_corr and not with_lims:
-            broad_matches = self.get_products("ratemap")
-            matched_prods = [p for p in broad_matches if not p.psf_corrected]
-        elif psf_corr and with_lims:
-            # Here we need to add the extra key to the energy key
-            matched_prods = self.get_products('ratemap', obs_id, inst, extra_key=energy_key + extra_key)
-        elif psf_corr and not with_lims:
-            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
-            broad_matches = self.get_products('ratemap', obs_id, inst, extra_key=None, just_obj=False)
-            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
-
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any ratemaps matching your input.")
-
-        return matched_prods
+        return self._get_phot_prod("ratemap", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                                   psf_iter)
 
     # The combined photometric products don't really NEED their own get methods, but I figured I would just for
     #  clarity's sake
@@ -2769,9 +2826,151 @@ class BaseSource:
 
         return matched_prods
 
-    def get_profiles(self):
-        raise NotImplementedError("This will be implemented soon, but I think I need to rejig how I store"
-                                  " profiles first")
+    def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
+                       radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+        """
+        The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
+        searches for full and partial matches in this source's product storage structure.
+
+        :param str search_key: The exact search key which defined profile type, and whether it is combined or not.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
+            is None which means the method will use the default coordinate of this source.
+        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
+            used often as you likely won't know the radial values a priori.
+        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed hi_en must be too.
+        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed lo_en must be too.
+        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
+            were multiple matching products).
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if all([lo_en is None, hi_en is None]):
+            energy_key = "_"
+        elif all([lo_en is not None, hi_en is not None]):
+            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        if central_coord is None:
+            central_coord = self.default_coord
+        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
+
+        if radii is not None:
+            radii = self.convert_radius(radii, 'deg')
+            rad_chunk = "r" + "_".join(radii.value.astype(str))
+            rad_info = True
+        else:
+            rad_info = False
+
+        if search_key not in ALLOWED_PRODUCTS:
+            warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.")
+
+        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False)
+        matched_prods = []
+        for p in broad_prods:
+            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
+
+            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
+                matched_prods.append(p[-1])
+            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
+                matched_prods.append(p[-1])
+
+        return matched_prods
+
+    def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
+                     radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+        """
+        This is the generic get method for XGA profile objects stored in this source. You still must remember
+        the profile type value to use it, but once entered it will return a list of all matching profiles (or a
+        single object if only one match is found).
+
+        :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
+            is None which means the method will use the default coordinate of this source.
+        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
+            used often as you likely won't know the radial values a priori.
+        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed hi_en must be too.
+        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed lo_en must be too.
+        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
+            were multiple matching products).
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if "profile" in profile_type:
+            warnings.warn("The profile_type you passed contains the word 'profile', which is appended onto "
+                          "a profile type by XGA, you need to try this again without profile on the end, unless"
+                          " you gave a generic profile a type with 'profile' in.")
+
+        search_key = profile_type + "_profile"
+        if all([obs_id is None, inst is None]):
+            search_key = "combined_" + search_key
+
+        if search_key not in ALLOWED_PRODUCTS:
+            warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.")
+
+        search_key = profile_type + "_profile"
+        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any {p} profiles matching your input.".format(p=profile_type))
+
+        return matched_prods
+
+    def get_combined_profiles(self, profile_type: str, central_coord: Quantity = None, radii: Quantity = None,
+                              lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+        """
+        The generic get method for XGA profiles made using all available data which are stored in this source.
+        You still must remember the profile type value to use it, but once entered it will return a list
+        of all matching profiles (or a single object if only one match is found).
+
+        :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
+        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
+            is None which means the method will use the default coordinate of this source.
+        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
+            used often as you likely won't know the radial values a priori.
+        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed hi_en must be too.
+        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed lo_en must be too.
+        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
+            were multiple matching products).
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if "profile" in profile_type:
+            warnings.warn("The profile_type you passed contains the word 'profile', which is appended onto "
+                          "a profile type by XGA, you need to try this again without profile on the end, unless"
+                          " you gave a generic profile a type with 'profile' in.")
+
+        search_key = "combined_" + profile_type + "_profile"
+
+        if search_key not in ALLOWED_PRODUCTS:
+            warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.")
+
+        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en, hi_en)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any combined {p} profiles matching your "
+                                          "input.".format(p=profile_type))
+
+        return matched_prods
 
     @property
     def fitted_models(self) -> List[str]:
@@ -2787,6 +2986,50 @@ class BaseSource:
             models += list(self._fit_results[s_key].keys())
 
         return models
+
+    def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
+                    allow_negative: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        This method generates a list of ObsID-Instrument pairs, ordered by the signal to noise measured for the
+        given region, with element zero being the lowest SNR, and element N being the highest.
+
+        :param Quantity/str outer_radius: The radius that SNR should be calculated within, this can either be a
+            named radius such as r500, or an astropy Quantity.
+        :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the SNR. Default is None,
+            in which case the lower energy bound for peak finding will be used (default is 0.5keV).
+        :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the SNR. Default is None,
+            in which case the upper energy bound for peak finding will be used (default is 2.0keV).
+        :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
+            zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+        :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
+            of ascending signal to noise, then an array containing the order SNR ratios.
+        :rtype: Tuple[np.ndarray, np.ndarray]
+        """
+        # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
+        obs_inst = []
+        snrs = []
+        # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+        for obs_id in self.instruments:
+            for inst in self.instruments[obs_id]:
+                # Use our handy get_snr method to calculate the SNRs we want, then add that and the
+                #  ObsID-inst combo into their respective lists
+                snrs.append(self.get_snr(outer_radius, self.default_coord, lo_en, hi_en, obs_id, inst,
+                                         allow_negative))
+                obs_inst.append([obs_id, inst])
+
+        # Make our storage lists into arrays, easier to work with that way
+        obs_inst = np.array(obs_inst)
+        snrs = np.array(snrs)
+
+        # We want to order the output by SNR, with the lowest being first and the highest being last, so we
+        #  use a numpy function to output the index order needed to re-order our two arrays
+        reorder_snrs = np.argsort(snrs)
+        # Then we use that to re-order them
+        snrs = snrs[reorder_snrs]
+        obs_inst = obs_inst[reorder_snrs]
+
+        # And return our ordered dictionaries
+        return obs_inst, snrs
 
     def info(self):
         """
@@ -3119,12 +3362,7 @@ class NullSource:
                     # so we call this function recursively.
                     unpack_list(entry)
 
-        # Only certain product identifier are allowed
-        if p_type not in ALLOWED_PRODUCTS:
-            prod_str = ", ".join(ALLOWED_PRODUCTS)
-            raise UnknownProductError("{p} is not a recognised product type. Allowed product types are "
-                                      "{l}".format(p=p_type, l=prod_str))
-        elif obs_id not in self._products and obs_id is not None:
+        if obs_id not in self._products and obs_id is not None:
             raise NotAssociatedError("{o} is not associated with {s}.".format(o=obs_id, s=self.name))
         elif inst not in XMM_INST and inst is not None:
             raise ValueError("{} is not an allowed instrument".format(inst))

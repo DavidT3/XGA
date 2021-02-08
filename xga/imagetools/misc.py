@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/01/2021, 14:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/01/2021, 12:09. Copyright (c) David J Turner
 
 
 from typing import Tuple, List, Union
@@ -13,7 +13,7 @@ from ..sourcetools import ang_to_rad, rad_to_ang
 from ..utils import xmm_sky
 
 
-def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quantity(1, 'arcmin')) -> float:
+def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quantity(1, 'arcmin')) -> Quantity:
     """
     Very heavily inspired by the regions module version of this function, just tweaked to work better for
     my use case. Perturbs the given coordinates with the small_offset value, converts the changed ra-dec
@@ -24,8 +24,9 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
     :param Quantity coord: The starting coordinates.
     :param WCS input_wcs: The world coordinate system used to calculate the pixel to degree scale
     :param Quantity small_offset: The amount you wish to perturb the original coordinates
-    :return: Factor that can be used to convert pixel distances to degree distances.
-    :rtype: float
+    :return: Factor that can be used to convert pixel distances to degree distances, returned as an astropy
+        quantity with units of deg/pix.
+    :rtype: Quantity
     """
     if coord.unit != pix and coord.unit != deg:
         raise UnitConversionError("This function can only be used with radec or pixel coordinates as input")
@@ -51,11 +52,11 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
 
     scale = small_offset.to('deg').value / pix_dist.value
 
-    return scale
+    return Quantity(scale, 'deg/pix')
 
 
 def sky_deg_scale(im_prod: Union[Image, RateMap, ExpMap], coord: Quantity,
-                  small_offset: Quantity = Quantity(1, 'arcmin')) -> float:
+                  small_offset: Quantity = Quantity(1, 'arcmin')) -> Quantity:
     """
     This is equivelant to pix_deg_scale, but instead calculates the conversion factor between
     XMM's XY sky coordinate system and degrees.
@@ -63,8 +64,9 @@ def sky_deg_scale(im_prod: Union[Image, RateMap, ExpMap], coord: Quantity,
     :param Image/Ratemap/ExpMap im_prod: The image product to calculate the conversion factor for.
     :param Quantity coord: The starting coordinates.
     :param Quantity small_offset: The amount you wish to perturb the original coordinates
-    :return: A scaling factor to convert sky distances to degree distances.
-    :rtype: float
+    :return: A scaling factor to convert sky distances to degree distances, returned as an astropy
+        quantity with units of deg/xmm_sky.
+    :rtype: Quantity
     """
     # Now really this function probably isn't necessary at, because there is a fixed scaling from degrees
     #  to this coordinate system, but I do like to be general
@@ -88,7 +90,7 @@ def sky_deg_scale(im_prod: Union[Image, RateMap, ExpMap], coord: Quantity,
 
     scale = small_offset.to('deg').value / sky_dist.value
 
-    return scale
+    return Quantity(scale, deg/xmm_sky)
 
 
 def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantity, out_unit: UnitBase,
@@ -110,7 +112,7 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantit
     if pix_rad.unit != pix:
         raise UnitConversionError("pix_rads must be in units of pixels")
 
-    deg_rads = Quantity(pix_deg_scale(coord, im_prod.radec_wcs) * pix_rad.value, 'deg')
+    deg_rads = Quantity(pix_deg_scale(coord, im_prod.radec_wcs).value * pix_rad.value, 'deg')
 
     if out_unit.is_equivalent("kpc") and z is not None and cosmo is not None:
         # Quick convert to kpc with my handy function and then go to whatever unit the user requested
@@ -161,7 +163,7 @@ def physical_rad_to_pix(im_prod: Union[Image, RateMap, ExpMap], physical_rad: Qu
         conv_rads = None
         raise UnitConversionError("cen_rad_units doesn't appear to be a distance or angular unit.")
 
-    phys_to_pix = 1 / pix_deg_scale(coord, im_prod.radec_wcs)
+    phys_to_pix = 1 / pix_deg_scale(coord, im_prod.radec_wcs).value
     conv_rads = Quantity(conv_rads.value * phys_to_pix, 'pix')
 
     return conv_rads

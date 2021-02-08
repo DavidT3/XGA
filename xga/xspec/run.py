@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 14:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:09. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -15,8 +15,7 @@ from fitsio import FITS
 from tqdm import tqdm
 
 from .. import COMPUTE_MODE
-from ..exceptions import XSPECFitError, HeasoftError, MultipleMatchError, NoMatchFoundError
-from ..products import Spectrum
+from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
@@ -184,6 +183,7 @@ def xspec_call(xspec_func):
             ann_fit = False
             ann_results = {}
             ann_lums = {}
+            ann_obs_order = {}
 
             for res_set in results[src_repr]:
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
@@ -197,6 +197,7 @@ def xspec_call(xspec_func):
                         ann_fit = True
 
                     inst_lums = {}
+                    obs_order = []
                     for line_ind, line in enumerate(res_set[0]["SPEC_INFO"]):
                         sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                         # Want to derive the spectra storage key from the file name, this strips off some
@@ -211,6 +212,7 @@ def xspec_call(xspec_func):
                             # Finds the appropriate matching spectrum object for the current table line
                             spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
                         else:
+                            obs_order.append([sp_info[0], sp_info[1]])
                             ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
                             sp_key = 'ra' + sp_key.split('_ident')[0]
                             first_part = sp_key.split('ri')[0]
@@ -230,8 +232,6 @@ def xspec_call(xspec_func):
 
                         # Adds information from this fit to the spectrum object.
                         spec.add_fit_data(str(model), line, res_set[0]["PLOT"+str(line_ind+1)])
-                        # if not ann_fit:
-                        #     s.update_products(spec)  # Adds the updated spectrum object back into the source
 
                         # The add_fit_data method formats the luminosities nicely, so we grab them back out
                         #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
@@ -253,6 +253,8 @@ def xspec_call(xspec_func):
                     if ann_fit:
                         ann_results[spec.annulus_ident] = global_results
                         ann_lums[spec.annulus_ident] = chosen_lums
+                        ann_obs_order[spec.annulus_ident] = obs_order
+
                     elif not ann_fit:
                         # Push global fit results, luminosities etc. into the corresponding source object.
                         s.add_fit_data(model, global_results, chosen_lums, sp_key)
@@ -288,13 +290,25 @@ def xspec_call(xspec_func):
                 # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                 #  the last spectra that was opened in the loop
                 ann_spec = s.get_annular_spectra(set_id=spec.set_ident)
-                ann_spec.add_fit_data(model, ann_results, ann_lums)
+                ann_spec.add_fit_data(model, ann_results, ann_lums, ann_obs_order)
 
                 # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
                 #  so we check whether tbabs*apec has been run and if so generate a Tx profile automatically
                 if model == "tbabs*apec":
                     temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
                     s.update_products(temp_prof)
+
+                    # Normalisation profiles can be useful for many things, so we generate them too
+                    norm_profs = ann_spec.generate_profile(model, 'norm', 'cm^-5')
+                    # If the normalisation were not linked across spectra then there will be multiple
+                    #  profiles returned, and so we'll need to iterate through them
+                    if isinstance(norm_profs, list):
+                        for norm_prof in norm_profs:
+                            s.update_products(norm_prof)
+                    else:
+                        # Otherwise we can just add a single normalisation profile
+                        s.update_products(norm_profs)
+
                     if 'Abundanc' in ann_spec.get_results(0, 'tbabs*apec'):
                         met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
                         s.update_products(met_prof)

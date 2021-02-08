@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 09:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:52. Copyright (c) David J Turner
 
 import json
 import os
@@ -8,6 +8,7 @@ from typing import List, Tuple
 
 import pandas as pd
 import pkg_resources
+from astropy.constants import m_p, m_e
 from astropy.units import Quantity, def_unit
 from astropy.wcs import WCS
 from fitsio import read_header
@@ -52,7 +53,9 @@ ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combin
                          "combined_brightness_profile", "combined_gas_density_profile", "combined_gas_mass_profile"]
 # List of all XMM products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "brightness_profile",
-                    "gas_density_profile", "gas_mass_profile", "combined_spectrum"] + ENERGY_BOUND_PRODUCTS
+                    "gas_density_profile", "gas_mass_profile", "1d_apec_norm_profile", "combined_spectrum",
+                    "combined_1d_apec_norm_profile", "combined_1d_proj_temperature_profile", "gas_temperature_profile",
+                    "combined_gas_temperature_profile"] + ENERGY_BOUND_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]
 
 # Here we read in files that list the errors and warnings in SAS
@@ -77,6 +80,9 @@ ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
 # Conversion from Hydrogen number density to electron number density
 NHC = {"angr": 1.199}
 XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
+
+# I know this is practically pointless, I could just use m_p, but I like doing things properly.
+HY_MASS = m_p + m_e
 
 # A centralised constant to define what radius labels are allowed
 RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]

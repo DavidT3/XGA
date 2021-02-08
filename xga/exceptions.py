@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/01/2021, 14:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/01/2021, 17:18. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -536,7 +536,23 @@ class XGASetIDError(Exception):
             return 'XGASetIDError has been raised'
 
 
+class XGAPoorDataError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when the data aren't of sufficient quality to complete an operation.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
 
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'XGAPoorDataError has been raised'
 
 
 

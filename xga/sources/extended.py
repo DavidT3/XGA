@@ -1,18 +1,19 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 11:40. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 11:23. Copyright (c) David J Turner
 
 import warnings
-from typing import Union
+from typing import Union, List
 
 import numpy as np
 from astropy import wcs
 from astropy.cosmology import Planck15
-from astropy.units import Quantity, UnitConversionError, pix, kpc
+from astropy.units import Quantity, UnitConversionError, kpc
 
 from .general import ExtendedSource
-from ..exceptions import NoRegionsError
+from ..exceptions import NoRegionsError, NoProductAvailableError
 from ..imagetools import radial_brightness
-from ..products import Spectrum
+from ..products import Spectrum, BaseProfile1D
+from ..products.profile import ProjectedGasTemperature1D, APECNormalisation1D
 from ..sourcetools import ang_to_rad, rad_to_ang
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -215,26 +216,155 @@ class GalaxyCluster(ExtendedSource):
 
         return Quantity(res, 'keV')
 
-    def view_brightness_profile(self, reg_type: str, profile_type: str = "radial", num_slices: int = 4,
-                                use_peak: bool = True, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
-                                figsize: tuple = (10, 7), xscale: str = 'log', yscale: str = 'log',
-                                back_sub: bool = True):
+    def _get_spec_based_profiles(self, search_key: str, radii: Quantity = None, group_spec: bool = True,
+                                 min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                                 set_id: int = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
-        A method that generates and displays brightness profiles for the current cluster. Brightness profiles
-        exclude point sources and either measure the average counts per second within a circular annulus (radial),
-        or an angular region of a circular annulus (pizza). All points correspond to an annulus of width 1 pixel,
-        and this method does NOT do any rebinning to maximise signal to noise.
-        If use peak is selected, the peak coordinate used will depend on the combined ratemap, so would be different
-        for PSF corrected ratemaps to the uncorrected ratemap.
+        The generic get method for profiles which have been based on spectra, the only thing that tends to change
+        about how we search for them is the specific search key. Largely copied from get_annular_spectra.
+
+        :param str search_key: The profile search key, e.g. combined_1d_proj_temperature_profile.
+        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
+            from which the projected temperature profile was measured.
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped
+        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+            counts, what was the minimum number of counts?
+        :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
+            noise, what was the minimum signal to noise.
+        :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
+            the level of over sampling used?
+        :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
+            Passing a value for this parameter will override any other information that you have given this method.
+        :return: An XGA profile object if there is an exact match, a list of such objects if there are multiple matches.
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if group_spec and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif group_spec and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
+        #  degrees in the storage key
+        if radii is not None:
+            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
+            #  storage key and look for a single match
+            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
+            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
+            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
+                                                         dec=self.default_coord[1].value,
+                                                         ar=ann_rad_str, gr=group_spec)
+            spec_storage_name += extra_name
+        else:
+            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
+            #  and we'll look for partial matches
+            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
+            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
+            spec_storage_name = [pos_str, grp_str]
+
+        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
+        #  properly constructed storage key
+        if set_id is None and radii is not None:
+            matched_prods = self.get_products(search_key, extra_key=spec_storage_name)
+        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
+        elif set_id is None and radii is None:
+            matched_prods = [p for p in self.get_products(search_key)
+                             if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
+        # However if they have passed a setID then this over-rides everything else
+        else:
+            matched_prods = [p for p in self.get_products(search_key) if p.set_ident == set_id]
+
+        return matched_prods
+
+    def get_proj_temp_profiles(self, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
+                               min_sn: float = None, over_sample: float = None, set_id: int = None) \
+            -> Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]:
+        """
+        A get method for projected temperature profiles generated by XGA's XSPEC interface. This works identically
+        to the get_annular_spectra method, because projected temperature profiles are generated from annular spectra,
+        and as such can be described by the same parameters.
+
+        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
+            from which the projected temperature profile was measured.
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped
+        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+            counts, what was the minimum number of counts?
+        :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
+            noise, what was the minimum signal to noise.
+        :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
+            the level of over sampling used?
+        :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
+            Passing a value for this parameter will override any other information that you have given this method.
+        :return: An XGA ProjectedGasTemperature1D object if there is an exact match, a list of such objects
+            if there are multiple matches.
+        :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
+        """
+        matched_prods = self._get_spec_based_profiles("combined_1d_proj_temperature_profile", radii, group_spec,
+                                                      min_counts, min_sn, over_sample, set_id)
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("No matching 1D projected temperature profiles can be found.")
+
+        return matched_prods
+
+    def get_apec_norm_profiles(self, radii: Quantity = None, link_norm: bool = False,
+                               group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                               over_sample: float = None, set_id: int = None) \
+            -> Union[APECNormalisation1D, List[APECNormalisation1D]]:
+        """
+        A get method for APEC normalisation profiles generated by XGA's XSPEC interface.
+
+        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
+            from which the normalisation profile was measured.
+        :param bool link_norm: This is equivelant to the link_norm parameter in single_temp_apec_profile. If
+            True then the fit was run with XSPEC normalisations linked across spectra within an annulus, if False
+            then each spectrum in an annulus had an individual link_norm, and multiple profiles were generated.
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped
+        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+            counts, what was the minimum number of counts?
+        :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
+            noise, what was the minimum signal to noise.
+        :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
+            the level of over sampling used?
+        :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
+            Passing a value for this parameter will override any other information that you have given this method.
+        :return: An XGA APECNormalisation1D object if there is an exact match, a list of such objects
+            if there are multiple matches.
+        :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
+        """
+        if link_norm:
+            matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", radii, group_spec,
+                                                          min_counts, min_sn, over_sample, set_id)
+        else:
+            matched_prods = self._get_spec_based_profiles("1d_apec_norm_profile", radii, group_spec, min_counts,
+                                                          min_sn, over_sample, set_id)
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("No matching APEC normalisation profiles can be found.")
+
+        return matched_prods
+
+    def view_brightness_profile(self, reg_type: str, central_coord: Quantity = None, pix_step: int = 1,
+                                min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
+                                yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
+                                hi_en: Quantity = Quantity(2.0, 'keV')):
+        """
+        A method that generates and displays brightness profile objects for this galaxy cluster. Interloper
+        sources are excluded, and any fits performed to pre-existing brightness profiles which are being
+        viewed will also be displayed. The profile will be generated using a RateMap between the energy bounds
+        specified by lo_en and hi_en.
 
         :param str reg_type: The region in which to view the radial brightness profile.
-        :param str profile_type: The type of brightness profile you wish to view, radial or pizza.
-        :param int num_slices: The number of pizza slices to cut the cluster into. The size of each
-            slice will be 360 / num_slices degrees.
-        :param bool use_peak: If True then the radial profiles (including for PSF corrected ratemaps)
-            will all be constructed centered on the peak found for the 'normal' combined ratemap. If False,
-            peaks will be found for each individual combined ratemap and profiles will be constructed
-            centered on them.
+        :param Quantity central_coord: The central coordinate of the brightness profile.
         :param int pix_step: The width (in pixels) of each annular bin, default is 1.
         :param float/int min_snr: The minimum signal to noise allowed for each radial bin. This is 0 by
             default, which disables any automatic rebinning.
@@ -242,15 +372,12 @@ class GalaxyCluster(ExtendedSource):
         :param str xscale: The scaling to be applied to the x axis, default is log.
         :param str yscale: The scaling to be applied to the y axis, default is log.
         :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param Quantity lo_en: The lower energy bound of the RateMap to generate the profile from.
+        :param Quantity hi_en: The upper energy bound of the RateMap to generate the profile from.
         """
         allowed_rtype = ["custom", "r500", "r200", "r2500"]
         if reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-
-        # Check that the passed profile type is valid
-        allowed_ptype = ["radial", "pizza"]
-        if profile_type not in allowed_ptype:
-            raise ValueError("The only allowed profile types are {}".format(", ".join(allowed_ptype)))
 
         # Check that the valid region choice actually has an entry that is not None
         if reg_type == "custom" and self._custom_region_radius is None:
@@ -262,67 +389,53 @@ class GalaxyCluster(ExtendedSource):
         elif reg_type == "r2500" and self._r2500 is None:
             raise NoRegionsError("No R2500 region has been setup for this cluster")
 
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
+        comb_rt = self.get_combined_ratemaps(lo_en, hi_en)
         # If there have been PSF deconvolutions of the above data, then we can grab them too
+        # I still do it this way rather than with get_combined_ratemaps because I want ALL PSF corrected ratemaps
+        en_key = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
         psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", just_obj=False)
                         if en_key + "_" in rt[-2]]
 
         # Fetch the mask that will remove all interloper sources from the combined ratemap
         int_mask = self.get_interloper_mask()
 
-        if use_peak:
-            pix_central = comb_rt.coord_conv(self.peak, pix)
-        else:
-            pix_central = comb_rt.coord_conv(self.ra_dec, pix)
+        if central_coord is None:
+            central_coord = self.default_coord
 
         # Read out the radii
         rad = self.get_radius(reg_type)
 
-        # The plotting will be slightly different based on the profile type, also have to call the methods
-        #  to generate the profiles as I don't currently store the data.
-        if profile_type == "radial":
-            # This fetches any profiles that might have already been generated to our required specifications
-            prof_prods = self.get_products("combined_brightness_profile")
-            if len(prof_prods) == 1:
-                matching_profs = [p for p in list(prof_prods[0].values())
-                                  if p.check_match(comb_rt, pix_central, pix_step, min_snr, rad)]
-            else:
-                matching_profs = []
+        # This fetches any profiles that might have already been generated to our required specifications
+        try:
+            sb_profile = self.get_1d_brightness_profile(rad, combined=True, pix_step=pix_step, min_snr=min_snr,
+                                                        lo_en=lo_en, hi_en=hi_en)
+            if isinstance(sb_profile, list):
+                raise ValueError("There are multiple matches for this brightness profile, and its the developers "
+                                 "fault not yours.")
+        except NoProductAvailableError:
+            sb_profile, success = radial_brightness(comb_rt, central_coord, rad, self._back_inn_factor,
+                                                    self._back_out_factor, int_mask, self.redshift, pix_step, kpc,
+                                                    self.cosmo, min_snr)
+            self.update_products(sb_profile)
 
-            if len(matching_profs) == 0:
-                sb_profile, success = radial_brightness(comb_rt, pix_central, rad, self._back_inn_factor,
-                                                        self._back_out_factor, int_mask, self.redshift, pix_step, kpc,
-                                                        self.cosmo, min_snr)
-                self.update_products(sb_profile)
-            else:
-                sb_profile = matching_profs[0]
+        for psf_comb_rt in psf_comb_rts:
+            p_rt = psf_comb_rt[-1]
 
-            for psf_comb_rt in psf_comb_rts:
-                p_rt = psf_comb_rt[-1]
-                if use_peak:
-                    pix_central = self.find_peak(p_rt)[0]
-                else:
-                    pix_central = comb_rt.coord_conv(self.ra_dec, pix)
+            try:
+                psf_sb_profile = self.get_1d_brightness_profile(rad, combined=True, pix_step=pix_step, min_snr=min_snr,
+                                                                psf_corr=True, psf_model=p_rt.psf_model,
+                                                                psf_bins=p_rt.psf_bins, psf_algo=p_rt.psf_algorithm,
+                                                                psf_iter=p_rt.psf_iterations, lo_en=lo_en, hi_en=hi_en)
+                if isinstance(psf_sb_profile, list):
+                    raise ValueError("There are multiple matches for this brightness profile, and its the developers "
+                                     "fault not yours.")
+            except NoProductAvailableError:
+                psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], central_coord, rad,
+                                                            self._back_inn_factor, self._back_out_factor, int_mask,
+                                                            self.redshift, pix_step, kpc, self.cosmo, min_snr)
+                self.update_products(psf_sb_profile)
 
-                if len(prof_prods) == 1:
-                    matching_profs = [p for p in list(prof_prods[0].values())
-                                      if p.check_match(p_rt, pix_central, pix_step, min_snr, rad)]
-                else:
-                    matching_profs = []
-
-                if len(matching_profs) == 0:
-                    psf_sb_profile, success = radial_brightness(psf_comb_rt[-1], pix_central, rad,
-                                                                self._back_inn_factor, self._back_out_factor, int_mask,
-                                                                self.redshift, pix_step, kpc, self.cosmo, min_snr)
-                    self.update_products(psf_sb_profile)
-                else:
-                    psf_sb_profile = matching_profs[0]
-
-                sb_profile += psf_sb_profile
-        elif profile_type == "pizza":
-            raise NotImplementedError("This was implemented but so many things have changed and I haven't "
-                                      "adapted pizza profiles yet")
+            sb_profile += psf_sb_profile
 
         draw_rads = {}
         for r_name in self._radii:

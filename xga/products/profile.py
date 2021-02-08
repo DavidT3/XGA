@@ -1,20 +1,26 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/01/2021, 17:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:52. Copyright (c) David J Turner
 from typing import Tuple, Union
 
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
 from scipy.integrate import trapz, cumtrapz
 
+from .. import NHC, HY_MASS, ABUND_TABLES
 from ..products.base import BaseProfile1D
 from ..products.phot import RateMap
+from ..sourcetools.deproj import shell_ann_vol_intersect
+from ..sourcetools.misc import ang_to_rad
 
 
 class SurfaceBrightness1D(BaseProfile1D):
+    """
+    This class provides an interface to radially symmetric X-ray surface brightness profiles of extended objects.
+    """
     def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int,
                  min_snr: float, outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
                  background: Quantity = None, pixel_bins: np.ndarray = None, back_pixel_bin: np.ndarray = None,
-                 ann_areas: Quantity = None):
+                 ann_areas: Quantity = None, deg_radii: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
@@ -33,8 +39,12 @@ class SurfaceBrightness1D(BaseProfile1D):
         :param np.ndarray back_pixel_bin: An optional argument that provides the pixel bin used for the background
             calculation of this profile.
         :param Quantity ann_areas: The area of the annuli.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
-        super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err)
+        super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err,
+                         deg_radii=deg_radii)
 
         if type(background) != Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
@@ -59,6 +69,11 @@ class SurfaceBrightness1D(BaseProfile1D):
         # Useful quantities from generation of surface brightness profile
         self._pix_step = pix_step
         self._min_snr = min_snr
+
+        # This is the type of compromise I make when I am utterly exhausted, I am just going to require this be in
+        #  degrees
+        if not outer_rad.unit.is_equivalent('deg'):
+            raise UnitConversionError("outer_rad must be convertible to degrees.")
         self._outer_rad = outer_rad
 
         # This is an attribute that doesn't matter enough to be passed in, but can be set externally if it is relevant
@@ -74,6 +89,19 @@ class SurfaceBrightness1D(BaseProfile1D):
 
         # Storing the annular areas for this particular profile, if passed, None if not.
         self._areas = ann_areas
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "Surface Brightness"
+
+        en_key = "bound_{l}-{h}_".format(l=rt.energy_bounds[0].to('keV').value, h=rt.energy_bounds[1].to('keV').value)
+        if rt.psf_corrected:
+            psf_key = "_" + rt.psf_model + "_" + str(rt.psf_bins) + "_" + rt.psf_algorithm + str(rt.psf_iterations)
+        else:
+            psf_key = ""
+
+        ro = outer_rad.to('deg').value
+        self._storage_key = en_key + psf_key + self._storage_key + "_st{ps}_minsn{ms}_ro{ro}".format(ps=int(pix_step),
+                                                                                                     ms=min_snr, ro=ro)
 
     @property
     def pix_step(self) -> int:
@@ -244,9 +272,13 @@ class SurfaceBrightness1D(BaseProfile1D):
         return match
 
 
+# TODO WRITE A CUSTOM STORAGE KEY
 class GasMass1D(BaseProfile1D):
+    """
+    This class provides an interface to a cumulative gas mass profile of a Galaxy Cluster.
+    """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None):
+                 radii_err: Quantity = None, values_err: Quantity = None, deg_radii: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
         Clusters.
@@ -259,18 +291,29 @@ class GasMass1D(BaseProfile1D):
         :param str inst: The instrument which this profile was generated from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, deg_radii=deg_radii)
         self._prof_type = "gas_mass"
 
-        # As this will more often than not be generated from GasDensity1D, we have to allow an
+        # As this will more often than not be generated from GasDensity3D, we have to allow an
         #  external realisation to be added
         self._allowed_real_types = ["gas_dens_prof"]
 
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "Cumulative Gas Mass"
 
-class GasDensity1D(BaseProfile1D):
+
+# TODO WRITE A CUSTOM STORAGE KEY
+class GasDensity3D(BaseProfile1D):
+    """
+    This class provides an interface to a gas density profile of a galaxy cluster.
+    """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None):
+                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
+                 set_storage_key: str = None, deg_radii: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
         Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
@@ -284,8 +327,16 @@ class GasDensity1D(BaseProfile1D):
         :param str inst: The instrument which this profile was generated from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. It is
+            possible for a Gas Density profile to be generated from spectral or photometric information.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -304,6 +355,9 @@ class GasDensity1D(BaseProfile1D):
 
         # Setting up a dictionary to store gas mass results in.
         self._gas_masses = {}
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "Gas Density"
 
     def gas_mass(self, real_type: str, outer_rad: Quantity, conf_level: int = 90) -> Tuple[Quantity, Quantity]:
         """
@@ -404,7 +458,8 @@ class ProjectedGasTemperature1D(BaseProfile1D):
     of annular spectra by XSPEC. These are typically only defined by XGA methods.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None):
+                 radii_err: Quantity = None, values_err: Quantity = None, upper_limit: Quantity = Quantity(70, 'keV'),
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected temperature profile.
 
@@ -417,21 +472,297 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         :param str inst: The instrument which this profile was generated from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
+        :param Quantity upper_limit: An upper limit on what the temperature values are allowed to be, meant to
+            combat XSPEC's habit of putting failed temperature fits to 64keV. It can only be set on init, and
+            any points over that value will have their value and uncertainty set to NaN. Default is 70keV, which
+            WILL NOT exclude any values generated by XSPEC as the maximum temperature XSPEC measures is 64keV.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
-        #
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
 
-        # Actually imposing limits on what units are allowed for the radii and values for this - just
-        #  to make things like the gas mass integration easier and more reliable. Also this is for mass
-        #  density, not number density.
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
 
         if not values.unit.is_equivalent("keV"):
             raise UnitConversionError("Values unit cannot be converted to keV")
 
+        # Making a copy of the original data, just so it can be accessed if desired after the upper limit is applied
+        self._og_values = self.values.copy()
+        self._og_values_err = self.values_err.copy()
+
+        # This just checks that the upper limit is in a legal unit
+        if not upper_limit.unit.is_equivalent(self.values_unit):
+            raise UnitConversionError("The upper limit unit {uu} cannot be converted to the temperature unit "
+                                      "{tu}".format(uu=upper_limit.unit.to_string(), tu=self.values.unit.to_string()))
+        else:
+            upper_limit = upper_limit.to(self.values_unit)
+
+        # Applying the upper limit passed by the user
+        self._values[self._values > upper_limit] = np.nan
+        self._values_err[self._values > upper_limit] = np.nan
+
+        # Putting the upper limit into an attribute
+        self._upper_lim = upper_limit
+
         # Setting the type
         self._prof_type = "1d_proj_temperature"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "Projected Temperature"
+
+    @property
+    def original_values(self) -> Quantity:
+        """
+        A way to access the original temperature values of this profile, in case the upper limit
+        has removed some points.
+
+        :return: An astropy quantity containing the un-edited temperature profile values.
+        :rtype: Quantity
+        """
+        return self._og_values
+
+    @property
+    def original_values_err(self) -> Quantity:
+        """
+        A way to access the original temperature value errors of this profile, in case the upper limit
+        has removed some points.
+
+        :return: An astropy quantity containing the un-edited temperature profile value errors.
+        :rtype: Quantity
+        """
+        return self._og_values_err
+
+    @property
+    def upper_limit(self) -> Quantity:
+        """
+        Property which returns the temperature upper limit passed on init, and which has been used to cut the data.
+
+        :return: An astropy quantity containing the upper limit value.
+        :rtype: Quantity
+        """
+        return self._upper_lim
+
+
+class APECNormalisation1D(BaseProfile1D):
+    """
+    A profile product meant to hold a radial profile of XSPEC normalisation, as measured from a set of annular spectra
+    by XSPEC. These are typically only defined by XGA methods. This is a useful profile because it allows to not
+    only infer 3D profiles of temperature and metallicity, but can also allow us to infer the 3D density profile.
+    """
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
+                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
+                 set_storage_key: str = None, deg_radii: Quantity = None):
+        """
+        The init of a subclass of BaseProfile1D which will hold a 1D XSPEC normalisation profile.
+
+        :param Quantity radii: The radii at which the XSPEC normalisations have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The XSPEC normalisations that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        """
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
+
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+
+        if not values.unit.is_equivalent("cm^-5"):
+            raise UnitConversionError("Values unit cannot be converted to keV")
+
+        # Setting the type
+        self._prof_type = "1d_apec_norm"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "APEC Normalisation"
+
+    def _gen_profile_setup(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr') \
+            -> Tuple[Quantity, Quantity, float]:
+        """
+        There are many common steps in the gas_density_profile and emission_measure_profile methods, so I decided to
+        put some of the common setup steps in this internal function
+
+        :param float redshift: The redshift of the source that this profile was generated from.
+        :param cosmo: The chosen cosmology.
+        :param str abund_table: The abundance table to used for the conversion from n_e x n_H to n_e^2 during density
+            calculation. Default is the famous Anders & Grevesse table.
+        :return:
+        :rtype: Tuple[Quantity, Quantity, float]
+        """
+        # We need radii errors so that BaseProfile init can calculate the annular radii. The only possible time
+        #  this would be triggered is if a user defines their own normalisation profile.
+        if self.radii_err is None:
+            raise ValueError("There are no radii uncertainties available for this APEC normalisation profile, they"
+                             " are required to generate a profile.")
+
+        # This just checks that the input abundance table is legal
+        if abund_table in NHC and abund_table in ABUND_TABLES:
+            hy_to_elec = NHC[abund_table]
+        elif abund_table in ABUND_TABLES and abund_table not in NHC:
+            avail_nhc = ", ".join(list(NHC.keys()))
+            raise ValueError(
+                "{a} is a valid choice of XSPEC abundance table, but XGA doesn't have an electron to hydrogen "
+                "ratio for that table yet, this is the developers fault so please remind him if you see this "
+                "error. Please select from one of these in the meantime; {av}".format(a=abund_table, av=avail_nhc))
+        elif abund_table not in ABUND_TABLES:
+            avail_abund = ", ".join(ABUND_TABLES)
+            raise ValueError("{a} is not a valid abundance table choice, please use one of the "
+                             "following; {av}".format(a=abund_table, av=avail_abund))
+
+        # Converts the radii to cm so that the volume intersections are in the right units.
+        if self.annulus_bounds.unit.is_equivalent('kpc'):
+            cur_rads = self.annulus_bounds.to('cm')
+        elif self.annulus_bounds.unit.is_equivalent('deg'):
+            cur_rads = ang_to_rad(self.annulus_bounds.to('deg'), redshift, cosmo).to('cm')
+        else:
+            raise UnitConversionError("Somehow you have an unrecognised distance unit for the radii of this profile")
+
+        # Calculate the angular diameter distance to the source (in cm), just need the redshift and the cosmology
+        #  which has chosen for analysis
+        ang_dist = cosmo.angular_diameter_distance(redshift).to("cm")
+
+        return cur_rads, ang_dist, hy_to_elec
+
+    def gas_density_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr', num_real: int = 100,
+                            sigma: int = 2) -> GasDensity3D:
+        """
+        A method to calculate the gas density profile from the APEC normalisation profile, which in turn was
+        measured from XSPEC fits of an AnnularSpectra.
+
+        :param float redshift: The redshift of the source that this profile was generated from.
+        :param cosmo: The chosen cosmology.
+        :param str abund_table: The abundance table to used for the conversion from n_e x n_H to n_e^2 during density
+            calculation. Default is the famous Anders & Grevesse table.
+        :param int num_real: The number of data realisations which should be generated to infer density errors.
+        :param int sigma: What sigma of error should the density profile be created with, the default is 2σ.
+        :return: The gas density profile which has been calculated from the APEC normalisation profile.
+        :rtype: GasDensity3D
+        """
+        # There are commonalities between this method and others in this class, so I shifted some steps into an
+        #  internal method which we will call now
+        cur_rads, ang_dist, hy_to_elec = self._gen_profile_setup(redshift, cosmo, abund_table)
+
+        # This uses a handy function I defined a while back to calculate the volume intersections between the annuli
+        #  and spherical shells
+        vol_intersects = shell_ann_vol_intersect(cur_rads, cur_rads)
+
+        # This is essentially the constants bit of the XSPEC APEC normalisation
+        # Angular diameter distance is calculated using the cosmology which was associated with the cluster
+        #  at definition
+        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (hy_to_elec * 10 ** -14)
+        gas_dens = np.sqrt(np.linalg.inv(vol_intersects.T) @ self.values * conv_factor) * HY_MASS
+
+        norm_real = self.generate_data_realisations(num_real)
+        gas_dens_reals = Quantity(np.zeros(norm_real.shape), gas_dens.unit)
+        # Using a loop here is ugly and relatively slow, but it should be okay
+        for i in range(0, num_real):
+            gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @ norm_real[i, :] * conv_factor) * HY_MASS
+
+        # Convert the profile and the realisations to the correct unit
+        gas_dens = gas_dens.to("Msun/Mpc^3")
+        gas_dens_reals = gas_dens_reals.to("Msun/Mpc^3")
+
+        # Calculates the standard deviation of each data point, this is how we estimate the density errors
+        dens_sigma = np.std(gas_dens_reals, axis=0)*sigma
+
+        # Set up the actual profile object and return it
+        dens_prof = GasDensity3D(self.radii, gas_dens, self.centre, self.src_name, self.obs_id, self.instrument,
+                                 self.radii_err, dens_sigma, self.set_ident, self.associated_set_storage_key,
+                                 self.deg_radii)
+        return dens_prof
+
+    def emission_measure_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr',
+                                 num_real: int = 100, sigma: int = 2):
+        """
+        A method to calculate the emission measure profile from the APEC normalisation profile, which in turn was
+        measured from XSPEC fits of an AnnularSpectra.
+
+        :param float redshift: The redshift of the source that this profile was generated from.
+        :param cosmo: The chosen cosmology.
+        :param str abund_table: The abundance table to used for the conversion from n_e x n_H to n_e^2 during density
+            calculation. Default is the famous Anders & Grevesse table.
+        :param int num_real: The number of data realisations which should be generated to infer emission measure errors.
+        :param int sigma: What sigma of error should the density profile be created with, the default is 2σ.
+        :return:
+        :rtype:
+        """
+        cur_rads, ang_dist, hy_to_elec = self._gen_profile_setup(redshift, cosmo, abund_table)
+
+        # This is essentially the constants bit of the XSPEC APEC normalisation
+        # Angular diameter distance is calculated using the cosmology which was associated with the cluster
+        #  at definition
+        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (hy_to_elec * 10 ** -14)
+        em_meas = self.values * conv_factor
+
+        norm_real = self.generate_data_realisations(num_real)
+        em_meas_reals = norm_real * conv_factor
+
+        # Calculates the standard deviation of each data point, this is how we estimate the density errors
+        em_meas_sigma = np.std(em_meas_reals, axis=0)*sigma
+
+        # Set up the actual profile object and return it
+        em_meas_prof = EmissionMeasure1D(self.radii, em_meas, self.centre, self.src_name, self.obs_id, self.instrument,
+                                         self.radii_err, em_meas_sigma, self.set_ident, self.associated_set_storage_key,
+                                         self.deg_radii)
+        return em_meas_prof
+
+
+class EmissionMeasure1D(BaseProfile1D):
+    """
+    A profile product meant to hold a radial profile of X-ray emission measure.
+    """
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
+                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
+                 set_storage_key: str = None, deg_radii: Quantity = None):
+        """
+        The init of a subclass of BaseProfile1D which will hold a radial emission measure profile.
+
+        :param Quantity radii: The radii at which the emission measures have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The emission measures that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        """
+        #
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+
+        if not values.unit.is_equivalent("cm^-3"):
+            raise UnitConversionError("Values unit cannot be converted to cm^-3")
+
+        # Setting the type
+        self._prof_type = "1d_emission_measure"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "Emission Measure"
 
 
 class ProjectedGasMetallicity1D(BaseProfile1D):
@@ -440,7 +771,8 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
     from a set of annular spectra by XSPEC. These are typically only defined by XGA methods.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None):
+                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
+                 set_storage_key: str = None, deg_radii: Quantity = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected metallicity/abundance profile.
 
@@ -453,9 +785,16 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         :param str inst: The instrument which this profile was generated from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
         """
         #
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -469,6 +808,87 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         # Setting the type
         self._prof_type = "1d_proj_metallicity"
 
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "Projected Metallicity"
+
+
+class GasTemperature3D(BaseProfile1D):
+    """
+    A profile product meant to hold a 3D radial profile of X-ray temperature, as measured by some form of
+    de-projection applied to a projected temperature profile
+    """
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
+                 radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
+                 set_storage_key: str = None, deg_radii: Quantity = None):
+        """
+        The init of a subclass of BaseProfile1D which will hold a radial 3D temperature profile.
+
+        :param Quantity radii: The radii at which the gas temperatures have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The gas temperatures that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        """
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
+
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+
+        if not values.unit.is_equivalent("keV"):
+            raise UnitConversionError("Values unit cannot be converted to keV")
+
+        # Setting the type
+        self._prof_type = "gas_temperature"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "3D Temperature"
+
+
+class Generic1D(BaseProfile1D):
+    """
+    A 1D profile product meant to hold profiles which have been dynamically generated by XSPEC profile fitting
+    of models that I didn't build into XGA. It can also be used to make arbitrary profiles using external data.
+    """
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
+                 y_axis_label: str, prof_type: str, radii_err: Quantity = None, values_err: Quantity = None,
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
+        """
+        The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
+        to set up an XGA profile with custom data.
+
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param str y_axis_label: The label to apply to the y-axis of any plots generated from this profile.
+        :param str prof_type: This is a string description of the profile, used to store it in an XGA source (with
+            _profile appended). For instance the prof_type of a ProjectedGasTemperature1D instance is
+            1d_proj_temperature, and it would be stored under 1d_proj_temperature_profile.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        """
+
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
+        self._prof_type = prof_type
+        self._y_axis_name = y_axis_label
 
 
 
