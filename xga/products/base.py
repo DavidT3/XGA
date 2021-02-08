@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 16:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 17:14. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1084,7 +1084,8 @@ class BaseProfile1D:
 
     def view_chains(self, model: str, figsize: Tuple = None):
         """
-        Simple view method to quickly look at the MCMC chains for a given model fit.
+        Simple view method to quickly look at the MCMC chains for a given model fit, though bear in the mind that
+        these chains have already been thinned.
 
         :param str model: The name of the model for which to view the MCMC chains.
         :param Tuple figsize: Desired size of the figure, if None will be set automatically.
@@ -1098,14 +1099,17 @@ class BaseProfile1D:
         else:
             fig, axes = plt.subplots(len(m_info["par_names"]), figsize=figsize, sharex='col')
 
+        plt.suptitle("{m} Parameter Chains".format(m=MODEL_PUBLICATION_NAMES[model]), fontsize=14, y=1.02)
+
         for i in range(len(m_info["par_names"])):
             ax = axes[i]
             ax.plot(chains[:, :, i], "k", alpha=0.3)
             ax.set_xlim(0, len(chains))
-            ax.set_ylabel(m_info["par_names"][i])
+            ax.set_ylabel(m_info["par_names"][i], fontsize=13)
             ax.yaxis.set_label_coords(-0.1, 0.5)
 
-        axes[-1].set_xlabel("step number")
+        axes[-1].set_xlabel("Thinned Step Number", fontsize=13)
+        plt.tight_layout()
         plt.show()
 
     def view_corner(self, model: str, figsize: Tuple = (8, 8)):
@@ -1122,8 +1126,8 @@ class BaseProfile1D:
         fig = corner.corner(samples, labels=m_info["par_names"], figsize=figsize, quantiles=frac_conf_lev,
                             show_titles=True)
         t = self._y_axis_name
-        plt.suptitle("{m} - {s} {t} Profile - {c}% Confidence".format(m=model, s=self.src_name, t=t,
-                                                                      c=m_info["conf_level"]), fontsize=14, y=1.02)
+        plt.suptitle("{m} - {s} {t} Profile - {c}% Confidence".format(m=MODEL_PUBLICATION_NAMES[model], s=self.src_name,
+                                                                      t=t, c=m_info["conf_level"]), fontsize=14, y=1.02)
         plt.show()
 
     def add_realisation(self, real_type: str, radii: Quantity, realisation: Quantity, conf_level: int = 90):
