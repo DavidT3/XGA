@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/02/2021, 15:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 18:42. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -15,6 +15,7 @@ from ..imagetools.profile import radial_brightness
 from ..products import RateMap
 from ..products.profile import SurfaceBrightness1D, GasDensity3D
 from ..samples.extended import ClusterSample
+from ..sas.spec import region_setup
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
 from ..utils import NHC, ABUND_TABLES, HY_MASS, NUM_CORES
@@ -121,27 +122,30 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     return sources, to_dens_convs
 
 
-def _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, pix_step,
-            min_snr) -> SurfaceBrightness1D:
+def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Quantity, hi_en: Quantity,
+            psf_corr: bool, psf_model: str, psf_bins: int, psf_algo: str, psf_iter: int, pix_step: int,
+            min_snr: float) -> SurfaceBrightness1D:
     """
+    An internal function for the Surface Brightness based density functions, which just quickly assembles the
+    requested surface brightness profile.
 
-    :param src:
-    :param reg_type:
-    :param use_peak:
-    :param lo_en:
-    :param hi_en:
-    :param psf_corr:
-    :param psf_model:
-    :param psf_bins:
-    :param psf_algo:
-    :param psf_iter:
-    :param pix_step:
-    :param min_snr:
+    :param GalaxyCluster src: A GalaxyCluster object to generate a brightness profile for.
+    :param Quantity outer_radius: The desired outer radius of the brightness profile.
+    :param bool use_peak: If true the measured peak will be used as the central coordinate of the profile.
+    :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
+    :param Quantity hi_en: The upper energy limit of the combined ratemap used to calculate density.
+    :param bool psf_corr: Default True, whether PSF corrected ratemaps will be used to make the
+        surface brightness profile, and thus the density (if False density results could be incorrect).
+    :param str psf_model: If PSF corrected, the PSF model used.
+    :param int psf_bins: If PSF corrected, the number of bins per side.
+    :param str psf_algo: If PSF corrected, the algorithm used.
+    :param int psf_iter: If PSF corrected, the number of algorithm iterations.
+    :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
+    :param int/float min_snr: The minimum allowed signal to noise for the surface brightness
+        profiles. Default is 0, which disables automatic re-binning.
     :return:
     :rtype: SurfaceBrightness1D
     """
-    raise NotImplementedError("This function does not yet support the new way of specifying outer radius that"
-                              " has been added to the density calculation functions, see issue #349")
     if psf_corr:
         storage_key = "bound_{l}-{u}_{m}_{n}_{a}{i}".format(l=lo_en.value, u=hi_en.value, m=psf_model, n=psf_bins,
                                                             a=psf_algo, i=psf_iter)
@@ -166,7 +170,7 @@ def _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins
     # Grabs the mask which will remove interloper sources
     int_mask = src.get_interloper_mask()
 
-    rad = src.get_radius(reg_type, 'kpc')
+    rad = src.convert_radius(outer_radius, 'kpc')
     sb_prof, success = radial_brightness(comb_rt, centre, rad, src.background_radius_factors[0],
                                          src.background_radius_factors[1], int_mask, src.redshift, pix_step, kpc,
                                          src.cosmo, min_snr)
@@ -178,7 +182,7 @@ def _run_sb(src, reg_type, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins
 
 
 # TODO Come up with some way of propagating the SB profile uncertainty to density
-def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
+def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity] = 'r500',
                   use_peak: bool = True, pix_step: int = 1, min_snr: Union[int, float] = 0.0, abund_table: str = "angr",
                   lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                   psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
@@ -212,7 +216,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
         were grouped by minimum counts.
     :param float min_sn: The minimum signal to noise per channel, if the spectra that were used for fakeit
-        were grouped by minimum signal to noise.
+        were grouped by minimum signal to noise. THIS IS FOR THE SPECTRUM GENERATION.
     :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
     :return: A source or sample of sources, with the density profile added to its storage structure.
@@ -225,10 +229,13 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     sources, conv_factors = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
                                         hi_en, group_spec, min_counts, min_sn, over_sample, num_cores)
 
+    # Calls the handy spectrum region setup function to make a predictable set of outer radius values
+    out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
+
     dens_prog = tqdm(desc="Inverse Abel transforming data and measuring densities", total=len(sources))
     for src_ind, src in enumerate(sources):
-        sb_prof = _run_sb(src, outer_radius, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
-                          pix_step, min_snr)
+        sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                          psf_iter, pix_step, min_snr)
         src.update_products(sb_prof)
 
         # Convert the cen_rad and rad_bins to cm
@@ -247,10 +254,11 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         num_density = np.sqrt(direct_transform(sb, r=cen_rad.value, backend="python") * conv_factors[src_ind])
         # Now we convert to an actual mass
         density = (Quantity(num_density, "1/cm^3") * HY_MASS).to("Msun/Mpc^3")
+        deg_radii = src.convert_radius(cen_rad, 'deg')
 
         # TODO Figure out how to convert the surface brightness uncertainties
         dens_prof = GasDensity3D(cen_rad.to("kpc"), density, sb_prof.centre, src.name, "combined", "combined",
-                                 rad_bins.to("kpc"))
+                                 rad_bins.to("kpc"), deg_radii=deg_radii)
         src.update_products(dens_prof)
 
         dens_prog.update(1)
@@ -260,11 +268,11 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
 
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: str, fit_method: str = "mcmc",
-                          model_priors: list = None, model_start_pars: list = None, outer_radius: str = "r500",
-                          use_peak: bool = True, pix_step: int = 1, min_snr: Union[int, float] = 0.0,
-                          abund_table: str = "angr", lo_en: Quantity = Quantity(0.5, 'keV'),
-                          hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True,
-                          psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                          model_priors: list = None, model_start_pars: list = None,
+                          outer_radius: Union[str, Quantity] = "r500", use_peak: bool = True, pix_step: int = 1,
+                          min_snr: Union[int, float] = 0.0, abund_table: str = "angr",
+                          lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
+                          psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, model_realisations: int = 500, model_rad_steps: int = 300,
                           conf_level: int = 90, num_walkers: int = 20, num_steps: int = 20000, group_spec: bool = True,
                           min_counts: int = 5, min_sn: float = None, over_sample: float = None,
@@ -322,6 +330,9 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
     sources, conv_factors = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en, hi_en,
                                         group_spec, min_counts, min_sn, over_sample, num_cores)
 
+    # Calls the handy spectrum region setup function to make a predictable set of outer radius values
+    out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
+
     dens_prog = tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
                      total=len(sources), position=0)
     # Just defines whether the MCMC fits (if used) can be allowed to put a progress bar on the screen
@@ -331,8 +342,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
         prog_bar_allowed = False
 
     for src_ind, src in enumerate(sources):
-        sb_prof = _run_sb(src, outer_radius, use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
-                          pix_step, min_snr)
+        sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                          psf_iter, pix_step, min_snr)
         src.update_products(sb_prof)
 
         # Fit the user chosen model to sb_prof
@@ -358,10 +369,12 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
                 num_density[r_ind, :] = np.sqrt(direct_transform(realisation, r=radii.value, backend="python")
                                                 * conv_factors[src_ind])
 
-            # Now we convert to an actual mass
+            # Now we convert to an actual mass density
             density = (Quantity(num_density, "1/cm^3") * HY_MASS).to("Msun/Mpc^3").T
             mean_dens = np.mean(density, axis=1)
-            dens_prof = GasDensity3D(radii.to("kpc"), mean_dens, sb_prof.centre, src.name, "combined", "combined")
+            deg_radii = src.convert_radius(radii, 'deg')
+            dens_prof = GasDensity3D(radii.to("kpc"), mean_dens, sb_prof.centre, src.name, "combined", "combined",
+                                     deg_radii=deg_radii)
             dens_prof.add_realisation("inv_abel_model", radii.to("kpc"), density)
 
             src.update_products(dens_prof)
