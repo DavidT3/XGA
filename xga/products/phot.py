@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 07:49. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/02/2021, 13:52. Copyright (c) David J Turner
 
 
 import warnings
@@ -513,7 +513,7 @@ class Image(BaseProduct):
                  chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, zoom_in: bool = False,
                  manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
                  radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
-                 stretch: BaseStretch = LogStretch()) -> Axes:
+                 stretch: BaseStretch = LogStretch(), mask_edges: bool = True) -> Axes:
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
@@ -539,8 +539,11 @@ class Image(BaseProduct):
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
             only be triggered if a cross_hair coordinate is also specified.
         :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is also specified.
+            the background value for a given profile, will only be triggered if a cross_hair coordinate is
+            also specified.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
+        :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
+            to remove artificially bright pixels, default is True.
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
         """
@@ -555,7 +558,7 @@ class Image(BaseProduct):
 
         # If we're showing a RateMap, then we're gonna apply an edge mask to remove all the artificially brightened
         #  pixels that we can - it makes the view look better
-        if type(self) == RateMap:
+        if type(self) == RateMap and mask_edges:
             plot_data *= self.edge_mask
 
         ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
@@ -629,7 +632,7 @@ class Image(BaseProduct):
              other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False,
              manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
              radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
-             stretch: BaseStretch = LogStretch()):
+             stretch: BaseStretch = LogStretch(), mask_edges: bool = True):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
@@ -655,8 +658,11 @@ class Image(BaseProduct):
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
             only be triggered if a cross_hair coordinate is also specified.
         :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is also specified.
+            the background value for a given profile, will only be triggered if a cross_hair coordinate is
+            also specified.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
+        :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
+            to remove artificially bright pixels, default is True.
         """
 
         # Create figure object
@@ -666,7 +672,7 @@ class Image(BaseProduct):
         ax = plt.gca()
 
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
-                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch)
+                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges)
         plt.colorbar(ax.images[0])
         plt.tight_layout()
         # Display the image
