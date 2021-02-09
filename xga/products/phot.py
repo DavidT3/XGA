@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/02/2021, 13:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/02/2021, 14:30. Copyright (c) David J Turner
 
 
 import warnings
@@ -595,8 +595,8 @@ class Image(BaseProduct):
 
         if cross_hair is not None:
             pix_coord = self.coord_conv(cross_hair, pix).value
-            ax.axvline(pix_coord[0], color="white", linewidth=0.5)
-            ax.axhline(pix_coord[1], color="white", linewidth=0.5)
+            ax.axvline(pix_coord[0], color="white", linewidth=0.8)
+            ax.axhline(pix_coord[1], color="white", linewidth=0.8)
 
             for ann_rad in radial_bins_pix:
                 artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1.5)
