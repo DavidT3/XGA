@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 19:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/02/2021, 12:32. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1373,11 +1373,17 @@ class BaseProfile1D:
         y_axis_lims = main_ax.get_ylim()
 
         # This dynamically changes how tick labels are formatted depending on the values displayed
-        if max(x_axis_lims) < 1000:
+        if max(x_axis_lims) < 1000 and not models:
             main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
             main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        if max(y_axis_lims) < 1000:
+        elif max(x_axis_lims) < 1000 and models:
+            res_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            res_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+        if max(y_axis_lims) < 1000 and min(y_axis_lims) > 0.1:
             main_ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        elif max(y_axis_lims) < 1000 and min(y_axis_lims) <= 0.1:
             main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         # And of course actually showing it
