@@ -1,12 +1,17 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 16:47. Copyright (c) David J Turner
 from typing import Tuple, Union
+from warnings import warn
 
 import numpy as np
-from astropy.units import Quantity, UnitConversionError
+from astropy.constants import k_B, G
+from astropy.units import Quantity, UnitConversionError, temperature_energy, K
 from scipy.integrate import trapz, cumtrapz
+from scipy.misc import derivative
 
 from .. import NHC, HY_MASS, ABUND_TABLES
+from ..exceptions import ModelNotAssociatedError, XGAInvalidModelError, XGAFitError
+from ..models import PROF_TYPE_MODELS
 from ..products.base import BaseProfile1D
 from ..products.phot import RateMap
 from ..sourcetools.deproj import shell_ann_vol_intersect
@@ -853,6 +858,208 @@ class GasTemperature3D(BaseProfile1D):
 
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "3D Temperature"
+
+
+# TODO WRITE CUSTOM STORAGE KEY HERE AS WELL
+class HydrostaticMass(BaseProfile1D):
+    """
+    A profile product which uses input GasTemperature3D and GasDensity3D profiles to generate a hydrostatic
+    mass profile, which in turn can be used to measure the hydrostatic mass at a particular radius. In contrast
+    to other profile objects, this one calculates the y values itself.
+    """
+    def __init__(self, temperature_profile: GasTemperature3D, temperature_model: str, density_profile: GasDensity3D,
+                 density_model: str, radii: Quantity, radii_err: Quantity, deg_radii: Quantity):
+
+        # We check whether the temperature profile passed is actually the type of profile we need
+        if type(temperature_profile) != GasTemperature3D:
+            raise TypeError("Only a GasTemperature3D instance may be passed for temperature_profile, check "
+                            "you haven't accidentally passed a ProjectedGasTemperature1D.")
+        # Now we check the model choice passed for the temperature profile
+        try:
+            self._temp_fit = temperature_profile.get_model_fit(temperature_model)
+        except XGAInvalidModelError:
+            allowed = ", ".format(list(PROF_TYPE_MODELS['gas_temperature'].keys()))
+            raise ValueError("{p} is not an allowed temperature_model value, please use one of the "
+                             "following: {a}".format(a=allowed, p=temperature_model))
+        except ModelNotAssociatedError:
+            raise ValueError("{p} is an allowed temperature_model value, but hasn't yet been fitted to the "
+                             "profile".format(p=temperature_model))
+        except XGAFitError:
+            raise ValueError("{p} is an allowed temperature_model value, but the fit you performed was not "
+                             "successful".format(p=temperature_model))
+
+        # We repeat this process with the density profile and model
+        if type(density_profile) != GasDensity3D:
+            raise TypeError("Only a GasDensity3D instance may be passed for density_profile, check you haven't "
+                            "accidentally passed a GasDensity3D.")
+
+        try:
+            self._dens_fit = density_profile.get_model_fit(density_model)
+        except XGAInvalidModelError:
+            allowed = ", ".format(list(PROF_TYPE_MODELS['gas_density'].keys()))
+            raise ValueError("{p} is not an allowed density_model value, please use one of the "
+                             "following: {a}".format(a=allowed, p=density_model))
+        except ModelNotAssociatedError:
+            raise ValueError("{p} is an allowed density_model value, but hasn't yet been fitted to the "
+                             "profile".format(p=density_model))
+        except XGAFitError:
+            raise ValueError("{p} is an allowed density_model value, but the fit you performed was not "
+                             "successful".format(p=density_model))
+
+        # We also need to check that someone hasn't done something dumb like pass profiles from two different
+        #  clusters, so we'll compare source names.
+        if temperature_profile.src_name != density_profile.src_name:
+            raise ValueError("You have passed temperature and density profiles from two different "
+                             "sources, any resulting hydrostatic mass measurements would not be valid, so this is not "
+                             "allowed.")
+        # And check they were generated with the same central coordinate, otherwise they may not be valid. I
+        #  considered only raising a warning, but I need a consistent central coordinate to pass to the super init
+        elif np.any(temperature_profile.centre != density_profile.centre):
+            raise ValueError("The temperature and density profiles do not have the same central coordinate.")
+        # Same reasoning with the ObsID and instrument
+        elif temperature_profile.obs_id != density_profile.obs_id:
+            raise ValueError("The temperature and density profiles do not have the same associated ObsID.")
+        elif temperature_profile.instrument != density_profile.instrument:
+            raise ValueError("The temperature and density profiles do not have the same associated instrument.")
+
+        # We see if either of the profiles have an associated spectrum
+        if temperature_profile.set_ident is None and density_profile.set_ident is None:
+            set_id = None
+            set_store = None
+        elif temperature_profile.set_ident is None and density_profile.set_ident is not None:
+            set_id = density_profile.set_ident
+            set_store = density_profile.associated_set_storage_key
+        elif temperature_profile.set_ident is not None and density_profile.set_ident is None:
+            set_id = temperature_profile.set_ident
+            set_store = temperature_profile.associated_set_storage_key
+        elif temperature_profile.set_ident is not None and density_profile.set_ident is not None:
+            if temperature_profile.set_ident != density_profile.set_ident:
+                warn("The temperature and density profile you passed where generated from different sets of annular"
+                     " spectra, the mass profiles associated set ident will be set to None.")
+                set_id = None
+                set_store = None
+            else:
+                set_id = temperature_profile.set_ident
+                set_store = temperature_profile.associated_set_storage_key
+
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+        else:
+            radii = radii.to('kpc')
+            radii_err = radii_err.to('kpc')
+
+        # We won't REQUIRE that the profiles have data point generated at the same radii, as we're gonna
+        #  measure masses from the models, but I do need to check that the passed radii are within the radii of the
+        #  and warn the user if they aren't
+        if (radii > temperature_profile.annulus_bounds[-1]).any() \
+                or (radii[-1] > density_profile.annulus_bounds[-1]).any():
+            warn("Some radii passed to the HydrostaticMass init are outside the data range covered by the temperature "
+                 "or density profiles, as such you will be extrapolating based on the model fits.")
+
+        self._temp_prof = temperature_profile
+        self._dens_prof = density_profile
+        self._temp_model = temperature_model
+        self._dens_model = density_model
+
+        mass_vals, mass_errs = self.mass(radii)
+
+        super().__init__(radii, mass_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
+                         self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii)
+
+        # Setting the type
+        self._prof_type = "hydrostatic_mass"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "M$_{\rm{hydro}}$"
+
+    def mass(self, radius: Quantity, num_real: int = 300) -> Union[Quantity, Quantity]:
+        """
+        A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
+        radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
+        hydrostatic mass.
+
+        :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
+            mass within.
+        :param int num_real: The number of model realisations which should be generated for error propagation.
+        :return: An astropy quantity containing the mass/masses, and another containing the associated uncertainties.
+        :rtype: Union[Quantity, Quantity]
+        """
+        if (radius.max() > self._temp_prof.annulus_bounds[-1]).any() \
+                or (radius.max() > self._dens_prof.annulus_bounds[-1]).any():
+            warn("The radius at which you have requested the mass is greater than the outermost radius of the "
+                 "temperature or density profile used to generate this mass profile, prediction may not be valid.")
+
+        # Reading out the fit parameters of the chosen temperature model, just for convenience
+        temp_fit_pars = self._temp_fit['par']
+        # TODO GENERATING REALISATIONS HERE ASSUMES GAUSSIAN ERRORS AGAIN
+        temp_one_sig_err = self._temp_fit['par_err_1sig']
+
+        temp_model_par = np.repeat(temp_fit_pars[..., None], num_real, axis=1).T
+        temp_model_par_err = np.repeat(temp_one_sig_err[..., None], num_real, axis=1).T
+
+        # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
+        temp_par_dists = np.random.normal(temp_model_par, temp_model_par_err)
+
+        # Setting up the units for the derivative of the temperature profile
+        der_temp_unit = self._temp_prof.values_unit / radius.unit
+
+        # Actually calculating the derivative of the temperature profile
+        # TODO DO THE DERIVATIVES OF THE MODELS SO THIS COULD BE DONE ANALYTICALLY WHERE POSSIBLE
+        der_temp = Quantity(derivative(lambda r: self._temp_fit['model_func'](r, *temp_fit_pars), radius.value),
+                            der_temp_unit)
+        # The realisation derivatives
+        der_real_temps = Quantity(derivative(lambda r: self._temp_fit['model_func'](r, *temp_par_dists.T),
+                                             radius.value[..., None]), der_temp_unit).T
+        temp = Quantity(self._temp_fit['model_func'](radius.value, *temp_fit_pars), self._temp_prof.values_unit)
+        # Realisation temperatures
+        real_temps = Quantity(self._temp_fit['model_func'](radius.value[..., None], *temp_par_dists.T),
+                              self._temp_prof.values_unit).T
+
+        # As of the time of writing, its not currently possible to get this far with a temperature profile in Kelvin,
+        #  only keV, but I may allow it later and I would like to be ready for that possibility
+        if not temp.unit == K:
+            # Convert the temperature to Kelvin using the temperature energy equivalency, the value that goes into the
+            #  hydrostatic mass equation must be in Kelvin
+            temp = temp.to('K', equivalencies=temperature_energy())
+            real_temps = real_temps.to('K', equivalencies=temperature_energy())
+            # I can't use the equivalency when there is another unit in there for some reason, so I just do it
+            #  manually by dividing by the Boltzmann constant
+            der_temp = (der_temp / k_B).to(K / radius.unit)
+            der_real_temps = (der_real_temps / k_B).to(K / radius.unit)
+
+        # Now setting up the unit for the density profile derivative
+        der_dens_unit = self._dens_prof.values_unit / radius.unit
+
+        # This process is all essentially the same as the temperature derivatives
+        dens_fit_pars = self._dens_fit['par']
+        # TODO GENERATING REALISATIONS HERE ASSUMES GAUSSIAN ERRORS AGAIN
+        dens_one_sig_err = self._dens_fit['par_err_1sig']
+
+        dens_model_par = np.repeat(dens_fit_pars[..., None], num_real, axis=1).T
+        dens_model_par_err = np.repeat(dens_one_sig_err[..., None], num_real, axis=1).T
+        dens_par_dists = np.random.normal(dens_model_par, dens_model_par_err)
+
+        der_dens = Quantity(derivative(lambda r: self._dens_fit['model_func'](r, *dens_fit_pars), radius.value),
+                            der_dens_unit)
+        der_real_dens = Quantity(derivative(lambda r: self._dens_fit['model_func'](r, *dens_par_dists.T),
+                                            radius.value[..., None]), der_dens_unit).T
+        dens = Quantity(self._dens_fit['model_func'](radius.value, *dens_fit_pars), self._dens_prof.values_unit)
+        real_dens = Quantity(self._dens_fit['model_func'](radius.value[..., None], *dens_par_dists.T),
+                             self._dens_prof.values_unit).T
+
+        # Please note that this is just the vanilla hydrostatic mass equation, but not written in the standard form.
+        # Here there are no logs in the derivatives, and I've also written it in such a way that mass densities are
+        #  used rather than number densities
+        mass = ((-1 * k_B * np.power(radius, 2)) / (dens * HY_MASS * G)) * ((dens * der_temp) + (temp * der_dens))
+        # Just converts the mass/masses to the unit we normally use for them
+        mass = mass.to('Msun')
+
+        real_masses = ((-1 * k_B * np.power(radius, 2)) / (real_dens * HY_MASS * G)) * \
+                      ((real_dens * der_real_temps) + (real_temps * der_real_dens))
+        real_masses = real_masses.to('Msun')
+        mass_err = np.nanstd(real_masses, axis=0)
+
+        return mass, mass_err
 
 
 class Generic1D(BaseProfile1D):

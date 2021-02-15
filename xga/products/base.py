@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/02/2021, 12:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 16:47. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -14,7 +14,8 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
 
-from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError
+from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
+    ModelNotAssociatedError
 from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, PROF_TYPE_MODELS_PRIORS, \
     MODEL_PUBLICATION_PAR_NAMES
 from ..models.fitting import log_likelihood, log_prob
@@ -863,7 +864,7 @@ class BaseProfile1D:
             # Store these realisations for statistics later on
             self._good_model_fits[model] = {"par": fit_par, "par_err": fit_par_err, "start_pars": start_pars,
                                             "model_func": model_func, "par_names": model_par_names,
-                                            "conf_level": conf_level}
+                                            "conf_level": conf_level, "par_err_1sig": fit_par_err}
             self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
                                          "conf_level": conf_level, "mod_real_mean": model_mean,
                                          "mod_real_lower": model_lower, "mod_real_upper": model_upper}
@@ -876,6 +877,7 @@ class BaseProfile1D:
             fit_par = np.mean(flat_samp, axis=0)
             fit_par_mi = fit_par - pars_lower
             fit_par_pl = pars_upper - fit_par
+            fit_par_1sig = np.std(flat_samp, axis=0)
 
             # Setting up some radii between 0 and the maximum radius to sample the model at
             if self._radii_err is None:
@@ -895,7 +897,7 @@ class BaseProfile1D:
             self._good_model_fits[model] = {"par": fit_par, "par_err_mi": fit_par_mi, "par_err_pl": fit_par_pl,
                                             "model_func": model_func, "sampler": sampler, "thinning": thinning,
                                             "cut_off": cut_off, "par_names": model_par_names,
-                                            "conf_level": conf_level}
+                                            "conf_level": conf_level, "par_err_1sig": fit_par_1sig}
             self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
                                          "conf_level": conf_level, "mod_real_mean": model_mean,
                                          "mod_real_lower": model_lower, "mod_real_upper": model_upper}
@@ -940,7 +942,7 @@ class BaseProfile1D:
             raise XGAFitError("An attempt was made to fit {}, but it failed, no fit data can be "
                               "retrieved.".format(model))
         elif model not in self._good_model_fits:
-            raise XGAFitError("{} is valid for this profile, but hasn't been fit yet".format(model))
+            raise ModelNotAssociatedError("{} is valid for this profile, but hasn't been fit yet".format(model))
 
         return self._good_model_fits[model]
 
