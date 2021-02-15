@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 16:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 17:00. Copyright (c) David J Turner
 from typing import Tuple, Union
 from warnings import warn
 
@@ -970,7 +970,7 @@ class HydrostaticMass(BaseProfile1D):
         self._prof_type = "hydrostatic_mass"
 
         # This is what the y-axis is labelled as during plotting
-        self._y_axis_name = "M$_{\rm{hydro}}$"
+        self._y_axis_name = r"M$_{\rm{hydro}}$"
 
     def mass(self, radius: Quantity, num_real: int = 300) -> Union[Quantity, Quantity]:
         """
