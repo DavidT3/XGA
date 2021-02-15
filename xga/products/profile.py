@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 17:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 17:32. Copyright (c) David J Turner
 from typing import Tuple, Union
 from warnings import warn
 
@@ -972,7 +972,13 @@ class HydrostaticMass(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = r"M$_{\rm{hydro}}$"
 
-    def mass(self, radius: Quantity, num_real: int = 300) -> Union[Quantity, Quantity]:
+    def add_realisation(self):
+        """
+        This profile does not support adding realisations from an external source.
+        """
+        pass
+
+    def mass(self, radius: Quantity, sigma: int = 1, num_real: int = 300) -> Union[Quantity, Quantity]:
         """
         A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
         radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
@@ -980,6 +986,7 @@ class HydrostaticMass(BaseProfile1D):
 
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
+        :param int sigma: What sigma uncertainties should the calculated mass have, the default is 1σ.
         :param int num_real: The number of model realisations which should be generated for error propagation.
         :return: An astropy quantity containing the mass/masses, and another containing the associated uncertainties.
         :rtype: Union[Quantity, Quantity]
@@ -1057,7 +1064,7 @@ class HydrostaticMass(BaseProfile1D):
         real_masses = ((-1 * k_B * np.power(radius, 2)) / (real_dens * HY_MASS * G)) * \
                       ((real_dens * der_real_temps) + (real_temps * der_real_dens))
         real_masses = real_masses.to('Msun')
-        mass_err = np.nanstd(real_masses, axis=0)
+        mass_err = np.nanstd(real_masses, axis=0) * sigma
 
         return mass, mass_err
 
