@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/02/2021, 13:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/02/2021, 13:20. Copyright (c) David J Turner
 from typing import Tuple, Union
 from warnings import warn
 
@@ -371,7 +371,7 @@ class GasDensity3D(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Gas Density"
 
-    def gas_mass(self, real_type: str, outer_rad: Quantity, conf_level: int = 90, num_real: int = 300) \
+    def gas_mass(self, real_type: str, outer_rad: Quantity, conf_level: int = 90, num_real: int = 1000) \
             -> Tuple[Quantity, Quantity]:
         """
         A method to calculate and return the gas mass (with uncertainties).
@@ -480,6 +480,47 @@ class GasDensity3D(BaseProfile1D):
         results: Quantity = self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]['result']
         dist: Quantity = self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]["distribution"]
         return results, dist
+
+    def view_gas_mass_dist(self, real_type: str, radius: Quantity, conf_level: int = 90, num_real: int = 1000,
+                           figsize=(8, 8), colour: str = "tab:gray"):
+        """
+        A method which will generate a histogram of the gas mass distribution that resulted from the gas mass
+        calculation at the supplied radius. If the mass for the passed radius has already been measured it, and the mass
+        distribution, will be retrieved from the storage of this product rather than re-calculated.
+
+        :param str real_type: The realisation type to measure the gas mass from.
+        :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
+            mass within.
+        :param int conf_level: The confidence level for the mass uncertainties.
+        :param int num_real: The number of model realisations which should be generated for error propagation.
+        :param str colour: The desired colour of the histogram.
+        :param tuple figsize: The desired size of the histogram figure.
+        """
+        if not radius.isscalar:
+            raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
+                             "arrays of radii are not supported.")
+
+        gas_mass, gas_mass_dist = self.gas_mass(real_type, radius, conf_level, num_real)
+        plt.figure(figsize=figsize)
+        ax = plt.gca()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.yaxis.set_ticklabels([])
+
+        plt.hist(gas_mass_dist.value, bins='auto', color=colour, alpha=0.7, density=False)
+        plt.xlabel(self._y_axis_name)
+        plt.title("Gas Mass Distribution at {}".format(radius.to_string()))
+
+        lab_hy_mass = gas_mass.to("10^13Msun")
+        vals_label = str(lab_hy_mass[0].round(2).value) + "^{+" + str(lab_hy_mass[2].round(2).value) + "}" + \
+                     "_{-" + str(lab_hy_mass[1].round(2).value) + "}"
+        res_label = r"$\rm{M_{hydro}} = " + vals_label + "10^{13}M_{\odot}$"
+
+        plt.axvline(gas_mass[0].value, color='red', label=res_label)
+        plt.axvline(gas_mass[0].value-gas_mass[1].value, color='red', linestyle='dashed')
+        plt.axvline(gas_mass[0].value+gas_mass[2].value, color='red', linestyle='dashed')
+        plt.legend(loc='best', prop={'size': 12})
+        plt.tight_layout()
+        plt.show()
 
     def gas_mass_profile(self, real_type: str, outer_rad: Quantity, conf_level: int = 90) -> GasMass1D:
         """
@@ -1371,6 +1412,26 @@ class HydrostaticMass(BaseProfile1D):
         return BaryonFraction(self.radii, frac, self.centre, self.src_name, self.obs_id, self.instrument,
                               self.radii_err, frac_err, self.set_ident, self.associated_set_storage_key,
                               self.deg_radii)
+
+    @property
+    def temperature_profile(self) -> GasTemperature3D:
+        """
+        A method to provide access to the 3D temperature profile used to generate this hydrostatic mass profile.
+
+        :return: The input temperature profile.
+        :rtype: GasTemperature3D
+        """
+        return self._temp_prof
+
+    @property
+    def density_profile(self) -> GasDensity3D:
+        """
+        A method to provide access to the 3D density profile used to generate this hydrostatic mass profile.
+
+        :return: The input density profile.
+        :rtype: GasDensity3D
+        """
+        return self._dens_prof
 
 
 class Generic1D(BaseProfile1D):
