@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/02/2021, 13:51. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1144,10 +1144,6 @@ class BaseSource:
         #  custom central coordinates
         if reg_type == "region" and central_coord is not None:
             warnings.warn("You cannot use custom central coordinates with a region from supplied region files")
-        # elif reg_type != "region" and central_coord is None:
-        #     warnings.warn("No central coord supplied, using default (peak if use_peak is True),
-        #     initial coordinates"
-        #                   "otherwise.")
 
         if central_coord is None:
             central_coord = self._default_coord
@@ -1157,9 +1153,7 @@ class BaseSource:
         elif type(central_coord) == SkyCoord:
             centre = central_coord
         else:
-            print(central_coord)
-            print(type(central_coord))
-            raise TypeError("BOI")
+            raise TypeError("central_coord must be of type Quantity or SkyCoord.")
 
         # In case combined gets passed as the ObsID at any point
         if obs_id == "combined":

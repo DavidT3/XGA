@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 15:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/02/2021, 12:30. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -41,6 +41,9 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
     #  necessarily overlap
     if isinstance(sources, NullSource):
         raise TypeError("You cannot create spectra of a NullSource")
+
+    if isinstance(sources, BaseSource):
+        sources = [sources]
 
     # Checking that the user hasn't passed BaseSources
     if not all([type(src) != BaseSource for src in sources]):

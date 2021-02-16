@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/02/2021, 15:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 16:33. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -225,6 +225,9 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         raise ValueError("{a} is not a valid abundance table choice, please use one of the "
                          "following; {av}".format(a=abund_table, av=avail_abund))
 
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
     all_rads = []
     for src_ind, src in enumerate(sources):
         if use_combined:
@@ -244,6 +247,9 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
 
         # Shoves the annuli we've decided upon into a list for single_temp_apec_profile to use
         all_rads.append(rads)
+
+    if len(sources) == 1:
+        sources = sources[0]
 
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                              over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, link_norm=link_norm,
@@ -334,7 +340,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
-                           abund_table: str = "angr", num_data_real: int = 100, sigma: int = 2,
+                           abund_table: str = "angr", num_data_real: int = 300, sigma: int = 2,
                            num_cores: int = NUM_CORES):
     """
     This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using

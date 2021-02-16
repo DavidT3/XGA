@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 14:38. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/02/2021, 12:30. Copyright (c) David J Turner
 
 from typing import List, Union
 
@@ -70,6 +70,9 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     script_paths = []
     outfile_paths = []
     src_inds = []
+
+    if isinstance(sources, BaseSource):
+        sources = [sources]
 
     deg_rad = []
     for src_ind, source in enumerate(sources):
