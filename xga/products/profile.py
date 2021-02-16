@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/02/2021, 10:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/02/2021, 11:31. Copyright (c) David J Turner
 from typing import Tuple, Union
 from warnings import warn
 
@@ -1067,6 +1067,12 @@ class HydrostaticMass(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = r"M$_{\rm{hydro}}$"
 
+        # Setting up a dictionary to store hydro mass results in.
+        self._masses = {}
+
+        # This dictionary is for measurements of the baryon fraction
+        self._baryon_fraction = {}
+
     def add_realisation(self):
         """
         This profile does not support adding realisations from an external source.
@@ -1095,94 +1101,109 @@ class HydrostaticMass(BaseProfile1D):
             warn("The radius at which you have requested the mass is greater than the outermost radius of the "
                  "temperature or density profile used to generate this mass profile, prediction may not be valid.")
 
-        # Reading out the fit parameters of the chosen temperature model, just for convenience
-        temp_fit_pars = self._temp_fit['par']
-        # TODO GENERATING REALISATIONS HERE ASSUMES GAUSSIAN ERRORS AGAIN
-        temp_one_sig_err = self._temp_fit['par_err_1sig']
-
-        temp_model_par = np.repeat(temp_fit_pars[..., None], num_real, axis=1).T
-        temp_model_par_err = np.repeat(temp_one_sig_err[..., None], num_real, axis=1).T
-
-        # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
-        temp_par_dists = np.random.normal(temp_model_par, temp_model_par_err)
-
-        # Setting up the units for the derivative of the temperature profile
-        der_temp_unit = self._temp_prof.values_unit / radius.unit
-
-        # Actually calculating the derivative of the temperature profile
-        # TODO DO THE DERIVATIVES OF THE MODELS SO THIS COULD BE DONE ANALYTICALLY WHERE POSSIBLE
-        der_temp = Quantity(derivative(lambda r: self._temp_fit['model_func'](r, *temp_fit_pars), radius.value),
-                            der_temp_unit)
-        # The realisation derivatives
-        der_real_temps = Quantity(derivative(lambda r: self._temp_fit['model_func'](r, *temp_par_dists.T),
-                                             radius.value[..., None]), der_temp_unit).T
-        temp = Quantity(self._temp_fit['model_func'](radius.value, *temp_fit_pars), self._temp_prof.values_unit)
-        # Realisation temperatures
-        real_temps = Quantity(self._temp_fit['model_func'](radius.value[..., None], *temp_par_dists.T),
-                              self._temp_prof.values_unit).T
-
-        # As of the time of writing, its not currently possible to get this far with a temperature profile in Kelvin,
-        #  only keV, but I may allow it later and I would like to be ready for that possibility
-        if not temp.unit == K:
-            # Convert the temperature to Kelvin using the temperature energy equivalency, the value that goes into the
-            #  hydrostatic mass equation must be in Kelvin
-            temp = temp.to('K', equivalencies=temperature_energy())
-            real_temps = real_temps.to('K', equivalencies=temperature_energy())
-            # I can't use the equivalency when there is another unit in there for some reason, so I just do it
-            #  manually by dividing by the Boltzmann constant
-            der_temp = (der_temp / k_B).to(K / radius.unit)
-            der_real_temps = (der_real_temps / k_B).to(K / radius.unit)
-
-        # Now setting up the unit for the density profile derivative
-        der_dens_unit = self._dens_prof.values_unit / radius.unit
-
-        # This process is all essentially the same as the temperature derivatives
-        dens_fit_pars = self._dens_fit['par']
-        # TODO GENERATING REALISATIONS HERE ASSUMES GAUSSIAN ERRORS AGAIN
-        dens_one_sig_err = self._dens_fit['par_err_1sig']
-
-        dens_model_par = np.repeat(dens_fit_pars[..., None], num_real, axis=1).T
-        dens_model_par_err = np.repeat(dens_one_sig_err[..., None], num_real, axis=1).T
-        dens_par_dists = np.random.normal(dens_model_par, dens_model_par_err)
-
-        der_dens = Quantity(derivative(lambda r: self._dens_fit['model_func'](r, *dens_fit_pars), radius.value),
-                            der_dens_unit)
-        der_real_dens = Quantity(derivative(lambda r: self._dens_fit['model_func'](r, *dens_par_dists.T),
-                                            radius.value[..., None]), der_dens_unit).T
-        dens = Quantity(self._dens_fit['model_func'](radius.value, *dens_fit_pars), self._dens_prof.values_unit)
-        real_dens = Quantity(self._dens_fit['model_func'](radius.value[..., None], *dens_par_dists.T),
-                             self._dens_prof.values_unit).T
-
-        # Please note that this is just the vanilla hydrostatic mass equation, but not written in the standard form.
-        # Here there are no logs in the derivatives, and I've also written it in such a way that mass densities are
-        #  used rather than number densities
-        mass = ((-1 * k_B * np.power(radius, 2)) / (dens * HY_MASS * G)) * ((dens * der_temp) + (temp * der_dens))
-        # Just converts the mass/masses to the unit we normally use for them
-        mass = mass.to('Msun')
-
-        real_masses = ((-1 * k_B * np.power(radius, 2)) / (real_dens * HY_MASS * G)) * \
-                      ((real_dens * der_real_temps) + (real_temps * der_real_dens))
-        real_masses = real_masses.to('Msun')
-
-        # Making sure we don't include any profiles with NaN in by selecting only realisations where
-        #  no NaN is present
-        nan_not_present = np.array(list(set(np.where(~np.isnan(real_masses))[0])))
-        if real_masses.ndim == 2:
-            real_masses = real_masses[nan_not_present, :]
-        elif real_masses.ndim == 1:
-            real_masses = real_masses[nan_not_present]
+        if radius.isscalar and str(radius.value) in self._masses \
+                and str(conf_level) in self._masses[str(radius.value)]:
+            already_run = True
+            mass_res = self._masses[str(radius.value)][str(conf_level)]["result"]
+            real_masses = self._masses[str(radius.value)][str(conf_level)]["distribution"]
         else:
-            raise ValueError("You have a 3D mass realisation array and I have no idea how...")
+            already_run = False
 
-        mass_mean = np.mean(real_masses, axis=0)
-        mass_lower = mass_mean - np.percentile(real_masses, lower, axis=0)
-        mass_upper = np.percentile(real_masses, upper, axis=0) - mass_mean
+        if not already_run:
+            # Reading out the fit parameters of the chosen temperature model, just for convenience
+            temp_fit_pars = self._temp_fit['par']
+            # TODO GENERATING REALISATIONS HERE ASSUMES GAUSSIAN ERRORS AGAIN
+            temp_one_sig_err = self._temp_fit['par_err_1sig']
 
-        # mass_err = np.nanstd(real_masses, axis=0) * sigma
+            temp_model_par = np.repeat(temp_fit_pars[..., None], num_real, axis=1).T
+            temp_model_par_err = np.repeat(temp_one_sig_err[..., None], num_real, axis=1).T
 
-        mass_arr = np.array([mass_mean.value, mass_lower.value, mass_upper.value])
+            # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
+            temp_par_dists = np.random.normal(temp_model_par, temp_model_par_err)
 
-        return Quantity(mass_arr, mass.unit), real_masses
+            # Setting up the units for the derivative of the temperature profile
+            der_temp_unit = self._temp_prof.values_unit / radius.unit
+
+            # Actually calculating the derivative of the temperature profile
+            # TODO DO THE DERIVATIVES OF THE MODELS SO THIS COULD BE DONE ANALYTICALLY WHERE POSSIBLE
+            der_temp = Quantity(derivative(lambda r: self._temp_fit['model_func'](r, *temp_fit_pars), radius.value),
+                                der_temp_unit)
+            # The realisation derivatives
+            der_real_temps = Quantity(derivative(lambda r: self._temp_fit['model_func'](r, *temp_par_dists.T),
+                                                 radius.value[..., None]), der_temp_unit).T
+            temp = Quantity(self._temp_fit['model_func'](radius.value, *temp_fit_pars), self._temp_prof.values_unit)
+            # Realisation temperatures
+            real_temps = Quantity(self._temp_fit['model_func'](radius.value[..., None], *temp_par_dists.T),
+                                  self._temp_prof.values_unit).T
+
+            # As of the time of writing, its not currently possible to get this far with a temperature profile
+            #  in Kelvin, only keV, but I may allow it later and I would like to be ready for that possibility
+            if not temp.unit == K:
+                # Convert the temperature to Kelvin using the temperature energy equivalency, the value that
+                #  goes into the hydrostatic mass equation must be in Kelvin
+                temp = temp.to('K', equivalencies=temperature_energy())
+                real_temps = real_temps.to('K', equivalencies=temperature_energy())
+                # I can't use the equivalency when there is another unit in there for some reason, so I just do it
+                #  manually by dividing by the Boltzmann constant
+                der_temp = (der_temp / k_B).to(K / radius.unit)
+                der_real_temps = (der_real_temps / k_B).to(K / radius.unit)
+
+            # Now setting up the unit for the density profile derivative
+            der_dens_unit = self._dens_prof.values_unit / radius.unit
+
+            # This process is all essentially the same as the temperature derivatives
+            dens_fit_pars = self._dens_fit['par']
+            # TODO GENERATING REALISATIONS HERE ASSUMES GAUSSIAN ERRORS AGAIN
+            dens_one_sig_err = self._dens_fit['par_err_1sig']
+
+            dens_model_par = np.repeat(dens_fit_pars[..., None], num_real, axis=1).T
+            dens_model_par_err = np.repeat(dens_one_sig_err[..., None], num_real, axis=1).T
+            dens_par_dists = np.random.normal(dens_model_par, dens_model_par_err)
+
+            der_dens = Quantity(derivative(lambda r: self._dens_fit['model_func'](r, *dens_fit_pars), radius.value),
+                                der_dens_unit)
+            der_real_dens = Quantity(derivative(lambda r: self._dens_fit['model_func'](r, *dens_par_dists.T),
+                                                radius.value[..., None]), der_dens_unit).T
+            dens = Quantity(self._dens_fit['model_func'](radius.value, *dens_fit_pars), self._dens_prof.values_unit)
+            real_dens = Quantity(self._dens_fit['model_func'](radius.value[..., None], *dens_par_dists.T),
+                                 self._dens_prof.values_unit).T
+
+            # Please note that this is just the vanilla hydrostatic mass equation, but not written in the standard form.
+            # Here there are no logs in the derivatives, and I've also written it in such a way that mass densities are
+            #  used rather than number densities
+            mass = ((-1 * k_B * np.power(radius, 2)) / (dens * HY_MASS * G)) * ((dens * der_temp) + (temp * der_dens))
+            # Just converts the mass/masses to the unit we normally use for them
+            mass = mass.to('Msun')
+
+            real_masses = ((-1 * k_B * np.power(radius, 2)) / (real_dens * HY_MASS * G)) * \
+                          ((real_dens * der_real_temps) + (real_temps * der_real_dens))
+            real_masses = real_masses.to('Msun')
+
+            # Making sure we don't include any profiles with NaN in by selecting only realisations where
+            #  no NaN is present
+            nan_not_present = np.array(list(set(np.where(~np.isnan(real_masses))[0])))
+            if real_masses.ndim == 2:
+                real_masses = real_masses[nan_not_present, :]
+            elif real_masses.ndim == 1:
+                real_masses = real_masses[nan_not_present]
+            else:
+                raise ValueError("You have a 3D mass realisation array and I have no idea how...")
+
+            mass_mean = np.mean(real_masses, axis=0)
+            mass_lower = mass_mean - np.percentile(real_masses, lower, axis=0)
+            mass_upper = np.percentile(real_masses, upper, axis=0) - mass_mean
+
+            # mass_err = np.nanstd(real_masses, axis=0) * sigma
+
+            mass_res = Quantity(np.array([mass_mean.value, mass_lower.value, mass_upper.value]), mass.unit)
+
+            if mass_res.ndim == 1 and str(radius.value) not in self._masses:
+                self._masses[str(radius.value)] = {str(conf_level): {"result": mass_res, "distribution": real_masses}}
+            elif mass_res.ndim == 1 and str(radius.value) in self._masses and \
+                    str(conf_level) not in self._masses[str(radius.value)]:
+                self._masses[str(radius.value)][str(conf_level)] = {"result": mass_res, "distribution": real_masses}
+
+        return mass_res, real_masses
 
     def baryon_fraction(self, radius: Quantity, conf_level: int = 68, num_real: int = 300) -> Tuple[Quantity, Quantity]:
         """
@@ -1197,25 +1218,46 @@ class HydrostaticMass(BaseProfile1D):
             containing the baryon fraction distribution.
         :rtype: Tuple[Quantity, Quantity]
         """
+        if not radius.isscalar:
+            raise ValueError("Unfortunately this method can only calculate the baryon fraction within one "
+                             "radius, multiple radii are not supported.")
+
+        if str(radius.value) in self._baryon_fraction and str(conf_level) in self._baryon_fraction[str(radius.value)]:
+            already_run = True
+            bar_frac_res = self._baryon_fraction[str(radius.value)][str(conf_level)]["result"]
+            bar_frac_dist = self._baryon_fraction[str(radius.value)][str(conf_level)]["distribution"]
+        else:
+            already_run = False
+
         upper = 50 + (conf_level / 2)
         lower = 50 - (conf_level / 2)
 
-        hy_mass, hy_mass_dist = self.mass(radius, conf_level, num_real)
+        if not already_run:
+            hy_mass, hy_mass_dist = self.mass(radius, conf_level, num_real)
 
-        gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model, radius, conf_level)
-        if len(hy_mass_dist) < len(gas_mass_dist):
-            bar_frac_dist = gas_mass_dist[:len(hy_mass_dist)] / hy_mass_dist
-        elif len(hy_mass_dist) > len(gas_mass_dist):
-            bar_frac_dist = gas_mass_dist / hy_mass_dist[:len(gas_mass_dist)]
-        else:
-            bar_frac_dist = gas_mass_dist / hy_mass_dist
+            gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model, radius, conf_level)
+            if len(hy_mass_dist) < len(gas_mass_dist):
+                bar_frac_dist = gas_mass_dist[:len(hy_mass_dist)] / hy_mass_dist
+            elif len(hy_mass_dist) > len(gas_mass_dist):
+                bar_frac_dist = gas_mass_dist / hy_mass_dist[:len(gas_mass_dist)]
+            else:
+                bar_frac_dist = gas_mass_dist / hy_mass_dist
 
-        bar_frac_mean = np.mean(bar_frac_dist, axis=0)
-        bar_frac_lower = bar_frac_mean - np.percentile(bar_frac_dist, lower, axis=0)
-        bar_frac_upper = np.percentile(bar_frac_dist, upper, axis=0) - bar_frac_mean
+            bar_frac_mean = np.mean(bar_frac_dist, axis=0)
+            bar_frac_lower = bar_frac_mean - np.percentile(bar_frac_dist, lower, axis=0)
+            bar_frac_upper = np.percentile(bar_frac_dist, upper, axis=0) - bar_frac_mean
+            # TODO Reconcile this with issue #403, should I be returning the gm/hym, or the mean of the dist
+            bar_frac_res = Quantity([(gas_mass[0]/hy_mass[0]).value, bar_frac_lower.value, bar_frac_upper.value], '')
 
-        # TODO Reconcile this with issue #403, should I be returning the gm/hym, or the mean of the dist
-        return Quantity([(gas_mass[0]/hy_mass[0]).value, bar_frac_lower.value, bar_frac_upper.value], ''), bar_frac_dist
+            if str(radius.value) not in self._baryon_fraction:
+                self._baryon_fraction[str(radius.value)] = {str(conf_level): {"result": bar_frac_res,
+                                                                              "distribution": bar_frac_dist}}
+            elif str(radius.value) in self._baryon_fraction and str(conf_level) \
+                    not in self._baryon_fraction[str(radius.value)]:
+                self._baryon_fraction[str(radius.value)][str(conf_level)] = {"result": bar_frac_res,
+                                                                             "distribution": bar_frac_dist}
+
+        return bar_frac_res, bar_frac_dist
 
     def baryon_fraction_profile(self, conf_level: int = 68, num_real: int = 300) -> BaryonFraction:
         """
