@@ -1,11 +1,12 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/02/2021, 11:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/02/2021, 13:11. Copyright (c) David J Turner
 from typing import Tuple, Union
 from warnings import warn
 
 import numpy as np
 from astropy.constants import k_B, G
 from astropy.units import Quantity, UnitConversionError, temperature_energy, K
+from matplotlib import pyplot as plt
 from scipy.integrate import trapz, cumtrapz, quad
 from scipy.misc import derivative
 
@@ -1079,7 +1080,7 @@ class HydrostaticMass(BaseProfile1D):
         """
         pass
 
-    def mass(self, radius: Quantity, conf_level: int = 90, num_real: int = 300) -> Union[Quantity, Quantity]:
+    def mass(self, radius: Quantity, conf_level: int = 90, num_real: int = 1000) -> Union[Quantity, Quantity]:
         """
         A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
         radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
@@ -1205,7 +1206,48 @@ class HydrostaticMass(BaseProfile1D):
 
         return mass_res, real_masses
 
-    def baryon_fraction(self, radius: Quantity, conf_level: int = 68, num_real: int = 300) -> Tuple[Quantity, Quantity]:
+    def view_mass_dist(self, radius: Quantity, conf_level: int = 90, num_real: int = 1000, figsize=(8, 8),
+                       colour: str = "tab:gray"):
+        """
+        A method which will generate a histogram of the mass distribution that resulted from the mass calculation
+        at the supplied radius. If the mass for the passed radius has already been measured it, and the mass
+        distribution, will be retrieved from the storage of this product rather than re-calculated.
+
+        :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
+            mass within.
+        :param int conf_level: The confidence level for the mass uncertainties.
+        :param int num_real: The number of model realisations which should be generated for error propagation.
+        :param str colour: The desired colour of the histogram.
+        :param tuple figsize: The desired size of the histogram figure.
+        """
+        if not radius.isscalar:
+            raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
+                             "arrays of radii are not supported.")
+
+        hy_mass, hy_dist = self.mass(radius, conf_level, num_real)
+        plt.figure(figsize=figsize)
+        ax = plt.gca()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.yaxis.set_ticklabels([])
+
+        plt.hist(hy_dist.value, bins='auto', color=colour, alpha=0.7, density=False)
+        plt.xlabel(self._y_axis_name)
+        plt.title("Mass Distribution at {}".format(radius.to_string()))
+
+        lab_hy_mass = hy_mass.to("10^14Msun")
+        vals_label = str(lab_hy_mass[0].round(2).value) + "^{+" + str(lab_hy_mass[2].round(2).value) + "}" + \
+                     "_{-" + str(lab_hy_mass[1].round(2).value) + "}"
+        res_label = r"$\rm{M_{hydro}} = " + vals_label + "10^{14}M_{\odot}$"
+
+        plt.axvline(hy_mass[0].value, color='red', label=res_label)
+        plt.axvline(hy_mass[0].value-hy_mass[1].value, color='red', linestyle='dashed')
+        plt.axvline(hy_mass[0].value+hy_mass[2].value, color='red', linestyle='dashed')
+        plt.legend(loc='best', prop={'size': 12})
+        plt.tight_layout()
+        plt.show()
+
+    def baryon_fraction(self, radius: Quantity, conf_level: int = 90, num_real: int = 1000) \
+            -> Tuple[Quantity, Quantity]:
         """
         A method to use the hydrostatic mass information of this profile, and the gas density information of the
         input gas density profile, to calculate a baryon fraction within the given radius.
@@ -1259,7 +1301,48 @@ class HydrostaticMass(BaseProfile1D):
 
         return bar_frac_res, bar_frac_dist
 
-    def baryon_fraction_profile(self, conf_level: int = 68, num_real: int = 300) -> BaryonFraction:
+    def view_baryon_fraction_dist(self, radius: Quantity, conf_level: int = 90, num_real: int = 1000, figsize=(8, 8),
+                                  colour: str = "tab:gray"):
+        """
+        A method which will generate a histogram of the baryon fraction distribution that resulted from the mass
+        calculation at the supplied radius. If the baryon fraction for the passed radius has already been
+        measured it, and the baryon fraction distribution, will be retrieved from the storage of this product
+        rather than re-calculated.
+
+        :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
+            baryon fraction within.
+        :param int conf_level: The confidence level for the baryon fraction uncertainties.
+        :param int num_real: The number of model realisations which should be generated for error propagation.
+        :param tuple figsize: The desired size of the histogram figure.
+        :param str colour: The desired colour of the histogram.
+        """
+        if not radius.isscalar:
+            raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
+                             "arrays of radii are not supported.")
+
+        bar_frac, bar_frac_dist = self.baryon_fraction(radius, conf_level, num_real)
+        plt.figure(figsize=figsize)
+        ax = plt.gca()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.yaxis.set_ticklabels([])
+
+        plt.hist(bar_frac_dist.value, bins='auto', color=colour, alpha=0.7)
+        plt.xlabel("Baryon Fraction")
+        plt.title("Baryon Fraction Distribution at {}".format(radius.to_string()))
+
+        vals_label = str(bar_frac[0].round(2).value) + "^{+" + str(bar_frac[2].round(2).value) + "}" + \
+                        "_{-" + str(bar_frac[1].round(2).value) + "}"
+        res_label = r"$\rm{f_{gas}} = " + vals_label + "$"
+
+        plt.axvline(bar_frac[0].value, color='red', label=res_label)
+        plt.axvline(bar_frac[0].value-bar_frac[1].value, color='red', linestyle='dashed')
+        plt.axvline(bar_frac[0].value+bar_frac[2].value, color='red', linestyle='dashed')
+        plt.legend(loc='best', prop={'size': 12})
+        plt.xlim(0)
+        plt.tight_layout()
+        plt.show()
+
+    def baryon_fraction_profile(self, conf_level: int = 90, num_real: int = 1000) -> BaryonFraction:
         """
         A method which uses the baryon_fraction method to construct a baryon fraction profile at the radii of
         this HydrostaticMass profile.
@@ -1286,7 +1369,8 @@ class HydrostaticMass(BaseProfile1D):
         frac_err = Quantity(frac_err, '')
 
         return BaryonFraction(self.radii, frac, self.centre, self.src_name, self.obs_id, self.instrument,
-                              self.radii_err, frac_err, self.set_ident, self.associated_set_storage_key, self.deg_radii)
+                              self.radii_err, frac_err, self.set_ident, self.associated_set_storage_key,
+                              self.deg_radii)
 
 
 class Generic1D(BaseProfile1D):
