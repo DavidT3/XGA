@@ -1,12 +1,12 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 17:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/02/2021, 10:34. Copyright (c) David J Turner
 from typing import Tuple, Union
 from warnings import warn
 
 import numpy as np
 from astropy.constants import k_B, G
 from astropy.units import Quantity, UnitConversionError, temperature_energy, K
-from scipy.integrate import trapz, cumtrapz
+from scipy.integrate import trapz, cumtrapz, quad
 from scipy.misc import derivative
 
 from .. import NHC, HY_MASS, ABUND_TABLES
@@ -340,17 +340,23 @@ class GasDensity3D(BaseProfile1D):
             units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
             values converted to degrees, and allows this object to construct a predictable storage key.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
-
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
         #  density, not number density.
         if not radii.unit.is_equivalent("Mpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
 
-        if not values.unit.is_equivalent("solMass / Mpc3"):
+        if not values.unit.is_equivalent("solMass / Mpc^3"):
             raise UnitConversionError("Values unit cannot be converted to solMass / Mpc3")
+
+        # Its easier for me if I just make sure they are in this particular unit, especially when it comes to
+        #  fitting and integrating models
+        values = values.to("solMass / Mpc^3")
+        if values_err is not None:
+            values_err = values_err.to("solMass / Mpc^3")
+
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
 
         # These are the allowed realisation types (in addition to whatever density models there are
         self._allowed_real_types = ["inv_abel_model", "inv_abel_data"]
@@ -364,13 +370,16 @@ class GasDensity3D(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Gas Density"
 
-    def gas_mass(self, real_type: str, outer_rad: Quantity, conf_level: int = 90) -> Tuple[Quantity, Quantity]:
+    def gas_mass(self, real_type: str, outer_rad: Quantity, conf_level: int = 90, num_real: int = 300) \
+            -> Tuple[Quantity, Quantity]:
         """
         A method to calculate and return the gas mass (with uncertainties).
 
         :param str real_type: The realisation type to measure the mass from.
         :param Quantity outer_rad: The radius to measure the gas mass out to.
         :param int conf_level: The confidence level for the gas mass uncertainties.
+        :param int num_real: Number of realisations of model to be generated, if a model fit is being integrated
+            for the gas mass value.
         :return: A Quantity containing three values (mass, -err, +err), and another Quantity containing
             the entire mass distribution from the whole realisation.
         :rtype: Tuple[Quantity, Quantity]
@@ -384,6 +393,9 @@ class GasDensity3D(BaseProfile1D):
                                       " of this profile ({u})".format(u=self.radii_unit.to_string()))
         else:
             outer_rad = outer_rad.to(self.radii_unit)
+
+        if not outer_rad.isscalar:
+            raise ValueError("Only a scalar quantity may be passed for outer_rad.")
 
         run_int = True
         # Setting up storage structure if this particular configuration hasn't been run already
@@ -403,6 +415,8 @@ class GasDensity3D(BaseProfile1D):
         else:
             run_int = False
 
+        upper = 50 + (conf_level / 2)
+        lower = 50 - (conf_level / 2)
         if real_type not in self._good_model_fits and run_int:
             real_info = self._realisations[real_type]
 
@@ -411,20 +425,56 @@ class GasDensity3D(BaseProfile1D):
             trunc_real = real_info["mod_real"].to("solMass / Mpc3")[allowed_ind, :] * trunc_rad[..., None]**2
 
             gas_masses = Quantity(4*np.pi*trapz(trunc_real.value.T, trunc_rad.value), "solMass")
-
-            upper = 50 + (conf_level / 2)
-            lower = 50 - (conf_level / 2)
+            nan_not_present = np.array(list(set(np.where(~np.isnan(gas_masses))[0])))
+            gas_masses = gas_masses[nan_not_present]
 
             gas_mass_mean = np.mean(gas_masses)
             gas_mass_lower = gas_mass_mean - np.percentile(gas_masses, lower)
             gas_mass_upper = np.percentile(gas_masses, upper) - gas_mass_mean
+
+            # TODO SHOULD IT BE THE MEAN VALUE OR THE VALUE WITH THE FINAL FIT PARAMETERS?
             storage = Quantity(np.array([gas_mass_mean.value, gas_mass_lower.value, gas_mass_upper.value]),
                                gas_mass_mean.unit)
             self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]["result"] = storage
             self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]["distribution"] = gas_masses
 
         elif real_type in self._good_model_fits and run_int:
-            raise NotImplementedError("Cannot integrate models yet")
+            dens_fit = self._good_model_fits[real_type]
+            dens_fit_pars = dens_fit['par']
+            # TODO GENERATING REALISATIONS HERE ASSUMES GAUSSIAN ERRORS AGAIN
+            dens_one_sig_err = dens_fit['par_err_1sig']
+
+            dens_model_par = np.repeat(dens_fit_pars[..., None], num_real, axis=1).T
+            dens_model_par_err = np.repeat(dens_one_sig_err[..., None], num_real, axis=1).T
+            dens_par_dists = np.random.normal(dens_model_par, dens_model_par_err)
+
+            vol_rat = (Quantity(1, outer_rad.unit) / Quantity(1, 'Mpc')).to('').value ** 3
+
+            gm_val = 4*np.pi*quad(lambda r: dens_fit['model_func'](r, *tuple(dens_fit_pars))*vol_rat*np.power(r, 2), 0,
+                                  outer_rad.value)[0]
+            gas_masses = []
+            for i in range(0, num_real):
+                gd_func = lambda r: dens_fit['model_func'](r, *dens_par_dists[i, :])*vol_rat*np.power(r, 2)
+                gm_real = 4*np.pi*quad(gd_func, 0, outer_rad.value)[0]
+                gas_masses.append(gm_real)
+
+            # gm_val = Quantity(gm_val, "Msun")
+            gas_masses = Quantity(gas_masses, "Msun")
+
+            # Making sure we don't include any gas masses that might be NaN by selecting only realisations where
+            #  no NaN is present
+            nan_not_present = np.array(list(set(np.where(~np.isnan(gas_masses))[0])))
+            gas_masses = gas_masses[nan_not_present]
+
+            gas_mass_mean = np.mean(gas_masses)
+            gas_mass_lower = gas_mass_mean - np.percentile(gas_masses, lower)
+            gas_mass_upper = np.percentile(gas_masses, upper) - gas_mass_mean
+
+            # TODO SHOULD IT BE THE MEAN VALUE OR THE VALUE WITH THE FINAL FIT PARAMETERS?
+            storage = Quantity(np.array([gas_mass_mean.value, gas_mass_lower.value, gas_mass_upper.value]),
+                               gas_mass_mean.unit)
+            self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]["result"] = storage
+            self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]["distribution"] = gas_masses
 
         results: Quantity = self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]['result']
         dist: Quantity = self._gas_masses[real_type][str(outer_rad.value)][str(conf_level)]["distribution"]
@@ -860,6 +910,49 @@ class GasTemperature3D(BaseProfile1D):
         self._y_axis_name = "3D Temperature"
 
 
+class BaryonFraction(BaseProfile1D):
+    """
+    A profile product which will hold a profile showing how the baryon fraction of a galaxy cluster changes
+    with radius. These profiles are typically generated from a HydrostaticMass profile product instance.
+    """
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
+                 radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
+                 set_storage_key: str = None, deg_radii: Quantity = None):
+        """
+        The init of a subclass of BaseProfile1D which will hold a radial baryon fraction profile.
+
+        :param Quantity radii: The radii at which the baryon fracion have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The baryon fracions that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        """
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
+                         set_storage_key, deg_radii)
+
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+
+        if not values.unit.is_equivalent(""):
+            raise UnitConversionError("Values unit cannot be converted to dimensionless")
+
+        # Setting the type
+        self._prof_type = "baryon_fraction"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = "Baryon Fraction"
+
+
 # TODO WRITE CUSTOM STORAGE KEY HERE AS WELL
 class HydrostaticMass(BaseProfile1D):
     """
@@ -961,7 +1054,9 @@ class HydrostaticMass(BaseProfile1D):
         self._temp_model = temperature_model
         self._dens_model = density_model
 
-        mass_vals, mass_errs = self.mass(radii)
+        mass, mass_dist = self.mass(radii, conf_level=68)
+        mass_vals = mass[0, :]
+        mass_errs = np.mean(mass[1:, :], axis=0)
 
         super().__init__(radii, mass_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
                          self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii)
@@ -978,7 +1073,7 @@ class HydrostaticMass(BaseProfile1D):
         """
         pass
 
-    def mass(self, radius: Quantity, sigma: int = 1, num_real: int = 300) -> Union[Quantity, Quantity]:
+    def mass(self, radius: Quantity, conf_level: int = 90, num_real: int = 300) -> Union[Quantity, Quantity]:
         """
         A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
         radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
@@ -986,11 +1081,15 @@ class HydrostaticMass(BaseProfile1D):
 
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
-        :param int sigma: What sigma uncertainties should the calculated mass have, the default is 1σ.
+        :param int conf_level: The confidence level for the mass uncertainties.
         :param int num_real: The number of model realisations which should be generated for error propagation.
-        :return: An astropy quantity containing the mass/masses, and another containing the associated uncertainties.
+        :return: An astropy quantity containing the mass/masses, lower and upper uncertainties, and another containing
+            the mass realisation distribution.
         :rtype: Union[Quantity, Quantity]
         """
+        upper = 50 + (conf_level / 2)
+        lower = 50 - (conf_level / 2)
+
         if (radius.max() > self._temp_prof.annulus_bounds[-1]).any() \
                 or (radius.max() > self._dens_prof.annulus_bounds[-1]).any():
             warn("The radius at which you have requested the mass is greater than the outermost radius of the "
@@ -1064,9 +1163,88 @@ class HydrostaticMass(BaseProfile1D):
         real_masses = ((-1 * k_B * np.power(radius, 2)) / (real_dens * HY_MASS * G)) * \
                       ((real_dens * der_real_temps) + (real_temps * der_real_dens))
         real_masses = real_masses.to('Msun')
-        mass_err = np.nanstd(real_masses, axis=0) * sigma
 
-        return mass, mass_err
+        # Making sure we don't include any profiles with NaN in by selecting only realisations where
+        #  no NaN is present
+        nan_not_present = np.array(list(set(np.where(~np.isnan(real_masses))[0])))
+        if real_masses.ndim == 2:
+            real_masses = real_masses[nan_not_present, :]
+        elif real_masses.ndim == 1:
+            real_masses = real_masses[nan_not_present]
+        else:
+            raise ValueError("You have a 3D mass realisation array and I have no idea how...")
+
+        mass_mean = np.mean(real_masses, axis=0)
+        mass_lower = mass_mean - np.percentile(real_masses, lower, axis=0)
+        mass_upper = np.percentile(real_masses, upper, axis=0) - mass_mean
+
+        # mass_err = np.nanstd(real_masses, axis=0) * sigma
+
+        mass_arr = np.array([mass_mean.value, mass_lower.value, mass_upper.value])
+
+        return Quantity(mass_arr, mass.unit), real_masses
+
+    def baryon_fraction(self, radius: Quantity, conf_level: int = 68, num_real: int = 300) -> Tuple[Quantity, Quantity]:
+        """
+        A method to use the hydrostatic mass information of this profile, and the gas density information of the
+        input gas density profile, to calculate a baryon fraction within the given radius.
+
+        :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
+            baryon fraction within.
+        :param int conf_level: The confidence level for the uncertainties.
+        :param int num_real: The number of model realisations which should be generated for error propagation.
+        :return: An astropy quantity containing the baryon fraction, -ve error, and +ve error, and another quantity
+            containing the baryon fraction distribution.
+        :rtype: Tuple[Quantity, Quantity]
+        """
+        upper = 50 + (conf_level / 2)
+        lower = 50 - (conf_level / 2)
+
+        hy_mass, hy_mass_dist = self.mass(radius, conf_level, num_real)
+
+        gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model, radius, conf_level)
+        if len(hy_mass_dist) < len(gas_mass_dist):
+            bar_frac_dist = gas_mass_dist[:len(hy_mass_dist)] / hy_mass_dist
+        elif len(hy_mass_dist) > len(gas_mass_dist):
+            bar_frac_dist = gas_mass_dist / hy_mass_dist[:len(gas_mass_dist)]
+        else:
+            bar_frac_dist = gas_mass_dist / hy_mass_dist
+
+        bar_frac_mean = np.mean(bar_frac_dist, axis=0)
+        bar_frac_lower = bar_frac_mean - np.percentile(bar_frac_dist, lower, axis=0)
+        bar_frac_upper = np.percentile(bar_frac_dist, upper, axis=0) - bar_frac_mean
+
+        # TODO Reconcile this with issue #403, should I be returning the gm/hym, or the mean of the dist
+        return Quantity([(gas_mass[0]/hy_mass[0]).value, bar_frac_lower.value, bar_frac_upper.value], ''), bar_frac_dist
+
+    def baryon_fraction_profile(self, conf_level: int = 68, num_real: int = 300) -> BaryonFraction:
+        """
+        A method which uses the baryon_fraction method to construct a baryon fraction profile at the radii of
+        this HydrostaticMass profile.
+
+        :param int conf_level: The confidence level for the uncertainties.
+        :param int num_real: The number of model realisations which should be generated for error propagation.
+        :return: An XGA BaryonFraction object.
+        :rtype: BaryonFraction
+        """
+        frac = []
+        frac_err = []
+        # Step through the radii of this profile
+        for rad in self.radii:
+            # Grabs the baryon fraction for the current radius
+            b_frac = self.baryon_fraction(rad, conf_level, num_real)[0]
+
+            # Only need the actual result, not the distribution
+            frac.append(b_frac[0])
+            # Calculates a mean uncertainty
+            frac_err.append(b_frac[1:].mean())
+
+        # Makes them unit-less quantities, as baryon fraction is mass/mass
+        frac = Quantity(frac, '')
+        frac_err = Quantity(frac_err, '')
+
+        return BaryonFraction(self.radii, frac, self.centre, self.src_name, self.obs_id, self.instrument,
+                              self.radii_err, frac_err, self.set_ident, self.associated_set_storage_key, self.deg_radii)
 
 
 class Generic1D(BaseProfile1D):
