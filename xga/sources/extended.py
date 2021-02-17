@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 11:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 15:02. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List
@@ -478,6 +478,10 @@ class GalaxyCluster(ExtendedSource):
         # Setting up variables to be added into
         av_lum = Quantity(0, "erg/s")
         total_phot = 0
+
+        if isinstance(spec, Spectrum):
+            spec = [spec]
+
         # Cycling through the relevant spectra
         for s in spec:
             # The luminosity is added to the average luminosity variable, will be divided by N
@@ -524,6 +528,10 @@ class GalaxyCluster(ExtendedSource):
         # Grabbing the relevant spectra
         spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
                                 min_sn=min_sn, over_sample=over_sample)
+
+        if isinstance(spec, Spectrum):
+            spec = [spec]
+
         total_phot = 0
         for s in spec:
             s: Spectrum
