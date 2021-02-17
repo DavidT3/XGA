@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/02/2021, 14:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 20:07. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -290,28 +290,31 @@ def xspec_call(xspec_func):
                 # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                 #  the last spectra that was opened in the loop
                 ann_spec = s.get_annular_spectra(set_id=spec.set_ident)
-                ann_spec.add_fit_data(model, ann_results, ann_lums, ann_obs_order)
+                try:
+                    ann_spec.add_fit_data(model, ann_results, ann_lums, ann_obs_order)
 
-                # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
-                #  so we check whether tbabs*apec has been run and if so generate a Tx profile automatically
-                if model == "tbabs*apec":
-                    temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
-                    s.update_products(temp_prof)
+                    # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
+                    #  so we check whether tbabs*apec has been run and if so generate a Tx profile automatically
+                    if model == "tbabs*apec":
+                        temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
+                        s.update_products(temp_prof)
 
-                    # Normalisation profiles can be useful for many things, so we generate them too
-                    norm_profs = ann_spec.generate_profile(model, 'norm', 'cm^-5')
-                    # If the normalisation were not linked across spectra then there will be multiple
-                    #  profiles returned, and so we'll need to iterate through them
-                    if isinstance(norm_profs, list):
-                        for norm_prof in norm_profs:
-                            s.update_products(norm_prof)
-                    else:
-                        # Otherwise we can just add a single normalisation profile
-                        s.update_products(norm_profs)
+                        # Normalisation profiles can be useful for many things, so we generate them too
+                        norm_profs = ann_spec.generate_profile(model, 'norm', 'cm^-5')
+                        # If the normalisation were not linked across spectra then there will be multiple
+                        #  profiles returned, and so we'll need to iterate through them
+                        if isinstance(norm_profs, list):
+                            for norm_prof in norm_profs:
+                                s.update_products(norm_prof)
+                        else:
+                            # Otherwise we can just add a single normalisation profile
+                            s.update_products(norm_profs)
 
-                    if 'Abundanc' in ann_spec.get_results(0, 'tbabs*apec'):
-                        met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
-                        s.update_products(met_prof)
+                        if 'Abundanc' in ann_spec.get_results(0, 'tbabs*apec'):
+                            met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
+                            s.update_products(met_prof)
+                except ValueError:
+                    warnings.warn("{src} annular spectra profile fit was not successful".format(src=ann_spec.src_name))
 
                 else:
                     raise NotImplementedError("How have you even managed to fit this model to a profile?! Its not"
