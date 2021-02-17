@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/02/2021, 13:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 18:33. Copyright (c) David J Turner
 from typing import Tuple, Union
 from warnings import warn
 
@@ -387,8 +387,8 @@ class GasDensity3D(BaseProfile1D):
         """
         if real_type not in self._realisations:
             raise ValueError("{r} is not an acceptable realisation type, this profile object currently has "
-                             "realisations stored for".format(r=real_type,
-                                                              a=", ".join(list(self._realisations.keys()))))
+                             "realisations stored for {a}".format(r=real_type,
+                                                                  a=", ".join(list(self._realisations.keys()))))
         if not outer_rad.unit.is_equivalent(self.radii_unit):
             raise UnitConversionError("The supplied outer radius cannot be converted to the radius unit"
                                       " of this profile ({u})".format(u=self.radii_unit.to_string()))
@@ -507,13 +507,13 @@ class GasDensity3D(BaseProfile1D):
         ax.yaxis.set_ticklabels([])
 
         plt.hist(gas_mass_dist.value, bins='auto', color=colour, alpha=0.7, density=False)
-        plt.xlabel(self._y_axis_name)
+        plt.xlabel("Gas Mass [M$_{\odot}$]")
         plt.title("Gas Mass Distribution at {}".format(radius.to_string()))
 
         lab_hy_mass = gas_mass.to("10^13Msun")
         vals_label = str(lab_hy_mass[0].round(2).value) + "^{+" + str(lab_hy_mass[2].round(2).value) + "}" + \
                      "_{-" + str(lab_hy_mass[1].round(2).value) + "}"
-        res_label = r"$\rm{M_{hydro}} = " + vals_label + "10^{13}M_{\odot}$"
+        res_label = r"$\rm{M_{gas}} = " + vals_label + "10^{13}M_{\odot}$"
 
         plt.axvline(gas_mass[0].value, color='red', label=res_label)
         plt.axvline(gas_mass[0].value-gas_mass[1].value, color='red', linestyle='dashed')
@@ -1272,7 +1272,7 @@ class HydrostaticMass(BaseProfile1D):
         ax.yaxis.set_ticklabels([])
 
         plt.hist(hy_dist.value, bins='auto', color=colour, alpha=0.7, density=False)
-        plt.xlabel(self._y_axis_name)
+        plt.xlabel(self._y_axis_name + " M$_{\odot}$")
         plt.title("Mass Distribution at {}".format(radius.to_string()))
 
         lab_hy_mass = hy_mass.to("10^14Msun")

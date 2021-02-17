@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/02/2021, 13:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 18:33. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -492,6 +492,8 @@ class BaseSource:
         og_dir = os.getcwd()
         # This is used for spectra that should be part of an AnnularSpectra object
         ann_spec_constituents = {}
+        # This is to store whether all components could be loaded in successfully
+        ann_spec_usable = {}
         for obs in self._obs:
             if os.path.exists(OUTPUT + obs):
                 os.chdir(OUTPUT + obs)
@@ -610,24 +612,31 @@ class BaseSource:
                             obj.set_ident = set_id
                             if set_id not in ann_spec_constituents:
                                 ann_spec_constituents[set_id] = []
+                                ann_spec_usable[set_id] = True
                             ann_spec_constituents[set_id].append(obj)
                         else:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
                             self.update_products(obj)
                     else:
-                        raise ValueError("I have found multiple file matches for a Spectrum, contact the developer!")
+                        warnings.warn("{src} spectrum {sp} cannot be loaded in due to a mismatch in available"
+                                      " ancillary files".format(src=self.name, sp=sp))
+                        if "ident" in sp.split("/")[-1]:
+                            set_id = int(sp.split('ident')[-1].split('_')[0])
+                            ann_spec_usable[set_id] = False
+
         os.chdir(og_dir)
 
         # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
         #  those objects and add them to the storage structure
         if len(ann_spec_constituents) != 0:
             for set_id in ann_spec_constituents:
-                ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
-                if self._redshift is not None:
-                    # If we know the redshift we will add the radii to the annular spectra in proper distance units
-                    ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
-                self.update_products(ann_spec_obj)
+                if ann_spec_usable[set_id]:
+                    ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+                    if self._redshift is not None:
+                        # If we know the redshift we will add the radii to the annular spectra in proper distance units
+                        ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
+                    self.update_products(ann_spec_obj)
 
         # Merged products have all the ObsIDs that they are made up of in their name
         obs_str = "_".join(self._obs)
@@ -693,16 +702,21 @@ class BaseSource:
 
                         # If its not an AnnularSpectra fit then we can just fetch the spectrum from the source
                         #  the normal way
-                        if set_id is None:
-                            # This adds ra back on, and removes any ident information if it is there
-                            sp_key = 'ra' + sp_key
-                            # Finds the appropriate matching spectrum object for the current table line
-                            spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
-                        else:
-                            sp_key = 'ra' + sp_key.split('_ident')[0]
-                            ann_spec = self.get_annular_spectra(set_id=set_id)
-                            spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
-                            obs_order.append([sp_info[0], sp_info[1]])
+                        try:
+                            if set_id is None:
+                                # This adds ra back on, and removes any ident information if it is there
+                                sp_key = 'ra' + sp_key
+                                # Finds the appropriate matching spectrum object for the current table line
+                                spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
+                            else:
+                                sp_key = 'ra' + sp_key.split('_ident')[0]
+                                ann_spec = self.get_annular_spectra(set_id=set_id)
+                                spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                                obs_order.append([sp_info[0], sp_info[1]])
+                        except (NoProductAvailableError, IndexError):
+                            warnings.warn("{src} fit {f} could not be loaded in as there are no matching spectra "
+                                          "available".format(src=self.name, f=fit_name))
+                            break
 
                         # Adds information from this fit to the spectrum object.
                         spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
@@ -1976,7 +1990,10 @@ class BaseSource:
         #  because then I can just grab the storage key from one of them
         specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
         # I just take the first spectrum in the list because the storage key will be the same for all of them
-        storage_key = specs[0].storage_key
+        if isinstance(specs, list):
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
 
         # Bunch of checks to make sure the requested results actually exist
         if len(self._fit_results) == 0:
@@ -2052,7 +2069,10 @@ class BaseSource:
         #  because then I can just grab the storage key from one of them
         specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
         # I just take the first spectrum in the list because the storage key will be the same for all of them
-        storage_key = specs[0].storage_key
+        if isinstance(specs, list):
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
 
         # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
         #  bounds. If the limits are none then so is the energy key
