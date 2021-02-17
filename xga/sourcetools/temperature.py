@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 16:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 14:33. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -9,6 +9,7 @@ from astropy.units import Quantity
 
 from .deproj import shell_ann_vol_intersect
 from .. import NUM_CORES, ABUND_TABLES
+from ..exceptions import NoProductAvailableError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.profile import annular_mask
 from ..products.profile import GasTemperature3D
@@ -419,11 +420,16 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     for src_ind, src in enumerate(sources):
         cur_rads = ann_rads[src_ind]
 
-        # The projected temperature profile we're going to use
-        proj_temp = src.get_proj_temp_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample)
-        # The normalisation profile(s) from the fit that produced the projected temperature profile. Possible
-        #  this will be a list of profiles if link_norm == False
-        apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn, over_sample)
+        try:
+            # The projected temperature profile we're going to use
+            proj_temp = src.get_proj_temp_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample)
+            # The normalisation profile(s) from the fit that produced the projected temperature profile. Possible
+            #  this will be a list of profiles if link_norm == False
+            apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn,
+                                                        over_sample)
+        except NoProductAvailableError:
+            warn("{s} doesn't have a matching projected temperature profile, skipping.")
+            continue
 
         if not link_norm:
             # obs_id =
