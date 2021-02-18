@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 11:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 17:26. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1260,7 +1260,7 @@ class BaseProfile1D:
             leg_label = self.src_name
 
         # This subtracts the background if the user wants a background subtracted plot
-        sub_values = self.values.value
+        sub_values = self.values.value.copy()
         if back_sub:
             sub_values -= self.background.value
 
@@ -1825,7 +1825,7 @@ class BaseAggregateProfile1D:
                 leg_label = p.src_name
 
             # This subtracts the background if the user wants a background subtracted plot
-            sub_values = p.values.value
+            sub_values = p.values.value.copy()
             if back_sub:
                 sub_values -= p.background.value
 
