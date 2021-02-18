@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 20:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 10:34. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -702,26 +702,19 @@ class BaseSource:
 
                         # If its not an AnnularSpectra fit then we can just fetch the spectrum from the source
                         #  the normal way
-                        try:
-                            if set_id is None:
-                                # This adds ra back on, and removes any ident information if it is there
-                                sp_key = 'ra' + sp_key
-                                # Finds the appropriate matching spectrum object for the current table line
-                                spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
-                            else:
-                                sp_key = 'ra' + sp_key.split('_ident')[0]
-                                ann_spec = self.get_annular_spectra(set_id=set_id)
-                                spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
-                                obs_order.append([sp_info[0], sp_info[1]])
-                        except (NoProductAvailableError, IndexError):
-                            warnings.warn("{src} fit {f} could not be loaded in as there are no matching spectra "
-                                          "available".format(src=self.name, f=fit_name))
-                            break
+                        if set_id is None:
+                            # This adds ra back on, and removes any ident information if it is there
+                            sp_key = 'ra' + sp_key
+                            # Finds the appropriate matching spectrum object for the current table line
+                            spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
+                        else:
+                            sp_key = 'ra' + sp_key.split('_ident')[0]
+                            ann_spec = self.get_annular_spectra(set_id=set_id)
+                            spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                            obs_order.append([sp_info[0], sp_info[1]])
 
                         # Adds information from this fit to the spectrum object.
                         spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
-                        # if not ann_fit:
-                        #     s.update_products(spec)  # Adds the updated spectrum object back into the source
 
                         # The add_fit_data method formats the luminosities nicely, so we grab them back out
                         #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
@@ -737,8 +730,10 @@ class BaseSource:
                         # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
                     elif "mos2" in inst_lums:
                         chosen_lums = inst_lums["mos2"]
-                    else:
+                    elif "mos1" in inst_lums:
                         chosen_lums = inst_lums["mos1"]
+                    else:
+                        chosen_lums = None
 
                     if set_id is not None:
                         ann_results[set_id][model][spec.annulus_ident] = global_results
@@ -747,16 +742,17 @@ class BaseSource:
                     else:
                         # Push global fit results, luminosities etc. into the corresponding source object.
                         self.add_fit_data(model, global_results, chosen_lums, sp_key)
-
-                except OSError:
+                except (OSError, NoProductAvailableError, IndexError):
                     chosen_lums = {}
+                    warnings.warn("{src} fit {f} could not be loaded in as there are no matching spectra "
+                                  "available".format(src=self.name, f=fit_name))
                 fit_data.close()
 
             if len(ann_results) != 0:
                 for set_id in ann_results:
-                    rel_ann_spec = self.get_annular_spectra(set_id=set_id)
-                    for model in ann_results[set_id]:
-                        try:
+                    try:
+                        rel_ann_spec = self.get_annular_spectra(set_id=set_id)
+                        for model in ann_results[set_id]:
                             rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model],
                                                       ann_obs_order[set_id][model])
                             if model == "tbabs*apec":
@@ -777,9 +773,10 @@ class BaseSource:
                                 if 'Abundanc' in rel_ann_spec.get_results(0, 'tbabs*apec'):
                                     met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
                                     self.update_products(met_prof)
-                        except ValueError:
-                            warnings.warn("A previous  annular spectra profile fit for {src} was not successful, and "
-                                          "cannot be loaded back in".format(src=rel_ann_spec.src_name))
+                    except (NoProductAvailableError, ValueError):
+                        warnings.warn("A previous annular spectra profile fit for {src} was not successful, or no "
+                                      "matching spectrum has been loaded, so it cannot be read "
+                                      "in".format(src=self.name))
 
         os.chdir(og_dir)
 
