@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/02/2021, 12:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 13:29. Copyright (c) David J Turner
 
 from typing import List, Union
 
@@ -10,6 +10,7 @@ from .common import _write_xspec_script
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError
+from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sas import spectrum_set
 from ...sources import BaseSource
@@ -94,6 +95,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         for ann_id in range(ann_spec.num_annuli):
             # We fetch the spectrum objects for this particular annulus
             spec_objs = ann_spec.get_spectra(ann_id)
+            if isinstance(spec_objs, Spectrum):
+                spec_objs = [spec_objs]
 
             # Turn spectra paths into TCL style list for substitution into template
             specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
