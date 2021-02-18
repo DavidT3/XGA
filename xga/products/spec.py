@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/02/2021, 11:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 13:27. Copyright (c) David J Turner
 
 
 import os
@@ -1048,7 +1048,12 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         all_spec = []
         for ann_i in range(self._num_ann):
-            all_spec += self.get_spectra(ann_i)
+            # If there is only one spectrum per annulus then get_spectra will just return an object
+            ann_spec = self.get_spectra(ann_i)
+            if isinstance(ann_spec, Spectrum):
+                ann_spec = [ann_spec]
+
+            all_spec += ann_spec
 
         return all_spec
 
