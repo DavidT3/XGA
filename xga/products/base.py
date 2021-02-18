@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 10:40. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 11:19. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1358,12 +1358,18 @@ class BaseProfile1D:
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
         if models and custom_title is None:
-            plt.suptitle("{l} Profile - with models".format(l=self._y_axis_name), y=0.91)
+            title_str = "{l} Profile - with models".format(l=self._y_axis_name)
         elif not models and custom_title is None:
-            plt.suptitle("{l} Profile".format(l=self._y_axis_name), y=0.91)
+            title_str = "{l} Profile".format(l=self._y_axis_name)
         else:
             # If the user doesn't like my title, they can supply their own
-            plt.suptitle(custom_title, y=0.91)
+            title_str = custom_title
+
+        # If this particular profile is not considered usable, the user should be made aware in the plot
+        if not self._usable:
+            title_str += " [CONSIDERED UNUSABLE]"
+        # Actually plots the title
+        plt.suptitle(title_str, y=0.91)
 
         # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
         main_ylims = main_ax.get_ylim()
