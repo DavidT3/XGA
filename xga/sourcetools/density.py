@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 14:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 13:41. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -335,11 +335,6 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
 
     dens_prog = tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
                      total=len(sources), position=0)
-    # Just defines whether the MCMC fits (if used) can be allowed to put a progress bar on the screen
-    if len(sources) == 1:
-        prog_bar_allowed = True
-    else:
-        prog_bar_allowed = False
 
     for src_ind, src in enumerate(sources):
         sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
@@ -348,7 +343,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
 
         # Fit the user chosen model to sb_prof
         sb_prof.fit(model, fit_method, model_priors, model_start_pars, model_realisations, model_rad_steps,
-                    conf_level, num_walkers, num_steps, progress_bar=prog_bar_allowed)
+                    conf_level, num_walkers, num_steps)
 
         model_r = sb_prof.get_realisation(model)
         if model_r is not None:
