@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 16:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 10:40. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -647,6 +647,10 @@ class BaseProfile1D:
         # The y-axis label used to be stored in a dictionary in the init of models, but it makes more sense
         #  just declaring it in the init I think - it should be over-ridden in every subclass
         self._y_axis_name = "Unknown"
+
+        # Akin to the usable attribute of other product classes, will be set for different reasons by different
+        #  profile subclasses
+        self._usable = True
 
     def fit(self, model: str, method: str = "mcmc", priors: list = None, start_pars: list = None,
             model_real: int = 1000, model_rad_steps: int = 300, conf_level: int = 90, num_walkers: int = 20,
@@ -1624,6 +1628,17 @@ class BaseProfile1D:
         :rtype: str
         """
         return self._storage_key
+
+    @property
+    def usable(self) -> bool:
+        """
+        Whether the profile object can be considered usable or not, reasons for this decision will vary for
+        different profile types.
+
+        :return: A boolean variable.
+        :rtype: bool
+        """
+        return self._usable
 
     def __len__(self):
         """
