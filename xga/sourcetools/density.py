@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 13:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/02/2021, 08:30. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -343,7 +343,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
 
         # Fit the user chosen model to sb_prof
         sb_prof.fit(model, fit_method, model_priors, model_start_pars, model_realisations, model_rad_steps,
-                    conf_level, num_walkers, num_steps)
+                    conf_level, num_walkers, num_steps, progress_bar=False)
 
         model_r = sb_prof.get_realisation(model)
         if model_r is not None:
