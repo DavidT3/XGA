@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 16:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 17:26. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -648,6 +648,10 @@ class BaseProfile1D:
         #  just declaring it in the init I think - it should be over-ridden in every subclass
         self._y_axis_name = "Unknown"
 
+        # Akin to the usable attribute of other product classes, will be set for different reasons by different
+        #  profile subclasses
+        self._usable = True
+
     def fit(self, model: str, method: str = "mcmc", priors: list = None, start_pars: list = None,
             model_real: int = 1000, model_rad_steps: int = 300, conf_level: int = 90, num_walkers: int = 20,
             num_steps: int = 20000, progress_bar: bool = True, show_errors: bool = True):
@@ -1256,7 +1260,7 @@ class BaseProfile1D:
             leg_label = self.src_name
 
         # This subtracts the background if the user wants a background subtracted plot
-        sub_values = self.values.value
+        sub_values = self.values.value.copy()
         if back_sub:
             sub_values -= self.background.value
 
@@ -1354,12 +1358,18 @@ class BaseProfile1D:
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
         if models and custom_title is None:
-            plt.suptitle("{l} Profile - with models".format(l=self._y_axis_name), y=0.91)
+            title_str = "{l} Profile - with models".format(l=self._y_axis_name)
         elif not models and custom_title is None:
-            plt.suptitle("{l} Profile".format(l=self._y_axis_name), y=0.91)
+            title_str = "{l} Profile".format(l=self._y_axis_name)
         else:
             # If the user doesn't like my title, they can supply their own
-            plt.suptitle(custom_title, y=0.91)
+            title_str = custom_title
+
+        # If this particular profile is not considered usable, the user should be made aware in the plot
+        if not self._usable:
+            title_str += " [CONSIDERED UNUSABLE]"
+        # Actually plots the title
+        plt.suptitle(title_str, y=0.91)
 
         # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
         main_ylims = main_ax.get_ylim()
@@ -1625,6 +1635,17 @@ class BaseProfile1D:
         """
         return self._storage_key
 
+    @property
+    def usable(self) -> bool:
+        """
+        Whether the profile object can be considered usable or not, reasons for this decision will vary for
+        different profile types.
+
+        :return: A boolean variable.
+        :rtype: bool
+        """
+        return self._usable
+
     def __len__(self):
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
@@ -1804,7 +1825,7 @@ class BaseAggregateProfile1D:
                 leg_label = p.src_name
 
             # This subtracts the background if the user wants a background subtracted plot
-            sub_values = p.values.value
+            sub_values = p.values.value.copy()
             if back_sub:
                 sub_values -= p.background.value
 

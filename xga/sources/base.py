@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/02/2021, 13:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/02/2021, 20:02. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -136,7 +136,8 @@ class BaseSource:
         self._r500 = None
         self._r2500 = None
         # Also adding a radius dictionary attribute
-        self._radii = {}
+        if not hasattr(self, "_radii"):
+            self._radii = {}
         # Initialisation of cluster observables as None
         self._richness = None
         self._richness_err = None
@@ -492,6 +493,8 @@ class BaseSource:
         og_dir = os.getcwd()
         # This is used for spectra that should be part of an AnnularSpectra object
         ann_spec_constituents = {}
+        # This is to store whether all components could be loaded in successfully
+        ann_spec_usable = {}
         for obs in self._obs:
             if os.path.exists(OUTPUT + obs):
                 os.chdir(OUTPUT + obs)
@@ -610,24 +613,31 @@ class BaseSource:
                             obj.set_ident = set_id
                             if set_id not in ann_spec_constituents:
                                 ann_spec_constituents[set_id] = []
+                                ann_spec_usable[set_id] = True
                             ann_spec_constituents[set_id].append(obj)
                         else:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
                             self.update_products(obj)
                     else:
-                        raise ValueError("I have found multiple file matches for a Spectrum, contact the developer!")
+                        warnings.warn("{src} spectrum {sp} cannot be loaded in due to a mismatch in available"
+                                      " ancillary files".format(src=self.name, sp=sp))
+                        if "ident" in sp.split("/")[-1]:
+                            set_id = int(sp.split('ident')[-1].split('_')[0])
+                            ann_spec_usable[set_id] = False
+
         os.chdir(og_dir)
 
         # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
         #  those objects and add them to the storage structure
         if len(ann_spec_constituents) != 0:
             for set_id in ann_spec_constituents:
-                ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
-                if self._redshift is not None:
-                    # If we know the redshift we will add the radii to the annular spectra in proper distance units
-                    ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
-                self.update_products(ann_spec_obj)
+                if ann_spec_usable[set_id]:
+                    ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+                    if self._redshift is not None:
+                        # If we know the redshift we will add the radii to the annular spectra in proper distance units
+                        ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
+                    self.update_products(ann_spec_obj)
 
         # Merged products have all the ObsIDs that they are made up of in their name
         obs_str = "_".join(self._obs)
@@ -706,8 +716,6 @@ class BaseSource:
 
                         # Adds information from this fit to the spectrum object.
                         spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
-                        # if not ann_fit:
-                        #     s.update_products(spec)  # Adds the updated spectrum object back into the source
 
                         # The add_fit_data method formats the luminosities nicely, so we grab them back out
                         #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
@@ -723,8 +731,10 @@ class BaseSource:
                         # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
                     elif "mos2" in inst_lums:
                         chosen_lums = inst_lums["mos2"]
-                    else:
+                    elif "mos1" in inst_lums:
                         chosen_lums = inst_lums["mos1"]
+                    else:
+                        chosen_lums = None
 
                     if set_id is not None:
                         ann_results[set_id][model][spec.annulus_ident] = global_results
@@ -733,35 +743,41 @@ class BaseSource:
                     else:
                         # Push global fit results, luminosities etc. into the corresponding source object.
                         self.add_fit_data(model, global_results, chosen_lums, sp_key)
-
-                except OSError:
+                except (OSError, NoProductAvailableError, IndexError):
                     chosen_lums = {}
+                    warnings.warn("{src} fit {f} could not be loaded in as there are no matching spectra "
+                                  "available".format(src=self.name, f=fit_name))
                 fit_data.close()
 
             if len(ann_results) != 0:
                 for set_id in ann_results:
-                    rel_ann_spec = self.get_annular_spectra(set_id=set_id)
-                    for model in ann_results[set_id]:
-                        rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model], 
-                                                  ann_obs_order[set_id][model])
-                        if model == "tbabs*apec":
-                            temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
-                            self.update_products(temp_prof)
+                    try:
+                        rel_ann_spec = self.get_annular_spectra(set_id=set_id)
+                        for model in ann_results[set_id]:
+                            rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model],
+                                                      ann_obs_order[set_id][model])
+                            if model == "tbabs*apec":
+                                temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
+                                self.update_products(temp_prof)
 
-                            # Normalisation profiles can be useful for many things, so we generate them too
-                            norm_profs = rel_ann_spec.generate_profile(model, 'norm', 'cm^-5')
-                            # If the normalisation were not linked across spectra then there will be multiple
-                            #  profiles returned, and so we'll need to iterate through them
-                            if isinstance(norm_profs, list):
-                                for norm_prof in norm_profs:
-                                    self.update_products(norm_prof)
-                            else:
-                                # Otherwise we can just add a single normalisation profile
-                                self.update_products(norm_profs)
+                                # Normalisation profiles can be useful for many things, so we generate them too
+                                norm_profs = rel_ann_spec.generate_profile(model, 'norm', 'cm^-5')
+                                # If the normalisation were not linked across spectra then there will be multiple
+                                #  profiles returned, and so we'll need to iterate through them
+                                if isinstance(norm_profs, list):
+                                    for norm_prof in norm_profs:
+                                        self.update_products(norm_prof)
+                                else:
+                                    # Otherwise we can just add a single normalisation profile
+                                    self.update_products(norm_profs)
 
-                            if 'Abundanc' in rel_ann_spec.get_results(0, 'tbabs*apec'):
-                                met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
-                                self.update_products(met_prof)
+                                if 'Abundanc' in rel_ann_spec.get_results(0, 'tbabs*apec'):
+                                    met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
+                                    self.update_products(met_prof)
+                    except (NoProductAvailableError, ValueError):
+                        warnings.warn("A previous annular spectra profile fit for {src} was not successful, or no "
+                                      "matching spectrum has been loaded, so it cannot be read "
+                                      "in".format(src=self.name))
 
         os.chdir(og_dir)
 
@@ -1056,6 +1072,12 @@ class BaseSource:
         """
         # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
         #  University of Edinburgh - 2005.
+        # Red - Point source
+        # Green - Extended source
+        # Magenta - PSF-sized extended source
+        # Blue - Extended source with significant point source contribution
+        # Cyan - Extended source with significant Run1 contribution
+        # Yellow - Extended source with less than 10 counts
         if source_type == "ext":
             allowed_colours = ["green", "magenta", "blue", "cyan", "yellow"]
         elif source_type == "pnt":
@@ -1603,7 +1625,7 @@ class BaseSource:
         return final_src, final_back
 
     def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity,
-                             deg_central_coord: Quantity) -> np.ndarray:
+                             deg_central_coord: Quantity, interloper_regions: np.ndarray = None) -> np.ndarray:
         """
         This function finds and returns any interloper regions that have any part of their boundary within
         the specified radii, centered on the specified central coordinate.
@@ -1612,6 +1634,9 @@ class BaseSource:
         :param Quantity outer_radius: The outer radius of the area to search for interlopers in.
         :param Quantity deg_central_coord: The central coordinate (IN DEGREES) of the area to search for
             interlopers in.
+        :param np.ndarray interloper_regions: An optional parameter that allows the user to pass a specific
+            list of regions to check. Default is None, in which case the interloper_regions internal list
+            will be used.
         :return: A numpy array of the interloper regions within the specified area.
         :rtype: np.ndarray
         """
@@ -1651,6 +1676,10 @@ class BaseSource:
         if deg_central_coord.unit != deg:
             raise UnitConversionError("The central coordinate must be in degrees for this function.")
 
+        # If no custom interloper regions array was passed, we use the internal array
+        if interloper_regions is None:
+            interloper_regions = self._interloper_regions.copy()
+
         inner_radius = self.convert_radius(inner_radius, 'deg')
         outer_radius = self.convert_radius(outer_radius, 'deg')
 
@@ -1667,12 +1696,12 @@ class BaseSource:
         int_dists = np.array([np.sqrt(np.sum((perimeter_points(r.center.ra.value, r.center.dec.value, r.width.value/2,
                                                                r.height.value/2, r.angle.to('rad').value)
                                               - deg_central_coord.value) ** 2, axis=1))
-                              for r in self._interloper_regions])
+                              for r in interloper_regions])
 
         # Finds which of the possible interlopers have any part of their boundary within the annulus in consideration
         int_within = np.unique(np.where((int_dists < outer_radius.value) & (int_dists > inner_radius.value))[0])
 
-        return np.array(self._interloper_regions)[int_within]
+        return np.array(interloper_regions)[int_within]
 
     @staticmethod
     def _interloper_sas_string(reg: EllipseSkyRegion, im: Image, output_unit: Union[UnitBase, str]) -> str:
@@ -1976,7 +2005,10 @@ class BaseSource:
         #  because then I can just grab the storage key from one of them
         specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
         # I just take the first spectrum in the list because the storage key will be the same for all of them
-        storage_key = specs[0].storage_key
+        if isinstance(specs, list):
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
 
         # Bunch of checks to make sure the requested results actually exist
         if len(self._fit_results) == 0:
@@ -2052,7 +2084,10 @@ class BaseSource:
         #  because then I can just grab the storage key from one of them
         specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
         # I just take the first spectrum in the list because the storage key will be the same for all of them
-        storage_key = specs[0].storage_key
+        if isinstance(specs, list):
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
 
         # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
         #  bounds. If the limits are none then so is the energy key

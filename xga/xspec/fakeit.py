@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/01/2021, 11:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 15:00. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -10,6 +10,7 @@ from astropy.units import Quantity
 from .run import xspec_call
 from .. import OUTPUT, NUM_CORES, COUNTRATE_CONV_SCRIPT
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..products import Spectrum
 from ..samples.extended import ClusterSample
 from ..sas import evselect_spectrum, region_setup
 from ..sources import BaseSource, GalaxyCluster
@@ -116,6 +117,12 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         spec_objs = source.get_spectra(out_rad_vals[s_ind], inner_radius=inn_rad_vals[s_ind],
                                        group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                                        over_sample=over_sample)
+
+        # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
+        #  a source with only a single valid instrument for a single valid observation this may not be the case
+        if isinstance(spec_objs, Spectrum):
+            spec_objs = [spec_objs]
+
         # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
         if len(spec_objs) == 0:
             raise NoProductAvailableError("There are no matching spectra for {} object, you "

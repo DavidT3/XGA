@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 15:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 10:05. Copyright (c) David J Turner
 
 import warnings
 from typing import List, Union
@@ -11,6 +11,7 @@ from .common import _check_inputs, _write_xspec_script, _pregen_spectra
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import NoProductAvailableError, ModelNotAssociatedError
+from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 
@@ -88,6 +89,11 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
                                        group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                                        over_sample=over_sample)
+        # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
+        #  a cluster with only a single valid instrument for a single valid observation this may not be the case
+        if isinstance(spec_objs, Spectrum):
+            spec_objs = [spec_objs]
+
         # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
         if len(spec_objs) == 0:
             raise NoProductAvailableError("There are no matching spectra for {s} object, you "
@@ -209,6 +215,12 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     for src_ind, source in enumerate(sources):
         spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind], group_spec=group_spec,
                                        min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+
+        # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
+        #  a source with only a single valid instrument for a single valid observation this may not be the case
+        if isinstance(spec_objs, Spectrum):
+            spec_objs = [spec_objs]
+
         if len(spec_objs) == 0:
             raise NoProductAvailableError("There are no matching spectra for {s}, you "
                                           "need to generate them first!".format(s=source.name))

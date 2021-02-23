@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/02/2021, 14:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/02/2021, 08:30. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -92,10 +92,10 @@ DENS_MODELS_STARTS = {"simple_vikhlinin_dens": [1, 100, 1, 300, 2, 1e+13],
                       "king": [1, 100, 1e+13],
                       "vikhlinin_dens": [1, 100, 1, 300, 2, 3, 1e+13, 1, 50, 1e+13]}
 
-DENS_MODELS_PRIORS = {"simple_vikhlinin_dens": [[-3, 3], [1, 1000], [-3, 3], [1, 2000], [0, 5], [1e+12, 1e+15]],
-                      "king": [[0, 3], [1, 1000], [1e+12, 1e+15]],
-                      "vikhlinin_dens": [[-3, 3], [1, 1000], [-3, 3], [1, 2000], [0, 5], [-5, 5], [1e+12, 1e+15],
-                                         [-3, 3], [1, 1000], [1e+12, 1e+15]]}
+DENS_MODELS_PRIORS = {"simple_vikhlinin_dens": [[-3, 3], [1, 1000], [-3, 3], [1, 2000], [0, 5], [1e+12, 1e+16]],
+                      "king": [[0, 3], [1, 1000], [1e+12, 1e+16]],
+                      "vikhlinin_dens": [[-3, 3], [1, 1000], [-3, 3], [1, 2000], [0, 5], [-5, 5], [1e+12, 1e+16],
+                                         [-3, 3], [1, 1000], [1e+12, 1e+16]]}
 
 DENS_MODELS_PAR_NAMES = {"simple_vikhlinin_dens": [r"$\beta$", r"R$_{\rm{core}}$", r"$\alpha$", r"R$_{\rm{s}}$",
                                                    r"$\epsilon$", r"$\rho_{0}$"],

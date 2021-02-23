@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/02/2021, 16:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 11:19. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -9,6 +9,7 @@ from astropy.units import Quantity
 
 from .deproj import shell_ann_vol_intersect
 from .. import NUM_CORES, ABUND_TABLES
+from ..exceptions import NoProductAvailableError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.profile import annular_mask
 from ..products.profile import GasTemperature3D
@@ -419,11 +420,16 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     for src_ind, src in enumerate(sources):
         cur_rads = ann_rads[src_ind]
 
-        # The projected temperature profile we're going to use
-        proj_temp = src.get_proj_temp_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample)
-        # The normalisation profile(s) from the fit that produced the projected temperature profile. Possible
-        #  this will be a list of profiles if link_norm == False
-        apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn, over_sample)
+        try:
+            # The projected temperature profile we're going to use
+            proj_temp = src.get_proj_temp_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample)
+            # The normalisation profile(s) from the fit that produced the projected temperature profile. Possible
+            #  this will be a list of profiles if link_norm == False
+            apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn,
+                                                        over_sample)
+        except NoProductAvailableError:
+            warn("{s} doesn't have a matching projected temperature profile, skipping.")
+            continue
 
         if not link_norm:
             # obs_id =
@@ -434,45 +440,50 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             obs_id = 'combined'
             inst = 'combined'
 
-        # Also make an Emission Measure profile, used for weighting the contributions from different shells to annuli
-        em_prof = apec_norm_prof.emission_measure_profile(src.redshift, src.cosmo, abund_table, num_data_real, sigma)
-        src.update_products(em_prof)
+        # There are reasons that a projected temperature profile can be considered unusable, so we must check
+        if proj_temp.usable:
+            # Also make an Emission Measure profile, used for weighting the contributions from different
+            #  shells to annuli
+            em_prof = apec_norm_prof.emission_measure_profile(src.redshift, src.cosmo, abund_table,
+                                                              num_data_real, sigma)
+            src.update_products(em_prof)
 
-        # Need to make sure the annular boundaries are a) in a proper distance unit rather than degrees, and b)
-        #  in units of centimeters
-        cur_rads = src.convert_radius(cur_rads, 'cm')
-        # Use a handy function I wrote to calculate the volume intersections of spherical shells and
-        #  projected annuli
-        vol_intersects = shell_ann_vol_intersect(cur_rads, cur_rads)
+            # Need to make sure the annular boundaries are a) in a proper distance unit rather than degrees, and b)
+            #  in units of centimeters
+            cur_rads = src.convert_radius(cur_rads, 'cm')
+            # Use a handy function I wrote to calculate the volume intersections of spherical shells and
+            #  projected annuli
+            vol_intersects = shell_ann_vol_intersect(cur_rads, cur_rads)
 
-        # Then its a simple inverse problem to recover the 3D temperatures
-        temp_3d = (np.linalg.inv(vol_intersects.T)@(proj_temp.values*em_prof.values)) / (np.linalg.inv(
-            vol_intersects.T)@em_prof.values)
+            # Then its a simple inverse problem to recover the 3D temperatures
+            temp_3d = (np.linalg.inv(vol_intersects.T)@(proj_temp.values*em_prof.values)) / (np.linalg.inv(
+                vol_intersects.T)@em_prof.values)
 
-        # I generate random realisations of the projected temperature profile and the emission measure profile
-        #  to help me with error propagation
-        proj_temp_reals = proj_temp.generate_data_realisations(num_data_real)
-        em_reals = em_prof.generate_data_realisations(num_data_real)
+            # I generate random realisations of the projected temperature profile and the emission measure profile
+            #  to help me with error propagation
+            proj_temp_reals = proj_temp.generate_data_realisations(num_data_real)
+            em_reals = em_prof.generate_data_realisations(num_data_real)
 
-        # Set up an N x R array for the random realisations of the 3D temperature, where N is the number
-        #  of realisations and R is the number of radius data points
-        temp_3d_reals = Quantity(np.zeros(proj_temp_reals.shape), proj_temp_reals.unit)
-        for i in range(0, num_data_real):
-            # Calculate and store the 3D temperature profile realisations
-            interim = (np.linalg.inv(vol_intersects.T)@(proj_temp_reals[i, :]*em_reals[i, :])) / (np.linalg.inv(
-                vol_intersects.T)@em_reals[i, :])
-            temp_3d_reals[i, :] = interim
+            # Set up an N x R array for the random realisations of the 3D temperature, where N is the number
+            #  of realisations and R is the number of radius data points
+            temp_3d_reals = Quantity(np.zeros(proj_temp_reals.shape), proj_temp_reals.unit)
+            for i in range(0, num_data_real):
+                # Calculate and store the 3D temperature profile realisations
+                interim = (np.linalg.inv(vol_intersects.T)@(proj_temp_reals[i, :]*em_reals[i, :])) / (np.linalg.inv(
+                    vol_intersects.T)@em_reals[i, :])
+                temp_3d_reals[i, :] = interim
 
-        # Calculate a standard deviation for each bin to use as the uncertainty
-        temp_3d_sigma = np.std(temp_3d_reals, axis=0)*sigma
+            # Calculate a standard deviation for each bin to use as the uncertainty
+            temp_3d_sigma = np.std(temp_3d_reals, axis=0)*sigma
 
-        # And finally actually set up a 3D temperature profile
-        temp_3d_prof = GasTemperature3D(proj_temp.radii, temp_3d, proj_temp.centre, src.name, obs_id, inst,
-                                        proj_temp.radii_err, temp_3d_sigma, proj_temp.set_ident,
-                                        proj_temp.associated_set_storage_key, proj_temp.deg_radii)
-        src.update_products(temp_3d_prof)
+            # And finally actually set up a 3D temperature profile
+            temp_3d_prof = GasTemperature3D(proj_temp.radii, temp_3d, proj_temp.centre, src.name, obs_id, inst,
+                                            proj_temp.radii_err, temp_3d_sigma, proj_temp.set_ident,
+                                            proj_temp.associated_set_storage_key, proj_temp.deg_radii)
+            src.update_products(temp_3d_prof)
 
-
+        else:
+            warn("The projected temperature profile for {src} is not considered usable by XGA".format(src=src.name))
 
 
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 17:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 08:44. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -384,6 +384,9 @@ class ClusterSample(BaseSample):
         :rtype: Quantity
         """
         gms = []
+
+        raise NotImplementedError("This function is currently broken due to a change in how profiles are stored"
+                                  " within XGA sources, hopefully not for long though!")
 
         # Iterate through all of our Galaxy Clusters
         for gcs in self._sources.values():
