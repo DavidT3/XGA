@@ -1,8 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 15:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/02/2021, 13:07. Copyright (c) David J Turner
 
 import warnings
-from typing import Union, List
+from typing import Union, List, Tuple, Dict
 
 import numpy as np
 from astropy import wcs
@@ -22,15 +22,16 @@ warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class GalaxyCluster(ExtendedSource):
+    """
+    This class is for the declaration and analysis of GalaxyCluster sources, and is a subclass of ExtendedSource.
+    """
     def __init__(self, ra, dec, redshift, name=None, r200: Quantity = None, r500: Quantity = None,
                  r2500: Quantity = None, richness: float = None, richness_err: float = None,
                  wl_mass: Quantity = None, wl_mass_err: Quantity = None, custom_region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False,
                  clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3, regen_merged: bool = True):
-        super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
-                         back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits)
-
+        self._radii = {}
         if r200 is None and r500 is None and r2500 is None:
             raise ValueError("You must set at least one overdensity radius")
 
@@ -38,34 +39,37 @@ class GalaxyCluster(ExtendedSource):
         #  initialising a GalaxyCluster object. These chunks just convert the radii to kpc.
         # I know its ugly to have the same code three times, but I want these to be in attributes.
         if r200 is not None and r200.unit.is_equivalent("deg"):
-            self._r200 = ang_to_rad(r200, self._redshift, self._cosmo).to("kpc")
+            self._r200 = ang_to_rad(r200, redshift, cosmology).to("kpc")
             # Radii must be stored in degrees in the internal radii dictionary
             self._radii["r200"] = r200.to("deg")
         elif r200 is not None and r200.unit.is_equivalent("kpc"):
             self._r200 = r200.to("kpc")
-            self._radii["r200"] = rad_to_ang(r200, self.redshift, self.cosmo)
+            self._radii["r200"] = rad_to_ang(r200, redshift, cosmology)
         elif r200 is not None and not r200.unit.is_equivalent("kpc") and not r200.unit.is_equivalent("deg"):
             raise UnitConversionError("R200 radius must be in either angular or distance units.")
         elif r200 is None and clean_obs_reg == "r200":
             clean_obs_reg = "r500"
 
         if r500 is not None and r500.unit.is_equivalent("deg"):
-            self._r500 = ang_to_rad(r500, self._redshift, self._cosmo).to("kpc")
+            self._r500 = ang_to_rad(r500, redshift, cosmology).to("kpc")
             self._radii["r500"] = r500.to("deg")
         elif r500 is not None and r500.unit.is_equivalent("kpc"):
             self._r500 = r500.to("kpc")
-            self._radii["r500"] = rad_to_ang(r500, self.redshift, self.cosmo)
+            self._radii["r500"] = rad_to_ang(r500, redshift, cosmology)
         elif r500 is not None and not r500.unit.is_equivalent("kpc") and not r500.unit.is_equivalent("deg"):
             raise UnitConversionError("R500 radius must be in either angular or distance units.")
 
         if r2500 is not None and r2500.unit.is_equivalent("deg"):
-            self._r2500 = ang_to_rad(r2500, self._redshift, self._cosmo).to("kpc")
+            self._r2500 = ang_to_rad(r2500, redshift, cosmology).to("kpc")
             self._radii["r2500"] = r2500.to("deg")
         elif r2500 is not None and r2500.unit.is_equivalent("kpc"):
             self._r2500 = r2500.to("kpc")
-            self._radii["r2500"] = rad_to_ang(r2500, self.redshift, self.cosmo)
+            self._radii["r2500"] = rad_to_ang(r2500, redshift, cosmology)
         elif r2500 is not None and not r2500.unit.is_equivalent("kpc") and not r2500.unit.is_equivalent("deg"):
             raise UnitConversionError("R2500 radius must be in either angular or distance units.")
+
+        super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
+                         back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits)
 
         # Reading observables into their attributes, if the user doesn't pass a value for a particular observable
         #  it will be None.
@@ -101,6 +105,62 @@ class GalaxyCluster(ExtendedSource):
         # Throws an error if a poor choice of region has been made
         elif clean_obs and clean_obs_reg not in self._radii:
             raise NoRegionsError("{c} is not associated with {s}".format(c=clean_obs_reg, s=self.name))
+
+    def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
+        """
+        A function to override the _source_type_match method of the BaseSource class, containing slightly
+        more complex matching criteria for galaxy clusters. Galaxy clusters having their own version of this
+        method was driven by issue #407, the problems I was having with low redshift clusters particularly.
+
+        Point sources within 0.15R500, 0.1R200, or 0.5R2500 (in order of descending priority, R200 will only be
+        used if R500 isn't available etc.) will be allowed to remain in the analysis, as they may well be cool-cores.
+
+        :param str source_type: Should either be ext or pnt, describes what type of source I
+            should be looking for in the region files.
+        :return: A dictionary containing the matched region for each ObsID + a combined region, another
+            dictionary containing any sources that matched to the coordinates and weren't chosen,
+            and a final dictionary with sources that aren't the target, or in the 2nd dictionary.
+        :rtype: Tuple[Dict, Dict, Dict]
+        """
+        def dist_from_source(reg):
+            """
+            Calculates the euclidean distance between the centre of a supplied region, and the
+            position of the source.
+
+            :param reg: A region object.
+            :return: Distance between region centre and source position.
+            """
+            ra = reg.center.ra.value
+            dec = reg.center.dec.value
+            return Quantity(np.sqrt(abs(ra - self._ra_dec[0]) ** 2 + abs(dec - self._ra_dec[1]) ** 2), 'deg')
+
+        results_dict, alt_match_dict, anti_results_dict = super()._source_type_match('ext')
+
+        # TODO ACTUALLY BASE THESE FACTORS ON REAL RADIUS - OBSERVABLE RELATIONS?
+        if self._radii['r500'] is not None:
+            check_rad = self.convert_radius(self._radii['r500'] * 0.15, 'deg')
+        elif self._radii['r200'] is not None:
+            check_rad = self.convert_radius(self._radii['r200'] * 0.1, 'deg')
+        else:
+            check_rad = self.convert_radius(self._radii['r2500'] * 0.5, 'deg')
+
+        new_anti_results = {}
+        for obs in self._obs:
+            new_anti_results[obs] = []
+            for reg_obj in anti_results_dict[obs]:
+                dist = dist_from_source(reg_obj)
+                if reg_obj.visual["color"] == 'red' and dist < check_rad:
+                    warnings.warn("A point source has been detected very close to the user supplied coordinates of "
+                                  "{} and will not be excluded from analysis due to the possibility of a "
+                                  "mis-identified cool core".format(self.name))
+                elif reg_obj.visual["color"] == "magenta" and dist < check_rad:
+                    warnings.warn("A PSF sized extended source has been detected very close to the user supplied "
+                                  "coordinates of {} and will not be excluded from analysis due to the possibility "
+                                  "of a mis-identified cool core".format(self.name))
+                else:
+                    new_anti_results[obs].append(reg_obj)
+
+        return results_dict, alt_match_dict, new_anti_results
 
     # Property getters for the over density radii, they don't get setters as various things are defined on init
     #  that I don't want to call again.

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 10:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/02/2021, 13:07. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -136,7 +136,8 @@ class BaseSource:
         self._r500 = None
         self._r2500 = None
         # Also adding a radius dictionary attribute
-        self._radii = {}
+        if not hasattr(self, "_radii"):
+            self._radii = {}
         # Initialisation of cluster observables as None
         self._richness = None
         self._richness_err = None
@@ -1071,6 +1072,12 @@ class BaseSource:
         """
         # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
         #  University of Edinburgh - 2005.
+        # Red - Point source
+        # Green - Extended source
+        # Magenta - PSF-sized extended source
+        # Blue - Extended source with significant point source contribution
+        # Cyan - Extended source with significant Run1 contribution
+        # Yellow - Extended source with less than 10 counts
         if source_type == "ext":
             allowed_colours = ["green", "magenta", "blue", "cyan", "yellow"]
         elif source_type == "pnt":

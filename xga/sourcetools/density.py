@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/02/2021, 08:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/02/2021, 13:07. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -471,7 +471,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
             apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn,
                                                         over_sample)
         except NoProductAvailableError:
-            warn("{s} doesn't have a matching apec normalisatin profile, skipping.")
+            warn("{s} doesn't have a matching apec normalisation profile, skipping.")
             continue
 
         if not link_norm:
