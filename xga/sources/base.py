@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/02/2021, 13:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/02/2021, 20:02. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1625,7 +1625,7 @@ class BaseSource:
         return final_src, final_back
 
     def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity,
-                             deg_central_coord: Quantity) -> np.ndarray:
+                             deg_central_coord: Quantity, interloper_regions: np.ndarray = None) -> np.ndarray:
         """
         This function finds and returns any interloper regions that have any part of their boundary within
         the specified radii, centered on the specified central coordinate.
@@ -1634,6 +1634,9 @@ class BaseSource:
         :param Quantity outer_radius: The outer radius of the area to search for interlopers in.
         :param Quantity deg_central_coord: The central coordinate (IN DEGREES) of the area to search for
             interlopers in.
+        :param np.ndarray interloper_regions: An optional parameter that allows the user to pass a specific
+            list of regions to check. Default is None, in which case the interloper_regions internal list
+            will be used.
         :return: A numpy array of the interloper regions within the specified area.
         :rtype: np.ndarray
         """
@@ -1673,6 +1676,10 @@ class BaseSource:
         if deg_central_coord.unit != deg:
             raise UnitConversionError("The central coordinate must be in degrees for this function.")
 
+        # If no custom interloper regions array was passed, we use the internal array
+        if interloper_regions is None:
+            interloper_regions = self._interloper_regions.copy()
+
         inner_radius = self.convert_radius(inner_radius, 'deg')
         outer_radius = self.convert_radius(outer_radius, 'deg')
 
@@ -1689,12 +1696,12 @@ class BaseSource:
         int_dists = np.array([np.sqrt(np.sum((perimeter_points(r.center.ra.value, r.center.dec.value, r.width.value/2,
                                                                r.height.value/2, r.angle.to('rad').value)
                                               - deg_central_coord.value) ** 2, axis=1))
-                              for r in self._interloper_regions])
+                              for r in interloper_regions])
 
         # Finds which of the possible interlopers have any part of their boundary within the annulus in consideration
         int_within = np.unique(np.where((int_dists < outer_radius.value) & (int_dists > inner_radius.value))[0])
 
-        return np.array(self._interloper_regions)[int_within]
+        return np.array(interloper_regions)[int_within]
 
     @staticmethod
     def _interloper_sas_string(reg: EllipseSkyRegion, im: Image, output_unit: Union[UnitBase, str]) -> str:
