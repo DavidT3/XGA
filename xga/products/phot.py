@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/02/2021, 14:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/02/2021, 12:59. Copyright (c) David J Turner
 
 
 import warnings
@@ -629,7 +629,7 @@ class Image(BaseProduct):
         return ax
 
     def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
-             other_points: List[np.ndarray] = None, figsize: Tuple = (7, 6), zoom_in: bool = False,
+             other_points: List[np.ndarray] = None, figsize: Tuple = (10, 8), zoom_in: bool = False,
              manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
              radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
              stretch: BaseStretch = LogStretch(), mask_edges: bool = True):
