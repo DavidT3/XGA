@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/02/2021, 20:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/02/2021, 12:29. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -132,9 +132,12 @@ class BaseSource:
         # Initialisation of attributes related to Extended and GalaxyCluster sources
         self._peaks = None
         # Initialisation of allowed overdensity radii as None
-        self._r200 = None
-        self._r500 = None
-        self._r2500 = None
+        if not hasattr(self, 'r200'):
+            self._r200 = None
+        if not hasattr(self, 'r500'):
+            self._r500 = None
+        if not hasattr(self, 'r2500'):
+            self._r2500 = None
         # Also adding a radius dictionary attribute
         if not hasattr(self, "_radii"):
             self._radii = {}
