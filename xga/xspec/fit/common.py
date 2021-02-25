@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/02/2021, 13:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/02/2021, 17:31. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -7,7 +7,7 @@ from typing import List, Union, Tuple
 
 from astropy.units import Quantity
 
-from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES, XGA_PRE_CHECK
+from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES
 from ...samples.base import BaseSample
 from ...sas import evselect_spectrum, region_setup
 from ...sources import BaseSource, ExtendedSource, PointSource
@@ -168,7 +168,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
 
     # The template is filled out here, taking everything we have generated and everything the user
     #  passed in. The result is an XSPEC script that can be run as is.
-    script = script.format(xsp=XGA_EXTRACT, xpc=XGA_PRE_CHECK, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value,
+    script = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value,
                            q0=0., lamb0=source.cosmo.Ode0, sp=specs, lo_cut=lo_en.to("keV").value,
                            hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
                            lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,

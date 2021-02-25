@@ -5,9 +5,6 @@
 #  syntax. This *should* act as a general script for model combinations, so long as the formatted
 #  parameter values are valid.
 
-# This loads the XGA custom readout script, used to save fit results, spectra information,
-#  and plotting data to a fits file
-
 # As this script is designed to be populated by a Python script, the single curly braces denote places for the Python
 #  .format command to inject a value, and every normal TCL use of curly braces has to be double curly braces
 
@@ -16,11 +13,6 @@
 #############################################
 # The TCl file containing the function that extracts and writes out the final results
 source {xsp}
-
-# The TCL file containing routines to pre-check spectra before they are simultaneously fit
-source {xpc}
-#############################################
-
 
 #############################################
 # Setting up XSPEC
@@ -39,8 +31,6 @@ cosmo {H0} {q0} {lamb0}
 
 # We want plotting data to be in terms of energies, not channels
 setplot energy
-#############################################
-
 
 #############################################
 # Python supplied variables
@@ -73,7 +63,7 @@ set freezing {fr}
 # The confidence interval for parameter error estimation, I don't quite know what the parameter corresponds to,
 #  but the tutorials say that 2.706 is equivalent to the 90% confidence region, 9.0 is equivalent to the 3 sigma
 #  range, and 1.0 is equivelant to 1sigma
-set par_err_interval {el}
+set delta_fit_stat {el}
 
 # Now the parameters that xga_extract needs
 set out_file {of}
@@ -87,15 +77,126 @@ set lum_upp_lims {lul}
 
 
 # Here we run a pre-check to see which of the spectra are good enough to actually contribute anything to the fit
-#############################################
+#################################################
 # Running the spectral gauntlet
-#############################################
+#################################################
+if {{$run_pre_check == True}} {{
+
+    array set check_lo_lim {{}}
+    array set check_hi_lim {{}}
+    array set check_err_lim {{}}
+    for {{set i 0}} {{$i < [llength $check_pars]}} {{incr i}} {{
+        set temp_key [lindex $check_pars $i]
+
+        set check_lo_lim($temp_key) [lindex $check_pars_lo_lim $i]
+        set check_hi_lim($temp_key) [lindex $check_pars_hi_lim $i]
+        set check_err_lim($temp_key) [lindex $check_pars_err_lim $i]
+    }}
+
+    # All the fitting has to be done in this script rather than in a function because for some reason I was
+    #  unable to declare a model with default parameters when in a TCL proc, very annoying
+    #############################################
+    # Setting up spectra for individual fits
+    #############################################
+    # Put the number of spectra in a variable
+    set num_spec [llength $spec_paths]
+
+    # For loop here to load in all the spectra, iterating over path list
+    set counter 1
+    foreach pa $spec_paths {{
+        # Loads each spectrum into its own data and plot group
+        data $counter:$counter $pa
+        incr counter
+        }}
+
+    # Now we ignore the energy range that we don't want to use, for all loaded spectra
+    ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
+
+    # If any channels have been labelled bad, this will discount them from analysis
+    ignore bad
+    #############################################
+    # Setting up model for individual fits
+    #############################################
+    model $model_name
+    /*
+
+    # Get the number of parameters in a variable, for iterating through later
+    set num_pars [tcloutr modpar]
+    # This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
+    set num_uniq_par [expr {{$num_pars / $num_spec}}]
+
+    # Just combines them into an array, so we can pass a parameter name and get a value and freeze bool. All
+    #  link bools will be false because these models are being fit independently of each other. This is probably
+    #  more complex than it needs to be but it allowed me to just copy some code I'd already written
+    array set par_arr {{}}
+    array set link_arr {{}}
+    array set freeze_arr {{}}
+    for {{set i 0}} {{$i < [llength $par_names]}} {{incr i}} {{
+        set temp_key [lindex $par_names $i]
+        set temp_contents [array get par_arr]
+
+        # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+        set key_count 1
+        while {{$temp_key in $temp_contents}} {{
+            set temp_key [concat [lindex $par_names $i]_$key_count]
+            incr key_count
+            }}
+
+        set par_arr($temp_key) [lindex $par_values $i]
+        set link_arr($temp_key) F
+        set freeze_arr($temp_key) [lindex $freezing $i]
+        }}
+
+    # Here we iterate through the parameters and set them up in XSPEC
+    set sep_cnt 1
+    set sep_par_lst {{}}
+    for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
+        set cur_par [lindex [tcloutr pinfo $i] 0]
+
+        if {{$sep_cnt <= $num_uniq_par}} {{
+            # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+            set key_count 1
+            while {{$cur_par in $sep_par_lst}} {{
+                set cur_par [concat [lindex [tcloutr pinfo $i] 0]_$key_count]
+                incr key_count
+                }}
+            lappend sep_par_lst $cur_par
+        }} else {{
+            puts $sep_par_lst
+            set sep_cnt 1
+            set sep_par_lst {{$cur_par}}
+        }}
+
+        if {{$i <= $num_uniq_par}} {{
+            newpar $i $par_arr($cur_par)
+        }} elseif {{$i > $num_uniq_par && $link_arr($cur_par) == "F"}} {{
+            newpar $i $par_arr($cur_par)
+            }}
+
+        if {{$freeze_arr($cur_par) == "T"}} {{
+            freeze $i
+        }} else {{
+            thaw $i
+            }}
+
+        incr sep_cnt
+        }}
+    #############################################
+    # Running fit and checking errors
+    #############################################
+    fit 100
+
+
+    #############################################
+
+}}
+show
+exit
+#################################################
+
 
 #############################################
-
-
-#############################################
-# Loading in Spectra for the final fit
+# Setting up spectra for the final fit
 #############################################
 
 # Now put the number of spectra in a variable
@@ -200,7 +301,7 @@ for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
 fit 100
 
 # Calculate errors on the fit parameters; error just ignores those parameters that are frozen
-error $par_err_interval,1-$num_pars
+error $delta_fit_stat,1-$num_pars
 
 set lum_lim_pairs {{}}
 for {{set i 0}} {{$i < [llength $lum_low_lims]}} {{incr i}} {{
