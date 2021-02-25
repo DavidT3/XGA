@@ -32,6 +32,10 @@ cosmo {H0} {q0} {lamb0}
 # We want plotting data to be in terms of energies, not channels
 setplot energy
 
+# These scripts are running headlessly, so we have to just let XSPEC keep going whenever it asks a question,
+#  that's what this command does
+query yes
+
 #############################################
 # Python supplied variables
 #############################################
@@ -152,7 +156,6 @@ if {{$run_pre_check == True}} {{
     set sep_par_lst {{}}
     for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
         set cur_par [lindex [tcloutr pinfo $i] 0]
-
         if {{$sep_cnt <= $num_uniq_par}} {{
             # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
             set key_count 1
@@ -182,16 +185,54 @@ if {{$run_pre_check == True}} {{
         incr sep_cnt
         }}
     #############################################
-    # Running fit and checking errors
+    # Running fit/errors and checking results
     #############################################
+
+    # This assembles a list of spec paths where each spec name is repeated N times (where N is the number of
+    #  parameters in a model - tbabs*apec has 5 for instance), then we move onto the next spec_path
+    set par_spec {{}}
+    foreach sp $spec_paths {{
+        for {{set i 1}} {{$i <= $num_uniq_par}} {{incr i 1}} {{
+            lappend par_spec $sp
+        }}
+    }}
+
     fit 100
+    set good_spec_paths {{}}
+    for {{set ipar 1}} {{$ipar <= $num_pars}} {{incr ipar}} {{
+        # We calculate the errors on the individual fits, though only if its a parameter we're checking
+        scan [tcloutr pinfo $ipar] "%s %s" pname punit
+        if {{[lsearch -exact $check_pars $pname] >= 0}} {{
+            error $delta_fit_stat, $ipar
+            scan [tcloutr param $ipar] "%f %f" par_val delta
+            scan [tcloutr error $ipar] "%f %f" lo_conf_lim hi_conf_lim
+            set lo_err [expr $par_val-$lo_conf_lim]
+            set hi_err [expr $hi_conf_lim-$par_val]
 
+            set cur_sp [lindex $par_spec [expr $ipar-1]]
+            if {{$par_val > $check_lo_lim($pname) && $par_val < $check_hi_lim($pname) && $lo_err < $check_err_lim($pname) && $hi_err < $check_err_lim($pname)}} {{
+                puts $cur_sp
+                lappend good_spec_paths $cur_sp
+            }}
+        }}
+    }}
 
     #############################################
+    # Final decision on spectra
+    #############################################
+    set num_par_test [llength $check_pars]
+    set final_spec_paths {{}}
+    foreach sp $spec_paths {{
+        if {{[llength [lsearch -all $good_spec_paths $sp]] == $num_par_test}} {{
+            lappend final_spec_paths $sp
+        }}
+    }}
 
+    if {{[llength $final_spec_paths] == 0}} {{
+        exit
+    }}
+    #############################################
 }}
-show
-exit
 #################################################
 
 

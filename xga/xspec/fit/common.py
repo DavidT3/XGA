@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/02/2021, 17:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/02/2021, 23:28. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -179,7 +179,4 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     with open(script_file, 'w') as xcm:
         xcm.write(script)
 
-    # TODO OBVIOUSLY REMOVE THIS
-    import sys
-    sys.exit()
     return out_file, script_file
