@@ -7,8 +7,24 @@
 
 # This loads the XGA custom readout script, used to save fit results, spectra information,
 #  and plotting data to a fits file
+
+# As this script is designed to be populated by a Python script, the single curly braces denote places for the Python
+#  .format command to inject a value, and every normal TCL use of curly braces has to be double curly braces
+
+#############################################
+# Sourcing external TCL files
+#############################################
+# The TCl file containing the function that extracts and writes out the final results
 source {xsp}
 
+# The TCL file containing routines to pre-check spectra before they are simultaneously fit
+source {xpc}
+#############################################
+
+
+#############################################
+# Setting up XSPEC
+#############################################
 # Set the statistic type to Cash
 statistic cstat
 
@@ -23,9 +39,64 @@ cosmo {H0} {q0} {lamb0}
 
 # We want plotting data to be in terms of energies, not channels
 setplot energy
+#############################################
 
+
+#############################################
+# Python supplied variables
+#############################################
 # Set up a list of paths to the spectra we want to fit, done like this to make it more dynamic
 set spec_paths {sp}
+
+# The energy limits applied to the spectra before fitting
+set ignore_lo_en {lo_cut}
+set ignore_hi_en {hi_cut}
+
+# This sets whether the fit should run a check on the spectra before doing the global fit
+set run_pre_check {check}
+set check_pars {cps}
+set check_pars_lo_lim {cpsl}
+set check_pars_hi_lim {cpsh}
+set check_pars_err_lim {cpse}
+
+# The name of the model
+set model_name {m}
+
+# Need the user's parameter choices, initially in the form of a name list and a value list, then an array
+#  Also have lists that define whether a parameter in the model will be linked across different spectra, and whether
+#  a parameter is frozen during fitting
+set par_names {pn}
+set par_values {pv}
+set linking {lk}
+set freezing {fr}
+
+# The confidence interval for parameter error estimation, I don't quite know what the parameter corresponds to,
+#  but the tutorials say that 2.706 is equivalent to the 90% confidence region, 9.0 is equivalent to the 3 sigma
+#  range, and 1.0 is equivelant to 1sigma
+set par_err_interval {el}
+
+# Now the parameters that xga_extract needs
+set out_file {of}
+set input_redshift {redshift}
+set luminosity_confidence {lel}
+
+# This is where the lower and upper energy limits for the luminosity calculations go, xga_extract needs them
+set lum_low_lims {lll}
+set lum_upp_lims {lul}
+#############################################
+
+
+# Here we run a pre-check to see which of the spectra are good enough to actually contribute anything to the fit
+#############################################
+# Running the spectral gauntlet
+#############################################
+
+#############################################
+
+
+#############################################
+# Loading in Spectra for the final fit
+#############################################
 
 # Now put the number of spectra in a variable
 set num_spec [llength $spec_paths]
@@ -39,27 +110,20 @@ foreach p $spec_paths {{
     }}
 
 # Now we ignore the energy range that we don't want to use, for all loaded spectra
-ignore **:**-{lo_cut} **:{hi_cut}-**
+ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
 
 # If any channels have been labelled bad, this will discount them from analysis
 ignore bad
+#############################################
 
 # Now we must define the model, but without setting any parameters (thats what /* does)
-model {m}
+model $model_name
 /*
 
 # Get the number of parameters in a variable, for iterating through later
 set num_pars [tcloutr modpar]
 # This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
 set num_uniq_par [expr {{$num_pars / $num_spec}}]
-
-# Need the user's parameter choices, initially in the form of a name list and a value list, then an array
-#  Also have lists that define whether a parameter in the model will be linked across different spectra, and whether
-#  a parameter is frozen during fitting
-set par_names {pn}
-set par_values {pv}
-set linking {lk}
-set freezing {fr}
 
 # Probably isn't necessary as the inputs should be governed by XGA, but doing some checks
 if {{[llength $par_names] != $num_uniq_par}} {{
@@ -136,11 +200,7 @@ for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
 fit 100
 
 # Calculate errors on the fit parameters; error just ignores those parameters that are frozen
-error {el},1-$num_pars
-
-# This is where the lower and upper energy limits for the luminosity calculations go
-set lum_low_lims {lll}
-set lum_upp_lims {lul}
+error $par_err_interval,1-$num_pars
 
 set lum_lim_pairs {{}}
 for {{set i 0}} {{$i < [llength $lum_low_lims]}} {{incr i}} {{
@@ -151,6 +211,6 @@ for {{set i 0}} {{$i < [llength $lum_low_lims]}} {{incr i}} {{
     }}
 
 # And finally we run the custom XGA script that extracts all the information we want
-xga_extract {of} $lum_lim_pairs {redshift} {lel} {m}
+xga_extract $out_file $lum_lim_pairs $input_redshift $luminosity_confidence $model_name
 
 exit
