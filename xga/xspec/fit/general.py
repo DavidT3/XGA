@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/02/2021, 23:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/02/2021, 10:43. Copyright (c) David J Turner
 
 import warnings
 from typing import List, Union
@@ -295,7 +295,8 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z)
+                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
+                                                    "{}", "{}", "{}")
 
         # If the fit has already been performed we do not wish to perform it again
         try:
