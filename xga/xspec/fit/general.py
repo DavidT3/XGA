@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 10:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/02/2021, 10:43. Copyright (c) David J Turner
 
 import warnings
 from typing import List, Union
@@ -26,12 +26,17 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                      abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
                      min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                     num_cores: int = NUM_CORES):
+                     num_cores: int = NUM_CORES, spectrum_checking: bool = True):
     """
     This is a convenience function for fitting an absorbed single temperature apec model to an object.
     It would be possible to do the exact same fit using the custom_model function, but as it will
     be a very common fit a dedicated function is in order. If there are no existing spectra with the passed
     settings, then they will be generated automatically.
+
+    If the spectrum checking step of the XSPEC fit is enabled (using the boolean flag spectrum_checking), then
+    each individual spectrum available for a given source will be fitted, and if the measured temperature is less
+    than or equal to 0.01keV, or greater than 20keV, or the temperature uncertainty is greater than 15keV, then
+    that spectrum will be rejected and not included in the final fit.
 
     :param List[BaseSource] sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
@@ -52,7 +57,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param bool link_norm: Whether the normalisations of different spectra should be linked during fitting.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
-    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command.
+    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which
+        should be equivelant to 1sigma errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec
+        /manual/XSerror.html) correctly.
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
@@ -67,6 +74,8 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :param bool spectrum_checking: Should the spectrum checking step of the XSPEC fit (where each spectrum is fit
+        individually and tested to see whether it will contribute to the simultaneous fit) be activated?
     """
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores)
@@ -128,9 +137,25 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         else:
             linking = "{T T T T F}"
 
+        # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
+        #  limits. For this function they will be hardcoded, for simplicities sake, and we're only going to
+        #  check the temperature, as its the main thing we're fitting for with tbabs*apec
+        if spectrum_checking:
+            check_list = "{kT}"
+            check_lo_lims = "{0.01}"
+            check_hi_lims = "{20}"
+            check_err_lims = "{15}"
+        else:
+            check_list = "{}"
+            check_lo_lims = "{}"
+            check_hi_lims = "{}"
+            check_err_lims = "{}"
+
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift)
+                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
+                                                    spectrum_checking, check_list, check_lo_lims, check_hi_lims,
+                                                    check_err_lims)
 
         # If the fit has already been performed we do not wish to perform it again
         try:
@@ -176,7 +201,9 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.    :param start_pho_index:
     :param bool link_norm: Whether the normalisations of different spectra should be linked during fitting.
-    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command.
+    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which
+        should be equivelant to 1sigma errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec
+        /manual/XSerror.html) correctly.
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
@@ -268,7 +295,8 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z)
+                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
+                                                    "{}", "{}", "{}")
 
         # If the fit has already been performed we do not wish to perform it again
         try:

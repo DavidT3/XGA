@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2021, 11:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/02/2021, 23:28. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -117,7 +117,8 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
 def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, abund_table: str, fit_method: str,
                         specs: str, lo_en: Quantity, hi_en: Quantity, par_names: str, par_values: str,
                         linking: str, freezing: str, par_fit_stat: float, lum_low_lims: str, lum_upp_lims: str,
-                        lum_conf: float, redshift: float) -> Tuple[str, str]:
+                        lum_conf: float, redshift: float, pre_check: bool, check_par_names: str, check_par_lo_lims: str,
+                        check_par_hi_lims: str, check_par_err_lims: str) -> Tuple[str, str]:
     """
     This writes out a configured XSPEC script, and is common to all fit functions.
 
@@ -139,6 +140,16 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     :param str lum_upp_lims: A string containing the upper energy limits for the luminosity measurements.
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param float redshift: The redshift of the object.
+    :param bool pre_check: Flag indicating whether a pre-check of the quality of the input spectra
+        should be performed.
+    :param str check_par_names: A string representing a TCL list of model parameter names that checks should be
+        performed on.
+    :param str check_par_lo_lims: A string representing a TCL list of allowed lower limits for the check_par_names
+        parameter entries.
+    :param str check_par_hi_lims: A string representing a TCL list of allowed upper limits for the check_par_names
+        parameter entries.
+    :param str check_par_err_lims: A string representing a TCL list of allowed upper limits for the parameter
+        uncertainties.
     :return: The paths to the output file and the script file.
     :rtype: Tuple[str, str]
     """
@@ -161,7 +172,8 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
                            q0=0., lamb0=source.cosmo.Ode0, sp=specs, lo_cut=lo_en.to("keV").value,
                            hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
                            lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
-                           of=out_file, redshift=redshift, lel=lum_conf)
+                           of=out_file, redshift=redshift, lel=lum_conf, check=pre_check, cps=check_par_names,
+                           cpsl=check_par_lo_lims, cpsh=check_par_hi_lims, cpse=check_par_err_lims)
 
     # Write out the filled-in template to its destination
     with open(script_file, 'w') as xcm:
