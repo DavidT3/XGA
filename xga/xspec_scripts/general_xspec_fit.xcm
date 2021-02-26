@@ -229,8 +229,22 @@ if {{$run_pre_check == True}} {{
     }}
 
     if {{[llength $final_spec_paths] == 0}} {{
+        puts "No acceptable spectra are left after the cleaning step"
         exit
     }}
+    #############################################
+    # Cleanup step
+    #############################################
+    model clear
+    set spec_paths $final_spec_paths
+    data none
+
+    unset par_arr
+    unset link_arr
+    unset freeze_arr
+    unset sep_par_lst
+    unset num_pars
+    unset num_uniq_par
     #############################################
 }}
 #################################################
@@ -338,6 +352,7 @@ for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
     incr sep_cnt
     }}
 
+
 # Now of course we run the model fit
 fit 100
 
@@ -351,6 +366,7 @@ for {{set i 0}} {{$i < [llength $lum_low_lims]}} {{incr i}} {{
     lappend interim [lindex $lum_upp_lims $i]
     lappend lum_lim_pairs $interim
     }}
+
 
 # And finally we run the custom XGA script that extracts all the information we want
 xga_extract $out_file $lum_lim_pairs $input_redshift $luminosity_confidence $model_name
