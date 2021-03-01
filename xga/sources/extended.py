@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/02/2021, 20:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/03/2021, 09:32. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -112,8 +112,10 @@ class GalaxyCluster(ExtendedSource):
         more complex matching criteria for galaxy clusters. Galaxy clusters having their own version of this
         method was driven by issue #407, the problems I was having with low redshift clusters particularly.
 
-        Point sources within 0.15R500, 0.1R200, or 0.5R2500 (in order of descending priority, R200 will only be
-        used if R500 isn't available etc.) will be allowed to remain in the analysis, as they may well be cool-cores.
+        Point sources within 0.15R500, 0.15*0.66*R200, or 0.15*2.25*R2500 (in order of descending priority, R200
+        will only be used if R500 isn't available etc. - the extra factors for R200 and R2500 are meant to convert
+        the radius to ~R500, and were arrived at using the Arnaud et al. 2005 R-T scaling relations) will be allowed
+        to remain in the analysis, as they may well be cool-cores.
 
         This method also attempts to check for fragmentation of clusters by the source finder, which can cause
         issues where low redshift clusters are split up into multiple extended sources. Any interloper sources which
@@ -142,13 +144,14 @@ class GalaxyCluster(ExtendedSource):
 
         results_dict, alt_match_dict, anti_results_dict = super()._source_type_match('ext')
 
-        # TODO ACTUALLY BASE THESE FACTORS ON REAL RADIUS - OBSERVABLE RELATIONS?
+        # The 0.66 and 2.25 factors are intended to shift the r200 and r2500 values to approximately r500, and were
+        #  decided on by dividing the Arnaud et al. 2005 R-T relations by one another and finding the mean factor
         if self._radii['r500'] is not None:
             check_rad = self.convert_radius(self._radii['r500'] * 0.15, 'deg')
         elif self._radii['r200'] is not None:
-            check_rad = self.convert_radius(self._radii['r200'] * 0.1, 'deg')
+            check_rad = self.convert_radius(self._radii['r200'] * 0.66 * 0.15, 'deg')
         else:
-            check_rad = self.convert_radius(self._radii['r2500'] * 0.5, 'deg')
+            check_rad = self.convert_radius(self._radii['r2500'] * 2.25 * 0.15, 'deg')
 
         # Here we scrub the anti-results dictionary (I don't know why I called it that...) to make sure cool cores
         #  aren't accidentally removed, and that chunks of cluster emission aren't removed
