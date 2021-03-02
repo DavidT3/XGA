@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/03/2021, 10:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/03/2021, 11:15. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1404,14 +1404,12 @@ class BaseProfile1D:
         # Actually plots the title
         plt.suptitle(title_str, y=0.91)
 
-        # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
-        main_ylims = main_ax.get_ylim()
-        y_pos = main_ylims[1]*0.90
         # If the user has passed radii to plot, then we plot them
         for r_name in draw_rads:
-            main_ax.axvline(draw_rads[r_name].value, linestyle='dashed', color='black')
-            main_ax.text(draw_rads[r_name].value * 1.01, y_pos, r_name, rotation=90, verticalalignment='center',
-                         color='black', fontsize=14)
+            d_rad = (draw_rads[r_name] / x_norm).value
+            main_ax.axvline(d_rad, linestyle='dashed', color='black')
+            main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
+                             color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
         # Use the axis limits quite a lot in this next bit, so read them out into variables
         x_axis_lims = main_ax.get_xlim()
@@ -1789,6 +1787,11 @@ class BaseAggregateProfile1D:
         #  first component because we've already checked that they're all the same type
         self._y_axis_name = self._profiles[0].y_axis_label
 
+        # Here I grab all the x_norm and y_norms, so that the view method of this aggregate profile can also
+        #  apply normalisation to the separate profiles if the user wants
+        self._x_norms = [p.x_norm for p in self._profiles]
+        self._y_norms = [p.y_norm for p in self._profiles]
+
     @property
     def radii_unit(self) -> Unit:
         """
@@ -1839,6 +1842,54 @@ class BaseAggregateProfile1D:
         :rtype: Union[Tuple[Quantity, Quantity], Tuple[None, None]]
         """
         return self._energy_bounds
+
+    @property
+    def x_norms(self) -> List[Quantity]:
+        """
+        The collated x normalisation values for the constituent profiles of this aggregate profile.
+
+        :return: A list of astropy quantities which represent the x-normalisations of the different profiles.
+        :rtype: List[Quantity]
+        """
+        return self._x_norms
+
+    @x_norms.setter
+    def x_norms(self, new_vals: List[Quantity]):
+        """
+        Setter for the collated x normalisation values for the constituent profiles of this aggregate profile.
+
+        :param List[Quantity] new_vals: A list of astropy quantities that the profile's x-axis values are
+            to be normalised by, there must be one entry for each profile.
+        """
+        if len(new_vals) == len(self._x_norms):
+            self._x_norms = new_vals
+        else:
+            raise ValueError("The new list passed for x-axis normalisations must be the same length"
+                             " as the original.")
+
+    @property
+    def y_norms(self) -> List[Quantity]:
+        """
+        The collated y normalisation values for the constituent profiles of this aggregate profile.
+
+        :return: A list of astropy quantities which represent the y-normalisations of the different profiles.
+        :rtype: List[Quantity]
+        """
+        return self._y_norms
+
+    @y_norms.setter
+    def y_norms(self, new_vals: List[Quantity]):
+        """
+        Setter for the collated y normalisation values for the constituent profiles of this aggregate profile.
+
+        :param List[Quantity] new_vals: A list of astropy quantities that the profile's y-axis values are
+            to be normalised by, there must be one entry for each profile.
+        """
+        if len(new_vals) == len(self._y_norms):
+            self._y_norms = new_vals
+        else:
+            raise ValueError("The new list passed for y-axis normalisations must be the same length"
+                             " as the original.")
 
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
              ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
