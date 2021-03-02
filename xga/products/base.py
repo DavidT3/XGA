@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 17:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/03/2021, 10:35. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -492,7 +492,8 @@ class BaseProfile1D:
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
+                 y_norm: Quantity = Quantity(1, '')):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -512,6 +513,10 @@ class BaseProfile1D:
         :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
             units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
             values converted to degrees, and allows this object to construct a predictable storage key.
+        :param Quantity x_norm: An astropy quantity to use to normalise the x-axis values, this is only used when
+            plotting if the user tells the view method that they wish for the plot to use normalised x-axis data.
+        :param Quantity y_norm: An astropy quantity to use to normalise the y-axis values, this is only used when
+            plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
         """
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
@@ -651,6 +656,11 @@ class BaseProfile1D:
         # Akin to the usable attribute of other product classes, will be set for different reasons by different
         #  profile subclasses
         self._usable = True
+
+        # These are the normalisation values for plotting (and possibly fitting at some point). I don't check their
+        #  units at any point because the user is welcome to normalise their plots by whatever value they wish
+        self._x_norm = x_norm
+        self._y_norm = y_norm
 
     def fit(self, model: str, method: str = "mcmc", priors: list = None, start_pars: list = None,
             model_real: int = 1000, model_rad_steps: int = 300, conf_level: int = 90, num_walkers: int = 20,
@@ -1207,7 +1217,8 @@ class BaseProfile1D:
         return realisations
 
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
-             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {}):
+             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
+             normalise_x: bool = False, normalise_y: bool = False):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals.
@@ -1226,6 +1237,10 @@ class BaseProfile1D:
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
             the dictionary key they are stored under is what they will be labelled.
             e.g. ({'r500': Quantity(), 'r200': Quantity()}
+        :param bool normalise_x: Should the x-axis be normalised with the x_norm value passed on the definition of
+            the profile object.
+        :param bool normalise_y: Should the y-axis be normalised with the x_norm value passed on the definition of
+            the profile object.
         """
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
@@ -1238,6 +1253,18 @@ class BaseProfile1D:
         if len(self._good_model_fits) == 0:
             models = False
             just_models = False
+
+        # If the user wants the x-axis to be normalised then we grab the value from the profile (though of course
+        #  if the user didn't set it initially then self.x_norm will also be 1
+        if normalise_x:
+            x_norm = self.x_norm
+        else:
+            # Otherwise we set x_norm to a harmless values with no units and unity value
+            x_norm = Quantity(1, '')
+        if normalise_y:
+            y_norm = self.y_norm
+        else:
+            y_norm = Quantity(1, '')
 
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1260,30 +1287,30 @@ class BaseProfile1D:
             leg_label = self.src_name
 
         # This subtracts the background if the user wants a background subtracted plot
-        sub_values = self.values.value.copy()
+        plot_y_vals = self.values.copy()
         if back_sub:
-            sub_values -= self.background.value
+            plot_y_vals -= self.background
 
-        # As we plot on a log-log scale, it can be annoying if there is a radius value (because of course
-        #  log scaled don't like 0 values) - so I'm going to perturb it slightly if there is an r=0 value
-        # TODO DECIDE HOW TO ACTUALLY DO THIS
-        rad_vals = self.radii.value
-        # if rad_vals[0] == 0:
-        #     # This makes the value of the first radius 1% of the maximum radius
-        #     rad_vals[0] = rad_vals[1] * 0.01
+        rad_vals = self.radii.copy()
+        plot_y_vals /= y_norm
+        rad_vals /= x_norm
 
         # Now the actual plotting of the data
         if self.radii_err is not None and self.values_err is None:
-            line = main_ax.errorbar(rad_vals, sub_values, xerr=self.radii_err.value, fmt="x", capsize=2,
+            x_errs = (self.radii_err.copy() / x_norm).value
+            line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
                                     label=leg_label)
         elif self.radii_err is None and self.values_err is not None:
-            line = main_ax.errorbar(rad_vals, sub_values, yerr=self.values_err.value, fmt="x", capsize=2,
+            y_errs = (self.values_err.copy() / y_norm).value
+            line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
                                     label=leg_label)
         elif self.radii_err is not None and self.values_err is not None:
-            line = main_ax.errorbar(rad_vals, sub_values, xerr=self.radii_err.value,
-                                    yerr=self.values_err.value, fmt="x", capsize=2, label=leg_label)
+            x_errs = (self.radii_err.copy() / x_norm).value
+            y_errs = (self.values_err.copy() / y_norm).value
+            line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
+                                    label=leg_label)
         else:
-            line = main_ax.plot(rad_vals, sub_values, 'x', label=leg_label)
+            line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
 
         if just_models and models:
             line[0].set_visible(False)
@@ -1302,23 +1329,27 @@ class BaseProfile1D:
                 info = self.get_realisation(model)
                 pars = self.get_model_fit(model)["par"]
 
-                mod_line = main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars),
-                                        label=MODEL_PUBLICATION_NAMES[model])
+                mod_rad = info["mod_radii"]/x_norm
+                mod_val = Quantity(model_func(info["mod_radii"], *pars), self.values_unit)/y_norm
+                mod_low = Quantity(info["mod_real_lower"], self.values_unit)/y_norm
+                mod_upp = Quantity(info["mod_real_upper"], self.values_unit)/y_norm
+
+                mod_line = main_ax.plot(mod_rad.value, mod_val.value, label=MODEL_PUBLICATION_NAMES[model])
                 model_colour = mod_line[0].get_color()
-                main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
-                                     where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=model_colour,
-                                     alpha=0.7, interpolate=True)
-                main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=model_colour, linestyle="dashed")
-                main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=model_colour, linestyle="dashed")
+
+                main_ax.fill_between(mod_rad.value, mod_low.value, mod_upp.value, alpha=0.7, interpolate=True,
+                                     where=mod_upp.value >= mod_low.value, facecolor=model_colour)
+                main_ax.plot(mod_rad.value, mod_low.value, color=model_colour, linestyle="dashed")
+                main_ax.plot(mod_rad.value, mod_upp.value, color=model_colour, linestyle="dashed")
 
                 # This calculates and plots the residuals between the model and the data on the extra
                 #  axis we added near the beginning of this method
-                res_ax.plot(self.radii.value, model_func(self.radii.value, *pars) - sub_values, 'D',
+                res_ax.plot(rad_vals.value, model_func(self.radii.value, *pars) - (plot_y_vals*y_norm).value, 'D',
                             color=model_colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
-        x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
-        y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
+        x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + plot_y_vals.unit.to_string("latex").strip("$") + r"\right]$"
 
         # Setting the main plot's x label
         main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
@@ -1645,6 +1676,42 @@ class BaseProfile1D:
         :rtype: bool
         """
         return self._usable
+
+    @property
+    def x_norm(self) -> Quantity:
+        """
+        The normalisation value for x-axis data passed on the definition of the this profile object.
+
+        :return: An astropy quantity containing the normalisation value.
+        :rtype: Quantity
+        """
+        return self._x_norm
+
+    @x_norm.setter
+    def x_norm(self, new_val: Quantity):
+        """
+        The setter for the normalisation value for x-axis data passed on the definition of the this profile object.
+        :param Quantity new_val: The new value for the normalisation of x-axis data.
+        """
+        self._x_norm = new_val
+
+    @property
+    def y_norm(self) -> Quantity:
+        """
+        The normalisation value for y-axis data passed on the definition of the this profile object.
+
+        :return: An astropy quantity containing the normalisation value.
+        :rtype: Quantity
+        """
+        return self._y_norm
+
+    @y_norm.setter
+    def y_norm(self, new_val: Quantity):
+        """
+        The setter for the normalisation value for y-axis data passed on the definition of the this profile object.
+        :param Quantity new_val: The new value for the normalisation of y-axis data.
+        """
+        self._y_norm = new_val
 
     def __len__(self):
         """
