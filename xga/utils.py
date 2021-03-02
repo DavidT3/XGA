@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/02/2021, 17:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/03/2021, 09:44. Copyright (c) David J Turner
 
 import json
 import os
@@ -365,6 +365,11 @@ else:
 
     xmm_sky = def_unit("xmm_sky")
     xmm_det = def_unit("xmm_det")
+    # These are largely defined so that I can use them for when I'm normalising profile plots, that way
+    #  the view method can just write the units nicely the way it normally does
+    r200_unit = def_unit('r200', format={'latex': r"\mathrm{R_{200}}"})
+    r500_unit = def_unit('r500', format={'latex': r"\mathrm{R_{500}}"})
+    r2500_unit = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
 
 
 
