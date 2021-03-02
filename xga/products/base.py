@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/03/2021, 10:35. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/03/2021, 10:39. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1388,7 +1388,9 @@ class BaseProfile1D:
             res_ax.set_ylabel("Model - Data", fontsize=13)
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
-        if models and custom_title is None:
+        if models and custom_title is None and len(self._good_model_fits) == 1:
+            title_str = "{l} Profile - with model".format(l=self._y_axis_name)
+        elif models and custom_title is None and len(self._good_model_fits) > 1:
             title_str = "{l} Profile - with models".format(l=self._y_axis_name)
         elif not models and custom_title is None:
             title_str = "{l} Profile".format(l=self._y_axis_name)
