@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/03/2021, 11:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/03/2021, 14:31. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1893,7 +1893,8 @@ class BaseAggregateProfile1D:
 
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
              ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
-             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}):
+             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, normalise_x: bool = False,
+             normalise_y: bool = False):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -1913,7 +1914,12 @@ class BaseAggregateProfile1D:
         :param str custom_title: A plot title to replace the automatically generated title, default is None.
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
             the dictionary key they are stored under is what they will be labelled.
-            e.g. ({'r500': Quantity(), 'r200': Quantity()}
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}. If normalise_x option is also used, and the x-norm values
+            are not the same for each profile, then draw_rads will be disabled.
+        :param bool normalise_x: Should the x-axis values be normalised with the x_norm value passed on the
+            definition of the constituent profile objects.
+        :param bool normalise_y: Should the y-axis values be normalised with the y_norm value passed on the
+            definition of the constituent profile objects.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -1921,6 +1927,22 @@ class BaseAggregateProfile1D:
         if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
             raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
                                       "{}".format(self.radii_unit.to_string()))
+
+        # Set up the x normalisation and y normalisation variables
+        if normalise_x:
+            x_norms = self.x_norms
+        else:
+            x_norms = [Quantity(1, '') for n in self.x_norms]
+
+        if normalise_y:
+            y_norms = self.y_norms
+        else:
+            y_norms = [Quantity(1, '') for n in self.y_norms]
+
+        # Need to make sure that draw_rads, if set, is compatible with the normalisations. The problem is that
+        #  if the profiles all have different normalisations then the draw_rads values can't be normalised
+        if len(draw_rads) != 0 and len(set(x_norms)) != 1:
+            draw_rads = {}
 
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1938,29 +1960,37 @@ class BaseAggregateProfile1D:
         main_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
         # Cycles through the component profiles of this aggregate profile, plotting them all
-        for p in self._profiles:
+        for p_ind, p in enumerate(self._profiles):
             if p.type == "brightness_profile" and p.psf_corrected:
                 leg_label = p.src_name + " PSF Corrected"
             else:
                 leg_label = p.src_name
 
             # This subtracts the background if the user wants a background subtracted plot
-            sub_values = p.values.value.copy()
+            plot_y_vals = p.values.copy()
             if back_sub:
-                sub_values -= p.background.value
+                plot_y_vals -= p.background
+
+            rad_vals = p.radii.copy()
+            plot_y_vals /= y_norms[p_ind]
+            rad_vals /= x_norms[p_ind]
 
             # Now the actual plotting of the data
             if p.radii_err is not None and p.values_err is None:
-                line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, fmt="x", capsize=2,
+                x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
+                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
                                         label=leg_label)
             elif p.radii_err is None and p.values_err is not None:
-                line = main_ax.errorbar(p.radii.value, sub_values, yerr=p.values_err.value, fmt="x", capsize=2,
+                y_errs = (p.values_err.copy() / y_norms[p_ind]).value
+                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
                                         label=leg_label)
             elif p.radii_err is not None and p.values_err is not None:
-                line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, yerr=p.values_err.value,
-                                        fmt="x", capsize=2, label=leg_label)
+                x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
+                y_errs = (p.values_err.copy() / y_norms[p_ind]).value
+                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
+                                        label=leg_label)
             else:
-                line = main_ax.plot(p.radii.value, sub_values, 'x', label=leg_label)
+                line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
 
             # If the user only wants the models to be plotted, then this goes through the matplotlib
             #  artist objects that make up the line plot and hides them.
@@ -1984,21 +2014,26 @@ class BaseAggregateProfile1D:
                 info = p.get_realisation(model)
                 pars = p.get_model_fit(model)["par"]
 
+                mod_rad = info["mod_radii"] / x_norms[p_ind]
+                mod_val = Quantity(model_func(info["mod_radii"], *pars), self.values_unit) / y_norms[p_ind]
+                mod_low = Quantity(info["mod_real_lower"], self.values_unit) / y_norms[p_ind]
+                mod_upp = Quantity(info["mod_real_upper"], self.values_unit) / y_norms[p_ind]
+
                 colour = line[0].get_color()
-                main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars), color=colour)
-                main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
-                                     where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=colour,
-                                     alpha=0.7, interpolate=True)
-                main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=colour, linestyle="dashed")
-                main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=colour, linestyle="dashed")
+                main_ax.plot(mod_rad.value, mod_val.value, color=colour)
+                main_ax.fill_between(mod_rad.value, mod_low.value, mod_upp.value, alpha=0.7, interpolate=True,
+                                     where=mod_upp.value >= mod_low.value, facecolor=colour)
+                main_ax.plot(mod_rad.value, mod_low.value, color=colour, linestyle="dashed")
+                main_ax.plot(mod_rad.value, mod_upp.value, color=colour, linestyle="dashed")
 
                 # This calculates and plots the residuals between the model and the data on the extra
                 #  axis we added near the beginning of this method
-                res_ax.plot(p.radii.value, model_func(p.radii.value, *pars)-sub_values, 'D', color=colour)
+                res_ax.plot(rad_vals.value, model_func(p.radii.value, *pars) - (plot_y_vals * y_norms[p_ind]).value,
+                            'D', color=colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
-        x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
-        y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
+        x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + plot_y_vals.unit.to_string("latex").strip("$") + r"\right]$"
 
         # Setting the main plot's x label
         main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
@@ -2011,8 +2046,6 @@ class BaseAggregateProfile1D:
         # Adds a legend with source names to the side if the user requested it
         # I let the user decide because there could be quite a few names in it and it could get messy
         if legend:
-            # TODO I'd like this to dynamically choose the number of columns depending on the number of
-            #  profiles but I got bored figuring how to do it
             main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
             # This makes sure legend keys are shown, even if the data is hidden
             for leg_key in main_leg.legendHandles:
@@ -2051,14 +2084,12 @@ class BaseAggregateProfile1D:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
 
-        # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
-        main_ylims = main_ax.get_ylim()
-        y_mid = (main_ylims[1] - main_ylims[0]) / 2
         # If the user has passed radii to plot, then we plot them
         for r_name in draw_rads:
-            main_ax.axvline(draw_rads[r_name].value, linestyle='dashed', color='black')
-            main_ax.text(draw_rads[r_name].value * 1.01, y_mid, r_name, rotation=90, verticalalignment='center',
-                         color='black', fontsize=14)
+            d_rad = (draw_rads[r_name] / x_norms[0]).value
+            main_ax.axvline(d_rad, linestyle='dashed', color='black')
+            main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
+                             color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
         # And of course actually showing it
         plt.show()
