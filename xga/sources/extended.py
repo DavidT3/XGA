@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/03/2021, 09:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/03/2021, 15:37. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -612,11 +612,12 @@ class GalaxyCluster(ExtendedSource):
         # Calculating and returning the combined factor.
         return av_lum / total_rate
 
-    def combined_norm_conv_factor(self, outer_radius: Union[str, Quantity], lo_en: Quantity, hi_en: Quantity,
-                                  inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                                  min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> Quantity:
+    def norm_conv_factor(self, outer_radius: Union[str, Quantity], lo_en: Quantity, hi_en: Quantity,
+                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                         min_counts: int = 5, min_sn: float = None, over_sample: float = None, obs_id: str = None,
+                         inst: str = None) -> Quantity:
         """
-        Combines count-rate to normalisation conversion factors associated with this source
+        Combines count-rate to normalisation conversion factors associated with this source.
 
         :param str/Quantity outer_radius: The name or value of the outer radius of the spectra that should be used
             to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
@@ -633,14 +634,28 @@ class GalaxyCluster(ExtendedSource):
         :param float min_sn: The minimum signal to noise per channel, if the spectra that were used for fakeit
             were grouped by minimum signal to noise.
         :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
+        :param str obs_id: The ObsID to fetch a conversion factor for, default is None which means the combined
+            conversion factor will be returned.
+        :param str inst: The instrument to fetch a conversion factor for, default is None which means the combined
+            conversion factor will be returned.
         :return: A combined conversion factor that can be applied to a combined ratemap to
             calculate luminosity.
         :rtype: Quantity
         """
+        # Check the ObsID and instrument inputs
+        if all([obs_id is None, inst is None]):
+            pass
+        elif all([obs_id is not None, inst is not None]):
+            pass
+        else:
+            raise ValueError("If a value is supplied for obs_id, then a value must be supplied for inst as well, and "
+                             "vice versa.")
+
         # Grabbing the relevant spectra
         spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
-                                min_sn=min_sn, over_sample=over_sample)
+                                min_sn=min_sn, over_sample=over_sample, obs_id=obs_id, inst=inst)
 
+        # Its just easier if we know that the spectra are in a list
         if isinstance(spec, Spectrum):
             spec = [spec]
 
