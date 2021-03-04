@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/03/2021, 15:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 18:17. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -186,10 +186,12 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
         rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
         # Grabs the mask which will remove interloper sources
         int_mask = src.get_interloper_mask()
+        comb = True
     elif all([obs_id is not None, inst is not None]):
         rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
         # Grabs the mask which will remove interloper sources
         int_mask = src.get_interloper_mask(obs_id=obs_id)
+        comb = False
     else:
         raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
 
@@ -199,12 +201,18 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
         centre = src.ra_dec
 
     rad = src.convert_radius(outer_radius, 'kpc')
-    sb_prof, success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],
-                                         src.background_radius_factors[1], int_mask, src.redshift, pix_step, kpc,
-                                         src.cosmo, min_snr)
 
-    if not success:
-        warn("Minimum SNR rebinning failed for {}".format(src.name))
+    try:
+        sb_prof = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en, combined=comb,
+                                                pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
+                                                psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
+                                                psf_iter=psf_iter)
+    except NoProductAvailableError:
+        sb_prof, success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],
+                                             src.background_radius_factors[1], int_mask, src.redshift, pix_step, kpc,
+                                             src.cosmo, min_snr)
+        if not success:
+            warn("Minimum SNR rebinning failed for {}".format(src.name))
 
     return sb_prof
 
