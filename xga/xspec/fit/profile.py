@@ -1,12 +1,12 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/02/2021, 10:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 11:54. Copyright (c) David J Turner
 
 from typing import List, Union
 
 import astropy.units as u
 from astropy.units import Quantity
 
-from .common import _write_xspec_script
+from .common import _write_xspec_script, _check_inputs
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError
@@ -24,7 +24,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                              hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                              abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
                              min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                             num_cores: int = NUM_CORES, spectrum_checking: bool = True):
+                             num_cores: int = NUM_CORES, spectrum_checking: bool = True,
+                             timeout: Quantity = Quantity(1, 'hr')):
     """
     A function that allows for the fitting of sets of annular spectra (generated from objects such as galaxy
     clusters) with an absorbed plasma emission model (tbabs*apec). This function fits the annuli completely
@@ -62,9 +63,13 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :param bool spectrum_checking: Should the spectrum checking step of the XSPEC fit (where each spectrum is fit
         individually and tested to see whether it will contribute to the simultaneous fit) be activated?
+    :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
+        Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
+        fits.
     """
     # We make sure the requested sets of annular spectra have actually been generated
     spectrum_set(sources, radii, group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
+    sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # Unfortunately, a very great deal of this function is going to be copied from the original single_temp_apec
     model = "tbabs*apec"
@@ -160,9 +165,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                 outfile_paths.append(out_file)
                 src_inds.append(src_ind)
 
-
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout
 
 
 

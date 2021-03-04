@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/02/2021, 10:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 11:54. Copyright (c) David J Turner
 
 import warnings
 from typing import List, Union
@@ -26,7 +26,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                      abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
                      min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                     num_cores: int = NUM_CORES, spectrum_checking: bool = True):
+                     num_cores: int = NUM_CORES, spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr')):
     """
     This is a convenience function for fitting an absorbed single temperature apec model to an object.
     It would be possible to do the exact same fit using the custom_model function, but as it will
@@ -76,10 +76,13 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :param bool spectrum_checking: Should the spectrum checking step of the XSPEC fit (where each spectrum is fit
         individually and tested to see whether it will contribute to the simultaneous fit) be activated?
+    :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
+        Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
+        fits.
     """
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores)
-    sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table)
+    sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
@@ -167,7 +170,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             src_inds.append(src_ind)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
 
 
 @xspec_call
@@ -178,7 +181,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               freeze_nh: bool = True, link_norm: bool = False, par_fit_stat: float = 1., lum_conf: float = 68.,
               abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
               min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-              num_cores: int = NUM_CORES):
+              num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr')):
     """
     This is a convenience function for fitting a tbabs absorbed powerlaw (or zpowerlw if redshifted
     is selected) to source spectra.
@@ -218,11 +221,14 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
+        Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
+        fits.
     """
 
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores)
-    sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table)
+    sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, either absorbed powerlaw or absorbed zpowerlw
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
@@ -308,6 +314,6 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             src_inds.append(src_ind)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
 
 

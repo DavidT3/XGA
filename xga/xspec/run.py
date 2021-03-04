@@ -1,12 +1,13 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 10:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 11:54. Copyright (c) David J Turner
 
 import os
 import shutil
 import warnings
 from functools import wraps
-from multiprocessing.dummy import Pool
-from subprocess import Popen, PIPE
+# from multiprocessing.dummy import Pool
+from multiprocessing import Pool
+from subprocess import Popen, PIPE, TimeoutExpired
 from typing import Tuple, Union
 
 import fitsio
@@ -26,7 +27,7 @@ if shutil.which("xspec") is None:
     warnings.warn("Unable to locate an XSPEC installation.")
 
 
-def execute_cmd(x_script: str, out_file: str, src: str, run_type: str) \
+def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: float) \
         -> Tuple[Union[FITS, str], str, bool, list, list]:
     """
     This function is called for the local compute option. It will run the supplied XSPEC script, then check
@@ -36,12 +37,32 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str) \
     :param str out_file: The expected path for the output file of that XSPEC script.
     :param str src: A string representation of the source object that this fit is associated with.
     :param str run_type: A flag that tells this function what type of run this is; e.g. fit or conv_factors.
+    :param float timeout: The length of time (in seconds) which the XSPEC script is allowed to run for before being
+        killed.
     :return: FITS object of the results, string repr of the source associated with this fit, boolean variable
         describing if this fit can be used, list of any errors found, list of any warnings found.
     :rtype: Tuple[Union[FITS, str], str, bool, list, list]
     """
+    # We assume the output will be usable to start with
+    usable = True
+
     cmd = "xspec - {}".format(x_script)
-    out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
+    # I add exec to the beginning to make sure that the command inherits the same process ID as the shell, which
+    #  allows the timeout to kill the XSPEC run rather than the shell process. Entirely thanks to slayton on
+    #   https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
+    xspec_proc = Popen("exec " + cmd, shell=True, stdout=PIPE, stderr=PIPE)
+
+    # This makes sure the process is killed if it does timeout
+    try:
+        out, err = xspec_proc.communicate(timeout=timeout)
+    except TimeoutExpired:
+        xspec_proc.kill()
+        out, err = xspec_proc.communicate()
+        # Need to infer the name of the source to supply it in the warning
+        source_name = x_script.split('/')[-1].split("_")[0]
+        warnings.warn("An XSPEC fit for {} has timed out".format(source_name))
+        usable = False
+
     out = out.decode("UTF-8").split("\n")
     err = err.decode("UTF-8").split("\n")
 
@@ -50,7 +71,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str) \
     err_err_lines = [line.split("***Error: ")[-1] for line in err if "***Error" in line]
     warn_err_lines = [line.split("***Warning: ")[-1] for line in err if "***Warning" in line]
 
-    if len(err_out_lines) == 0 and len(err_err_lines) == 0:
+    if usable and len(err_out_lines) == 0 and len(err_err_lines) == 0:
         usable = True
     else:
         usable = False
@@ -85,10 +106,12 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str) \
             del spec_plot
 
         # This reads in the fits we just made
-        res_tables = FITS(out_file + ".fits")
-        tab_names = [tab.get_extname() for tab in res_tables]
-        if "results" not in tab_names or "spec_info" not in tab_names:
-            usable = False
+        with FITS(out_file + ".fits") as res_tables:
+            tab_names = [tab.get_extname() for tab in res_tables]
+            if "results" not in tab_names or "spec_info" not in tab_names:
+                usable = False
+        # I'm going to try returning the file path as that should be pickleable
+        res_tables = out_file + ".fits"
     elif os.path.exists(out_file) and run_type == "conv_factors":
         res_tables = out_file
         usable = True
@@ -124,9 +147,12 @@ def xspec_call(xspec_func):
         #  and 3rd is the number of cores to use.
         # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
         #  countrate to luminosity conversion constants
-        script_list, paths, cores, run_type, src_inds, radii = xspec_func(*args, **kwargs)
+        script_list, paths, cores, run_type, src_inds, radii, timeout = xspec_func(*args, **kwargs)
         src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
         rel_src_repr = [repr(sources[src_ind]) for src_ind in src_inds]
+
+        # Make sure the timeout is converted to seconds, then just stored as a float
+        timeout = timeout.to('second').value
 
         # This is what the returned information from the execute command gets stored in before being parceled out
         #  to source and spectrum objects
@@ -157,7 +183,7 @@ def xspec_call(xspec_func):
                 for s_ind, s in enumerate(script_list):
                     pth = paths[s_ind]
                     src = rel_src_repr[s_ind]
-                    pool.apply_async(execute_cmd, args=(s, pth, src, run_type), callback=callback)
+                    pool.apply_async(execute_cmd, args=(s, pth, src, run_type, timeout), callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
@@ -187,6 +213,7 @@ def xspec_call(xspec_func):
 
             for res_set in results[src_repr]:
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
+                    res_set[0] = FITS(res_set[0])
                     global_results = res_set[0]["RESULTS"][0]
                     model = global_results["MODEL"].strip(" ")
 
