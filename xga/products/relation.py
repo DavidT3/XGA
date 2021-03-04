@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/01/2021, 09:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 19:04. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -16,8 +16,6 @@ from matplotlib.ticker import FuncFormatter
 
 from ..models import MODEL_PUBLICATION_NAMES
 
-# This is just to make some instances of astropy LaTeX units prettier for plotting
-PRETTY_UNITS = {'solMass': r'M$_{\odot}$', 'erg / s': r"erg s$^{-1}$"}
 # This is the default colour cycle for the AggregateScalingRelation view method
 PRETTY_COLOUR_CYCLE = ['tab:gray', 'tab:blue', 'darkgreen', 'firebrick', 'slateblue', 'goldenrod']
 
@@ -524,17 +522,15 @@ class ScalingRelation:
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
-        x_unit = '[' + self.x_unit.to_string() + ']'
-        y_unit = '[' + self.y_unit.to_string() + ']'
-        for og_unit in PRETTY_UNITS:
-            x_unit = x_unit.replace(og_unit, PRETTY_UNITS[og_unit])
-            y_unit = y_unit.replace(og_unit, PRETTY_UNITS[og_unit])
+        # Parsing the astropy units so that if they are double height then the square brackets will adjust size
+        x_unit = r"$\left[" + self.x_unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + self.y_unit.to_string("latex").strip("$") + r"\right]$"
 
         # Dimensionless quantities can be fitted too, and this make the axis label look nicer by not having empty
         #  square brackets
-        if x_unit == '[]':
+        if x_unit == r"$\left[\\mathrm{}\right]$":
             x_unit = ''
-        if y_unit == '[]':
+        if y_unit == r"$\left[\\mathrm{}\right]$":
             y_unit = ''
 
         # The scaling relation object knows what its x and y axes are called, though the user may pass
@@ -803,17 +799,15 @@ class AggregateScalingRelation:
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
-        x_unit = '[' + self.x_unit.to_string() + ']'
-        y_unit = '[' + self.y_unit.to_string() + ']'
-        for og_unit in PRETTY_UNITS:
-            x_unit = x_unit.replace(og_unit, PRETTY_UNITS[og_unit])
-            y_unit = y_unit.replace(og_unit, PRETTY_UNITS[og_unit])
+        # Parsing the astropy units so that if they are double height then the square brackets will adjust size
+        x_unit = r"$\left[" + self.x_unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + self.y_unit.to_string("latex").strip("$") + r"\right]$"
 
         # Dimensionless quantities can be fitted too, and this make the axis label look nicer by not having empty
         #  square brackets
-        if x_unit == '[]':
+        if x_unit == r"$\left[\\mathrm{}\right]$":
             x_unit = ''
-        if y_unit == '[]':
+        if y_unit == r"$\left[\\mathrm{}\right]$":
             y_unit = ''
 
         # The scaling relation object knows what its x and y axes are called
