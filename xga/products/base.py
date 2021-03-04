@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/03/2021, 14:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 19:59. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -13,6 +13,7 @@ from astropy.units import Quantity, UnitConversionError, Unit, deg
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
+from tabulate import tabulate
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
     ModelNotAssociatedError
@@ -967,78 +968,19 @@ class BaseProfile1D:
         """
         # Base profile don't have any type of model associated with them, so just making an empty list
         if self._prof_type == "base":
-            allowed = []
+            warn("There are no implemented models for this profile type")
         else:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
 
-        # These set up the dictionary of printables, and variables that store the longest entry for each column
-        to_print = {}
-        # Initial values are the column sizes of the headers
-        longest_name = 12
-        longest_pars = 21
-        longest_defaults = 26
-        for model in allowed:
-            # Function object grabbed
-            model_func = PROF_TYPE_MODELS[self._prof_type][model]
-            # Looking for the variables in the function signature
-            model_sig = inspect.signature(model_func)
-            # Ignore the first argument, as it will be radius
-            model_par_names = ", ".join([p.name for p in list(model_sig.parameters.values())[1:]])
-            # The default start parameters of the fit
-            start_pars = ", ".join([str(p) for p in PROF_TYPE_MODELS_STARTS[self._prof_type][model]])
-            to_print[model] = [model, model_par_names, start_pars]
-            if len(model) > longest_name:
-                longest_name = len(model)
-            if len(model_par_names) > longest_pars:
-                longest_pars = len(model_par_names)
-            if len(start_pars) > longest_defaults:
-                longest_defaults = len(start_pars)
-
-        if longest_name % 2 != 0:
-            longest_name += 3
-        else:
-            longest_name += 2
-
-        if longest_pars % 2 != 0:
-            longest_pars += 3
-        else:
-            longest_pars += 2
-
-        if longest_defaults % 2 != 0:
-            longest_defaults += 3
-        else:
-            longest_defaults += 2
-
-        # This next lot is just boring string formatting and printing, I'm sure you can figure it out.
-        first_col = "|" + " " * np.ceil((longest_name - 12) / 2).astype(int) + " MODEL NAME " + " " * np.ceil(
-            (longest_name - 12) / 2).astype(int) + "|"
-
-        second_col = " " * np.ceil((longest_pars - 21) / 2).astype(int) + " EXPECTED PARAMETERS " + " " * np.ceil(
-            (longest_pars - 21) / 2).astype(int) + "|"
-
-        third_col = " "*np.ceil((longest_defaults-26) / 2).astype(int) + " DEFAULT START PARAMETERS " + \
-                    " " * np.ceil((longest_defaults-26) / 2).astype(int) + "|"
-        comb = first_col + second_col + third_col
-        print("\n" + "-"*len(comb))
-        print(first_col + second_col + third_col)
-        print("-"*len(comb))
-        for model in to_print:
-            # I know this code is disgustingly ugly, but its not really important that you know how it works
-            # And perhaps I'll rewrite it at some point, who knows
-            the_line = "|" + " " * np.ceil((len(first_col) - len(to_print[model][0])) / 2).astype(int) + \
-                       to_print[model][0] + " " * np.ceil((len(first_col) -
-                                                           len(to_print[model][0])) / 2).astype(int) \
-                       + "|"
-
-            the_line += " "*np.ceil((len(second_col) -
-                                     len(to_print[model][1])) / 2).astype(int) + to_print[model][1] + \
-                        " "*np.ceil((len(second_col)-len(to_print[model][1])) / 2).astype(int) + "|"
-
-            the_line += " " * np.ceil((len(third_col) -
-                                       len(to_print[model][2])) / 2).astype(int) + to_print[model][
-                2] + " " * np.ceil((len(third_col) - len(to_print[model][2])) / 2).astype(int) + "|"
-            print(the_line)
-        print("-" * len(comb) + "\n")
+            model_par_names = [", ".join([p.name for p in list(inspect.signature(PROF_TYPE_MODELS[self._prof_type][model]).parameters.values())[1:]]) for model in allowed]
+            model_par_starts = [", ".join([str(p) for p in PROF_TYPE_MODELS_STARTS[self._prof_type][model]])
+                                for model in allowed]
+            # model_par_priors = [", ".join([str(p) for p in PROF_TYPE_MODELS_PRIORS[self._prof_type][model]])
+            #                     for model in allowed]
+            tab_dat = [[allowed[i], model_par_names[i], model_par_starts[i]]
+                       for i in range(0, len(allowed))]
+            print(tabulate(tab_dat, ["MODEL NAME", "EXPECTED PARAMETERS", "DEFAULT START VALUES"],
+                           tablefmt="fancy_grid"))
 
     def get_sampler(self, model: str) -> em.EnsembleSampler:
         """
