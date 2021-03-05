@@ -1,6 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/03/2021, 17:48. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/03/2021, 18:14. Copyright (c) David J Turner
 
+from copy import deepcopy
 from typing import Union, List, Dict
 from warnings import warn
 
@@ -16,7 +17,9 @@ class BaseModel1D:
     calculating derivatives and abel transforms which can be overwritten by subclasses if analytical solutions
     are available. The BaseModel class shouldn't be instantiated by itself, as it won't do anything.
     """
-    def __init__(self, x_unit: Union[Unit, str], y_unit: Union[Unit, str], x_lims: Quantity = None):
+    def __init__(self, x_unit: Union[Unit, str], y_unit: Union[Unit, str], start_pars: List[Quantity],
+                 par_priors: List[Dict[str, Union[Quantity, str]]], model_name: str, model_pub_name: str,
+                 par_pub_names: List[str], x_lims: Quantity = None):
         """
         Initialisation method for the base model class, just sets up all the necessary attributes and does some
         checks on the passed in parameters.
@@ -25,10 +28,25 @@ class BaseModel1D:
             representation or an astropy unit object.
         :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
             representation or an astropy unit object.
+        :param List[Quantity] start_pars: The start values of the model parameters for any fitting function that
+            used start values.
+        :param List[Dict[str, Union[Quantity, str]]] par_priors: The priors on the model parameters, for any
+            fitting function that uses them.
+        :param str model_name: The simple name of the particular model, e.g. 'beta'.
+        :param str model_pub_name: A smart name for the model that might be used in a publication
+            plot, e.g. 'Beta Profile'
+        :param List[str] par_pub_names: The names of the parameters of the model, as they should be used in plots
+            for publication. As matplotlib supports LaTeX formatting for labels these should use $$ syntax.
         :param Quantity x_lims: Upper and lower limits outside of which the model may not be valid, to be passed as
             a single non-scalar astropy quantity, with the first entry being the lower limit and the second entry
             being the upper limit. Default is None.
         """
+        # These are the prior types that XGA currently understands
+        self._prior_types = ['uniform']
+        # This is used by the allowed_prior_types method to populate the table explaining what info should
+        #  be supplied for each prior type
+        self._prior_type_format = ['Quantity([LOWER, UPPER], UNIT)']
+
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
             x_unit = Unit(x_unit)
@@ -40,22 +58,23 @@ class BaseModel1D:
         self._x_unit = x_unit
         self._y_unit = y_unit
 
-        # The expected number of parameters of this model.
-        self._num_pars = 0
-        # This will be a list of the units that the model parameters have
-        self._par_units = []
-
         # A list of starting values for the parameters of the model
-        self._start_pars = []
+        self._start_pars = start_pars
+
+        # These will be set AFTER a fit has been performed to a model, and the model class instance will then
+        #  describe that fit. Initially however they are the same as the start pars
+        self._model_pars = deepcopy(start_pars)
+        self._model_par_errs = [Quantity(0, p.unit) for p in self._model_pars]
+
+        # The expected number of parameters of this model.
+        self._num_pars = len(self._model_pars)
+        # This will be a list of the units that the model parameters have
+        self._par_units = [p.unit for p in self._model_pars]
+
         # A list of priors for the parameters of the model. Each entry in this list will be a dictionary with
         #  two keys 'prior' and 'type'. The value for prior will be an astropy quantity, and the value for type
         #  will be a prior type (so uniform, gaussian, etc.)
-        self._par_priors = []
-
-        # These will be set AFTER a fit has been performed to a model, and the model class instance will then
-        #  describe that fit
-        self._model_pars = []
-        self._model_par_errs = []
+        self._par_priors = par_priors
 
         # Just checking that the units and shape of xlim make sense
         if x_lims is not None and not x_lims.unit.is_equivalent(self._x_unit):
@@ -72,11 +91,12 @@ class BaseModel1D:
         # And setting xlim attribute, it is allowed to be None
         self._x_lims = x_lims
 
-        # These are the prior types that XGA currently understands
-        self._prior_types = ['uniform']
-        # This is used by the allowed_prior_types method to populate the table explaining what info should
-        #  be supplied for each prior type
-        self._prior_type_format = ['Quantity([LOWER, UPPER], UNIT)']
+        # Setting up attributes to store the names of the model and its parameters
+        self._name = model_name
+        self._pretty_name = model_pub_name
+        if len(par_pub_names) != self._num_pars:
+            raise ValueError("The par_pub_names list should have an entry for every parameter of the model")
+        self._pretty_par_names = par_pub_names
 
     def __call__(self, x: Quantity) -> Quantity:
         """
@@ -164,6 +184,14 @@ class BaseModel1D:
     def integral(self):
         raise NotImplementedError("This method has not yet been written, and it may never be, but I am considering"
                                   " adding this feature to this class.")
+
+    def allowed_prior_types(self):
+        """
+        Simple method to display the allowed prior types and their expected formats.
+        """
+        table_data = [[self._prior_types[i], self._prior_type_format[i]] for i in range(0, len(self._prior_types))]
+        headers = ["PRIOR TYPE", "EXPECTED PRIOR FORMAT"]
+        print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
 
     @property
     def model_pars(self) -> List[Quantity]:
@@ -313,13 +341,38 @@ class BaseModel1D:
         """
         return self._par_units
 
-    def allowed_prior_types(self):
+    @property
+    def name(self) -> str:
         """
-        Simple method to display the allowed prior types and their expected formats.
+        Property getter for the simple name of the model, which the user would enter when requesting
+        a particular model to be fit to a profile, for instance.
+
+        :return: String representation of the simple name of the model.
+        :rtype: str
         """
-        table_data = [[self._prior_types[i], self._prior_type_format[i]] for i in range(0, len(self._prior_types))]
-        headers = ["PRIOR TYPE", "EXPECTED PRIOR FORMAT"]
-        print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+        return self._name
+
+    @property
+    def publication_name(self) -> str:
+        """
+        Property getter for the publication name of the model, which is what would be added in a plot
+        meant for publication, for instance.
+
+        :return: String representation of the publication (i.e. pretty) name of the model.
+        :rtype: str
+        """
+        return self._pretty_name
+
+    @property
+    def par_publication_names(self) -> List[str]:
+        """
+        Property getter for the publication names of the model parameters. These would be used in a plot
+        for instance, and so can make use of Matplotlib's ability to render LaTeX math code.
+
+        :return: List of string representation of the publication (i.e. pretty) names of the model parameters.
+        :rtype: List[str]
+        """
+        return self._pretty_par_names
 
 
 
