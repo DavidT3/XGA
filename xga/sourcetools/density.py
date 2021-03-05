@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 18:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/03/2021, 13:05. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -26,6 +26,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
                 inner_radius: Union[str, Quantity], abund_table: str, lo_en: Quantity,
                 hi_en: Quantity, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                 over_sample: float = None, obs_id: Union[str, list] = None, inst: Union[str, list] = None,
+                conv_temp: Quantity = None, conv_outer_radius: Quantity = "r500",
                 num_cores: int = NUM_CORES) -> Tuple[Union[ClusterSample, List], np.ndarray, list, list]:
     """
     An internal function which exists because all the density profile methods that I have planned
@@ -59,6 +60,12 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         single string (e.g. 'pn') if only one source is being analysed, or the same instrument should be used for
         every source in a sample, or a list of strings if different instruments are required for each source. The
         default is None, in which case the combined data will be used to measure the density profile.
+    :param Quantity conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
+        the fakeit run to calculate the normalisation conversion factor will use these temperatures. The quantity
+         should have an entry for each cluster being analysed. Default is None.
+    :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
+        for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
+        a single value or an entry for each cluster being analysed.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
     :return: The source object(s)/sample that was passed in, an array of the calculated conversion factors,
         the parsed obs_id variable, and the parsed inst variable.
@@ -107,30 +114,36 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         raise NotImplementedError("That is an acceptable abundance table, but I haven't added the conversion factor "
                                   "to the dictionary yet")
 
-    # Check that the spectra we will be relying on for conversion calculation have been fitted, calling
-    #  this function will also make sure that they are generated
-    single_temp_apec(sources, outer_radius, inner_radius, abund_table=abund_table, num_cores=num_cores,
-                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+    if conv_temp is not None and not conv_temp.isscalar and len(conv_temp) != len(sources):
+        raise ValueError("If multiple there are multiple entries in conv_temp, then there must be the same number"
+                         " of entries as there are sources being analysed.")
+    elif conv_temp is not None:
+        temps = conv_temp
+    else:
+        # Check that the spectra we will be relying on for conversion calculation have been fitted, calling
+        #  this function will also make sure that they are generated
+        single_temp_apec(sources, outer_radius, inner_radius, abund_table=abund_table, num_cores=num_cores,
+                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
 
-    # Then we need to grab the temperatures and pass them through to the cluster conversion factor
-    #  calculator - this may well change as I intend to let cluster_cr_conv grab temperatures for
-    #  itself at some point
-    temp_temps = []
-    for src in sources:
-        try:
-            # A temporary temperature variable
-            temp_temp = src.get_temperature("tbabs*apec", outer_radius, inner_radius, group_spec, min_counts, min_sn,
-                                            over_sample)[0]
-        except (ModelNotAssociatedError, ParameterNotAssociatedError):
-            warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of 5keV".format(s=src.name))
-            temp_temp = Quantity(5, 'keV')
-
-        temp_temps.append(temp_temp.value)
-    temps = Quantity(temp_temps, 'keV')
+        # Then we need to grab the temperatures and pass them through to the cluster conversion factor
+        #  calculator - this may well change as I intend to let cluster_cr_conv grab temperatures for
+        #  itself at some point
+        temp_temps = []
+        for src in sources:
+            try:
+                # A temporary temperature variable
+                temp_temp = src.get_temperature("tbabs*apec", outer_radius, inner_radius, group_spec, min_counts,
+                                                min_sn, over_sample)[0]
+            except (ModelNotAssociatedError, ParameterNotAssociatedError):
+                warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
+                     "3keV".format(s=src.name))
+                temp_temp = Quantity(3, 'keV')
+            temp_temps.append(temp_temp.value)
+        temps = Quantity(temp_temps, 'keV')
 
     # This call actually does the fakeit calculation of the conversion factors, then stores them in the
     #  XGA Spectrum objects
-    cluster_cr_conv(sources, outer_radius, inner_radius, temps, abund_table=abund_table, num_cores=num_cores,
+    cluster_cr_conv(sources, conv_outer_radius, inner_radius, temps, abund_table=abund_table, num_cores=num_cores,
                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
 
     # This where the combined conversion factor that takes a count-rate/volume to a squared number density
@@ -224,6 +237,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                   psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                   psf_iter: int = 15, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                   over_sample: float = None, obs_id: Union[str, list] = None, inst: Union[str, list] = None,
+                  conv_temp: Quantity = None, conv_outer_radius: Quantity = "r500",
                   num_cores: int = NUM_CORES) -> Union[GalaxyCluster, ClusterSample]:
     """
     This is the most basic method for measuring the baryonic density profile of a Galaxy Cluster, and is not
@@ -262,6 +276,12 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         single string (e.g. 'pn') if only one source is being analysed, or the same instrument should be used for
         every source in a sample, or a list of strings if different instruments are required for each source. The
         default is None, in which case the combined data will be used to measure the density profile.
+    :param Quantity conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
+        the fakeit run to calculate the normalisation conversion factor will use these temperatures. The quantity
+         should have an entry for each cluster being analysed. Default is None.
+    :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
+        for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
+        a single value or an entry for each cluster being analysed.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
     :return: A source or sample of sources, with the density profile added to its storage structure.
     :rtype: Union[GalaxyCluster, ClusterSample]
@@ -272,7 +292,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     #  which are non-circular, so I just pass 0 arcseconds
     sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
                                                       hi_en, group_spec, min_counts, min_sn, over_sample, obs_id, inst,
-                                                      num_cores)
+                                                      conv_temp, conv_outer_radius, num_cores)
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
@@ -325,7 +345,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
                           psf_iter: int = 15, model_realisations: int = 500, model_rad_steps: int = 300,
                           conf_level: int = 90, num_walkers: int = 20, num_steps: int = 20000, group_spec: bool = True,
                           min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                          obs_id: Union[str, list] = None, inst: Union[str, list] = None, num_cores: int = NUM_CORES):
+                          obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
+                          conv_outer_radius: Quantity = "r500", num_cores: int = NUM_CORES):
     """
     A more sophisticated method of calculating density profiles than inv_abel_data, this fits a model
     to the surface brightness profile of each cluster, and the model is then numerically inverse Abel
@@ -377,6 +398,12 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
         single string (e.g. 'pn') if only one source is being analysed, or the same instrument should be used for
         every source in a sample, or a list of strings if different instruments are required for each source. The
         default is None, in which case the combined data will be used to measure the density profile.
+    :param Quantity conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
+        the fakeit run to calculate the normalisation conversion factor will use these temperatures. The quantity
+         should have an entry for each cluster being analysed. Default is None.
+    :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
+        for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
+        a single value or an entry for each cluster being analysed.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
     :return: The source/sample object passed in to this function.
     :rtype: GalaxyCluster/ClusterSample
@@ -385,7 +412,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample], model: s
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
                                                       hi_en, group_spec, min_counts, min_sn, over_sample, obs_id, inst,
-                                                      num_cores)
+                                                      conv_temp, conv_outer_radius, num_cores)
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
