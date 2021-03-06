@@ -1,6 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/03/2021, 18:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 09:41. Copyright (c) David J Turner
 
+import inspect
 from copy import deepcopy
 from typing import Union, List, Dict
 from warnings import warn
@@ -19,7 +20,7 @@ class BaseModel1D:
     """
     def __init__(self, x_unit: Union[Unit, str], y_unit: Union[Unit, str], start_pars: List[Quantity],
                  par_priors: List[Dict[str, Union[Quantity, str]]], model_name: str, model_pub_name: str,
-                 par_pub_names: List[str], x_lims: Quantity = None):
+                 par_pub_names: List[str], describes: str, info: dict, x_lims: Quantity = None):
         """
         Initialisation method for the base model class, just sets up all the necessary attributes and does some
         checks on the passed in parameters.
@@ -37,6 +38,9 @@ class BaseModel1D:
             plot, e.g. 'Beta Profile'
         :param List[str] par_pub_names: The names of the parameters of the model, as they should be used in plots
             for publication. As matplotlib supports LaTeX formatting for labels these should use $$ syntax.
+        :param str describes: An identifier for the type of data this model describes, e.g. 'Surface Brightness'.
+        :param dict info: A dictionary with information about the model, used by the info() method. Can hold
+            a general description, reference, authors etc.
         :param Quantity x_lims: Upper and lower limits outside of which the model may not be valid, to be passed as
             a single non-scalar astropy quantity, with the first entry being the lower limit and the second entry
             being the upper limit. Default is None.
@@ -97,6 +101,16 @@ class BaseModel1D:
         if len(par_pub_names) != self._num_pars:
             raise ValueError("The par_pub_names list should have an entry for every parameter of the model")
         self._pretty_par_names = par_pub_names
+
+        # This sets up the attribute to store what this model describes (e.g. surface brightness)
+        self._describes = describes
+        # This dictionary gives information about the model, have to make sure required keys are present
+        required = ['general', 'reference', 'author', 'year']
+        if any([k not in info for k in required]):
+            raise KeyError("The following keys must be present in the info dictionary: "
+                           "{r}".format(r=', '.join(required)))
+        else:
+            self._info = info
 
     def __call__(self, x: Quantity) -> Quantity:
         """
@@ -192,6 +206,16 @@ class BaseModel1D:
         table_data = [[self._prior_types[i], self._prior_type_format[i]] for i in range(0, len(self._prior_types))]
         headers = ["PRIOR TYPE", "EXPECTED PRIOR FORMAT"]
         print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+
+    def info(self):
+        """
+        A method that gives some information about this particular model.
+        """
+        headers = [self.publication_name, '']
+        ugly_pars = ", ".join([p.name for p in list(inspect.signature(self.model).parameters.values())[1:]])
+        data = [['Describes:', self.describes], ['Parameters:', ugly_pars], ["Author:", self._info['author']],
+                ["Year:", self._info['year']], ["Paper:", self._info['reference']], [self._info['info']]]
+        tabulate(data, headers=headers, tablefmt='fancy_grid')
 
     @property
     def model_pars(self) -> List[Quantity]:
@@ -374,6 +398,15 @@ class BaseModel1D:
         """
         return self._pretty_par_names
 
+    @property
+    def describes(self) -> str:
+        """
+        A one or two word description of the type of data this model describes.
+
+        :return: A string description.
+        :rtype: str
+        """
+        return self._describes
 
 
 
