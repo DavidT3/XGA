@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 18:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 19:11. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -80,6 +80,19 @@ class BetaProfile1D(BaseModel1D):
         :rtype: Union[np.ndarray, float]
         """
         return norm * np.power((1 + (np.power(x / r_core, 2))), ((-3 * beta) + 0.5))
+
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
+        """
+        Calculates the gradient of the beta profile at a given point, overriding the numerical method implemented
+        in the BaseModel1D class, as this simple model has an easily derivable first derivative.
+
+        :param Quantity x: The point(s) at which the slope of the model should be measured.
+        :param Quantity dx: This makes no difference here, as this is an analytical derivative.
+        :return: The calculated slope of the model at the supplied x position(s).
+        :rtype: Quantity
+        """
+        beta, r_core, norm = self._model_pars
+        return ((2*x)/np.power(r_core, 2))*(-3*beta + 0.5)*norm*np.power((1+(np.power(x/r_core, 2))), ((-3*beta)-0.5))
 
 
 # Here we define models that can be used to describe surface brightness profiles of Galaxy Clusters
