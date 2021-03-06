@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/03/2021, 09:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 19:37. Copyright (c) David J Turner
 
 import json
 import os
@@ -9,7 +9,7 @@ from typing import List, Tuple
 import pandas as pd
 import pkg_resources
 from astropy.constants import m_p, m_e
-from astropy.units import Quantity, def_unit
+from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import read_header
 from fitsio.header import FITSHDR
@@ -370,6 +370,7 @@ else:
     r200_unit = def_unit('r200', format={'latex': r"\mathrm{R_{200}}"})
     r500_unit = def_unit('r500', format={'latex': r"\mathrm{R_{500}}"})
     r2500_unit = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
+    add_enabled_units([r200_unit, r500_unit, r2500_unit, xmm_det, xmm_det])
 
 
 
