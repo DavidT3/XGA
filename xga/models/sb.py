@@ -1,9 +1,85 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/02/2021, 14:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 18:29. Copyright (c) David J Turner
 
 from typing import Union
 
 import numpy as np
+from astropy.units import Quantity, Unit, UnitConversionError, kpc, deg
+
+from .base import BaseModel1D
+from ..utils import r500_unit, r200_unit, r2500_unit
+
+
+class BetaProfile1D(BaseModel1D):
+    """
+    An XGA model implementation of the beta profile, essentially a projected isothermal king profile, it can be
+    used to describe a simple galaxy cluster radial surface brightness profile.
+    """
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('ct/(s*arcmin**2)')):
+
+        # If a string representation of a unit was passed then we make it an astropy unit
+        if isinstance(x_unit, str):
+            x_unit = Unit(x_unit)
+        if isinstance(y_unit, str):
+            y_unit = Unit(y_unit)
+
+        poss_y_units = [Unit('ct/(s*arcmin**2)'), Unit('ct/(s*kpc**2)'), Unit('ct/(s*pix**2)')]
+        y_convertible = [u.is_equivalent(y_unit) for u in poss_y_units]
+        if not any(y_convertible):
+            allowed = ", ".join([u.to_string() for u in poss_y_units])
+            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
+                                      "{a}".format(p=y_unit.to_string(), a=allowed))
+        else:
+            yu_ind = y_convertible.index(True)
+
+        poss_x_units = [kpc, deg, r200_unit, r500_unit, r2500_unit]
+        x_convertible = [u.is_equivalent(x_unit) for u in poss_x_units]
+        if not any(x_convertible):
+            allowed = ", ".join([u.to_string() for u in poss_x_units])
+            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
+                                      "{a}".format(p=x_unit.to_string(), a=allowed))
+        else:
+            xu_ind = x_convertible.index(True)
+
+        r_core_starts = [Quantity(50, 'kpc'), Quantity(0.2, 'deg'), Quantity(0.05, r200_unit), Quantity(0.1, r500_unit),
+                         Quantity(0.5, r2500_unit)]
+        # TODO MAKE THE NEW START PARAMETERS MORE SENSIBLE
+        norm_starts = [Quantity(1, 'ct/(s*arcmin**2)'), Quantity(1, 'ct/(s*kpc**2)'), Quantity(1, 'ct/(s*pix**2)')]
+
+        start_pars = [Quantity(1, ''), r_core_starts[xu_ind], norm_starts[yu_ind]]
+
+        # TODO ALSO MAKE THESE MORE SENSIBLE
+        r_core_priors = [{'prior': Quantity([0, 300], 'kpc'), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], 'deg'), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], r200_unit), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], r500_unit), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], r2500_unit), 'type': 'uniform'}]
+        norm_priors = [{'prior': Quantity([0, 100], 'ct/(s*arcmin**2)'), 'type': 'uniform'},
+                       {'prior': Quantity([0, 100], 'ct/(s*kpc**2)'), 'type': 'uniform'},
+                       {'prior': Quantity([0, 100], 'ct/(s*pix**2)'), 'type': 'uniform'}]
+
+        priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
+
+        nice_pars = [r"$\beta$", r"R$_{\rm{core}}$", "S$_{0}$"]
+        info_dict = {'author': 'placeholder', 'year': 'placeholder', 'reference': 'placeholder',
+                     'general': 'Essentially a projected isothermal king profile, it can be\n'
+                                'used to describe a simple galaxy cluster radial surface brightness profile.'}
+        super().__init__(x_unit, y_unit, start_pars, priors, 'beta', 'Beta Profile', nice_pars, 'Surface Brightness',
+                         info_dict)
+
+    @staticmethod
+    def model(x: Quantity, beta: Quantity, r_core: Quantity, norm: Quantity) -> Quantity:
+        """
+        The model function for the beta profile.
+
+        :param Quantity x: The radii to calculate y values for.
+        :param Quantity beta: The beta slope parameter of the model.
+        :param Quantity r_core: The core radius.
+        :param Quantity norm: The normalisation of the model.
+        :return: The y values corresponding to the input x values.
+        :rtype: Union[np.ndarray, float]
+        """
+        return norm * np.power((1 + (np.power(x / r_core, 2))), ((-3 * beta) + 0.5))
 
 
 # Here we define models that can be used to describe surface brightness profiles of Galaxy Clusters
