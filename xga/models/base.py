@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 09:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 09:42. Copyright (c) David J Turner
 
 import inspect
 from copy import deepcopy
@@ -215,7 +215,8 @@ class BaseModel1D:
         ugly_pars = ", ".join([p.name for p in list(inspect.signature(self.model).parameters.values())[1:]])
         data = [['Describes:', self.describes], ['Parameters:', ugly_pars], ["Author:", self._info['author']],
                 ["Year:", self._info['year']], ["Paper:", self._info['reference']], [self._info['info']]]
-        tabulate(data, headers=headers, tablefmt='fancy_grid')
+        print(tabulate(data, headers=headers, tablefmt='fancy_grid'))
+
 
     @property
     def model_pars(self) -> List[Quantity]:
