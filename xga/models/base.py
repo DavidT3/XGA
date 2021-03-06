@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 18:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 19:06. Copyright (c) David J Turner
 
 import inspect
 from copy import deepcopy
@@ -182,7 +182,8 @@ class BaseModel1D:
         else:
             dx = dx.to(self._x_unit)
 
-        return derivative(self.model, x, dx, order=order)
+        return Quantity(derivative(lambda r: self(Quantity(r, self._x_unit)).value, x.value, dx.value, n=order),
+                        self._y_unit/self._x_unit)
 
     def inverse_abel(self, x: Quantity) -> Quantity:
         """
