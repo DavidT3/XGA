@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 09:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 18:28. Copyright (c) David J Turner
 
 import inspect
 from copy import deepcopy
@@ -132,7 +132,7 @@ class BaseModel1D:
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
             warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.")
 
-        return self.model(x, *self._pars)
+        return self.model(x, *self._model_pars).to(self._y_unit)
 
     @staticmethod
     def model(x: Quantity, pars: List[Quantity]) -> Quantity:
@@ -213,10 +213,9 @@ class BaseModel1D:
         """
         headers = [self.publication_name, '']
         ugly_pars = ", ".join([p.name for p in list(inspect.signature(self.model).parameters.values())[1:]])
-        data = [['Describes:', self.describes], ['Parameters:', ugly_pars], ["Author:", self._info['author']],
-                ["Year:", self._info['year']], ["Paper:", self._info['reference']], [self._info['info']]]
+        data = [['DESCRIBES', self.describes], ['PARAMETERS', ugly_pars], ["AUTHOR", self._info['author']],
+                ["YEAR", self._info['year']], ["PAPER", self._info['reference']], ['INFO', self._info['general']]]
         print(tabulate(data, headers=headers, tablefmt='fancy_grid'))
-
 
     @property
     def model_pars(self) -> List[Quantity]:
