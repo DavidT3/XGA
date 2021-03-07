@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/03/2021, 19:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2021, 18:26. Copyright (c) David J Turner
 
 import inspect
 from copy import deepcopy
@@ -183,7 +183,7 @@ class BaseModel1D:
             dx = dx.to(self._x_unit)
 
         return Quantity(derivative(lambda r: self(Quantity(r, self._x_unit)).value, x.value, dx.value, n=order),
-                        self._y_unit/self._x_unit)
+                        self._y_unit/np.power(self._x_unit, order))
 
     def inverse_abel(self, x: Quantity) -> Quantity:
         """
@@ -214,8 +214,11 @@ class BaseModel1D:
         """
         headers = [self.publication_name, '']
         ugly_pars = ", ".join([p.name for p in list(inspect.signature(self.model).parameters.values())[1:]])
-        data = [['DESCRIBES', self.describes], ['PARAMETERS', ugly_pars], ["AUTHOR", self._info['author']],
-                ["YEAR", self._info['year']], ["PAPER", self._info['reference']], ['INFO', self._info['general']]]
+        par_units = ", ".join([u.to_string() for u in self.par_units])
+
+        data = [['DESCRIBES', self.describes], ['UNIT', self._y_unit.to_string()], ['PARAMETERS', ugly_pars],
+                ['PARAMETER UNITS', par_units], ["AUTHOR", self._info['author']], ["YEAR", self._info['year']],
+                ["PAPER", self._info['reference']], ['INFO', self._info['general']]]
         print(tabulate(data, headers=headers, tablefmt='fancy_grid'))
 
     @property

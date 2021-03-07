@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2021, 14:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2021, 18:26. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -193,9 +193,9 @@ class DoubleBetaProfile1D(BaseModel1D):
         """
         beta_one, r_core_one, norm_one, beta_two, r_core_two, norm_two = self._model_pars
         p1 = ((2*x)/np.power(r_core_one, 2))*((-3*beta_one) + 0.5)*norm_one*np.power((1+(np.power(x/r_core_one, 2))),
-                                                                                    ((-3*beta_one)-0.5))
+                                                                                     ((-3*beta_one)-0.5))
         p2 = ((2*x)/np.power(r_core_two, 2))*((-3*beta_two)+0.5)*norm_two*np.power((1+(np.power(x/r_core_two, 2))),
-                                                                                  ((-3*beta_two)-0.5))
+                                                                                   ((-3*beta_two)-0.5))
         return p1 + p2
 
 
