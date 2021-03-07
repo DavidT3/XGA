@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2021, 18:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2021, 20:40. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -183,8 +183,7 @@ class SimpleVikhlininDensity1D (BaseModel1D):
     def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
         """
         Calculates the gradient of the simple Vikhlinin density profile at a given point, overriding the
-        numerical method implemented in the BaseModel1D class, as this simple model has an easily derivable
-        first derivative.
+        numerical method implemented in the BaseModel1D class.
 
         :param Quantity x: The point(s) at which the slope of the model should be measured.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
@@ -192,6 +191,7 @@ class SimpleVikhlininDensity1D (BaseModel1D):
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
+        # TODO DOUBLE CHECK THIS WHEN I'M LESS TIRED
         beta, r_core, alpha, r_s, epsilon, norm = self.model_pars
 
         first_term = -1*norm*np.sqrt(np.power(x/r_core, -alpha)*np.power((x**3/r_s**3) + 1, -epsilon/3)
@@ -200,6 +200,110 @@ class SimpleVikhlininDensity1D (BaseModel1D):
         third_term = (x**3 + r_s**3)*(6*beta*x**2 + alpha*r_core**2) + x**3*epsilon*(x**2 + r_core**2)
 
         return first_term*second_term*third_term
+
+
+class VikhlininDensity1D (BaseModel1D):
+    """
+    An XGA model implementation of Vikhlinin's full density model for galaxy cluster intra-cluster medium,
+    which can be found in https://doi.org/10.1086/500288. It is a radial profile, so an assumption
+    of spherical symmetry is baked in.
+    """
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3')):
+
+        # If a string representation of a unit was passed then we make it an astropy unit
+        if isinstance(x_unit, str):
+            x_unit = Unit(x_unit)
+        if isinstance(y_unit, str):
+            y_unit = Unit(y_unit)
+
+        poss_y_units = [Unit('Msun/Mpc^3'), Unit('1/cm^3')]
+        y_convertible = [u.is_equivalent(y_unit) for u in poss_y_units]
+        if not any(y_convertible):
+            allowed = ", ".join([u.to_string() for u in poss_y_units])
+            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
+                                      "{a}".format(p=y_unit.to_string(), a=allowed))
+        else:
+            yu_ind = y_convertible.index(True)
+
+        poss_x_units = [kpc, deg, r200, r500, r2500]
+        x_convertible = [u.is_equivalent(x_unit) for u in poss_x_units]
+        if not any(x_convertible):
+            allowed = ", ".join([u.to_string() for u in poss_x_units])
+            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
+                                      "{a}".format(p=x_unit.to_string(), a=allowed))
+        else:
+            xu_ind = x_convertible.index(True)
+
+        r_core_starts = [Quantity(100, 'kpc'), Quantity(0.2, 'deg'), Quantity(0.05, r200), Quantity(0.1, r500),
+                         Quantity(0.5, r2500)]
+        r_s_starts = [Quantity(300, 'kpc'), Quantity(0.35, 'deg'), Quantity(0.15, r200), Quantity(0.3, r500),
+                      Quantity(1.0, r2500)]
+        r_core_two_starts = [Quantity(50, 'kpc'), Quantity(0.1, 'deg'), Quantity(0.03, r200), Quantity(0.05, r500),
+                             Quantity(0.25, r2500)]
+
+        norm_starts = [Quantity(1e+13, 'Msun/Mpc^3'), Quantity(1e-3, '1/cm^3')]
+        norm_two_starts = [Quantity(5e+12, 'Msun/Mpc^3'), Quantity(5e-4, '1/cm^3')]
+        start_pars = [Quantity(1, ''), r_core_starts[xu_ind], Quantity(1, ''), r_s_starts[xu_ind], Quantity(2, ''),
+                      Quantity(3, ''), norm_starts[yu_ind], Quantity(1, ''), r_core_two_starts[xu_ind],
+                      norm_two_starts[yu_ind]]
+
+        r_core_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], 'deg'), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
+        norm_priors = [{'prior': Quantity([[1e+12, 1e+16]], 'Msun/Mpc^3'), 'type': 'uniform'},
+                       {'prior': Quantity([0, 10], '1/cm^3'), 'type': 'uniform'}]
+
+        priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind],
+                  {'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind],
+                  {'prior': Quantity([0, 5]), 'type': 'uniform'}, {'prior': Quantity([-5, 5]), 'type': 'uniform'},
+                  norm_priors[yu_ind], {'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind],
+                  norm_priors[yu_ind]]
+
+        nice_pars = [r"$\beta_{1}$", r"R$_{\rm{core,1}}$", r"$\alpha$", r"R$_{\rm{s}}$", r"$\epsilon$", r"$\gamma$",
+                     r"$\rho_{01}$", r"$\beta_{2}$", r"R$_{\rm{core,2}}$", r"$\rho_{02}$"]
+        info_dict = {'author': 'Vikhlinin et al.', 'year': 2006,
+                     'reference': 'https://doi.org/10.1086/500288',
+                     'general': "The full model for cluster density profiles created by Vikhlinin et al.\n"
+                                "This model has MANY free parameters which can be very hard to get constraints\n"
+                                " on, and as such many people would use the simplified version which is implemented\n"
+                                " as 'simple_vikhlinin_dens' in XGA."}
+        super().__init__(x_unit, y_unit, start_pars, priors, 'vikhlinin_dens', 'Vikhlinin Profile',
+                         nice_pars, 'Gas Density', info_dict)
+
+    @staticmethod
+    def model(x: Quantity, beta_one: Quantity, r_core_one: Quantity, alpha: Quantity, r_s: Quantity, epsilon: Quantity,
+              gamma: Quantity, norm_one: Quantity, beta_two: Quantity, r_core_two: Quantity, norm_two: Quantity):
+        """
+        The model function for the full Vikhlinin density profile.
+
+        :param Quantity x: The radii to calculate y values for.
+        :param Quantity beta_one: The beta parameter of the model.
+        :param Quantity r_core_one: The core radius of the model.
+        :param Quantity alpha: The alpha parameter of the model.
+        :param Quantity r_s: The radius near where a change of slope by epsilon occurs.
+        :param Quantity epsilon: The epsilon parameter of the model.
+        :param Quantity gamma: Width of slope change transition region.
+        :param Quantity norm_one: The normalisation of the model first part of the model.
+        :param Quantity beta_two: The beta parameter slope of the small core part of the model.
+        :param Quantity r_core_two:The core radius of the small core part of the model.
+        :param Quantity norm_two: The normalisation of the additive, small core part of the model.
+        """
+        # Calculates the ratio of the r_values to the r_core_one parameter
+        rc1_rat = x / r_core_one
+        # Calculates the ratio of the r_values to the r_core_two parameter
+        rc2_rat = x / r_core_two
+        # Calculates the ratio of the r_values to the r_s parameter
+        rs_rat = x / r_s
+
+        first_term = np.power(rc1_rat, -alpha) / np.power((1 + np.power(rc1_rat, 2)), ((3 * beta_one) - (alpha / 2)))
+        second_term = 1 / np.power(1 + np.power(rs_rat, gamma), epsilon / gamma)
+        additive_term = 1 / np.power(1 + np.power(rc2_rat, 2), 3 * beta_two)
+
+        return np.sqrt(np.power(norm_one, 2) * first_term * second_term + np.power(norm_two, 2) * additive_term)
+
+    # TODO FIND IF THIS PROFILE HAS AN ANALYTICAL DERIVATIVE
 
 
 def king_profile(r_values: Union[np.ndarray, float], beta: float, r_core: float, norm: float) \
