@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2021, 18:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2021, 20:34. Copyright (c) David J Turner
 
 import inspect
 from copy import deepcopy
@@ -213,7 +213,21 @@ class BaseModel1D:
         A method that gives some information about this particular model.
         """
         headers = [self.publication_name, '']
-        ugly_pars = ", ".join([p.name for p in list(inspect.signature(self.model).parameters.values())[1:]])
+        # ugly_pars = ", ".join([p.name for p in list(inspect.signature(self.model).parameters.values())[1:]])
+        ugly_pars = ""
+        cur_length = 0
+        for p in list(inspect.signature(self.model).parameters.values())[1:]:
+            if cur_length > 70:
+                ugly_pars += '\n'
+                cur_length = 0
+
+            if ugly_pars == "":
+                next_par = '{}'.format(p.name)
+            else:
+                next_par = ', {}'.format(p.name)
+            cur_length += len(next_par)
+            ugly_pars += next_par
+
         par_units = ", ".join([u.to_string() for u in self.par_units])
 
         data = [['DESCRIBES', self.describes], ['UNIT', self._y_unit.to_string()], ['PARAMETERS', ugly_pars],
