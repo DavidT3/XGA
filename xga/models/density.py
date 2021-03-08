@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 10:48. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 12:52. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -10,7 +10,7 @@ from .base import BaseModel1D
 from ..utils import r500, r200, r2500
 
 
-class KingProfile1D (BaseModel1D):
+class KingProfile1D(BaseModel1D):
     """
     An XGA model implementation of the King profile, describing an isothermal sphere. This describes a
     radial density profile and assumes spherical symmetry.
@@ -93,7 +93,7 @@ class KingProfile1D (BaseModel1D):
         return (-6*beta*norm*x/np.power(r_core, 2))*np.power((1+np.power(x/r_core, 2)), (-3*beta) - 1)
 
 
-class SimpleVikhlininDensity1D (BaseModel1D):
+class SimpleVikhlininDensity1D(BaseModel1D):
     """
     An XGA model implementation of a simplified version of Vikhlinin's full density model. Used relatively recently
     in https://doi.org/10.1051/0004-6361/201833325 by Ghirardini et al., a simplified form of Vikhlinin's full
@@ -202,7 +202,7 @@ class SimpleVikhlininDensity1D (BaseModel1D):
         return first_term*second_term*third_term
 
 
-class VikhlininDensity1D (BaseModel1D):
+class VikhlininDensity1D(BaseModel1D):
     """
     An XGA model implementation of Vikhlinin's full density model for galaxy cluster intra-cluster medium,
     which can be found in https://doi.org/10.1086/500288. It is a radial profile, so an assumption
@@ -268,7 +268,7 @@ class VikhlininDensity1D (BaseModel1D):
                      'general': "The full model for cluster density profiles created by Vikhlinin et al.\n"
                                 "This model has MANY free parameters which can be very hard to get constraints\n"
                                 " on, and as such many people would use the simplified version which is implemented\n"
-                                " as 'simple_vikhlinin_dens' in XGA."}
+                                " as the SimpleVikhlininDensity1D class in XGA."}
         super().__init__(x_unit, y_unit, start_pars, priors, 'vikhlinin_dens', 'Vikhlinin Profile',
                          nice_pars, 'Gas Density', info_dict)
 
