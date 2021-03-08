@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 19:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 22:56. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -146,7 +146,8 @@ class BaseModel1D(metaclass=ABCMeta):
     @abstractmethod
     def model(x: Quantity, pars: List[Quantity]) -> Quantity:
         """
-        This is where the model function is actually defined, this MUST be overridden by every subclass model.
+        This is where the model function is actually defined, this MUST be overridden by every subclass
+        model, hence why I've used the abstract method decorator.
 
         :param Quantity x: The x-position at which the model should be evaluated.
         :param List[Quantity] pars: The parameters of model to be evaluated.
@@ -350,6 +351,37 @@ class BaseModel1D(metaclass=ABCMeta):
         self._model_pars = new_vals
 
     @property
+    def model_par_errs(self) -> List[Quantity]:
+        """
+        Property that returns the uncertainties on the current parameters of the model, by default these will
+        be zero as the default model_pars are the same as the start_pars.
+
+        :return: A list of astropy quantities representing the uncertainties on the parameters of this model.
+        :rtype: List[Quantity]
+        """
+        return self._model_par_errs
+
+    @model_par_errs.setter
+    def model_par_errs(self, new_vals: List[Quantity]):
+        """
+        Property that allows the current parameter uncertainties of the model to be set. Quantities representing
+        uncertainties may have one or two entries, with single element quantities assumed to represent
+        1σ gaussian errors, and double element quantities representing confidence limits in the 68th
+        percentile region.
+
+        :param List[Quantity] new_vals: A list of astropy quantities representing the new uncertainties
+            on the parameters of this model.
+        """
+        if len(new_vals) != self._num_pars:
+            raise ValueError("This model takes {t} parameters, the list you passed contains "
+                             "{c}".format(t=self._num_pars, c=len(new_vals)))
+        elif not all([p.unit == self._model_pars[p_ind].unit for p_ind, p in enumerate(new_vals)]):
+            raise UnitConversionError("All new parameter uncertainties must have the same unit as the "
+                                      "old parameters.")
+
+        self._model_par_errs = new_vals
+
+    @property
     def start_pars(self) -> List[Quantity]:
         """
         Property that returns the current start parameters of the model, by which I mean the values that
@@ -359,6 +391,17 @@ class BaseModel1D(metaclass=ABCMeta):
         :rtype: List[Quantity]
         """
         return self._start_pars
+
+    @property
+    def unitless_start_pars(self) -> np.ndarray:
+        """
+        Returns sanitised start parameters which are floats rather than astropy quantities, sometimes necessary
+        for fitting methods.
+
+        :return: Array of floats representing model start parameters.
+        :rtype: np.ndarray
+        """
+        return np.array([p.value for p in self.start_pars])
 
     @property
     def par_priors(self) -> List[Dict[str, Union[Quantity, str]]]:
