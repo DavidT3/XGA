@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2021, 20:40. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 10:48. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -301,9 +301,29 @@ class VikhlininDensity1D (BaseModel1D):
         second_term = 1 / np.power(1 + np.power(rs_rat, gamma), epsilon / gamma)
         additive_term = 1 / np.power(1 + np.power(rc2_rat, 2), 3 * beta_two)
 
-        return np.sqrt(np.power(norm_one, 2) * first_term * second_term + np.power(norm_two, 2) * additive_term)
+        return np.sqrt((np.power(norm_one, 2) * first_term * second_term) + (np.power(norm_two, 2) * additive_term))
 
-    # TODO FIND IF THIS PROFILE HAS AN ANALYTICAL DERIVATIVE
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
+        """
+        Calculates the gradient of the full Vikhlinin density profile at a given point, overriding the
+        numerical method implemented in the BaseModel1D class.
+
+        :param Quantity x: The point(s) at which the slope of the model should be measured.
+        :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
+            been left in so that the inputs for this method don't vary between models.
+        :return: The calculated slope of the model at the supplied x position(s).
+        :rtype: Quantity
+        """
+        b, rc, a, rs, e, g, n, b2, rc2, n2 = self.model_pars
+
+        # Its horrible I know...
+        p1 = (-6*b2*(n2**2)*x*(((x/rc2)**2) + 1)**((-3*b2)-1)) / rc2**2
+        p2 = (-a*(n**2)*((x/rc)**(-a-1))*((((x/rc)**2)+1)**((a/2)-3*b))*((((x/rs)**g) + 1)**(-e/g)))/rc
+        p3 = (2*(n**2)*x*((a/2)-(3*b))*((x/rc)**(-a))*((((x/rc)**2)+1)**((a/2)-(3*b)-1))*((((x/rs)**g) + 1)**(-e/g)))/rc**2
+        p4 = -(n**2)*e*(x**(g-1))*(rs**(-g))*((x/rc)**(-a))*((((x/rc)**2)+1)**((a/2)-(3*b)))*((((x/rs)**g)+1)**(-e/g-1))
+        p5 = 2*np.sqrt((n2**2)*((((x/rc2)**2)+1)**(-3*b2)) + (n**2)*((x/rc)**(-a))*((((x/rc)**2)+1)**((a/2)-(3*b)))*((((x/rs)**g)+1)**(-e/g)))
+
+        return (p1 + p2 + p3 + p4) / p5
 
 
 def king_profile(r_values: Union[np.ndarray, float], beta: float, r_core: float, norm: float) \
