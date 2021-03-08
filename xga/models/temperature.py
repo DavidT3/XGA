@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 12:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 13:20. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -92,6 +92,24 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         out_expr = 1 / np.power(1 + np.power(x / r_transition, 2), c_power / 2)
 
         return t_zero * cool_expr * out_expr
+
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
+        """
+        Calculates the gradient of the simple Vikhlinin temperature profile at a given point, overriding the
+        numerical method implemented in the BaseModel1D class.
+
+        :param Quantity x: The point(s) at which the slope of the model should be measured.
+        :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
+            been left in so that the inputs for this method don't vary between models.
+        :return: The calculated slope of the model at the supplied x position(s).
+        :rtype: Quantity
+        """
+        r_c, a, t_m, t_0, r_t, c = self._model_pars
+        p1 = (((x/r_t)**2)+1)**(-c/2)*((a*-(t_m-t_0))*((x**2)+(r_t**2))*((x/r_c)**a)
+                                       - c*x**2*(((x/r_c)**a)+1)*(t_m+(t_0*((x/r_c)**a))))
+        p2 = x*(x**2+r_t**2)*(((x/r_c)**a) + 1)**2
+
+        return p1/p2
 
 
 def central_region(r_values: Union[np.ndarray, float], r_cool: float, a_cool: float, t_min: float, t_zero: float) \
