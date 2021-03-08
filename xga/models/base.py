@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 19:35. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 19:39. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -218,7 +218,7 @@ class BaseModel1D(metaclass=ABCMeta):
         print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
 
     @staticmethod
-    def compare_units(check_pars: List[Quantity], good_pars: List[Quantity]):
+    def compare_units(check_pars: List[Quantity], good_pars: List[Quantity]) -> List[Quantity]:
         """
         Simple method that will be used in the inits of subclasses to make sure that any custom start
         values passed in by the user match the expected units of the default start parameters for that model.
@@ -226,22 +226,34 @@ class BaseModel1D(metaclass=ABCMeta):
         :param List[Quantity] check_pars: The first list of parameters, these are being checked.
         :param List[Quantity] good_pars: The second list of parameters, these are taken as having 'correct'
             units.
+        :return: Only if the check pars pass the tests. We return the check pars list but with all elements
+            converted to EXACTLY the same units as good_pars, not just equivelant.
+        :rtype: List[Quantity]
         """
         if len(check_pars) != len(good_pars):
             raise ValueError("If you pass custom start parameters you must pass a list with one entry for"
                              " each parameter")
 
+        # Check if custom par units are compatible with the correct default start parameter units
         unit_check = np.array([p.unit.is_equivalent(good_pars[p_ind].unit) for p_ind, p in enumerate(check_pars)])
         unit_strings = []
+        # Putting together an error string in the case where there are incompatible units
         for uc_ind, uc in enumerate(unit_check):
             if not uc:
                 unit_strings.append("{p} != {e}".format(p=check_pars[uc_ind].unit.to_string(),
                                                         e=good_pars[uc_ind].unit.to_string()))
         which_units = ', '.join(unit_strings)
 
+        # If that string is not empty then some of the units are buggered and we throw an error
         if which_units != "":
             raise UnitConversionError("The custom start parameters which have been passed can't all be converted to "
                                       "the expected units; " + which_units)
+
+        # If we get this far though then we know we're all good, so we just convert the parameters to
+        #  exactly the same units and return them
+        conv_check_pars = [p.to(good_pars[p_ind].unit) for p_ind, p in enumerate(check_pars)]
+
+        return conv_check_pars
 
     def info(self):
         """
