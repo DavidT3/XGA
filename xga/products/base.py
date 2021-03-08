@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 19:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 23:07. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -17,8 +17,7 @@ from tabulate import tabulate
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
     ModelNotAssociatedError
-from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, PROF_TYPE_MODELS_PRIORS, \
-    MODEL_PUBLICATION_PAR_NAMES
+from ..models import PROF_TYPE_MODELS, BaseModel1D
 from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
@@ -663,6 +662,100 @@ class BaseProfile1D:
         self._x_norm = x_norm
         self._y_norm = y_norm
 
+    def _emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int):
+        pass
+
+    def _curve_fit(self, model: BaseModel1D):
+        y_data = (self.values.copy() - self._background).value
+        y_errs = self.values_err.copy().value
+        rads = self.radii.copy().value
+        # Curve fit is a simple non-linear least squares implementation, its alright but fragile
+        try:
+            fit_par, fit_cov = curve_fit(model.model, rads, y_data, p0=model.unitless_start_pars, sigma=y_errs,
+                                         absolute_sigma=True)
+            # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
+            fit_par_err = np.sqrt(np.diagonal(fit_cov))
+            frac_err = np.divide(fit_par_err, fit_par, where=fit_par != 0)
+            if frac_err.max() > 10:
+                warn("A parameter uncertainty is more than 10 times larger than the parameter, curve_fit "
+                     "has failed.")
+                success = False
+
+            # If there is an infinite value in the covariance matrix, it means curve_fit was
+            #  unable to estimate it properly
+            if np.inf in fit_cov:
+                success = False
+        except RuntimeError:
+            warn("RuntimeError was raised, curve_fit has failed.")
+            success = False
+            fit_par = np.full(len(model.model_pars), np.nan)
+            fit_par_err = np.full(len(model.model_pars), np.nan)
+
+        # Now we put the values BACK into quantities
+        fit_par = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par)]
+        fit_par_err = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par_err)]
+
+        # And pass them into the model
+        model.model_pars = fit_par
+        model.model_par_errs = fit_par_err
+
+        # And then the model gets sent back
+        return model
+
+    def _odr_fit(self, model: BaseModel1D):
+        raise NotImplementedError("Profile objects don't currently support fitting with orthogonal "
+                                  " distance regression, and this is an internal method you shouldn't even be here!")
+
+    def _fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_steps: int = 20000, num_walkers: int = 20):
+
+        # TODO REMOVE THIS WARNING
+        warn("This isn't finished and doesn't do anything yet really")
+
+        # Make sure the method is lower case
+        method = method.lower()
+
+        # This chunk is just checking inputs and making sure they're valid
+        # Put the allowed models for this profile type into a string
+        allowed = ", ".join(PROF_TYPE_MODELS[self._prof_type])
+        if self._prof_type == "base":
+            raise XGAFitError("A BaseProfile1D object currently cannot have a model fitted to it, as there"
+                              " is no physical context.")
+        elif isinstance(model, str) and model.lower() not in PROF_TYPE_MODELS[self._prof_type]:
+            raise XGAInvalidModelError("{p} is not available for this type of profile, please use one of the "
+                                       "following models {a}".format(p=model, a=allowed))
+        elif isinstance(model, str):
+            model = PROF_TYPE_MODELS[self._prof_type][model]()
+        elif isinstance(model, BaseModel1D) and model.name not in PROF_TYPE_MODELS[self._prof_type]:
+            raise XGAInvalidModelError("{p} is not available for this type of profile, please use one of the "
+                                       "following models {a}".format(p=model, a=allowed))
+
+        # I don't think I'm going to allow any fits without value uncertainties - just seems daft
+        if self._values_err is None:
+            raise XGAFitError("You cannot fit to a profile that doesn't have value uncertainties.")
+
+        # Check whether a good fit result already exists for this model. We use the storage_key property that
+        #  XGA model objects generate from their name and their start parameters
+        if model.storage_key in self._good_model_fits:
+            warn("{} already has a successful fit result for this profile, with those start "
+                 "parameters".format(model.name))
+            already_done = True
+        elif model.storage_key in self._bad_model_fits:
+            warn("{} already has a failed fit result for this profile with those start parameters".format(model.name))
+            already_done = False
+        else:
+            already_done = False
+
+        allowed_methods = "mcmc, curve_fit, odr"
+        if not already_done and method == 'mcmc':
+            self._emcee_fit(model, num_steps, num_walkers)
+        elif not already_done and method == 'curve_fit':
+            self._curve_fit(model)
+        elif not already_done and method == 'odr':
+            self._odr_fit(model)
+        else:
+            raise XGAFitError("{p} is not a supported fitting method for XGA profiles, use one of the "
+                              "following; {a}".format(p=method, a=allowed_methods))
+
     def fit(self, model: str, method: str = "mcmc", priors: list = None, start_pars: list = None,
             model_real: int = 1000, model_rad_steps: int = 300, conf_level: int = 90, num_walkers: int = 20,
             num_steps: int = 20000, progress_bar: bool = True, show_errors: bool = True):
@@ -688,9 +781,10 @@ class BaseProfile1D:
         :param bool progress_bar: Controls whether a progress bar should be shown for MCMC fitting.
         :param bool show_errors: If there are errors during MCMC fitting, should they be displayed.
         """
+        raise NotImplementedError("The fit method is currently undergoing renovation, but will be open for "
+                                  "business soon!")
         # These are the currently allowed fitting methods
         method = method.lower()
-        fit_methods = ["curve_fit", "mcmc"]
         # Checking that the user hasn't chosen a method that isn't allowed
         if method not in fit_methods:
             raise ValueError("{0} is not an accepted fitting method, please choose one of these; "
@@ -972,13 +1066,41 @@ class BaseProfile1D:
         else:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
 
-            model_par_names = [", ".join([p.name for p in list(inspect.signature(PROF_TYPE_MODELS[self._prof_type][model]).parameters.values())[1:]]) for model in allowed]
-            model_par_starts = [", ".join([str(p) for p in PROF_TYPE_MODELS_STARTS[self._prof_type][model]])
-                                for model in allowed]
-            # model_par_priors = [", ".join([str(p) for p in PROF_TYPE_MODELS_PRIORS[self._prof_type][model]])
-            #                     for model in allowed]
-            tab_dat = [[allowed[i], model_par_names[i], model_par_starts[i]]
-                       for i in range(0, len(allowed))]
+            # These just roll through the available models for this type of profile and construct strings of
+            #  parameter names and start parameters to put in the table
+            model_par_names = []
+            model_par_starts = []
+            for m in allowed:
+                exp_pars = ""
+                par_len = 0
+                def_starts = ""
+                def_len = 0
+
+                # This chunk of code tries to make sure that the strings aren't too long to display nicely
+                #  in the table
+                mod_inst = PROF_TYPE_MODELS[self._prof_type][m]()
+                for p_ind, p in enumerate(list(inspect.signature(mod_inst.model).parameters.values())[1:]):
+                    if par_len > 35:
+                        exp_pars += ' \n'
+                        par_len = 0
+                    next_par = '{}, '.format(p.name)
+                    par_len += len(next_par)
+                    exp_pars += next_par
+
+                    if def_len > 35:
+                        def_starts += ' \n'
+                        def_len = 0
+                    next_def = '{}, '.format(str(mod_inst.start_pars[p_ind]))
+                    def_len += len(next_def)
+                    def_starts += next_def
+
+                # We slice out the last character because we know its going to be a spurious comma, just
+                #  because of the lazy way I wrote the loop above
+                model_par_names.append(exp_pars[:-2])
+                model_par_starts.append(def_starts[:-2])
+
+            # Construct the table data and display it using tabulate module
+            tab_dat = [[allowed[i], model_par_names[i], model_par_starts[i]] for i in range(0, len(allowed))]
             print(tabulate(tab_dat, ["MODEL NAME", "EXPECTED PARAMETERS", "DEFAULT START VALUES"],
                            tablefmt="fancy_grid"))
 
