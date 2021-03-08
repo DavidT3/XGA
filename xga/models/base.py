@@ -1,7 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 15:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 17:12. Copyright (c) David J Turner
 
 import inspect
+from abc import ABCMeta, abstractmethod
 from copy import deepcopy
 from typing import Union, List, Dict
 from warnings import warn
@@ -13,7 +14,7 @@ from scipy.misc import derivative
 from tabulate import tabulate
 
 
-class BaseModel1D:
+class BaseModel1D(metaclass=ABCMeta):
     """
     The superclass of XGA's 1D models, with base functionality implemented, including the numerical methods for
     calculating derivatives and abel transforms which can be overwritten by subclasses if analytical solutions
@@ -136,6 +137,7 @@ class BaseModel1D:
         return self.model(x, *self._model_pars).to(self._y_unit)
 
     @staticmethod
+    @abstractmethod
     def model(x: Quantity, pars: List[Quantity]) -> Quantity:
         """
         This is where the model function is actually defined, this MUST be overridden by every subclass model.
@@ -144,7 +146,7 @@ class BaseModel1D:
         :param List[Quantity] pars: The parameters of model to be evaluated.
         :return: The y-value of the model at x.
         """
-        return
+        raise NotImplementedError("Base Model doesn't have this implemented")
 
     def derivative(self, x: Quantity, dx: Quantity) -> Quantity:
         """
@@ -186,20 +188,20 @@ class BaseModel1D:
         return Quantity(derivative(lambda r: self(Quantity(r, self._x_unit)).value, x.value, dx.value, n=order),
                         self._y_unit/np.power(self._x_unit, order))
 
-    def inverse_abel(self, x: Quantity) -> Quantity:
-        """
-        Calculates the inverse abel transform of the model using numerical methods. This method will be overridden
-        in models that have an analytical solution to the inverse abel transform.
-
-        :param Quantity x: The x value(s) at which to measure the value of the inverse abel transform of the model.
-        :return: The value(s) of the inverse abel transformation.
-        :rtype: Quantity
-        """
-        raise NotImplementedError("This method has not yet been written")
-
-    def integral(self):
-        raise NotImplementedError("This method has not yet been written, and it may never be, but I am considering"
-                                  " adding this feature to this class.")
+    # def inverse_abel(self, x: Quantity) -> Quantity:
+    #     """
+    #     Calculates the inverse abel transform of the model using numerical methods. This method will be overridden
+    #     in models that have an analytical solution to the inverse abel transform.
+    #
+    #     :param Quantity x: The x value(s) at which to measure the value of the inverse abel transform of the model.
+    #     :return: The value(s) of the inverse abel transformation.
+    #     :rtype: Quantity
+    #     """
+    #     raise NotImplementedError("This method has not yet been written")
+    #
+    # def integral(self):
+    #     raise NotImplementedError("This method has not yet been written, and it may never be, but I am considering"
+    #                               " adding this feature to this class.")
 
     def allowed_prior_types(self):
         """
