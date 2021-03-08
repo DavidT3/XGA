@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 22:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 23:01. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -486,6 +486,21 @@ class BaseModel1D(metaclass=ABCMeta):
         :rtype: Quantity
         """
         return self._x_lims
+
+    @x_lims.setter
+    def x_lims(self, new_val: Quantity):
+        """
+        Property to set the x limits within which the model is considered valid
+
+        :param Quantity new_val: The new x-limits, first element lower, second element upper.
+        """
+        if not new_val.unit.is_equivalent(self._x_unit):
+            raise UnitConversionError("The x-axis unit of this model is {e}, you have passed limits in "
+                                      "{p}.".format(e=self._x_unit.to_string(), p=new_val.unit.to_string()))
+        elif len(new_val) != 2:
+            raise ValueError("The new quantity for the x-axis limits must have two entries.")
+
+        self.x_lims = new_val
 
     @property
     def par_units(self) -> List[Unit]:
