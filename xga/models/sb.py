@@ -1,7 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 17:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 19:45. Copyright (c) David J Turner
 
-from typing import Union
+from typing import Union, List
 
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError, kpc, deg
@@ -15,7 +15,8 @@ class BetaProfile1D(BaseModel1D):
     An XGA model implementation of the beta profile, essentially a projected isothermal king profile, it can be
     used to describe a simple galaxy cluster radial surface brightness profile.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('ct/(s*arcmin**2)')):
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('ct/(s*arcmin**2)'),
+                 cust_start_pars: List[Quantity] = None):
 
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -47,6 +48,10 @@ class BetaProfile1D(BaseModel1D):
         norm_starts = [Quantity(1, 'ct/(s*arcmin**2)'), Quantity(1, 'ct/(s*kpc**2)'), Quantity(1, 'ct/(s*pix**2)')]
 
         start_pars = [Quantity(1, ''), r_core_starts[xu_ind], norm_starts[yu_ind]]
+        if cust_start_pars is not None:
+            # If the custom start parameters can run this gauntlet without tripping an error then we're all good
+            # This method also returns the custom start pars converted to exactly the same units as the default
+            start_pars = self.compare_units(cust_start_pars, start_pars)
 
         # TODO ALSO MAKE THESE MORE SENSIBLE
         r_core_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
@@ -102,7 +107,8 @@ class DoubleBetaProfile1D(BaseModel1D):
     to deal better with peaky cluster cores that you might get from a cool-core cluster, this model can be used
     to describe a galaxy cluster radial surface brightness profile.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('ct/(s*arcmin**2)')):
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('ct/(s*arcmin**2)'),
+                 cust_start_pars: List[Quantity] = None):
 
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -137,6 +143,10 @@ class DoubleBetaProfile1D(BaseModel1D):
 
         start_pars = [Quantity(1, ''), r_core1_starts[xu_ind], norm_starts[yu_ind], Quantity(0.5, ''),
                       r_core2_starts[xu_ind], norm_starts[yu_ind]*0.5]
+        if cust_start_pars is not None:
+            # If the custom start parameters can run this gauntlet without tripping an error then we're all good
+            # This method also returns the custom start pars converted to exactly the same units as the default
+            start_pars = self.compare_units(cust_start_pars, start_pars)
 
         # TODO ALSO MAKE THESE MORE SENSIBLE
         r_core_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},

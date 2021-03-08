@@ -1,7 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 17:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 19:45. Copyright (c) David J Turner
 
-from typing import Union
+from typing import Union, List
 
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError, kpc, deg
@@ -15,7 +15,8 @@ class KingProfile1D(BaseModel1D):
     An XGA model implementation of the King profile, describing an isothermal sphere. This describes a
     radial density profile and assumes spherical symmetry.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3')):
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3'),
+                 cust_start_pars: List[Quantity] = None):
 
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -46,6 +47,10 @@ class KingProfile1D(BaseModel1D):
         # TODO MAKE THE NEW START PARAMETERS MORE SENSIBLE
         norm_starts = [Quantity(1e+13, 'Msun/Mpc^3'), Quantity(1e-3, '1/cm^3')]
         start_pars = [Quantity(1, ''), r_core_starts[xu_ind], norm_starts[yu_ind]]
+        if cust_start_pars is not None:
+            # If the custom start parameters can run this gauntlet without tripping an error then we're all good
+            # This method also returns the custom start pars converted to exactly the same units as the default
+            start_pars = self.compare_units(cust_start_pars, start_pars)
 
         r_core_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], 'deg'), 'type': 'uniform'},
@@ -99,7 +104,8 @@ class SimpleVikhlininDensity1D(BaseModel1D):
     in https://doi.org/10.1051/0004-6361/201833325 by Ghirardini et al., a simplified form of Vikhlinin's full
     density model, which can be found in https://doi.org/10.1086/500288.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3')):
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3'),
+                 cust_start_pars: List[Quantity] = None):
 
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -133,6 +139,10 @@ class SimpleVikhlininDensity1D(BaseModel1D):
         norm_starts = [Quantity(1e+13, 'Msun/Mpc^3'), Quantity(1e-3, '1/cm^3')]
         start_pars = [Quantity(1, ''), r_core_starts[xu_ind], Quantity(1, ''), r_s_starts[xu_ind], Quantity(2, ''),
                       norm_starts[yu_ind]]
+        if cust_start_pars is not None:
+            # If the custom start parameters can run this gauntlet without tripping an error then we're all good
+            # This method also returns the custom start pars converted to exactly the same units as the default
+            start_pars = self.compare_units(cust_start_pars, start_pars)
 
         r_core_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], 'deg'), 'type': 'uniform'},
@@ -208,7 +218,8 @@ class VikhlininDensity1D(BaseModel1D):
     which can be found in https://doi.org/10.1086/500288. It is a radial profile, so an assumption
     of spherical symmetry is baked in.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3')):
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3'),
+                 cust_start_pars: List[Quantity] = None):
 
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -246,6 +257,10 @@ class VikhlininDensity1D(BaseModel1D):
         start_pars = [Quantity(1, ''), r_core_starts[xu_ind], Quantity(1, ''), r_s_starts[xu_ind], Quantity(2, ''),
                       Quantity(3, ''), norm_starts[yu_ind], Quantity(1, ''), r_core_two_starts[xu_ind],
                       norm_two_starts[yu_ind]]
+        if cust_start_pars is not None:
+            # If the custom start parameters can run this gauntlet without tripping an error then we're all good
+            # This method also returns the custom start pars converted to exactly the same units as the default
+            start_pars = self.compare_units(cust_start_pars, start_pars)
 
         r_core_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], 'deg'), 'type': 'uniform'},

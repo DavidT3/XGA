@@ -1,7 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 17:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 19:45. Copyright (c) David J Turner
 
-from typing import Union
+from typing import Union, List
 
 import numpy as np
 from astropy.constants import k_B
@@ -16,7 +16,8 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
     An XGA model implementation of the simplified version of Vikhlinin's temperature model. This is for the
     description of 3D temperature profiles of galaxy clusters.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV')):
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV'),
+                 cust_start_pars: List[Quantity] = None):
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
             x_unit = Unit(x_unit)
@@ -50,6 +51,11 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
 
         start_pars = [r_cool_starts[xu_ind], Quantity(1, ''), t_min_starts[yu_ind], t_zero_starts[yu_ind],
                       r_tran_starts[xu_ind], Quantity(1, '')]
+
+        if cust_start_pars is not None:
+            # If the custom start parameters can run this gauntlet without tripping an error then we're all good
+            # This method also returns the custom start pars converted to exactly the same units as the default
+            start_pars = self.compare_units(cust_start_pars, start_pars)
 
         r_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
                     {'prior': Quantity([0, 2], 'deg'), 'type': 'uniform'},
@@ -117,7 +123,8 @@ class VikhlininTemperature1D(BaseModel1D):
     An XGA model implementation of the full version of Vikhlinin's temperature model. This is for the
     description of 3D temperature profiles of galaxy clusters.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV')):
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV'),
+                 cust_start_pars: List[Quantity] = None):
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
             x_unit = Unit(x_unit)
@@ -151,6 +158,11 @@ class VikhlininTemperature1D(BaseModel1D):
 
         start_pars = [r_cool_starts[xu_ind], Quantity(1, ''), t_min_starts[yu_ind], t_zero_starts[yu_ind],
                       r_tran_starts[xu_ind], Quantity(1, ''), Quantity(1, ''), Quantity(1, '')]
+
+        if cust_start_pars is not None:
+            # If the custom start parameters can run this gauntlet without tripping an error then we're all good
+            # This method also returns the custom start pars converted to exactly the same units as the default
+            start_pars = self.compare_units(cust_start_pars, start_pars)
 
         r_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
                     {'prior': Quantity([0, 2], 'deg'), 'type': 'uniform'},
