@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/02/2021, 16:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 17:29. Copyright (c) David J Turner
 
 import inspect
 from types import FunctionType
@@ -17,13 +17,8 @@ MODEL_PUBLICATION_NAMES = {**DENS_MODELS_PUB_NAMES, **MISC_MODELS_PUB_NAMES, **S
                            **TEMP_MODELS_PUB_NAMES}
 MODEL_PUBLICATION_PAR_NAMES = {**DENS_MODELS_PAR_NAMES, **MISC_MODELS_PAR_NAMES, **SB_MODELS_PAR_NAMES,
                                **TEMP_MODELS_PAR_NAMES}
-
 # These dictionaries tell the profile fitting function what models, start pars, and priors are allowed
 PROF_TYPE_MODELS = {"brightness": SB_MODELS, "gas_density": DENS_MODELS, "gas_temperature": TEMP_MODELS}
-PROF_TYPE_MODELS_STARTS = {"brightness": SB_MODELS_STARTS, "gas_density": DENS_MODELS_STARTS,
-                           "gas_temperature": TEMP_MODELS_STARTS}
-PROF_TYPE_MODELS_PRIORS = {"brightness": SB_MODELS_PRIORS, "gas_density": DENS_MODELS_PRIORS,
-                           "gas_temperature": TEMP_MODELS_PRIORS}
 
 
 def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β', new_data_name: str = 'x_values') \
