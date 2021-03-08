@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2021, 20:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 15:08. Copyright (c) David J Turner
 
 import inspect
 from copy import deepcopy
@@ -8,6 +8,7 @@ from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError
+from matplotlib import pyplot as plt
 from scipy.misc import derivative
 from tabulate import tabulate
 
@@ -191,7 +192,7 @@ class BaseModel1D:
         in models that have an analytical solution to the inverse abel transform.
 
         :param Quantity x: The x value(s) at which to measure the value of the inverse abel transform of the model.
-        :return: The value(s) of the inverse abel trans
+        :return: The value(s) of the inverse abel transformation.
         :rtype: Quantity
         """
         raise NotImplementedError("This method has not yet been written")
@@ -234,6 +235,46 @@ class BaseModel1D:
                 ['PARAMETER UNITS', par_units], ["AUTHOR", self._info['author']], ["YEAR", self._info['year']],
                 ["PAPER", self._info['reference']], ['INFO', self._info['general']]]
         print(tabulate(data, headers=headers, tablefmt='fancy_grid'))
+
+    def view(self, radii: Quantity = None, xscale: str = 'log', yscale: str = 'log', figsize: tuple = (8, 8),
+             colour: str = "black"):
+        """
+        Very simple view method to visualise XGA models with the current parameters.
+
+        :param Quantity radii: Radii at which to calculate points to plot, doesn't need to be set if the model has
+            x limits defined.
+        :param str xscale: The scale to apply to the x-axis, default is log.
+        :param str yscale: The scale to apply to the y-axis, default is log.
+        :param tuple figsize: The size of figure to be set up.
+        :param str colour: The colour that the line in the plot should be.
+        """
+        if radii is None and self.x_lims is not None:
+            radii = Quantity(np.linspace(*self._x_lims.value, 100), self._x_unit)
+        elif radii is None and self._x_lims is None:
+            raise ValueError("You did not set x-limits for this model, so you must pass radii values to the"
+                             " view method.")
+
+        plt.figure(figsize=figsize)
+        ax = plt.gca()
+        ax.minorticks_on()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        plt.plot(radii, self(radii), color=colour)
+
+        plt.xscale(xscale)
+        plt.yscale(yscale)
+        plt.xlim([radii.value.min(), radii.value.max()])
+
+        # Parsing the astropy units so that if they are double height then the square brackets will adjust size
+        x_unit = r"$\left[" + self._x_unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + self._y_unit.to_string("latex").strip("$") + r"\right]$"
+
+        plt.xlabel('x {}'.format(x_unit), fontsize=12)
+        y_lab = self.describes + ' {}'.format(y_unit)
+        plt.ylabel(y_lab, fontsize=12)
+        plt.title(self.publication_name, fontsize=16)
+        plt.tight_layout()
+        plt.show()
 
     @property
     def model_pars(self) -> List[Quantity]:
