@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 17:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 19:35. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -20,6 +20,7 @@ class BaseModel1D(metaclass=ABCMeta):
     calculating derivatives and abel transforms which can be overwritten by subclasses if analytical solutions
     are available. The BaseModel class shouldn't be instantiated by itself, as it won't do anything.
     """
+
     def __init__(self, x_unit: Union[Unit, str], y_unit: Union[Unit, str], start_pars: List[Quantity],
                  par_priors: List[Dict[str, Union[Quantity, str]]], model_name: str, model_pub_name: str,
                  par_pub_names: List[str], describes: str, info: dict, x_lims: Quantity = None):
@@ -114,6 +115,11 @@ class BaseModel1D(metaclass=ABCMeta):
         else:
             self._info = info
 
+        # In much the same way as I create storage keys for spectra, this should uniquely identify the model name
+        #  and the start parameters (which cannot be changed after declaration) - when stored in profiles this will
+        #  allow multiple fits to the same model but with different start points to be stored together
+        self._storage_key = self._name + '_' + '_'.join([str(p) for p in start_pars])
+
     def __call__(self, x: Quantity) -> Quantity:
         """
         This method gets run when an instance of a particular model class gets called (i.e. an x-value is
@@ -186,7 +192,7 @@ class BaseModel1D(metaclass=ABCMeta):
             dx = dx.to(self._x_unit)
 
         return Quantity(derivative(lambda r: self(Quantity(r, self._x_unit)).value, x.value, dx.value, n=order),
-                        self._y_unit/np.power(self._x_unit, order))
+                        self._y_unit / np.power(self._x_unit, order))
 
     # def inverse_abel(self, x: Quantity) -> Quantity:
     #     """
@@ -210,6 +216,32 @@ class BaseModel1D(metaclass=ABCMeta):
         table_data = [[self._prior_types[i], self._prior_type_format[i]] for i in range(0, len(self._prior_types))]
         headers = ["PRIOR TYPE", "EXPECTED PRIOR FORMAT"]
         print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+
+    @staticmethod
+    def compare_units(check_pars: List[Quantity], good_pars: List[Quantity]):
+        """
+        Simple method that will be used in the inits of subclasses to make sure that any custom start
+        values passed in by the user match the expected units of the default start parameters for that model.
+
+        :param List[Quantity] check_pars: The first list of parameters, these are being checked.
+        :param List[Quantity] good_pars: The second list of parameters, these are taken as having 'correct'
+            units.
+        """
+        if len(check_pars) != len(good_pars):
+            raise ValueError("If you pass custom start parameters you must pass a list with one entry for"
+                             " each parameter")
+
+        unit_check = np.array([p.unit.is_equivalent(good_pars[p_ind].unit) for p_ind, p in enumerate(check_pars)])
+        unit_strings = []
+        for uc_ind, uc in enumerate(unit_check):
+            if not uc:
+                unit_strings.append("{p} != {e}".format(p=check_pars[uc_ind].unit.to_string(),
+                                                        e=good_pars[uc_ind].unit.to_string()))
+        which_units = ', '.join(unit_strings)
+
+        if which_units != "":
+            raise UnitConversionError("The custom start parameters which have been passed can't all be converted to "
+                                      "the expected units; " + which_units)
 
     def info(self):
         """
@@ -315,22 +347,6 @@ class BaseModel1D(metaclass=ABCMeta):
         :rtype: List[Quantity]
         """
         return self._start_pars
-
-    @start_pars.setter
-    def start_pars(self, new_vals: List[Quantity]):
-        """
-        Property that allows the current start parameter values of the model to be set.
-
-        :param List[Quantity] new_vals: A list of astropy quantities representing the new values
-            of the start parameters of this model.
-        """
-        if len(new_vals) != self._num_pars:
-            raise ValueError("This model takes {t} parameters, the list you passed contains "
-                             "{c}".format(t=self._num_pars, c=len(new_vals)))
-        elif not all([p.unit == self._start_pars[p_ind].unit for p_ind, p in enumerate(new_vals)]):
-            raise UnitConversionError("All new start parameters must have the same unit as the old start parameters")
-
-        self._start_pars = new_vals
 
     @property
     def par_priors(self) -> List[Dict[str, Union[Quantity, str]]]:
@@ -469,12 +485,13 @@ class BaseModel1D(metaclass=ABCMeta):
         """
         return self._describes
 
+    @property
+    def storage_key(self) -> str:
+        """
+        Returns a storage key for this model that is based upon the model name and start parameters, used
+        for placing a model instance in a profile storage structure.
 
-
-
-
-
-
-
-
-
+        :return: String storage key.
+        :rtype: str
+        """
+        return self._storage_key
