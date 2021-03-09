@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/03/2021, 18:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/03/2021, 22:27. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -7,6 +7,7 @@ from copy import deepcopy
 from typing import Union, List, Dict
 from warnings import warn
 
+import emcee as em
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError
 from matplotlib import pyplot as plt
@@ -130,6 +131,11 @@ class BaseModel1D(metaclass=ABCMeta):
         # If the fit was performed with an MCMC fitter than it can store an acceptance fraction in the model,
         #  its quite a useful diagnostic
         self._acc_frac = None
+
+        # If an emcee sampler is used to do the fitting than that sampler can be stored in the model instance
+        self._emcee_sampler = None
+        # And the number of steps the fitting method decided on for a burn-in region
+        self._cut_off = None
 
     def __call__(self, x: Quantity) -> Quantity:
         """
@@ -698,8 +704,46 @@ class BaseModel1D(metaclass=ABCMeta):
         """
         self._acc_frac = new_val
 
+    @property
+    def emcee_sampler(self) -> em.EnsembleSampler:
+        """
+        Property getter for the emcee sampler used to fit this model, if applicable. By default this will be
+        None, as the it has to be set externally, as the model won't necessarily be fit by emcee
 
+        :return: The emcee sampler used to fit this model.
+        :rtype: em.EnsembleSampler
+        """
+        return self._emcee_sampler
 
+    @emcee_sampler.setter
+    def emcee_sampler(self, new_val: em.EnsembleSampler):
+        """
+        Property setter for an emcee sampler to be added to this model.
+
+        :param em.EnsembleSampler new_val: The emcee sampler used to fit this model
+        """
+        self._emcee_sampler = new_val
+
+    @property
+    def cut_off(self) -> int:
+        """
+        Property getter for the number of steps that an MCMC fitting method decided should be removed for burn-in.
+         By default this will be None, as the it has to be set externally, as the model won't necessarily
+         be fit by emcee
+
+        :return: The number of steps to be removed for burn-in.
+        :rtype: int
+        """
+        return self._cut_off
+
+    @cut_off.setter
+    def cut_off(self, new_val: int):
+        """
+        Property setter for the number of steps to removed from MCMC chains as burn-in.
+
+        :param int new_val: The number of steps.
+        """
+        self._cut_off = new_val
 
 
 

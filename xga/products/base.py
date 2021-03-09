@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/03/2021, 18:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/03/2021, 22:27. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -662,7 +662,17 @@ class BaseProfile1D:
         self._x_norm = x_norm
         self._y_norm = y_norm
 
-    def _emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool):
+    def _emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
+                   num_samples: int):
+        """
+
+        :param model:
+        :param num_steps:
+        :param num_walkers:
+        :param progress_bar:
+        :param show_warn:
+        :param int num_samples:
+        """
         # I'm just defining these here so that the lines don't get too long for PEP standards
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
@@ -719,31 +729,78 @@ class BaseProfile1D:
             model.fit_warning = warning_str
             success = False
 
+        rng = np.random.default_rng()
         if success:
             # The auto-correlation can produce an error that basically says not to trust the chains
             try:
                 # The sampler has a convenient auto-correlation time derivation, which returns the
                 #  auto-correlation time for each parameter - with this I simply choose the highest one and
                 #  round up to the nearest 100 to use as the burn-in
-                auto_corr = sampler.get_autocorr_time()
-                cut_off = int(np.ceil(auto_corr.max() / 100) * 100)
+                auto_corr = np.mean(sampler.get_autocorr_time())
+                # Find the nearest hundred above the mean auto-correlation time, then multiply by two for
+                #  burn-in region
+                cut_off = int(np.ceil(auto_corr / 100) * 100)*2
                 success = True
             except ValueError as bugger:
                 model.fit_warning = str(bugger)
                 success = False
+                cut_off = None
             except em.autocorr.AutocorrError as bugger:
                 model.fit_warning = str(bugger)
-                cut_off = int(0.1 * num_steps)
+                cut_off = int(0.3 * num_steps)
 
+            # Store the chosen cut off in the model instance
+            model.cut_off = cut_off
+
+            # If the fit is considered to have not completely failed then we store distributions and parameters
+            #  in the model intance
+            if success:
+                # I am not going to thin the chains, apparently that can actually increase variance?
+                flat_samp = sampler.get_chain(discard=cut_off, flat=True)
+                # Construct a numpy array representing the indices of the flattened chains
+                all_inds = np.arange(flat_samp.shape[0])
+                # Use the numpy random submodule to choose randomly sample the flattened chains
+                chosen_inds = rng.choice(all_inds, num_samples)
+                chosen = flat_samp[chosen_inds, :]
+                # Then give those chains the correct units and store them in the model instance
+                par_dists = [Quantity(chosen[:, p_ind], model.par_units[p_ind]) for p_ind in range(model.num_pars)]
+                model.par_dists = par_dists
+
+                # Start constructing the uncertainties on the parameters, though with a more complex model where the
+                #  parameters distributions are not gaussian using these parameter values would not be appropriate
+                model_par_errs = []
+                for p_dist in par_dists:
+                    # Store the current unit
+                    u = p_dist.unit
+                    # Measure the 50th percentile value of the current parameter distribution
+                    fiftieth = np.percentile(p_dist, 50).value
+                    # Find the upper and lower bounds of the 1sigma region of the distribution
+                    upper = np.percentile(p_dist, 84.1).value
+                    lower = np.percentile(p_dist, 15.9).value
+                    # Store the upper and lower uncertainties with the correct units
+                    model_par_errs.append(Quantity([fiftieth-lower, upper-fiftieth], u))
+
+                # Store the model parameter and uncertainties in the model instance
+                model.model_pars = [p_dist.mean() for p_dist in par_dists]
+                model.model_par_errs = model_par_errs
+
+        # Store the sampler in the model instance, useful for getting raw chains etc again in the future
+        model.emcee_sampler = sampler
+
+        # I show all the warnings at once, if the user wants that
         if model.fit_warning != "" and show_warn:
             print(model.fit_warning)
 
-    def _curve_fit(self, model: BaseModel1D) -> Tuple[BaseModel1D, bool]:
+        return model, success
+
+    def _curve_fit(self, model: BaseModel1D, num_samples: int) -> Tuple[BaseModel1D, bool]:
         """
         An internal function to fit an XGA model instance to the data in this profile using the
         non-linear least squares curve_fit routine from scipy.
 
-        :param BaseModel1D model:
+        :param BaseModel1D model: An instance of the model to be fit to this profile.
+        :param int num_samples: The number of random samples to be drawn and stored in the model
+            parameter distribution property.
         :return: The model (with best fit parameters stored within it), and a boolean flag as to whether the
             fit was successful or not.
         :rtype: Tuple[BaseModel1D, bool]
@@ -785,9 +842,9 @@ class BaseProfile1D:
         # Apparently this is what we should be using for random numbers from numpy now!
         rng = np.random.default_rng()
         if success:
-            # I generate 1000 random points from the distribution of each parameter
-            ext_model_par = np.repeat(fit_par[..., None], 1000, axis=1).T
-            ext_model_par_err = np.repeat(fit_par_err[..., None], 1000, axis=1).T
+            # I generate num_samples random points from the distribution of each parameter
+            ext_model_par = np.repeat(fit_par[..., None], num_samples, axis=1).T
+            ext_model_par_err = np.repeat(fit_par_err[..., None], num_samples, axis=1).T
             # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
             model_par_dists = rng.normal(ext_model_par, ext_model_par_err)
             par_dists = [Quantity(model_par_dists[:, p_ind], model.par_units[p_ind])
@@ -812,8 +869,8 @@ class BaseProfile1D:
         raise NotImplementedError("Profile objects don't currently support fitting with orthogonal "
                                   " distance regression, and this is an internal method you shouldn't even be here!")
 
-    def _fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_steps: int = 20000,
-             num_walkers: int = 20, progress_bar: bool = True, show_warn: bool = False):
+    def _fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_samples: int = 10000,
+             num_steps: int = 20000, num_walkers: int = 20, progress_bar: bool = True, show_warn: bool = True):
 
         # TODO REMOVE THIS WARNING
         warn("This isn't finished and doesn't do anything yet really")
@@ -854,9 +911,9 @@ class BaseProfile1D:
 
         allowed_methods = "mcmc, curve_fit, odr"
         if not already_done and method == 'mcmc':
-            self._emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn)
+            self._emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn, num_samples)
         elif not already_done and method == 'curve_fit':
-            self._curve_fit(model)
+            self._curve_fit(model, num_samples)
         elif not already_done and method == 'odr':
             self._odr_fit(model)
         else:
