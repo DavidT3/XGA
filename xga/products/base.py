@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 23:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/03/2021, 18:26. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -662,34 +662,137 @@ class BaseProfile1D:
         self._x_norm = x_norm
         self._y_norm = y_norm
 
-    def _emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int):
-        pass
-
-    def _curve_fit(self, model: BaseModel1D):
+    def _emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool):
+        # I'm just defining these here so that the lines don't get too long for PEP standards
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
         rads = self.radii.copy().value
+        success = True
+        warning_str = ""
+
+        for prior in model.par_priors:
+            if prior['type'] != 'uniform':
+                raise NotImplementedError("Sorry but I don't yet support non-uniform priors for profile fitting!")
+
+        prior_list = [p['prior'].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
+        prior_arr = np.array(prior_list)
+        # This finds maximum likelihood parameter values for the model+data
+        max_like_res = minimize(lambda *args: -log_likelihood(*args, model.model), model.unitless_start_pars,
+                                args=(rads, y_data, y_errs))
+
+        # This basically finds the order of magnitude (+1) of each parameter
+        ml_rand_dev = np.power(10, np.floor(np.log10(np.abs(max_like_res.x))))
+
+        # Then that order of magnitude is multiplied by a value drawn from a standard gaussian, and this is what
+        #  we perturb the maximum likelihood values with - so we get random start parameters for all
+        #  of our walkers
+        pos = max_like_res.x + ml_rand_dev * np.random.randn(num_walkers, model.num_pars)
+
+        # It is possible that some of the start parameters we've generated are outside the prior, in which
+        #  case emcee gets quite angry. Just in case I draw random values from the priors of all parameters,
+        #  ready to be substituted in if a start par is outside the allowed range
+        rand_uniform_pos = np.random.uniform(prior_arr[:, 0], prior_arr[:, 1], size=(num_walkers, model.num_pars))
+
+        # It is possible that the start parameters can be outside of the range allowed by the the priors. In which
+        #  case the MCMC fit will get super upset but not actually throw an error.
+        start_check_greater = np.greater_equal(pos, prior_arr[:, 0])
+        start_check_lower = np.less_equal(pos, prior_arr[:, 1])
+        # Any true value in this array is a parameter that isn't in the allowed prior range
+        to_replace = ~(start_check_greater & start_check_lower)
+
+        # So any start values that fall outside the allowed range will be swapped out with a value randomly drawn
+        #  from the prior
+        pos[to_replace] = rand_uniform_pos[to_replace]
+
+        # This instantiates an Ensemble sampler with the number of walkers specified by the user,
+        #  with the log probability as defined in the functions above
+        sampler = em.EnsembleSampler(num_walkers, model.num_pars, log_prob, args=(rads, y_data, y_errs, model.model,
+                                                                                  prior_list))
+        try:
+            # So now we start the sampler, running for the number of steps specified on function call, with
+            #  the starting parameters defined in the if statement above this.
+            sampler.run_mcmc(pos, num_steps, progress=progress_bar)
+            model.acceptance_fraction = np.mean(sampler.acceptance_fraction)
+            success = True
+        except ValueError as bugger:
+            warning_str = str(bugger)
+            model.fit_warning = warning_str
+            success = False
+
+        if success:
+            # The auto-correlation can produce an error that basically says not to trust the chains
+            try:
+                # The sampler has a convenient auto-correlation time derivation, which returns the
+                #  auto-correlation time for each parameter - with this I simply choose the highest one and
+                #  round up to the nearest 100 to use as the burn-in
+                auto_corr = sampler.get_autocorr_time()
+                cut_off = int(np.ceil(auto_corr.max() / 100) * 100)
+                success = True
+            except ValueError as bugger:
+                model.fit_warning = str(bugger)
+                success = False
+            except em.autocorr.AutocorrError as bugger:
+                model.fit_warning = str(bugger)
+                cut_off = int(0.1 * num_steps)
+
+        if model.fit_warning != "" and show_warn:
+            print(model.fit_warning)
+
+    def _curve_fit(self, model: BaseModel1D) -> Tuple[BaseModel1D, bool]:
+        """
+        An internal function to fit an XGA model instance to the data in this profile using the
+        non-linear least squares curve_fit routine from scipy.
+
+        :param BaseModel1D model:
+        :return: The model (with best fit parameters stored within it), and a boolean flag as to whether the
+            fit was successful or not.
+        :rtype: Tuple[BaseModel1D, bool]
+        """
+        y_data = (self.values.copy() - self._background).value
+        y_errs = self.values_err.copy().value
+        rads = self.radii.copy().value
+        success = True
+        warning_str = ""
+
         # Curve fit is a simple non-linear least squares implementation, its alright but fragile
         try:
             fit_par, fit_cov = curve_fit(model.model, rads, y_data, p0=model.unitless_start_pars, sigma=y_errs,
                                          absolute_sigma=True)
-            # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
-            fit_par_err = np.sqrt(np.diagonal(fit_cov))
-            frac_err = np.divide(fit_par_err, fit_par, where=fit_par != 0)
-            if frac_err.max() > 10:
-                warn("A parameter uncertainty is more than 10 times larger than the parameter, curve_fit "
-                     "has failed.")
-                success = False
 
             # If there is an infinite value in the covariance matrix, it means curve_fit was
             #  unable to estimate it properly
             if np.inf in fit_cov:
+                warning_str = "Infinity in covariance matrix"
                 success = False
+            else:
+                # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
+                fit_par_err = np.sqrt(np.diagonal(fit_cov))
+                frac_err = np.divide(fit_par_err, fit_par, where=fit_par != 0)
+                if frac_err.max() > 10:
+                    warning_str = "Very large parameter uncertainties"
+                    warn("A parameter uncertainty is more than 10 times larger than the parameter, curve_fit "
+                         "has failed.")
+                    success = False
         except RuntimeError:
             warn("RuntimeError was raised, curve_fit has failed.")
+            warning_str = "RuntimeError in curve_fit"
             success = False
             fit_par = np.full(len(model.model_pars), np.nan)
             fit_par_err = np.full(len(model.model_pars), np.nan)
+
+        # Using the parameter values and the covariance matrix I generate parameter distributions to store in the
+        #  model instance.
+        # Apparently this is what we should be using for random numbers from numpy now!
+        rng = np.random.default_rng()
+        if success:
+            # I generate 1000 random points from the distribution of each parameter
+            ext_model_par = np.repeat(fit_par[..., None], 1000, axis=1).T
+            ext_model_par_err = np.repeat(fit_par_err[..., None], 1000, axis=1).T
+            # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
+            model_par_dists = rng.normal(ext_model_par, ext_model_par_err)
+            par_dists = [Quantity(model_par_dists[:, p_ind], model.par_units[p_ind])
+                         for p_ind in range(0, len(fit_par))]
+            model.par_dists = par_dists
 
         # Now we put the values BACK into quantities
         fit_par = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par)]
@@ -699,14 +802,18 @@ class BaseProfile1D:
         model.model_pars = fit_par
         model.model_par_errs = fit_par_err
 
+        if not success:
+            model.fit_warning = warning_str
+
         # And then the model gets sent back
-        return model
+        return model, success
 
     def _odr_fit(self, model: BaseModel1D):
         raise NotImplementedError("Profile objects don't currently support fitting with orthogonal "
                                   " distance regression, and this is an internal method you shouldn't even be here!")
 
-    def _fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_steps: int = 20000, num_walkers: int = 20):
+    def _fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_steps: int = 20000,
+             num_walkers: int = 20, progress_bar: bool = True, show_warn: bool = False):
 
         # TODO REMOVE THIS WARNING
         warn("This isn't finished and doesn't do anything yet really")
@@ -747,7 +854,7 @@ class BaseProfile1D:
 
         allowed_methods = "mcmc, curve_fit, odr"
         if not already_done and method == 'mcmc':
-            self._emcee_fit(model, num_steps, num_walkers)
+            self._emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn)
         elif not already_done and method == 'curve_fit':
             self._curve_fit(model)
         elif not already_done and method == 'odr':
