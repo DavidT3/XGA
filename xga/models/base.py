@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/03/2021, 18:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/03/2021, 18:23. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -296,30 +296,44 @@ class BaseModel1D(metaclass=ABCMeta):
 
     def par_dist_view(self, bins: Union[str, int] = 'auto', colour: str = "lightslategrey"):
         """
-        Very simple method that allows you to view the parameter distributions that have been added to this model.
+        Very simple method that allows you to view the parameter distributions that have been added to this
+        model. The model parameter and uncertainties are indicated with red lines, highlighting the value
+        and enclosing the 1sigma confidence region.
 
         :param Union[str, int] bins: Equivelant to the plt.hist bins argument, set either the number of bins
             or the algorithm to decide on the number of bins.
         :param str colour: Set the colour of the histogram.
         """
-        figsize = (6, 5*self.num_pars)
-        fig, ax_arr = plt.subplots(ncols=1, nrows=self.num_pars, figsize=figsize)
-        for ax_ind, ax in enumerate(ax_arr):
-            ax.hist(self.par_dists[ax_ind].value, bins=bins, color=colour)
-            ax.axvline(self.model_pars[ax_ind].value, color='red')
-            err = self.model_par_errs[ax_ind].value
-            if len(err) == 1:
-                ax.axvline(self.model_pars[ax_ind].value-err, color='red', linestyle='dashed')
-                ax.axvline(self.model_pars[ax_ind].value+err, color='red', linestyle='dashed')
-            elif len(err) == 2:
-                ax.axvline(self.model_pars[ax_ind].value - err[0], color='red', linestyle='dashed')
-                ax.axvline(self.model_pars[ax_ind].value + err[1], color='red', linestyle='dashed')
-            else:
-                raise ValueError("Parameter error has three elements in it!")
-            ax.set_xlabel(self.par_publication_names[ax_ind])
+        # Check if there are parameter distributions associated with this model
+        if len(self._par_dists[0] != 0):
+            # Set up the figure
+            figsize = (6, 5*self.num_pars)
+            fig, ax_arr = plt.subplots(ncols=1, nrows=self.num_pars, figsize=figsize)
 
-        plt.tight_layout()
-        plt.show()
+            # Iterate through the axes and plot the histograms
+            for ax_ind, ax in enumerate(ax_arr):
+                # Add histogram
+                ax.hist(self.par_dists[ax_ind].value, bins=bins, color=colour)
+                # Add parameter value as a solid red line
+                ax.axvline(self.model_pars[ax_ind].value, color='red')
+                # Read out the errors
+                err = self.model_par_errs[ax_ind]
+                # Depending how many entries there are per parameter in the error quantity depends how we plot them
+                if err.isscalar:
+                    ax.axvline(self.model_pars[ax_ind].value-err.value, color='red', linestyle='dashed')
+                    ax.axvline(self.model_pars[ax_ind].value+err.value, color='red', linestyle='dashed')
+                elif not err.isscalar and len(err) == 2:
+                    ax.axvline(self.model_pars[ax_ind].value - err[0].value, color='red', linestyle='dashed')
+                    ax.axvline(self.model_pars[ax_ind].value + err[1].value, color='red', linestyle='dashed')
+                else:
+                    raise ValueError("Parameter error has three elements in it!")
+                ax.set_xlabel(self.par_publication_names[ax_ind])
+
+            # And show the plot
+            plt.tight_layout()
+            plt.show()
+        else:
+            warn("You have not added parameter distributions to this model")
 
     def view(self, radii: Quantity = None, xscale: str = 'log', yscale: str = 'log', figsize: tuple = (8, 8),
              colour: str = "black"):
