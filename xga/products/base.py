@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 16:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 18:19. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -18,7 +18,7 @@ from tabulate import tabulate
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
     ModelNotAssociatedError
-from ..models import PROF_TYPE_MODELS, BaseModel1D
+from ..models import PROF_TYPE_MODELS, BaseModel1D, MODEL_PUBLICATION_NAMES
 from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
@@ -1704,6 +1704,26 @@ class BaseProfile1D:
         """
         self._y_norm = new_val
 
+    @property
+    def fit_options(self) -> List[str]:
+        """
+        Returns the supported fit options for XGA profiles.
+
+        :return: List of supported fit options.
+        :rtype: List[str]
+        """
+        return self._fit_methods
+
+    @property
+    def nice_fit_names(self) -> List[str]:
+        """
+        Returns nicer looking names for the supported fit options of XGA profiles.
+
+        :return: List of nice fit options.
+        :rtype: List[str]
+        """
+        return self._nice_fit_methods
+
     def __len__(self):
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
@@ -2000,27 +2020,44 @@ class BaseAggregateProfile1D:
 
             # If the user passes a model name, and that model has been fitted to the data, then that
             #  model will be plotted
-            if model is not None and model in p.good_model_fits:
-                model_func = PROF_TYPE_MODELS[self._prof_type][model]
-                info = p.get_realisation(model)
-                pars = p.get_model_fit(model)["par"]
+            if model is not None:
+                # I've put them in this order because I would prefer mcmc over odr, and odr over curve_fit
+                for method in ['mcmc', 'odr', 'curve_fit']:
+                    try:
+                        model_obj = p.get_model_fit(model, method)
+                        lo_rad = p.radii.min()
+                        hi_rad = p.radii.max()
+                        mod_rads = np.linspace(lo_rad, hi_rad, 100)
+                        mod_reals = model_obj.get_realisations(mod_rads)
+                        median_model = np.percentile(mod_reals, 50, axis=1)
 
-                mod_rad = info["mod_radii"] / x_norms[p_ind]
-                mod_val = Quantity(model_func(info["mod_radii"], *pars), self.values_unit) / y_norms[p_ind]
-                mod_low = Quantity(info["mod_real_lower"], self.values_unit) / y_norms[p_ind]
-                mod_upp = Quantity(info["mod_real_upper"], self.values_unit) / y_norms[p_ind]
+                        upper_model = np.percentile(mod_reals, 84.1, axis=1)
+                        lower_model = np.percentile(mod_reals, 15.9, axis=1)
 
-                colour = line[0].get_color()
-                main_ax.plot(mod_rad.value, mod_val.value, color=colour)
-                main_ax.fill_between(mod_rad.value, mod_low.value, mod_upp.value, alpha=0.7, interpolate=True,
-                                     where=mod_upp.value >= mod_low.value, facecolor=colour)
-                main_ax.plot(mod_rad.value, mod_low.value, color=colour, linestyle="dashed")
-                main_ax.plot(mod_rad.value, mod_upp.value, color=colour, linestyle="dashed")
+                        colour = line[0].get_color()
 
-                # This calculates and plots the residuals between the model and the data on the extra
-                #  axis we added near the beginning of this method
-                res_ax.plot(rad_vals.value, model_func(p.radii.value, *pars) - (plot_y_vals * y_norms[p_ind]).value,
-                            'D', color=colour)
+                        mod_lab = model_obj.publication_name + " - {}".format(p.nice_fit_names[method])
+                        mod_line = main_ax.plot(mod_rads.value / x_norms[p_ind].value,
+                                                median_model.value/y_norms[p_ind], color=colour)
+
+                        main_ax.fill_between(mod_rads.value / x_norms[p_ind].value,
+                                             lower_model.value / y_norms[p_ind].value,
+                                             upper_model.value / y_norms[p_ind].value, alpha=0.7, interpolate=True,
+                                             where=upper_model.value >= lower_model.value, facecolor=colour)
+                        main_ax.plot(mod_rads.value / x_norms[p_ind].value, lower_model.value / y_norms[p_ind].value,
+                                     color=colour, linestyle="dashed")
+                        main_ax.plot(mod_rads.value / x_norms[p_ind].value, upper_model.value / y_norms[p_ind].value,
+                                     color=colour, linestyle="dashed")
+
+                        # This calculates and plots the residuals between the model and the data on the extra
+                        #  axis we added near the beginning of this method
+                        res = np.percentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
+                              (plot_y_vals * y_norms[p_ind])
+                        res_ax.plot(rad_vals.value, res.value, 'D', color=colour)
+
+                        break
+                    except ModelNotAssociatedError:
+                        pass
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
         x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
