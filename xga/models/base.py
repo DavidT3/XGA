@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 12:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 20:47. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -11,8 +11,11 @@ import emcee as em
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError
 from matplotlib import pyplot as plt
+from scipy.integrate import quad
 from scipy.misc import derivative
 from tabulate import tabulate
+
+from ..exceptions import XGAFitError
 
 
 class BaseModel1D(metaclass=ABCMeta):
@@ -250,9 +253,59 @@ class BaseModel1D(metaclass=ABCMeta):
     #     """
     #     raise NotImplementedError("This method has not yet been written")
     #
-    # def integral(self):
-    #     raise NotImplementedError("This method has not yet been written, and it may never be, but I am considering"
-    #                               " adding this feature to this class.")
+    def volume_integral(self, outer_radius: Quantity, use_par_dist: bool = False) -> Quantity:
+        """
+        Calculates a numerical value for the volume integral of the function over a sphere of
+        radius outer_radius. The scipy quad function is used. This method can either return a single value
+        calculated using the current model parameters, or a distribution of values using the parameter
+        distributions (assuming that this model has had a fit run on it).
+
+        This method will be overridden if there is an analytical solution to a particular model's volume
+        integration over a sphere.
+
+        :param Quantity outer_radius: The radius to integrate out to.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a volume
+            integral distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value
+        :return: The result of the integration, either a single value or a distribution.
+        :rtype: Quantity
+        """
+        def integrand(x: float, pars: List[float]):
+            """
+            Internal function to wrap the model function.
+
+            :param float x: The x-position currently being evaluated.
+            :param List[float] pars: The model parameters
+            :return: The integrand value.
+            :rtype: float
+            """
+
+            return x**2 * self.model(x, *pars)
+
+        # Perform checks on the input radius units
+        if not outer_radius.unit.is_equivalent(self._x_unit):
+            raise UnitConversionError("Outer radius cannot be converted to units of "
+                                      "{}".format(self._x_unit.to_string()))
+        else:
+            outer_radius = outer_radius.to(self._x_unit)
+
+        # The user can either request a single value using the current model parameters, or a distribution
+        #  using the current parameter distributions (if set)
+        if not use_par_dist:
+            integral_res = 4 * np.pi * quad(integrand, 0, outer_radius.value, args=[p.value for p
+                                                                                    in self._model_pars])[0]
+        elif use_par_dist and not self._par_dists[0].isscalar:
+            unitless_dists = [par_d.value for par_d in self.par_dists]
+            integral_res = np.zeros(len(unitless_dists[0]))
+            for par_ind in range(len(unitless_dists[0])):
+                integral_res[par_ind] = 4 * np.pi * quad(integrand, 0, outer_radius.value,
+                                                         args=[par_d[par_ind] for par_d in unitless_dists])[0]
+        else:
+            raise XGAFitError("No fit has been performed with this model, so there are no parameter distributions"
+                              " available.")
+
+        integral_res = Quantity(integral_res, self.y_unit * self.x_unit**3)
+        return integral_res
 
     def allowed_prior_types(self):
         """
