@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 21:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 21:58. Copyright (c) David J Turner
 from typing import Tuple, Union
 from warnings import warn
 
@@ -926,6 +926,8 @@ class HydrostaticMass(BaseProfile1D):
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: str, density_profile: GasDensity3D,
                  density_model: str, radii: Quantity, radii_err: Quantity, deg_radii: Quantity):
 
+        raise NotImplementedError("Haven't yet double checked this class to make sure it works with "
+                                  "my new way of doing models")
         # We check whether the temperature profile passed is actually the type of profile we need
         if type(temperature_profile) != GasTemperature3D:
             raise TypeError("Only a GasTemperature3D instance may be passed for temperature_profile, check "
@@ -1035,12 +1037,6 @@ class HydrostaticMass(BaseProfile1D):
 
         # This dictionary is for measurements of the baryon fraction
         self._baryon_fraction = {}
-
-    def add_realisation(self):
-        """
-        This profile does not support adding realisations from an external source.
-        """
-        pass
 
     def mass(self, radius: Quantity, conf_level: int = 90, num_real: int = 1000) -> Union[Quantity, Quantity]:
         """
