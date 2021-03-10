@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 09:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 12:47. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -106,6 +106,10 @@ class BaseModel1D(metaclass=ABCMeta):
             raise ValueError("The par_pub_names list should have an entry for every parameter of the model")
         self._pretty_par_names = par_pub_names
 
+        # I also add this attribute to store the parameter names as they appear in the model function, though
+        #  they are only found if someone accesses the par_names property
+        self._par_names = None
+
         # This sets up the attribute to store what this model describes (e.g. surface brightness)
         self._describes = describes
         # This dictionary gives information about the model, have to make sure required keys are present
@@ -156,6 +160,31 @@ class BaseModel1D(metaclass=ABCMeta):
             warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.")
 
         return self.model(x, *self._model_pars).to(self._y_unit)
+
+    def get_realisations(self, x: Quantity) -> Quantity:
+        """
+        This method uses the parameter distributions added to this model by a fitting process to generate
+        random realisations of this model at a given x-position (or positions).
+
+        :param Quantity x: The x-position(s) at which realisations of the model should be generated
+            from the associated parameter distributions.
+        :return: The model realisations, in a Quantity with shape (len(x), num_samples) if x has multiple
+            radii in it (num_samples is the number of samples in the parameter distributions), and (num_samples,) if
+            only a single x value is passed.
+        :rtype: Quantity
+        """
+        if not x.unit.is_equivalent(self._x_unit):
+            raise UnitConversionError("You have passed an x value in units of {p}, but this model expects units of "
+                                      "{e}".format(p=x.unit.to_string(), e=self._x_unit.to_string()))
+        else:
+            # Just to be sure its in exactly the right units
+            x = x.to(self._x_unit)
+
+        if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
+            warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.")
+
+        realisations = self.model(x[..., None], *self._par_dists)
+        return realisations
 
     @staticmethod
     @abstractmethod
@@ -759,6 +788,18 @@ class BaseModel1D(metaclass=ABCMeta):
         """
         self._fit_method = new_val
 
+    @property
+    def par_names(self) -> List[str]:
+        """
+        The names of the parameters as they appear in the signature of the model python function.
 
+        :return: A list of parameter names.
+        :rtype: List[str]
+        """
+        # We infer the parameter names from the signature of the model function
+        if self._par_names is None:
+            self._par_names = [p.name for p in list(inspect.signature(self.model).parameters.values())[1:]]
+
+        return self._par_names
 
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 19:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 12:47. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -156,7 +156,7 @@ class SimpleVikhlininDensity1D(BaseModel1D):
                   {'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind],
                   {'prior': Quantity([0, 5]), 'type': 'uniform'}, norm_priors[yu_ind]]
 
-        nice_pars = [r"$\beta$", r"R$_{\rm{core}}$", r"$\alpha$", r"R$_{\rm{s}}$", r"$\epsilon$", r"$\rho_{0}$"]
+        nice_pars = [r"$\beta$", r"R$_{\rm{core}}$", r"$\alpha$", r"R$_{\rm{s}}$", r"$\epsilon$", r"N$_{0}$"]
         info_dict = {'author': 'Ghirardini et al.', 'year': 2019,
                      'reference': 'https://doi.org/10.1051/0004-6361/201833325',
                      'general': "A simplified form of Vikhlinin's full density model, a type of broken\n"
@@ -277,7 +277,7 @@ class VikhlininDensity1D(BaseModel1D):
                   norm_priors[yu_ind]]
 
         nice_pars = [r"$\beta_{1}$", r"R$_{\rm{core,1}}$", r"$\alpha$", r"R$_{\rm{s}}$", r"$\epsilon$", r"$\gamma$",
-                     r"$\rho_{01}$", r"$\beta_{2}$", r"R$_{\rm{core,2}}$", r"$\rho_{02}$"]
+                     r"N$_{01}$", r"$\beta_{2}$", r"R$_{\rm{core,2}}$", r"N$_{02}$"]
         info_dict = {'author': 'Vikhlinin et al.', 'year': 2006,
                      'reference': 'https://doi.org/10.1086/500288',
                      'general': "The full model for cluster density profiles created by Vikhlinin et al.\n"

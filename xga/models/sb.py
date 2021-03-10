@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 19:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 12:47. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -85,6 +85,7 @@ class BetaProfile1D(BaseModel1D):
         :rtype: Quantity
         """
         return norm * np.power((1 + (np.power(x / r_core, 2))), ((-3 * beta) + 0.5))
+        # return norm * (1 + ((x / r_core)**2)**((-3 * beta) + 0.5))
 
     def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
         """
@@ -161,8 +162,8 @@ class DoubleBetaProfile1D(BaseModel1D):
         priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind],
                   {'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
 
-        nice_pars = [r"S$_{01}$", r"$\beta_{1}$", r"R$_{\rm{core},1}$", r"S$_{02}$", r"$\beta_{2}$",
-                     r"R$_{\rm{core},2}$"]
+        nice_pars = [r"$\beta_{1}$", r"R$_{\rm{core},1}$", r"S$_{01}$", r"$\beta_{2}$", r"R$_{\rm{core},2}$",
+                     r"S$_{02}$"]
         info_dict = {'author': 'placeholder', 'year': 'placeholder', 'reference': 'placeholder',
                      'general': 'The double beta profile, a summation of two single beta models. Often\n '
                                 'thought to deal better with peaky cluster cores that you might get from a\n'
