@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 20:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 21:16. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -141,6 +141,9 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # Allows the storage of the method used to fit the data in the model instance
         self._fit_method = None
+
+        # I'm going to store any volume integral results within the model itself
+        self._vol_ints = {'pars': {}, 'par_dists': {}}
 
     def __call__(self, x: Quantity) -> Quantity:
         """
@@ -289,22 +292,37 @@ class BaseModel1D(metaclass=ABCMeta):
         else:
             outer_radius = outer_radius.to(self._x_unit)
 
+        if use_par_dist and outer_radius in self._vol_ints['pars']:
+            already_run = True
+            integral_res = self._vol_ints['pars'][outer_radius]
+        elif not use_par_dist and outer_radius in self._vol_ints['par_dists']:
+            already_run = True
+            integral_res = self._vol_ints['par_dists'][outer_radius]
+        else:
+            already_run = False
+
         # The user can either request a single value using the current model parameters, or a distribution
         #  using the current parameter distributions (if set)
-        if not use_par_dist:
+        if not use_par_dist and not already_run:
             integral_res = 4 * np.pi * quad(integrand, 0, outer_radius.value, args=[p.value for p
                                                                                     in self._model_pars])[0]
-        elif use_par_dist and not self._par_dists[0].isscalar:
+        elif use_par_dist and len(self._par_dists[0]) != 0 and not already_run:
             unitless_dists = [par_d.value for par_d in self.par_dists]
             integral_res = np.zeros(len(unitless_dists[0]))
             for par_ind in range(len(unitless_dists[0])):
                 integral_res[par_ind] = 4 * np.pi * quad(integrand, 0, outer_radius.value,
                                                          args=[par_d[par_ind] for par_d in unitless_dists])[0]
-        else:
+        elif use_par_dist and len(self._par_dists[0]) == 0 and not already_run:
             raise XGAFitError("No fit has been performed with this model, so there are no parameter distributions"
                               " available.")
 
-        integral_res = Quantity(integral_res, self.y_unit * self.x_unit**3)
+        if not already_run:
+            integral_res = Quantity(integral_res, self.y_unit * self.x_unit**3)
+            if use_par_dist:
+                self._vol_ints['par_dists'][outer_radius] = integral_res
+            else:
+                self._vol_ints['pars'][outer_radius] = integral_res
+
         return integral_res
 
     def allowed_prior_types(self):
@@ -494,6 +512,10 @@ class BaseModel1D(metaclass=ABCMeta):
         elif not all([p.unit == self._model_pars[p_ind].unit for p_ind, p in enumerate(new_vals)]):
             raise UnitConversionError("All new parameters must have the same unit as the old parameters.")
         self._model_pars = new_vals
+
+        # We also need to make sure any existing integrals are wiped from the model's storage, as they will
+        #  no longer be valid
+        self._vol_ints['pars'] = {}
 
     @property
     def model_par_errs(self) -> List[Quantity]:
@@ -736,6 +758,9 @@ class BaseModel1D(metaclass=ABCMeta):
             new_vals = [p.to(self._par_units[p_ind]) for p_ind, p in enumerate(new_vals)]
 
         self._par_dists = new_vals
+
+        # Again must wipe any stored integrals as new parameter distributions will make them invalid
+        self._vol_ints['par_dists'] = {}
 
     @property
     def fit_warning(self) -> str:
