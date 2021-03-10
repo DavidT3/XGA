@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 18:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 18:47. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -2118,7 +2118,6 @@ class BaseAggregateProfile1D:
             main_ax.axvline(d_rad, linestyle='dashed', color='black')
             main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
                              color='black', fontsize=14, xycoords=('data', 'axes fraction'))
-
         # And of course actually showing it
         plt.show()
 
