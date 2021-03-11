@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 13:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 15:53. Copyright (c) David J Turner
 
 from copy import deepcopy
 from typing import Union, List, Tuple
@@ -123,7 +123,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     else:
         # Check that the spectra we will be relying on for conversion calculation have been fitted, calling
         #  this function will also make sure that they are generated
-        single_temp_apec(sources, outer_radius, inner_radius, abund_table=abund_table, num_cores=num_cores,
+        single_temp_apec(sources, conv_outer_radius, inner_radius, abund_table=abund_table, num_cores=num_cores,
                          group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
 
         # Then we need to grab the temperatures and pass them through to the cluster conversion factor
@@ -133,7 +133,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         for src in sources:
             try:
                 # A temporary temperature variable
-                temp_temp = src.get_temperature("tbabs*apec", outer_radius, inner_radius, group_spec, min_counts,
+                temp_temp = src.get_temperature("tbabs*apec", conv_outer_radius, inner_radius, group_spec, min_counts,
                                                 min_sn, over_sample)[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
                 warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
@@ -158,8 +158,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         #  is REQUIRED to define GalaxyCluster objects
         factor = ((4 * np.pi * (src.angular_diameter_distance.to("cm") * (1 + src.redshift)) ** 2) / (
                 hy_to_elec * 10 ** -14))
-        total_factor = factor * src.norm_conv_factor(outer_radius, lo_en, hi_en, inner_radius, group_spec, min_counts,
-                                                     min_sn, over_sample, obs_id[src_ind], inst[src_ind])
+        total_factor = factor * src.norm_conv_factor(conv_outer_radius, lo_en, hi_en, inner_radius, group_spec,
+                                                     min_counts, min_sn, over_sample, obs_id[src_ind], inst[src_ind])
         to_dens_convs.append(total_factor)
 
     return sources, to_dens_convs, obs_id, inst
@@ -229,16 +229,74 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
 
 
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
-                          model: Union[str, List[BaseModel1D], BaseModel1D, List[BaseModel1D]], fit_method: str = "mcmc",
-                          outer_radius: Union[str, Quantity] = "r500", use_peak: bool = True, pix_step: int = 1,
-                          min_snr: Union[int, float] = 0.0, abund_table: str = "angr", num_dens: bool = True,
+                          model: Union[str, List[str], BaseModel1D, List[BaseModel1D]], fit_method: str = "mcmc",
+                          outer_radius: Union[str, Quantity] = "r500", num_dens: bool = True, use_peak: bool = True,
+                          pix_step: int = 1, min_snr: Union[int, float] = 0.0, abund_table: str = "angr",
                           lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                           psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, num_walkers: int = 20, num_steps: int = 20000, num_samples: int = 10000,
                           group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                           obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
                           conv_outer_radius: Quantity = "r500", num_cores: int = NUM_CORES, show_warn: bool = True):
+    """
+    A photometric galaxy cluster gas density calculation method where a surface brightness profile is fit with
+    a model and an inverse abel transform is used to infer the 3D count-rate/volume profile. Then a conversion factor
+    calculated from simulated spectra is used to infer the number density profile.
 
+    Depending on the chosen surface brightness model, the inverse abel transform may be performed using an analytical
+    solution, or numerical methods.
+
+    :param GalaxyCluster/ClusterSample sources: A GalaxyCluster or ClusterSample object to measure density
+        profiles for.
+    :param str/List[str]/BaseModel1D/List[BaseModel1D] model: The model(s) to be fit to the cluster surface
+        profile(s). You may pass the string name of a profile (for single or multiple clusters), a single instance
+        of an XGA model class (for single or multiple clusters), a list of string names (one entry for each cluster
+        being analysed), or a list of XGA model instances (one entry for each cluster being analysed).
+    :param str fit_method: The method for the profile object to use to fit the model, default is mcmc.
+    :param str/Quantity outer_radius:
+    :param bool num_dens: If True then a number density profile will be generated, otherwise a mass density profile
+        will be generated.
+    :param bool use_peak: If true the measured peak will be used as the central coordinate of the profile.
+    :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
+    :param int/float min_snr: The minimum allowed signal to noise for the surface brightness
+        profiles. Default is 0, which disables automatic re-binning.
+    :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and for the
+        electron/hydrogen number density ratio.
+    :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
+    :param Quantity hi_en: The upper energy limit of the combined ratemap used to calculate density.
+    :param bool psf_corr: Default True, whether PSF corrected ratemaps will be used to make the
+        surface brightness profile, and thus the density (if False density results could be incorrect).
+    :param str psf_model: If PSF corrected, the PSF model used.
+    :param int psf_bins: If PSF corrected, the number of bins per side.
+    :param str psf_algo: If PSF corrected, the algorithm used.
+    :param int psf_iter: If PSF corrected, the number of algorithm iterations.
+    :param int num_walkers: If using mcmc fitting, the number of walkers to use. Default is 20.
+    :param int num_steps: If using mcmc fitting, the number of steps each walker should take. Default is 20000.
+    :param int num_samples:
+    :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
+    :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
+        were grouped by minimum counts.
+    :param float min_sn: The minimum signal to noise per channel, if the spectra that were used for fakeit
+        were grouped by minimum signal to noise.
+    :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
+    :param str/list obs_id: A specific ObsID(s) to measure the density from. This should be a string if a single
+        source is being analysed, and a list of ObsIDs the same length as the number of sources otherwise. The
+        default is None, in which case the combined data will be used to measure the density profile.
+    :param str/list inst: A specific instrument(s) to measure the density from. This can either be passed as a
+        single string (e.g. 'pn') if only one source is being analysed, or the same instrument should be used for
+        every source in a sample, or a list of strings if different instruments are required for each source. The
+        default is None, in which case the combined data will be used to measure the density profile.
+    :param Quantity conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
+        the fakeit run to calculate the normalisation conversion factor will use these temperatures. The quantity
+         should have an entry for each cluster being analysed. Default is None.
+    :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
+        for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
+        a single value or an entry for each cluster being analysed.
+    :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
+    :param bool show_warn: Should fit warnings be shown on screen.
+    :return: The source/sample object passed in to this function.
+    :rtype: GalaxyCluster/ClusterSample
+    """
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
