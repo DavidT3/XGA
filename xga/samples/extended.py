@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 08:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 23:09. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -308,7 +308,10 @@ class ClusterSample(BaseSample):
         A get method for temperatures measured for the constituent clusters of this sample. An error will be
         thrown if temperatures haven't been measured for the given region (the default is R_500) and model (default
         is the tbabs*apec model which single_temp_apec fits to cluster spectra). Any clusters for which temperature
-        fits failed will return NaN temperatures.
+        fits failed will return NaN temperatures, and with temperature greater than 25keV is considered failed, any
+        temperature with a negative error value is considered failed, any temperature where the Tx-low err is less
+        than zero isn't returned, and any temperature where one of the errors is more than three times larger than
+        the other is considered failed.
 
         :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
@@ -349,10 +352,22 @@ class ClusterSample(BaseSample):
 
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
                 #  so its set to NaN
-                if gcs_temp[0] > 30:
+                if gcs_temp[0] > 25:
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("A temperature of {m}keV was measured for {s}, anything over 30keV considered a failed "
                          "fit by XGA".format(s=gcs.name, m=gcs_temp))
+                elif gcs_temp.min() < 0:
+                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    warn("A negative value was detected in the temperature array for {s}, this is considered a failed "
+                         "measurement".format(s=gcs.name))
+                elif (gcs_temp[0] - gcs[1]) < 0:
+                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    warn("The temperature value - the lower error goes below zero for {s}, this makes the temperature"
+                         " hard to use for scaling relations as values are often logged.".format(s=gcs.name))
+                elif (gcs_temp[1] / gcs_temp[2]) > 3 or (gcs_temp[1] / gcs_temp[2]) < 0.33:
+                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    warn("One of the temperature uncertainty values for {s} is more than three times larger than "
+                         "the other, this means the fit quality is suspect.".format(s=gcs.name))
                 temps.append(gcs_temp)
 
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
