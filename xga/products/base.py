@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 18:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 08:28. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -795,6 +795,9 @@ class BaseProfile1D:
         if model.fit_warning != "" and show_warn:
             print(model.fit_warning)
 
+        # Tell the model whether we think the fit was successful or not
+        model.success = success
+
         # And finally storing the fit method used in the model itself
         model.fit_method = "mcmc"
 
@@ -874,6 +877,9 @@ class BaseProfile1D:
         if show_warn and warning_str != "":
             warn(warning_str)
 
+        # Tell the model whether we think the fit was successful or not
+        model.success = success
+
         # And finally storing the fit method used in the model itself
         model.fit_method = "curve_fit"
 
@@ -881,6 +887,10 @@ class BaseProfile1D:
         return model, success
 
     def _odr_fit(self, model: BaseModel1D, show_warn: bool):
+
+        # Tell the model whether we think the fit was successful or not
+        # model.success = success
+
         # And finally storing the fit method used in the model itself
         model.fit_method = "odr"
         raise NotImplementedError("This fitting method is still under construction!")

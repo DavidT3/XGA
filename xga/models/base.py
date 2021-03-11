@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 21:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 08:28. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -129,6 +129,11 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # Any warnings that the user should be aware of from the fitting function can be stored in here
         self._fit_warnings = ''
+
+        # And another attribute to hold whether the external fit method considers the fit run using
+        #  this model to be successful or not. This is also reflected in how the model is stored in a profile
+        #  object, but it feels useful to have the information here as well.
+        self._success = None
 
         # If the fit was performed with an MCMC fitter than it can store an acceptance fraction in the model,
         #  its quite a useful diagnostic
@@ -879,5 +884,33 @@ class BaseModel1D(metaclass=ABCMeta):
             self._par_names = [p.name for p in list(inspect.signature(self.model).parameters.values())[1:]]
 
         return self._par_names
+
+    @property
+    def success(self) -> bool:
+        """
+        If an fit has been run using this model then this property will tell you whether the fit method considered
+        it to be 'successful' or not. If no fit has been run using this model then the value is None.
+
+        :return: Was the fit successful?
+        :rtype: bool
+        """
+        return self._success
+
+    @success.setter
+    def success(self, new_val: bool):
+        """
+        This is for an external fit method to set whether the fit run using this model was successful or not
+
+        :param bool new_val: True for successful, False for failed.
+        """
+        self._success = new_val
+
+
+
+
+
+
+
+
 
 
