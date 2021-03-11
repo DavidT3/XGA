@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/03/2021, 15:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 13:50. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -638,8 +638,7 @@ class GalaxyCluster(ExtendedSource):
             conversion factor will be returned.
         :param str inst: The instrument to fetch a conversion factor for, default is None which means the combined
             conversion factor will be returned.
-        :return: A combined conversion factor that can be applied to a combined ratemap to
-            calculate luminosity.
+        :return: A combined conversion factor that can be applied to a combined ratemap to calculate luminosity.
         :rtype: Quantity
         """
         # Check the ObsID and instrument inputs
@@ -672,7 +671,7 @@ class GalaxyCluster(ExtendedSource):
 
         # Then we return 1/the rate because this method calculates the conversion factor from count rate to
         #  normalisation (which is always 1 for these simulated spectra).
-        return 1 / total_rate
+        return Quantity(1, 'cm^-5') / total_rate
 
 
 

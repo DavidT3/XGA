@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 08:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 13:50. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -931,10 +931,14 @@ class BaseProfile1D:
             raise XGAInvalidModelError("{p} is not available for this type of profile, please use one of the "
                                        "following models {a}".format(p=model, a=allowed))
         elif isinstance(model, str):
-            model = PROF_TYPE_MODELS[self._prof_type][model]()
+            model = PROF_TYPE_MODELS[self._prof_type][model](self.radii_unit, self.values_unit)
         elif isinstance(model, BaseModel1D) and model.name not in PROF_TYPE_MODELS[self._prof_type]:
             raise XGAInvalidModelError("{p} is not available for this type of profile, please use one of the "
                                        "following models {a}".format(p=model, a=allowed))
+        elif isinstance(model, BaseModel1D) and (model.x_unit != self.radii_unit or model.y_unit != self.values_unit):
+            raise UnitConversionError("The model instance passed to the fit method has units that are incompatible, "
+                                      "with the data. This profile has an radius unit of {r} and a value unit of "
+                                      "{v}".format(r=self.radii_unit.to_string(), v=self.values_unit.to_string()))
 
         # I don't think I'm going to allow any fits without value uncertainties - just seems daft
         if self._values_err is None:
@@ -1236,7 +1240,7 @@ class BaseProfile1D:
 
         # Default is to show models, but that flag is set to False here if there are none, otherwise we get
         #  extra plotted stuff that doesn't make sense
-        if len(self._good_model_fits) == 0:
+        if len(self.good_model_fits) == 0:
             models = False
             just_models = False
 
@@ -1338,7 +1342,6 @@ class BaseProfile1D:
 
                     # This calculates and plots the residuals between the model and the data on the extra
                     #  axis we added near the beginning of this method
-
                     res = np.percentile(model_obj.get_realisations(self.radii), 50, axis=1) - (plot_y_vals*y_norm)
                     res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
 

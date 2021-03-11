@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 11:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 13:50. Copyright (c) David J Turner
 from typing import Tuple, Union
 from warnings import warn
 
@@ -415,19 +415,24 @@ class GasDensity3D(BaseProfile1D):
 
         # Doing an extra check to warn the user if the radius they supplied is outside the radii
         #  covered by the data
-        if outer_rad >= self.annulus_bounds[-1]:
+        if outer_rad >= self.radii[-1]:
             warn("The outer radius you supplied is greater than or equal to the outer radius covered by the data, so"
                  " you are effectively extrapolating using the model.")
 
+        # Just preparing the way, setting up the storage dictionary
         if str(model_obj) not in self._gas_masses:
+            self._gas_masses[str(model_obj)] = {}
+
+        if outer_rad not in self._gas_masses[str(model_obj)] or particle_mass != HY_MASS:
             mass_dist = model_obj.volume_integral(outer_rad, use_par_dist=True)
             if self._sub_type == 'num_dens':
                 mass_dist *= particle_mass
 
             mass_dist = mass_dist.to('Msun')
-            self._gas_masses[str(model_obj)] = mass_dist
+            if particle_mass == HY_MASS:
+                self._gas_masses[str(model_obj)][outer_rad] = mass_dist
         else:
-            mass_dist = self._gas_masses[str(model_obj)]
+            mass_dist = self._gas_masses[str(model_obj)][outer_rad]
 
         med_mass = np.percentile(mass_dist, 50).value
         upp_mass = np.percentile(mass_dist, 50 + (conf_level/2)).value
@@ -437,7 +442,7 @@ class GasDensity3D(BaseProfile1D):
         return gas_mass, mass_dist
 
     def view_gas_mass_dist(self, model: str, outer_rad: Quantity, conf_level: int = 68.2, figsize=(8, 8),
-                           colour: str = "lightslategrey", fit_method: str = 'mcmc', particle_mass: Quantity = None):
+                           colour: str = "lightslategrey", fit_method: str = 'mcmc', particle_mass: Quantity = HY_MASS):
         """
         A method which will generate a histogram of the gas mass distribution that resulted from the gas mass
         calculation at the supplied radius. If the mass for the passed radius has already been measured it, and the
