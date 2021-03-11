@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 08:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 11:02. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -250,17 +250,16 @@ class BaseModel1D(metaclass=ABCMeta):
         return Quantity(derivative(lambda r: self(Quantity(r, self._x_unit)).value, x.value, dx.value, n=order),
                         self._y_unit / np.power(self._x_unit, order))
 
-    # def inverse_abel(self, x: Quantity) -> Quantity:
-    #     """
-    #     Calculates the inverse abel transform of the model using numerical methods. This method will be overridden
-    #     in models that have an analytical solution to the inverse abel transform.
-    #
-    #     :param Quantity x: The x value(s) at which to measure the value of the inverse abel transform of the model.
-    #     :return: The value(s) of the inverse abel transformation.
-    #     :rtype: Quantity
-    #     """
-    #     raise NotImplementedError("This method has not yet been written")
-    #
+    def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method: str = 'direct') -> Quantity:
+        """
+
+        :param x:
+        :param use_par_dist:
+        :param method:
+        """
+        raise NotImplementedError("This is gonna be a pain")
+        # direct_transform()
+
     def volume_integral(self, outer_radius: Quantity, use_par_dist: bool = False) -> Quantity:
         """
         Calculates a numerical value for the volume integral of the function over a sphere of

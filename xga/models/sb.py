@@ -1,12 +1,14 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 12:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 11:02. Copyright (c) David J Turner
 
 from typing import Union, List
 
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError, kpc, deg
+from scipy.special import gamma
 
 from .base import BaseModel1D
+from ..exceptions import XGAFitError
 from ..utils import r500, r200, r2500
 
 
@@ -100,6 +102,62 @@ class BetaProfile1D(BaseModel1D):
         """
         beta, r_core, norm = self._model_pars
         return ((2*x)/np.power(r_core, 2))*((-3*beta) + 0.5)*norm*np.power((1+(np.power(x/r_core, 2))), ((-3*beta)-0.5))
+
+    def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method='analytical') -> Quantity:
+        """
+        This overrides the inverse abel method of the model superclass, as there is an analytical solution to the
+        inverse abel transform of the single beta model. The form of the inverse abel transform is that of the
+        king profile, but with an extra transformation applied to the normalising parameter. This method can either
+        return a single value calculated using the current model parameters, or a distribution of values using
+        the parameter distributions (assuming that this model has had a fit run on it).
+
+        :param Quantity x: The x location(s) at which to calculate the value of the inverse abel transform.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a inverse abel transform
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
+        :param str method: The method that should be used to calculate the values of this inverse abel transform.
+            Default for this overriding method is 'analytical', in which case the analytical solution is used.
+            You may also pass 'direct' or 'basex' to calculate the result numerically.
+        :return: The inverse abel transform result.
+        :rtype: Quantity
+        """
+        def transform(x_val: Quantity, beta: Quantity, r_core: Quantity, norm: Quantity):
+            """
+            The function that calculates the inverse abel transform of this beta profile.
+
+            :param Quantity x_val: The x location(s) at which to calculate the value of the inverse abel transform.
+            :param Quantity beta: The beta parameter of the beta profile.
+            :param Quantity r_core: The core radius parameter of the beta profile.
+            :param Quantity norm: The normalisation of the beta profile.
+            :return:
+            """
+            # We calculate the new normalisation parameter
+            new_norm = norm / ((gamma((3 * beta) - 0.5) * np.sqrt(np.pi) * r_core) / gamma(3 * beta))
+
+            # Then return the value of the transformed beta profile
+            return new_norm * np.power((1 + (np.power(x_val / r_core, 2))), (-3 * beta))
+
+        # Checking x units to make sure that they are valid
+        if not x.unit.is_equivalent(self._x_unit):
+            raise UnitConversionError("The input x coordinates cannot be converted to units of "
+                                      "{}".format(self._x_unit.to_string()))
+        else:
+            x = x.to(self._x_unit)
+
+        if method == 'analytical':
+            # The way the calculation is called depends on whether the user wants to use the parameter distributions
+            #  or just the current model parameter values to calculate the inverse abel transform.
+            if not use_par_dist:
+                transform_res = transform(x, *self.model_pars)
+            elif use_par_dist and len(self._par_dists[0]) != 0:
+                transform_res = transform(x[..., None], *self.par_dists)
+            elif use_par_dist and len(self._par_dists[0]) == 0:
+                raise XGAFitError("No fit has been performed with this model, so there are no parameter distributions"
+                                  " available.")
+        else:
+            transform_res = super().inverse_abel(x, use_par_dist, method)
+
+        return transform_res
 
 
 class DoubleBetaProfile1D(BaseModel1D):

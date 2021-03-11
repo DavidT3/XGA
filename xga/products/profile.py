@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 21:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 11:02. Copyright (c) David J Turner
 from typing import Tuple, Union
 from warnings import warn
 
@@ -396,6 +396,9 @@ class GasDensity3D(BaseProfile1D):
             raise ModelNotAssociatedError("{m} is valid model type, but no fit has been performed".format(m=model))
         else:
             model_obj = self.get_model_fit(model, fit_method)
+
+        if not model_obj.success:
+            raise ValueError("The fit to that model was not considered a success by the fit method, cannot proceed.")
 
         # Making sure we can definitely calculate a gas mass with the current information
         if self._sub_type == 'num_dens' and particle_mass is None:
