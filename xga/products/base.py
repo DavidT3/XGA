@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 13:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/03/2021, 16:50. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -944,6 +944,12 @@ class BaseProfile1D:
         if self._values_err is None:
             raise XGAFitError("You cannot fit to a profile that doesn't have value uncertainties.")
 
+        # Checking that the method passed is valid
+        if method not in self._fit_methods:
+            allowed = ", ".join(self._fit_methods)
+            raise XGAFitError("{me} is not a valid fitting method, please use one of these; {a}".format(me=method,
+                                                                                                        a=allowed))
+
         # Check whether a good fit result already exists for this model. We use the storage_key property that
         #  XGA model objects generate from their name and their start parameters
         if model.name in self._good_model_fits[method]:
@@ -958,16 +964,12 @@ class BaseProfile1D:
             already_done = False
 
         # Running the requested fitting method
-        allowed_methods = "mcmc, curve_fit, odr"
         if not already_done and method == 'mcmc':
             model, success = self._emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn, num_samples)
         elif not already_done and method == 'curve_fit':
             model, success = self._curve_fit(model, num_samples, show_warn)
         elif not already_done and method == 'odr':
             model, success = self._odr_fit(model, show_warn)
-        elif not already_done:
-            raise XGAFitError("{p} is not a supported fitting method for XGA profiles, use one of the "
-                              "following; {a}".format(p=method, a=allowed_methods))
         else:
             model = self.get_model_fit(model.name, method)
 
@@ -1055,6 +1057,34 @@ class BaseProfile1D:
             ret_model = self._good_model_fits[method][model]
 
         return ret_model
+
+    def add_model_fit(self, model: BaseModel1D, method: str):
+        """
+        There are rare circumstances where XGA processes might wish to add a model to a profile from the outside,
+        which is what this method allows you to do.
+
+        :param BaseModel1D model: The XGA model object to add to the profile.
+        :param str method: The method used to fit the model.
+        """
+
+        # Checking that the method passed is valid
+        if method not in self._fit_methods:
+            allowed = ", ".join(self._fit_methods)
+            raise XGAFitError("{me} is not a valid fitting method, please use one of these; {a}".format(me=method,
+                                                                                                        a=allowed))
+        # Checking that the model is valid for this particular profile
+        allowed = ", ".join(PROF_TYPE_MODELS[self._prof_type])
+        if model.name not in PROF_TYPE_MODELS[self._prof_type]:
+            raise XGAInvalidModelError("{p} is not valid for this type of profile, please use one of the "
+                                       "following models {a}".format(p=model.name, a=allowed))
+        elif model.x_unit != self.radii_unit or model.y_unit != self.values_unit:
+            raise UnitConversionError("The model instance passed to the fit method has units that are incompatible, "
+                                      "with the data. This profile has an radius unit of {r} and a value unit of "
+                                      "{v}".format(r=self.radii_unit.to_string(), v=self.values_unit.to_string()))
+        elif not model.success:
+            raise ValueError("Please only add successful models to this profile.")
+        else:
+            self._good_model_fits[method][model.name] = model
 
     def get_sampler(self, model: str) -> em.EnsembleSampler:
         """
