@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/03/2021, 12:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/03/2021, 13:11. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -266,7 +266,8 @@ class BaseModel1D(metaclass=ABCMeta):
         :param bool use_par_dist: Should the parameter distributions be used to calculate a inverse abel transform
             distribution; this can only be used if a fit has been performed using the model instance.
             Default is False, in which case the current parameters will be used to calculate a single value.
-        :param str method: The method that should be used to calculate the values of this inverse abel transform.
+        :param str method: The method that should be used to calculate the values of this inverse abel transform. You
+            may pass 'direct', 'basex', 'hansenlaw', 'onion_bordas', 'onion_peeling', 'two_point', or 'three_point'.
         :return: The inverse abel transform result.
         :rtype: Quantity
         """
