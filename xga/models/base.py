@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 11:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/03/2021, 12:50. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -9,6 +9,11 @@ from warnings import warn
 
 import emcee as em
 import numpy as np
+from abel.basex import basex_transform
+from abel.dasch import onion_peeling_transform, two_point_transform, three_point_transform
+from abel.direct import direct_transform
+from abel.hansenlaw import hansenlaw_transform
+from abel.onion_bordas import onion_bordas_transform
 from astropy.units import Quantity, Unit, UnitConversionError
 from matplotlib import pyplot as plt
 from scipy.integrate import quad
@@ -252,13 +257,85 @@ class BaseModel1D(metaclass=ABCMeta):
 
     def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method: str = 'direct') -> Quantity:
         """
+        This method uses numerical methods to generate the inverse abel transform of the model. It may be
+        overridden by models that have analytical solutions to the inverse abel transform. All numerical inverse
+        abel transform methods are from the pyabel module, and please be aware that in my (limited) experience the
+        numerical solutions tend to diverge from analytical solutions at large radii.
 
-        :param x:
-        :param use_par_dist:
-        :param method:
+        :param Quantity x: The x location(s) at which to calculate the value of the inverse abel transform.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a inverse abel transform
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
+        :param str method: The method that should be used to calculate the values of this inverse abel transform.
+        :return: The inverse abel transform result.
+        :rtype: Quantity
         """
-        raise NotImplementedError("This is gonna be a pain")
-        # direct_transform()
+
+        # Checking x units to make sure that they are valid
+        if not x.unit.is_equivalent(self._x_unit):
+            raise UnitConversionError("The input x coordinates cannot be converted to units of "
+                                      "{}".format(self._x_unit.to_string()))
+        else:
+            x = x.to(self._x_unit)
+
+        # Sets up the resolution of the radial spatial sampling
+        force_change = False
+        if len(set(np.diff(x))) != 1:
+            warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
+                 "the method to 'direct'")
+            method = 'direct'
+            force_change = True
+        else:
+            dr = (x[1]-x[0]).value
+
+        # If the user just wants to use the current values of the model parameters then this is what happens
+        if not use_par_dist:
+            if method == 'direct' and force_change:
+                transform_res = direct_transform(self(x).value, r=x.value, backend='python')
+            elif method == 'direct' and not force_change:
+                transform_res = direct_transform(self(x).value, dr=dr)
+            elif method == 'basex':
+                transform_res = basex_transform(self(x).value, dr=dr)
+            elif method == 'hansenlaw':
+                transform_res = hansenlaw_transform(self(x).value, dr=dr)
+            elif method == 'onion_bordas':
+                transform_res = onion_bordas_transform(self(x).value, dr=dr)
+            elif method == 'onion_peeling':
+                transform_res = onion_peeling_transform(self(x).value, dr=dr)
+            elif method == 'two_point':
+                transform_res = two_point_transform(self(x).value, dr=dr)
+            elif method == 'three_point':
+                transform_res = three_point_transform(self(x).value, dr=dr)
+            else:
+                raise ValueError("{} is not a recognised inverse abel transform type".format(method))
+
+        # This uses the parameter distributions of this module
+        elif use_par_dist:
+            realisations = self.get_realisations(x).value
+            transform_res = np.zeros(realisations.shape)
+            for t_ind in range(0, realisations.shape[1]):
+                if method == 'direct' and force_change:
+                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], r=x.value, backend='python')
+                elif method == 'direct' and not force_change:
+                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], dr=dr)
+                elif method == 'basex':
+                    transform_res[:, t_ind] = basex_transform(realisations[:, t_ind], dr=dr)
+                elif method == 'hansenlaw':
+                    transform_res[:, t_ind] = hansenlaw_transform(realisations[:, t_ind], dr=dr)
+                elif method == 'onion_bordas':
+                    transform_res[:, t_ind] = onion_bordas_transform(realisations[:, t_ind], dr=dr)
+                elif method == 'onion_peeling':
+                    transform_res[:, t_ind] = onion_peeling_transform(realisations[:, t_ind], dr=dr)
+                elif method == 'two_point':
+                    transform_res[:, t_ind] = two_point_transform(realisations[:, t_ind], dr=dr)
+                elif method == 'three_point':
+                    transform_res[:, t_ind] = three_point_transform(realisations[:, t_ind], dr=dr)
+                else:
+                    raise ValueError("{} is not a recognised inverse abel transform type".format(method))
+
+        transform_res = Quantity(transform_res, self._y_unit/self._x_unit)
+
+        return transform_res
 
     def volume_integral(self, outer_radius: Quantity, use_par_dist: bool = False) -> Quantity:
         """

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/03/2021, 08:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/03/2021, 12:50. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -368,6 +368,10 @@ class ClusterSample(BaseSample):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("One of the temperature uncertainty values for {s} is more than three times larger than "
                          "the other, this means the fit quality is suspect.".format(s=gcs.name))
+                elif (gcs_temp[0] - gcs_temp[1:].mean()) < 0:
+                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    warn("The temperature value - the average error goes below zero for {s}, this makes the "
+                         "temperature hard to use for scaling relations as values are often logged".format(s=gcs.name))
                 temps.append(gcs_temp)
 
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
