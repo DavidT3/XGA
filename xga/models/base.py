@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/03/2021, 13:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 14:00. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -155,13 +155,17 @@ class BaseModel1D(metaclass=ABCMeta):
         # I'm going to store any volume integral results within the model itself
         self._vol_ints = {'pars': {}, 'par_dists': {}}
 
-    def __call__(self, x: Quantity) -> Quantity:
+    def __call__(self, x: Quantity, use_par_dist: bool = False) -> Quantity:
         """
         This method gets run when an instance of a particular model class gets called (i.e. an x-value is
         passed in). As the model stores parameter values it only needs an x-value at which to evaluate the
-        output and return a value.
+        output and return a value. By default it will use the best fit parameters stored in this model, but can
+        use the parameter distributions to produce a distribution of values at x.
 
         :param Quantity x: The x-position at which the model should be evaluated.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate model values; this can
+            only be used if a fit has been performed using the model instance. Default is False, in which case
+            the current parameters will be used to calculate a single value.
         :return: The y-value of the model at x.
         :rtype: Quantity
         """
@@ -175,7 +179,17 @@ class BaseModel1D(metaclass=ABCMeta):
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
             warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.")
 
-        return self.model(x, *self._model_pars).to(self._y_unit)
+        # Check whether parameter distributions have been added to this model
+        if use_par_dist and len(self._par_dists[0]) == 0:
+            raise XGAFitError("No fit has been performed with this model, so there are no parameter distributions"
+                              " available.")
+
+        if use_par_dist:
+            val = self.get_realisations(x)
+        else:
+            val = self.model(x[..., None], *self._model_pars).to(self._y_unit)
+
+        return val
 
     def get_realisations(self, x: Quantity) -> Quantity:
         """
@@ -215,7 +229,7 @@ class BaseModel1D(metaclass=ABCMeta):
         """
         raise NotImplementedError("Base Model doesn't have this implemented")
 
-    def derivative(self, x: Quantity, dx: Quantity) -> Quantity:
+    def derivative(self, x: Quantity, dx: Quantity, use_par_dist: bool = False) -> Quantity:
         """
         Calculates a numerical derivative of the model at the specified x value, using the specified dx
         value. This method will be overridden in models that have an analytical solution to their first
@@ -223,19 +237,26 @@ class BaseModel1D(metaclass=ABCMeta):
 
         :param Quantity x: The point(s) at which the slope of the model should be measured.
         :param Quantity dx: The dx value to use during the calculation.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        return self.nth_derivative(x, dx, 1)
+        return self.nth_derivative(x, dx, 1, use_par_dist)
 
-    def nth_derivative(self, x: Quantity, dx: Quantity, order: int) -> Quantity:
+    def nth_derivative(self, x: Quantity, dx: Quantity, order: int, use_par_dist: bool = False) -> Quantity:
         """
         A method to calculate the nth order derivative of the model using a numerical method.
 
         :param Quantity x: The point(s) at which the slope of the model should be measured.
         :param Quantity dx: The dx value to use during the calculation.
         :param int order: The order of the desired derivative.
-        :return: The value(s) of the nth order derivative of the model at x.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
+        :return: The value(s) of the nth order derivative of the model at x, either calculated from the current
+            best fit parameters, or a distribution.
         :rtype: Quantity
         """
         # Just checking that the units of x and dx aren't silly
@@ -252,8 +273,9 @@ class BaseModel1D(metaclass=ABCMeta):
         else:
             dx = dx.to(self._x_unit)
 
-        return Quantity(derivative(lambda r: self(Quantity(r, self._x_unit)).value, x.value, dx.value, n=order),
-                        self._y_unit / np.power(self._x_unit, order))
+        der_val = Quantity(derivative(lambda r: self(Quantity(r, self._x_unit), use_par_dist).value, x.value,
+                                      dx.value, n=order), self._y_unit / np.power(self._x_unit, order))
+        return der_val
 
     def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method: str = 'direct') -> Quantity:
         """
