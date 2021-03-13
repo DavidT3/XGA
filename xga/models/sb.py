@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/03/2021, 13:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 14:16. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -19,7 +19,16 @@ class BetaProfile1D(BaseModel1D):
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('ct/(s*arcmin**2)'),
                  cust_start_pars: List[Quantity] = None):
+        """
+        The init of a subclass of the XGA BaseModel1D class, describing the surface brightness beta profile model.
 
+        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+            used start values. The units are checked against default start values.
+        """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
             x_unit = Unit(x_unit)
@@ -89,7 +98,7 @@ class BetaProfile1D(BaseModel1D):
         return norm * np.power((1 + (np.power(x / r_core, 2))), ((-3 * beta) + 0.5))
         # return norm * (1 + ((x / r_core)**2)**((-3 * beta) + 0.5))
 
-    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
         """
         Calculates the gradient of the beta profile at a given point, overriding the numerical method implemented
         in the BaseModel1D class, as this simple model has an easily derivable first derivative.
@@ -97,10 +106,20 @@ class BetaProfile1D(BaseModel1D):
         :param Quantity x: The point(s) at which the slope of the model should be measured.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
             been left in so that the inputs for this method don't vary between models.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        beta, r_core, norm = self._model_pars
+        # Just makes sure that if there are multiple x values then the broadcasting will go to the correct shape of
+        #  numpy array
+        x = x[..., None]
+        # Generates a distribution of derivatives using the parameter distributions
+        if not use_par_dist:
+            beta, r_core, norm = self._model_pars
+        else:
+            beta, r_core, norm = self.par_dists
         return ((2*x)/np.power(r_core, 2))*((-3*beta) + 0.5)*norm*np.power((1+(np.power(x/r_core, 2))), ((-3*beta)-0.5))
 
     def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method='analytical') -> Quantity:
@@ -169,6 +188,17 @@ class DoubleBetaProfile1D(BaseModel1D):
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('ct/(s*arcmin**2)'),
                  cust_start_pars: List[Quantity] = None):
+        """
+        The init of a subclass of the XGA BaseModel1D class, describing the surface brightness double-beta
+        profile model.
+
+        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+            used start values. The units are checked against default start values.
+        """
 
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -250,7 +280,7 @@ class DoubleBetaProfile1D(BaseModel1D):
         return (norm_one * np.power((1 + (np.power(x / r_core_one, 2))), ((-3 * beta_one) + 0.5))) + \
                (norm_two * np.power((1 + (np.power(x / r_core_two, 2))), ((-3 * beta_two) + 0.5)))
 
-    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
         """
         Calculates the gradient of the double beta profile at a given point, overriding the numerical method
         implemented in the BaseModel1D class, as this simple model has an easily derivable first derivative.
@@ -258,10 +288,18 @@ class DoubleBetaProfile1D(BaseModel1D):
         :param Quantity x: The point(s) at which the slope of the model should be measured.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
             been left in so that the inputs for this method don't vary between models.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        beta_one, r_core_one, norm_one, beta_two, r_core_two, norm_two = self._model_pars
+        x = x[..., None]
+        if not use_par_dist:
+            beta_one, r_core_one, norm_one, beta_two, r_core_two, norm_two = self._model_pars
+        else:
+            beta_one, r_core_one, norm_one, beta_two, r_core_two, norm_two = self.par_dists
+
         p1 = ((2*x)/np.power(r_core_one, 2))*((-3*beta_one) + 0.5)*norm_one*np.power((1+(np.power(x/r_core_one, 2))),
                                                                                      ((-3*beta_one)-0.5))
         p2 = ((2*x)/np.power(r_core_two, 2))*((-3*beta_two)+0.5)*norm_two*np.power((1+(np.power(x/r_core_two, 2))),

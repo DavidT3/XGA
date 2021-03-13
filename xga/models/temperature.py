@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2021, 19:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 14:16. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -18,6 +18,17 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV'),
                  cust_start_pars: List[Quantity] = None):
+        """
+        The init of a subclass of the XGA BaseModel1D class, describing a simple version of the galaxy cluster
+        temperature profile model created by Vikhlinin et al.
+
+        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+            used start values. The units are checked against default start values.
+        """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
             x_unit = Unit(x_unit)
@@ -99,7 +110,7 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
 
         return t_zero * cool_expr * out_expr
 
-    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
         """
         Calculates the gradient of the simple Vikhlinin temperature profile at a given point, overriding the
         numerical method implemented in the BaseModel1D class.
@@ -107,10 +118,18 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         :param Quantity x: The point(s) at which the slope of the model should be measured.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
             been left in so that the inputs for this method don't vary between models.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        r_c, a, t_m, t_0, r_t, c = self._model_pars
+        x = x[..., None]
+        if not use_par_dist:
+            r_c, a, t_m, t_0, r_t, c = self._model_pars
+        else:
+            r_c, a, t_m, t_0, r_t, c = self.par_dists
+
         p1 = (((x/r_t)**2)+1)**(-c/2)*((a*-(t_m-t_0))*((x**2)+(r_t**2))*((x/r_c)**a)
                                        - c*x**2*(((x/r_c)**a)+1)*(t_m+(t_0*((x/r_c)**a))))
         p2 = x*(x**2+r_t**2)*(((x/r_c)**a) + 1)**2
@@ -125,6 +144,17 @@ class VikhlininTemperature1D(BaseModel1D):
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV'),
                  cust_start_pars: List[Quantity] = None):
+        """
+        The init of a subclass of the XGA BaseModel1D class, describing the full version of the galaxy cluster
+        temperature profile model created by Vikhlinin et al.
+
+        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+            used start values. The units are checked against default start values.
+        """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
             x_unit = Unit(x_unit)

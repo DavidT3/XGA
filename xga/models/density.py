@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/03/2021, 12:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 14:16. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -17,7 +17,17 @@ class KingProfile1D(BaseModel1D):
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3'),
                  cust_start_pars: List[Quantity] = None):
+        """
+        The init of a subclass of the XGA BaseModel1D class, describing a basic model for galaxy cluster gas
+        density, the king profile.
 
+        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+            used start values. The units are checked against default start values.
+        """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
             x_unit = Unit(x_unit)
@@ -83,7 +93,7 @@ class KingProfile1D(BaseModel1D):
         """
         return norm * np.power((1 + (np.power(x / r_core, 2))), (-3 * beta))
 
-    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
         """
         Calculates the gradient of the king profile at a given point, overriding the numerical method implemented
         in the BaseModel1D class, as this simple model has an easily derivable first derivative.
@@ -91,10 +101,18 @@ class KingProfile1D(BaseModel1D):
         :param Quantity x: The point(s) at which the slope of the model should be measured.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
             been left in so that the inputs for this method don't vary between models.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        beta, r_core, norm = self._model_pars
+        x = x[..., None]
+        if not use_par_dist:
+            beta, r_core, norm = self._model_pars
+        else:
+            beta, r_core, norm = self.par_dists
+
         return (-6*beta*norm*x/np.power(r_core, 2))*np.power((1+np.power(x/r_core, 2)), (-3*beta) - 1)
 
 
@@ -106,7 +124,17 @@ class SimpleVikhlininDensity1D(BaseModel1D):
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3'),
                  cust_start_pars: List[Quantity] = None):
+        """
+        The init of a subclass of the XGA BaseModel1D class, describing a simplified version of Vikhlinin et al.'s
+        model for the gas density profile of a galaxy cluster.
 
+        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+            used start values. The units are checked against default start values.
+        """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
             x_unit = Unit(x_unit)
@@ -190,7 +218,7 @@ class SimpleVikhlininDensity1D(BaseModel1D):
         result = norm * np.sqrt(first_term * second_term)
         return result
 
-    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
         """
         Calculates the gradient of the simple Vikhlinin density profile at a given point, overriding the
         numerical method implemented in the BaseModel1D class.
@@ -198,12 +226,19 @@ class SimpleVikhlininDensity1D(BaseModel1D):
         :param Quantity x: The point(s) at which the slope of the model should be measured.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
             been left in so that the inputs for this method don't vary between models.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        # TODO DOUBLE CHECK THIS WHEN I'M LESS TIRED
-        beta, r_core, alpha, r_s, epsilon, norm = self.model_pars
+        x = x[..., None]
+        if not use_par_dist:
+            beta, r_core, alpha, r_s, epsilon, norm = self.model_pars
+        else:
+            beta, r_core, alpha, r_s, epsilon, norm = self.par_dists
 
+        # TODO DOUBLE CHECK THIS WHEN I'M LESS TIRED
         first_term = -1*norm*np.sqrt(np.power(x/r_core, -alpha)*np.power((x**3/r_s**3) + 1, -epsilon/3)
                                      *np.power((x**2/r_core**2) + 1, 0.5*(alpha-(6*beta))))
         second_term = 1/(2*x*(x**2 + r_core**2)*(x**3 + r_s**3))
@@ -220,6 +255,17 @@ class VikhlininDensity1D(BaseModel1D):
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3'),
                  cust_start_pars: List[Quantity] = None):
+        """
+        The init of a subclass of the XGA BaseModel1D class, describing the full version of Vikhlinin et al.'s
+        model for the gas density profile of a galaxy cluster.
+
+        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+            representation or an astropy unit object.
+        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+            used start values. The units are checked against default start values.
+        """
 
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -318,7 +364,7 @@ class VikhlininDensity1D(BaseModel1D):
 
         return np.sqrt((np.power(norm_one, 2) * first_term * second_term) + (np.power(norm_two, 2) * additive_term))
 
-    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, '')) -> Quantity:
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
         """
         Calculates the gradient of the full Vikhlinin density profile at a given point, overriding the
         numerical method implemented in the BaseModel1D class.
@@ -326,10 +372,17 @@ class VikhlininDensity1D(BaseModel1D):
         :param Quantity x: The point(s) at which the slope of the model should be measured.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
             been left in so that the inputs for this method don't vary between models.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        b, rc, a, rs, e, g, n, b2, rc2, n2 = self.model_pars
+        x = x[..., None]
+        if not use_par_dist:
+            b, rc, a, rs, e, g, n, b2, rc2, n2 = self.model_pars
+        else:
+            b, rc, a, rs, e, g, n, b2, rc2, n2 = self.par_dists
 
         # Its horrible I know...
         p1 = (-6*b2*(n2**2)*x*(((x/rc2)**2) + 1)**((-3*b2)-1)) / rc2**2
