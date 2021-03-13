@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 14:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 16:43. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -76,8 +76,8 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         t_priors = [{'prior': Quantity([0, 15], 'keV'), 'type': 'uniform'},
                     {'prior': (Quantity([0, 15], 'keV')/k_B).to('K'), 'type': 'uniform'}]
 
-        priors = [r_priors[xu_ind], Quantity([-10, 10]), t_priors[yu_ind], t_priors[yu_ind], r_priors[xu_ind],
-                  Quantity([-10, 10])]
+        priors = [r_priors[xu_ind], {'prior': Quantity([-10, 10]), 'type': 'uniform'}, t_priors[yu_ind],
+                  t_priors[yu_ind], r_priors[xu_ind], {'prior': Quantity([-10, 10]), 'type': 'uniform'}]
 
         nice_pars = [r"R$_{\rm{cool}}$", r"a$_{\rm{cool}}$", r"T$_{\rm{min}}$", "T$_{0}$", r"R$_{\rm{T}}$", "c"]
         info_dict = {'author': 'Ghirardini et al.', 'year': 2019,
@@ -202,8 +202,9 @@ class VikhlininTemperature1D(BaseModel1D):
         t_priors = [{'prior': Quantity([0, 15], 'keV'), 'type': 'uniform'},
                     {'prior': (Quantity([0, 15], 'keV')/k_B).to('K'), 'type': 'uniform'}]
 
-        priors = [r_priors[xu_ind], Quantity([-10, 10]), t_priors[yu_ind], t_priors[yu_ind], r_priors[xu_ind],
-                  Quantity([-10, 10]), Quantity([-10, 10]), Quantity([-10, 10])]
+        priors = [r_priors[xu_ind], {'prior': Quantity([-10, 10]), 'type': 'uniform'}, t_priors[yu_ind],
+                  t_priors[yu_ind], r_priors[xu_ind], {'prior': Quantity([-10, 10]), 'type': 'uniform'},
+                  {'prior': Quantity([-10, 10]), 'type': 'uniform'}, {'prior': Quantity([-10, 10]), 'type': 'uniform'}]
 
         nice_pars = [r"R$_{\rm{cool}}$", r"a$_{\rm{cool}}$", r"T$_{\rm{min}}$", "T$_{0}$", r"R$_{\rm{T}}$", "a", "b",
                      "c"]
