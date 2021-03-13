@@ -1,17 +1,16 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 13:50. Copyright (c) David J Turner
-from typing import Tuple, Union
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 22:56. Copyright (c) David J Turner
+from typing import Tuple, Union, List
 from warnings import warn
 
 import numpy as np
 from astropy.constants import k_B, G
-from astropy.units import Quantity, UnitConversionError, temperature_energy, K, Unit
+from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
-from scipy.misc import derivative
 
 from .. import NHC, HY_MASS, ABUND_TABLES
 from ..exceptions import ModelNotAssociatedError, XGAInvalidModelError, XGAFitError
-from ..models import PROF_TYPE_MODELS
+from ..models import PROF_TYPE_MODELS, BaseModel1D
 from ..products.base import BaseProfile1D
 from ..products.phot import RateMap
 from ..sourcetools.deproj import shell_ann_vol_intersect
@@ -931,46 +930,36 @@ class HydrostaticMass(BaseProfile1D):
     mass profile, which in turn can be used to measure the hydrostatic mass at a particular radius. In contrast
     to other profile objects, this one calculates the y values itself.
     """
-    def __init__(self, temperature_profile: GasTemperature3D, temperature_model: str, density_profile: GasDensity3D,
-                 density_model: str, radii: Quantity, radii_err: Quantity, deg_radii: Quantity):
+    def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
+                 density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
+                 radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
+                 num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
+                 progress: bool = True):
+        """
 
-        raise NotImplementedError("Haven't yet double checked this class to make sure it works with "
-                                  "my new way of doing models")
+        :param temperature_profile:
+        :param temperature_model:
+        :param density_profile:
+        :param density_model:
+        :param radii:
+        :param radii_err:
+        :param deg_radii:
+        :param fit_method:
+        :param num_walkers:
+        :param list/int num_steps:
+        :param num_samples:
+        :param show_warn:
+        :param progress:
+        """
         # We check whether the temperature profile passed is actually the type of profile we need
         if type(temperature_profile) != GasTemperature3D:
             raise TypeError("Only a GasTemperature3D instance may be passed for temperature_profile, check "
                             "you haven't accidentally passed a ProjectedGasTemperature1D.")
-        # Now we check the model choice passed for the temperature profile
-        try:
-            self._temp_fit = temperature_profile.get_model_fit(temperature_model)
-        except XGAInvalidModelError:
-            allowed = ", ".format(list(PROF_TYPE_MODELS['gas_temperature'].keys()))
-            raise ValueError("{p} is not an allowed temperature_model value, please use one of the "
-                             "following: {a}".format(a=allowed, p=temperature_model))
-        except ModelNotAssociatedError:
-            raise ValueError("{p} is an allowed temperature_model value, but hasn't yet been fitted to the "
-                             "profile".format(p=temperature_model))
-        except XGAFitError:
-            raise ValueError("{p} is an allowed temperature_model value, but the fit you performed was not "
-                             "successful".format(p=temperature_model))
 
         # We repeat this process with the density profile and model
         if type(density_profile) != GasDensity3D:
             raise TypeError("Only a GasDensity3D instance may be passed for density_profile, check you haven't "
                             "accidentally passed a GasDensity3D.")
-
-        try:
-            self._dens_fit = density_profile.get_model_fit(density_model)
-        except XGAInvalidModelError:
-            allowed = ", ".format(list(PROF_TYPE_MODELS['gas_density'].keys()))
-            raise ValueError("{p} is not an allowed density_model value, please use one of the "
-                             "following: {a}".format(a=allowed, p=density_model))
-        except ModelNotAssociatedError:
-            raise ValueError("{p} is an allowed density_model value, but hasn't yet been fitted to the "
-                             "profile".format(p=density_model))
-        except XGAFitError:
-            raise ValueError("{p} is an allowed density_model value, but the fit you performed was not "
-                             "successful".format(p=density_model))
 
         # We also need to check that someone hasn't done something dumb like pass profiles from two different
         #  clusters, so we'll compare source names.
@@ -1008,22 +997,38 @@ class HydrostaticMass(BaseProfile1D):
                 set_id = temperature_profile.set_ident
                 set_store = temperature_profile.associated_set_storage_key
 
+        self._temp_prof = temperature_profile
+        self._dens_prof = density_profile
+
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
         else:
             radii = radii.to('kpc')
             radii_err = radii_err.to('kpc')
+        # This will be overwritten by the super() init call, but it allows rad_check to work
+        self._radii = radii
 
         # We won't REQUIRE that the profiles have data point generated at the same radii, as we're gonna
         #  measure masses from the models, but I do need to check that the passed radii are within the radii of the
         #  and warn the user if they aren't
-        if (radii > temperature_profile.annulus_bounds[-1]).any() \
-                or (radii[-1] > density_profile.annulus_bounds[-1]).any():
-            warn("Some radii passed to the HydrostaticMass init are outside the data range covered by the temperature "
-                 "or density profiles, as such you will be extrapolating based on the model fits.")
+        self.rad_check(radii)
 
-        self._temp_prof = temperature_profile
-        self._dens_prof = density_profile
+        if isinstance(num_steps, int):
+            temp_steps = num_steps
+            dens_steps = num_steps
+        elif isinstance(num_steps, list) and len(num_steps) == 2:
+            temp_steps = num_steps[0]
+            dens_steps = num_steps[1]
+        else:
+            raise ValueError("If a list is passed for num_steps then it must have two entries, the first for the "
+                             "temperature profile fit and the second for the density profile fit")
+
+        # Make sure the model fits have been run, and retrieve the model objects
+        temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps, num_walkers,
+                                                    progress, show_warn)
+        density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps, num_walkers, progress,
+                                            show_warn)
+
         self._temp_model = temperature_model
         self._dens_model = density_model
 
@@ -1046,7 +1051,8 @@ class HydrostaticMass(BaseProfile1D):
         # This dictionary is for measurements of the baryon fraction
         self._baryon_fraction = {}
 
-    def mass(self, radius: Quantity, conf_level: int = 90, num_real: int = 1000) -> Union[Quantity, Quantity]:
+    def mass(self, radius: Quantity, conf_level: int = 68.2, particle_mass: Quantity = HY_MASS) \
+            -> Union[Quantity, Quantity]:
         """
         A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
         radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
@@ -1055,7 +1061,8 @@ class HydrostaticMass(BaseProfile1D):
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
         :param int conf_level: The confidence level for the mass uncertainties.
-        :param int num_real: The number of model realisations which should be generated for error propagation.
+        :param Quantity particle_mass: Only necessary when the density profile has units are of number density
+            rather than mass density, the average mass of the particles in the cluster.
         :return: An astropy quantity containing the mass/masses, lower and upper uncertainties, and another containing
             the mass realisation distribution.
         :rtype: Union[Quantity, Quantity]
@@ -1063,117 +1070,60 @@ class HydrostaticMass(BaseProfile1D):
         upper = 50 + (conf_level / 2)
         lower = 50 - (conf_level / 2)
 
-        if (radius.max() > self._temp_prof.annulus_bounds[-1]).any() \
-                or (radius.max() > self._dens_prof.annulus_bounds[-1]).any():
-            warn("The radius at which you have requested the mass is greater than the outermost radius of the "
-                 "temperature or density profile used to generate this mass profile, prediction may not be valid.")
+        # Prints a warning of the mass is outside the range of the data
+        self.rad_check(radius)
 
-        if radius.isscalar and str(radius.value) in self._masses \
-                and str(conf_level) in self._masses[str(radius.value)]:
+        if radius.isscalar and radius in self._masses:
             already_run = True
-            mass_res = self._masses[str(radius.value)][str(conf_level)]["result"]
-            real_masses = self._masses[str(radius.value)][str(conf_level)]["distribution"]
+            mass_dist = self._masses[radius]
         else:
             already_run = False
 
-        if not already_run:
-            # Reading out the fit parameters of the chosen temperature model, just for convenience
-            temp_fit_pars = self._temp_fit['par']
-            # TODO GENERATING REALISATIONS HERE ASSUMES GAUSSIAN ERRORS AGAIN
-            temp_one_sig_err = self._temp_fit['par_err_1sig']
+        if not already_run and self._dens_model.success and self._temp_model.success:
 
-            temp_model_par = np.repeat(temp_fit_pars[..., None], num_real, axis=1).T
-            temp_model_par_err = np.repeat(temp_one_sig_err[..., None], num_real, axis=1).T
+            # This grabs gas density values from the density model, need to check whether the model is in units
+            #  of mass or number density
+            if self._dens_model.y_unit.is_equivalent('1/cm^3'):
+                dens = self._dens_model.get_realisations(radius) * particle_mass
+                dens_der = self._dens_model.derivative(radius, use_par_dist=True) * particle_mass
+            else:
+                dens = self._dens_model.get_realisations(radius)
+                dens_der = self._dens_model.derivative(radius, use_par_dist=True)
 
-            # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
-            temp_par_dists = np.random.normal(temp_model_par, temp_model_par_err)
-
-            # Setting up the units for the derivative of the temperature profile
-            der_temp_unit = self._temp_prof.values_unit / radius.unit
-
-            # Actually calculating the derivative of the temperature profile
-            # TODO DO THE DERIVATIVES OF THE MODELS SO THIS COULD BE DONE ANALYTICALLY WHERE POSSIBLE
-            der_temp = Quantity(derivative(lambda r: self._temp_fit['model_func'](r, *temp_fit_pars), radius.value),
-                                der_temp_unit)
-            # The realisation derivatives
-            der_real_temps = Quantity(derivative(lambda r: self._temp_fit['model_func'](r, *temp_par_dists.T),
-                                                 radius.value[..., None]), der_temp_unit).T
-            temp = Quantity(self._temp_fit['model_func'](radius.value, *temp_fit_pars), self._temp_prof.values_unit)
-            # Realisation temperatures
-            real_temps = Quantity(self._temp_fit['model_func'](radius.value[..., None], *temp_par_dists.T),
-                                  self._temp_prof.values_unit).T
-
-            # As of the time of writing, its not currently possible to get this far with a temperature profile
-            #  in Kelvin, only keV, but I may allow it later and I would like to be ready for that possibility
-            if not temp.unit == K:
-                # Convert the temperature to Kelvin using the temperature energy equivalency, the value that
-                #  goes into the hydrostatic mass equation must be in Kelvin
-                temp = temp.to('K', equivalencies=temperature_energy())
-                real_temps = real_temps.to('K', equivalencies=temperature_energy())
-                # I can't use the equivalency when there is another unit in there for some reason, so I just do it
-                #  manually by dividing by the Boltzmann constant
-                der_temp = (der_temp / k_B).to(K / radius.unit)
-                der_real_temps = (der_real_temps / k_B).to(K / radius.unit)
-
-            # Now setting up the unit for the density profile derivative
-            der_dens_unit = self._dens_prof.values_unit / radius.unit
-
-            # This process is all essentially the same as the temperature derivatives
-            dens_fit_pars = self._dens_fit['par']
-            # TODO GENERATING REALISATIONS HERE ASSUMES GAUSSIAN ERRORS AGAIN
-            dens_one_sig_err = self._dens_fit['par_err_1sig']
-
-            dens_model_par = np.repeat(dens_fit_pars[..., None], num_real, axis=1).T
-            dens_model_par_err = np.repeat(dens_one_sig_err[..., None], num_real, axis=1).T
-            dens_par_dists = np.random.normal(dens_model_par, dens_model_par_err)
-
-            der_dens = Quantity(derivative(lambda r: self._dens_fit['model_func'](r, *dens_fit_pars), radius.value),
-                                der_dens_unit)
-            der_real_dens = Quantity(derivative(lambda r: self._dens_fit['model_func'](r, *dens_par_dists.T),
-                                                radius.value[..., None]), der_dens_unit).T
-            dens = Quantity(self._dens_fit['model_func'](radius.value, *dens_fit_pars), self._dens_prof.values_unit)
-            real_dens = Quantity(self._dens_fit['model_func'](radius.value[..., None], *dens_par_dists.T),
-                                 self._dens_prof.values_unit).T
+            # We do the same for the temperature vals, again need to check the units
+            if self._temp_model.y_unit.is_equivalent("keV"):
+                temp = (self._temp_model.get_realisations(radius)/k_B).to('K')
+                temp_der = self._temp_model.derivative(radius, use_par_dist=True)/k_B
+                temp_der = temp_der.to(Unit('K')/self._temp_model.x_unit)
+            else:
+                temp = self._temp_model.get_realisations(radius).to('K')
+                temp_der = self._temp_model.derivative(radius, use_par_dist=True).to('K')
 
             # Please note that this is just the vanilla hydrostatic mass equation, but not written in the standard form.
             # Here there are no logs in the derivatives, and I've also written it in such a way that mass densities are
             #  used rather than number densities
-            mass = ((-1 * k_B * np.power(radius, 2)) / (dens * HY_MASS * G)) * ((dens * der_temp) + (temp * der_dens))
+            mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * HY_MASS * G)) * \
+                        ((dens * temp_der) + (temp * dens_der))
+
             # Just converts the mass/masses to the unit we normally use for them
-            mass = mass.to('Msun')
+            mass_dist = mass_dist.to('Msun').T
 
-            real_masses = ((-1 * k_B * np.power(radius, 2)) / (real_dens * HY_MASS * G)) * \
-                          ((real_dens * der_real_temps) + (real_temps * der_real_dens))
-            real_masses = real_masses.to('Msun')
+            if radius.isscalar:
+                self._masses[radius] = mass_dist
 
-            # Making sure we don't include any profiles with NaN in by selecting only realisations where
-            #  no NaN is present
-            nan_not_present = np.array(list(set(np.where(~np.isnan(real_masses))[0])))
-            if real_masses.ndim == 2:
-                real_masses = real_masses[nan_not_present, :]
-            elif real_masses.ndim == 1:
-                real_masses = real_masses[nan_not_present]
-            else:
-                raise ValueError("You have a 3D mass realisation array and I have no idea how...")
+        elif not self._temp_model.success or not self._dens_model.success:
+            raise XGAFitError("One or both of the fits to the temperature model and density profiles were "
+                              "not successful")
 
-            mass_mean = np.mean(real_masses, axis=0)
-            mass_lower = mass_mean - np.percentile(real_masses, lower, axis=0)
-            mass_upper = np.percentile(real_masses, upper, axis=0) - mass_mean
+        mass_med = np.mean(mass_dist, axis=0)
+        mass_lower = mass_med - np.percentile(mass_dist, lower, axis=0)
+        mass_upper = np.percentile(mass_dist, upper, axis=0) - mass_med
 
-            # mass_err = np.nanstd(real_masses, axis=0) * sigma
+        mass_res = Quantity(np.array([mass_med.value, mass_lower.value, mass_upper.value]), mass_dist.unit)
 
-            mass_res = Quantity(np.array([mass_mean.value, mass_lower.value, mass_upper.value]), mass.unit)
+        return mass_res, mass_dist
 
-            if mass_res.ndim == 1 and str(radius.value) not in self._masses:
-                self._masses[str(radius.value)] = {str(conf_level): {"result": mass_res, "distribution": real_masses}}
-            elif mass_res.ndim == 1 and str(radius.value) in self._masses and \
-                    str(conf_level) not in self._masses[str(radius.value)]:
-                self._masses[str(radius.value)][str(conf_level)] = {"result": mass_res, "distribution": real_masses}
-
-        return mass_res, real_masses
-
-    def view_mass_dist(self, radius: Quantity, conf_level: int = 90, num_real: int = 1000, figsize=(8, 8),
-                       colour: str = "tab:gray"):
+    def view_mass_dist(self, radius: Quantity, conf_level: int = 90, figsize=(8, 8),  colour: str = "lightslategrey"):
         """
         A method which will generate a histogram of the mass distribution that resulted from the mass calculation
         at the supplied radius. If the mass for the passed radius has already been measured it, and the mass
@@ -1182,7 +1132,6 @@ class HydrostaticMass(BaseProfile1D):
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
         :param int conf_level: The confidence level for the mass uncertainties.
-        :param int num_real: The number of model realisations which should be generated for error propagation.
         :param str colour: The desired colour of the histogram.
         :param tuple figsize: The desired size of the histogram figure.
         """
@@ -1190,7 +1139,7 @@ class HydrostaticMass(BaseProfile1D):
             raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
                              "arrays of radii are not supported.")
 
-        hy_mass, hy_dist = self.mass(radius, conf_level, num_real)
+        hy_mass, hy_dist = self.mass(radius, conf_level)
         plt.figure(figsize=figsize)
         ax = plt.gca()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
@@ -1212,8 +1161,7 @@ class HydrostaticMass(BaseProfile1D):
         plt.tight_layout()
         plt.show()
 
-    def baryon_fraction(self, radius: Quantity, conf_level: int = 90, num_real: int = 1000) \
-            -> Tuple[Quantity, Quantity]:
+    def baryon_fraction(self, radius: Quantity, conf_level: int = 90) -> Tuple[Quantity, Quantity]:
         """
         A method to use the hydrostatic mass information of this profile, and the gas density information of the
         input gas density profile, to calculate a baryon fraction within the given radius.
@@ -1221,11 +1169,11 @@ class HydrostaticMass(BaseProfile1D):
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             baryon fraction within.
         :param int conf_level: The confidence level for the uncertainties.
-        :param int num_real: The number of model realisations which should be generated for error propagation.
         :return: An astropy quantity containing the baryon fraction, -ve error, and +ve error, and another quantity
             containing the baryon fraction distribution.
         :rtype: Tuple[Quantity, Quantity]
         """
+        raise NotImplementedError("Haven't refinished this yet")
         if not radius.isscalar:
             raise ValueError("Unfortunately this method can only calculate the baryon fraction within one "
                              "radius, multiple radii are not supported.")
@@ -1241,7 +1189,7 @@ class HydrostaticMass(BaseProfile1D):
         lower = 50 - (conf_level / 2)
 
         if not already_run:
-            hy_mass, hy_mass_dist = self.mass(radius, conf_level, num_real)
+            hy_mass, hy_mass_dist = self.mass(radius, conf_level)
 
             gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model, radius, conf_level)
             if len(hy_mass_dist) < len(gas_mass_dist):
@@ -1268,7 +1216,7 @@ class HydrostaticMass(BaseProfile1D):
         return bar_frac_res, bar_frac_dist
 
     def view_baryon_fraction_dist(self, radius: Quantity, conf_level: int = 90, num_real: int = 1000, figsize=(8, 8),
-                                  colour: str = "tab:gray"):
+                                  colour: str = "lightslategrey"):
         """
         A method which will generate a histogram of the baryon fraction distribution that resulted from the mass
         calculation at the supplied radius. If the baryon fraction for the passed radius has already been
@@ -1357,6 +1305,22 @@ class HydrostaticMass(BaseProfile1D):
         :rtype: GasDensity3D
         """
         return self._dens_prof
+
+    def rad_check(self, rad: Quantity):
+        """
+        Very simple method that prints a warning if the radius is outside the range of data covered by the
+        density or temperature profiles.
+
+        :param Quantity rad: The radius to check.
+        """
+        if not rad.unit.is_equivalent(self.radii_unit):
+            raise UnitConversionError("You can only check radii in units convertible to the radius units of "
+                                      "the profile ({})".format(self.radii_unit.to_string()))
+
+        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) \
+                or (self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()):
+            warn("Some radii are outside the data range covered by the temperature or density profiles, as such "
+                 "you will be extrapolating based on the model fits.")
 
 
 class Generic1D(BaseProfile1D):
