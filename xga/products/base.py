@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/03/2021, 16:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/03/2021, 13:00. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1237,7 +1237,7 @@ class BaseProfile1D:
 
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
-             normalise_x: bool = False, normalise_y: bool = False):
+             normalise_x: bool = False, normalise_y: bool = False, x_label: str = None, y_label: str = None):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1261,6 +1261,8 @@ class BaseProfile1D:
             the profile object.
         :param bool normalise_y: Should the y-axis be normalised with the x_norm value passed on the definition of
             the profile object.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
         """
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
@@ -1379,13 +1381,19 @@ class BaseProfile1D:
         x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
         y_unit = r"$\left[" + plot_y_vals.unit.to_string("latex").strip("$") + r"\right]$"
 
-        # Setting the main plot's x label
-        main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
-        if self._background.value == 0 or not back_sub:
-            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        if x_label is None:
+            # Setting the main plot's x label
+            main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
         else:
+            main_ax.set_xlabel(x_label + " {}".format(x_unit), fontsize=13)
+
+        if y_label is None and (self._background.value == 0 or not back_sub):
+            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        elif y_label is None:
             # If background has been subtracted it will be mentioned in the y axis label
             main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        elif y_label is not None:
+            main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
 
         main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
         # This makes sure legend keys are shown, even if the data is hidden
@@ -1416,9 +1424,9 @@ class BaseProfile1D:
             res_ax.set_ylabel("Model - Data", fontsize=13)
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
-        if models and custom_title is None and len(self._good_model_fits) == 1:
+        if models and custom_title is None and len(self.good_model_fits) == 1:
             title_str = "{l} Profile - with model".format(l=self._y_axis_name)
-        elif models and custom_title is None and len(self._good_model_fits) > 1:
+        elif models and custom_title is None and len(self.good_model_fits) > 1:
             title_str = "{l} Profile - with models".format(l=self._y_axis_name)
         elif not models and custom_title is None:
             title_str = "{l} Profile".format(l=self._y_axis_name)
@@ -1948,7 +1956,7 @@ class BaseAggregateProfile1D:
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
              ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
              just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, normalise_x: bool = False,
-             normalise_y: bool = False):
+             normalise_y: bool = False, x_label: str = None, y_label: str = None):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -1974,6 +1982,8 @@ class BaseAggregateProfile1D:
             definition of the constituent profile objects.
         :param bool normalise_y: Should the y-axis values be normalised with the y_norm value passed on the
             definition of the constituent profile objects.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -2106,13 +2116,19 @@ class BaseAggregateProfile1D:
         x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
         y_unit = r"$\left[" + plot_y_vals.unit.to_string("latex").strip("$") + r"\right]$"
 
-        # Setting the main plot's x label
-        main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
-        if not self._back_avail or not back_sub:
-            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        if x_label is None:
+            # Setting the main plot's x label
+            main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
         else:
+            main_ax.set_xlabel(x_label + " {}".format(x_unit), fontsize=13)
+
+        if y_label is None and (self._background.value == 0 or not back_sub):
+            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        elif y_label is None:
             # If background has been subtracted it will be mentioned in the y axis label
             main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        elif y_label is not None:
+            main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
 
         # Adds a legend with source names to the side if the user requested it
         # I let the user decide because there could be quite a few names in it and it could get messy
