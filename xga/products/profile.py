@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 16:53. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 17:22. Copyright (c) David J Turner
 from typing import Tuple, Union, List
 from warnings import warn
 
@@ -8,7 +8,7 @@ from astropy.constants import k_B, G, m_p
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
 
-from .. import NHC, HY_MASS, ABUND_TABLES, MEAN_MOL_WEIGHT
+from .. import NHC, ABUND_TABLES, MEAN_MOL_WEIGHT
 from ..exceptions import ModelNotAssociatedError, XGAInvalidModelError, XGAFitError
 from ..models import PROF_TYPE_MODELS, BaseModel1D
 from ..products.base import BaseProfile1D
@@ -681,14 +681,15 @@ class APECNormalisation1D(BaseProfile1D):
         # Angular diameter distance is calculated using the cosmology which was associated with the cluster
         #  at definition
         conv_factor = (4 * np.pi * e_to_p_ratio * (ang_dist * (1 + redshift)) ** 2) / 10 ** -14
-        gas_dens = np.sqrt(np.linalg.inv(vol_intersects.T) @ self.values * conv_factor) * (1+e_to_p_ratio)
-        gas_dens *= (MEAN_MOL_WEIGHT*m_p)
+        to_mass_dens = (1+e_to_p_ratio) * MEAN_MOL_WEIGHT*m_p
+        gas_dens = np.sqrt(np.linalg.inv(vol_intersects.T) @ self.values * conv_factor) * to_mass_dens
 
         norm_real = self.generate_data_realisations(num_real)
         gas_dens_reals = Quantity(np.zeros(norm_real.shape), gas_dens.unit)
         # Using a loop here is ugly and relatively slow, but it should be okay
         for i in range(0, num_real):
-            gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @ norm_real[i, :] * conv_factor) * HY_MASS
+            gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @ norm_real[i, :] * conv_factor) * \
+                                    to_mass_dens
 
         # Convert the profile and the realisations to the correct unit
         gas_dens = gas_dens.to("Msun/Mpc^3")
