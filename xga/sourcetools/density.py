@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 14:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 14:23. Copyright (c) David J Turner
 
 from copy import deepcopy
 from typing import Union, List, Tuple
@@ -19,7 +19,7 @@ from ..samples.extended import ClusterSample
 from ..sas.spec import region_setup
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
-from ..utils import NHC, ABUND_TABLES, HY_MASS, NUM_CORES
+from ..utils import NHC, ABUND_TABLES, NUM_CORES
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
 
@@ -334,8 +334,6 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
 
     # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
     e_to_p_ratio = NHC[abund_table]
-    print(e_to_p_ratio)
-
     for src_ind, src in enumerate(sources):
         sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                           psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
@@ -403,9 +401,9 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                 #  abundance tables
                 # The mean molecular weight multiplied by the proton mass
                 conv_mass = 0.61*m_p
-                dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*HY_MASS).to('Msun/Mpc^3'), sb_prof.centre,
+                dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'), sb_prof.centre,
                                          src.name, cur_obs, cur_inst, dens_rads_errs,
-                                         (num_dens_err*HY_MASS).to('Msun/Mpc^3'), deg_radii=dens_deg_rads)
+                                         (num_dens_err*conv_mass).to('Msun/Mpc^3'), deg_radii=dens_deg_rads)
 
             src.update_products(dens_prof)
         dens_prog.update(1)
