@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/03/2021, 13:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 09:39. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -2122,7 +2122,7 @@ class BaseAggregateProfile1D:
         else:
             main_ax.set_xlabel(x_label + " {}".format(x_unit), fontsize=13)
 
-        if y_label is None and (self._background.value == 0 or not back_sub):
+        if y_label is None and (not self._back_avail or not back_sub):
             main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
         elif y_label is None:
             # If background has been subtracted it will be mentioned in the y axis label
