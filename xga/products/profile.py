@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 15:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 16:53. Copyright (c) David J Turner
 from typing import Tuple, Union, List
 from warnings import warn
 
@@ -431,8 +431,8 @@ class GasDensity3D(BaseProfile1D):
 
         return gas_mass, mass_dist
 
-    def view_gas_mass_dist(self, model: str, outer_rad: Quantity, conf_level: int = 68.2, figsize=(8, 8),
-                           colour: str = "lightslategrey", fit_method: str = 'mcmc'):
+    def view_gas_mass_dist(self, model: str, outer_rad: Quantity, conf_level: float = 68.2, figsize=(8, 8),
+                           bins: Union[str, int] = 'auto', colour: str = "lightslategrey", fit_method: str = 'mcmc'):
         """
         A method which will generate a histogram of the gas mass distribution that resulted from the gas mass
         calculation at the supplied radius. If the mass for the passed radius has already been measured it, and the
@@ -440,10 +440,12 @@ class GasDensity3D(BaseProfile1D):
 
         :param str model: The name of the model from which to derive the gas mass.
         :param Quantity outer_rad: The radius within which to calculate the gas mass.
-        :param int conf_level: The confidence level for the mass uncertainties, this doesn't affect the
+        :param float conf_level: The confidence level for the mass uncertainties, this doesn't affect the
             distribution, only the vertical lines indicating the measured value of gas mass.
         :param str colour: The desired colour of the histogram.
         :param tuple figsize: The desired size of the histogram figure.
+        :param int/str bins: The argument to be passed to plt.hist, either a number of bins or a binning
+            algorithm name.
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
         """
         if not outer_rad.isscalar:
@@ -457,7 +459,7 @@ class GasDensity3D(BaseProfile1D):
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
         ax.yaxis.set_ticklabels([])
 
-        plt.hist(gas_mass_dist.value, bins='auto', color=colour, alpha=0.7, density=False)
+        plt.hist(gas_mass_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
         plt.xlabel("Gas Mass [M$_{\odot}$]")
         plt.title("Gas Mass Distribution at {}".format(outer_rad.to_string()))
 
@@ -626,7 +628,7 @@ class APECNormalisation1D(BaseProfile1D):
 
         # This just checks that the input abundance table is legal
         if abund_table in NHC and abund_table in ABUND_TABLES:
-            hy_to_elec = NHC[abund_table]
+            e_to_p_ratio = NHC[abund_table]
         elif abund_table in ABUND_TABLES and abund_table not in NHC:
             avail_nhc = ", ".join(list(NHC.keys()))
             raise ValueError(
@@ -650,7 +652,7 @@ class APECNormalisation1D(BaseProfile1D):
         #  which has chosen for analysis
         ang_dist = cosmo.angular_diameter_distance(redshift).to("cm")
 
-        return cur_rads, ang_dist, hy_to_elec
+        return cur_rads, ang_dist, e_to_p_ratio
 
     def gas_density_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr', num_real: int = 100,
                             sigma: int = 2) -> GasDensity3D:
@@ -667,10 +669,9 @@ class APECNormalisation1D(BaseProfile1D):
         :return: The gas density profile which has been calculated from the APEC normalisation profile.
         :rtype: GasDensity3D
         """
-        raise NotImplementedError("I cannot currently trust this, I need to back through and check everything")
         # There are commonalities between this method and others in this class, so I shifted some steps into an
         #  internal method which we will call now
-        cur_rads, ang_dist, hy_to_elec = self._gen_profile_setup(redshift, cosmo, abund_table)
+        cur_rads, ang_dist, e_to_p_ratio = self._gen_profile_setup(redshift, cosmo, abund_table)
 
         # This uses a handy function I defined a while back to calculate the volume intersections between the annuli
         #  and spherical shells
@@ -679,8 +680,9 @@ class APECNormalisation1D(BaseProfile1D):
         # This is essentially the constants bit of the XSPEC APEC normalisation
         # Angular diameter distance is calculated using the cosmology which was associated with the cluster
         #  at definition
-        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (hy_to_elec * 10 ** -14)
-        gas_dens = np.sqrt(np.linalg.inv(vol_intersects.T) @ self.values * conv_factor) * HY_MASS
+        conv_factor = (4 * np.pi * e_to_p_ratio * (ang_dist * (1 + redshift)) ** 2) / 10 ** -14
+        gas_dens = np.sqrt(np.linalg.inv(vol_intersects.T) @ self.values * conv_factor) * (1+e_to_p_ratio)
+        gas_dens *= (MEAN_MOL_WEIGHT*m_p)
 
         norm_real = self.generate_data_realisations(num_real)
         gas_dens_reals = Quantity(np.zeros(norm_real.shape), gas_dens.unit)
@@ -925,20 +927,29 @@ class HydrostaticMass(BaseProfile1D):
                  num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
                  progress: bool = True):
         """
+        The init method for the HydrostaticMass class, uses temperature and density profiles, along with models, to
+        set up the hydrostatic mass profile.
 
-        :param temperature_profile:
-        :param temperature_model:
-        :param density_profile:
-        :param density_model:
-        :param radii:
-        :param radii_err:
-        :param deg_radii:
-        :param fit_method:
-        :param num_walkers:
-        :param list/int num_steps:
-        :param num_samples:
-        :param show_warn:
-        :param progress:
+        :param GasTemperature3D temperature_profile: The XGA 3D temperature profile to take temperature
+            information from.
+        :param str/BaseModel1D temperature_model: The model to fit to the temperature profile, either a name or an
+            instance of an XGA temperature model class.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
+        :param str/BaseModel1D density_model: The model to fit to the density profile, either a name or an
+            instance of an XGA density model class.
+        :param Quantity radii: The radii at which to measure the hydrostatic mass for the declaration of the profile.
+        :param Quantity radii_err: The uncertainties on the radii.
+        :param Quantity deg_radii: The radii values, but in units of degrees. This is required to set up a storage key
+            for the profile to be filed in an XGA source.
+        :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
+        :param int num_walkers: If the fit method is 'mcmc' then this will set the number of walkers for the emcee
+            sampler to set up.
+        :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler to
+            take. If a single number is passed then that number of steps is used for both profiles, otherwise if a list
+            is passed the first entry is used for the temperature fit, and the second for the density fit.
+        :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
+        :param bool show_warn: Should warnings thrown during the fitting processes be shown.
+        :param bool progress: Should fit progress bars be shown.
         """
         # We check whether the temperature profile passed is actually the type of profile we need
         if type(temperature_profile) != GasTemperature3D:
@@ -1037,10 +1048,7 @@ class HydrostaticMass(BaseProfile1D):
         # Setting up a dictionary to store hydro mass results in.
         self._masses = {}
 
-        # This dictionary is for measurements of the baryon fraction
-        self._baryon_fraction = {}
-
-    def mass(self, radius: Quantity, conf_level: int = 68.2) -> Union[Quantity, Quantity]:
+    def mass(self, radius: Quantity, conf_level: float = 68.2) -> Union[Quantity, Quantity]:
         """
         A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
         radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
@@ -1052,7 +1060,7 @@ class HydrostaticMass(BaseProfile1D):
 
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
-        :param int conf_level: The confidence level for the mass uncertainties.
+        :param float conf_level: The confidence level for the mass uncertainties, the default is 68.2% (~1σ).
         :return: An astropy quantity containing the mass/masses, lower and upper uncertainties, and another containing
             the mass realisation distribution.
         :rtype: Union[Quantity, Quantity]
@@ -1107,7 +1115,7 @@ class HydrostaticMass(BaseProfile1D):
             raise XGAFitError("One or both of the fits to the temperature model and density profiles were "
                               "not successful")
 
-        mass_med = np.mean(mass_dist, axis=0)
+        mass_med = np.percentile(mass_dist, 50, axis=0)
         mass_lower = mass_med - np.percentile(mass_dist, lower, axis=0)
         mass_upper = np.percentile(mass_dist, upper, axis=0) - mass_med
 
@@ -1115,7 +1123,8 @@ class HydrostaticMass(BaseProfile1D):
 
         return mass_res, mass_dist
 
-    def view_mass_dist(self, radius: Quantity, conf_level: int = 90, figsize=(8, 8),  colour: str = "lightslategrey"):
+    def view_mass_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8), bins: Union[str, int] = 'auto',
+                       colour: str = "lightslategrey"):
         """
         A method which will generate a histogram of the mass distribution that resulted from the mass calculation
         at the supplied radius. If the mass for the passed radius has already been measured it, and the mass
@@ -1123,7 +1132,9 @@ class HydrostaticMass(BaseProfile1D):
 
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
-        :param int conf_level: The confidence level for the mass uncertainties.
+        :param float conf_level: The confidence level for the mass uncertainties, the default is 68.2% (~1σ).
+        :param int/str bins: The argument to be passed to plt.hist, either a number of bins or a binning
+            algorithm name.
         :param str colour: The desired colour of the histogram.
         :param tuple figsize: The desired size of the histogram figure.
         """
@@ -1131,13 +1142,18 @@ class HydrostaticMass(BaseProfile1D):
             raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
                              "arrays of radii are not supported.")
 
+        # Grabbing out the mass distribution, as well as the single result that describes the mass distribution.
         hy_mass, hy_dist = self.mass(radius, conf_level)
+        # Setting up the figure
         plt.figure(figsize=figsize)
         ax = plt.gca()
+        # Includes nicer ticks
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        # And removing the yaxis tick labels as its just a number of values per bin
         ax.yaxis.set_ticklabels([])
 
-        plt.hist(hy_dist.value, bins='auto', color=colour, alpha=0.7, density=False)
+        # Plot the histogram and set up labels
+        plt.hist(hy_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
         plt.xlabel(self._y_axis_name + " M$_{\odot}$")
         plt.title("Mass Distribution at {}".format(radius.to_string()))
 
@@ -1146,6 +1162,7 @@ class HydrostaticMass(BaseProfile1D):
                      "_{-" + str(lab_hy_mass[1].round(2).value) + "}"
         res_label = r"$\rm{M_{hydro}} = " + vals_label + "10^{14}M_{\odot}$"
 
+        # And this just plots the 'result' on the distribution as a series of vertical lines
         plt.axvline(hy_mass[0].value, color='red', label=res_label)
         plt.axvline(hy_mass[0].value-hy_mass[1].value, color='red', linestyle='dashed')
         plt.axvline(hy_mass[0].value+hy_mass[2].value, color='red', linestyle='dashed')
@@ -1153,62 +1170,48 @@ class HydrostaticMass(BaseProfile1D):
         plt.tight_layout()
         plt.show()
 
-    def baryon_fraction(self, radius: Quantity, conf_level: int = 90) -> Tuple[Quantity, Quantity]:
+    def baryon_fraction(self, radius: Quantity, conf_level: float = 68.2) -> Tuple[Quantity, Quantity]:
         """
         A method to use the hydrostatic mass information of this profile, and the gas density information of the
         input gas density profile, to calculate a baryon fraction within the given radius.
 
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             baryon fraction within.
-        :param int conf_level: The confidence level for the uncertainties.
+        :param float conf_level: The confidence level for the mass uncertainties, the default is 68.2% (~1σ).
         :return: An astropy quantity containing the baryon fraction, -ve error, and +ve error, and another quantity
             containing the baryon fraction distribution.
         :rtype: Tuple[Quantity, Quantity]
         """
-        raise NotImplementedError("Haven't refinished this yet")
+        upper = 50 + (conf_level / 2)
+        lower = 50 - (conf_level / 2)
+
         if not radius.isscalar:
             raise ValueError("Unfortunately this method can only calculate the baryon fraction within one "
                              "radius, multiple radii are not supported.")
 
-        if str(radius.value) in self._baryon_fraction and str(conf_level) in self._baryon_fraction[str(radius.value)]:
-            already_run = True
-            bar_frac_res = self._baryon_fraction[str(radius.value)][str(conf_level)]["result"]
-            bar_frac_dist = self._baryon_fraction[str(radius.value)][str(conf_level)]["distribution"]
+        # Grab out the hydrostatic mass distribution, and the gas mass distribution
+        hy_mass, hy_mass_dist = self.mass(radius, conf_level)
+        gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model.name, radius, conf_level,
+                                                           self._dens_model.fit_method)
+
+        # If the distributions don't have the same number of entries (though as far I can recall they always should),
+        #  then we just make sure we have two equal length distributions to divide
+        if len(hy_mass_dist) < len(gas_mass_dist):
+            bar_frac_dist = gas_mass_dist[:len(hy_mass_dist)] / hy_mass_dist
+        elif len(hy_mass_dist) > len(gas_mass_dist):
+            bar_frac_dist = gas_mass_dist / hy_mass_dist[:len(gas_mass_dist)]
         else:
-            already_run = False
+            bar_frac_dist = gas_mass_dist / hy_mass_dist
 
-        upper = 50 + (conf_level / 2)
-        lower = 50 - (conf_level / 2)
-
-        if not already_run:
-            hy_mass, hy_mass_dist = self.mass(radius, conf_level)
-
-            gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model, radius, conf_level)
-            if len(hy_mass_dist) < len(gas_mass_dist):
-                bar_frac_dist = gas_mass_dist[:len(hy_mass_dist)] / hy_mass_dist
-            elif len(hy_mass_dist) > len(gas_mass_dist):
-                bar_frac_dist = gas_mass_dist / hy_mass_dist[:len(gas_mass_dist)]
-            else:
-                bar_frac_dist = gas_mass_dist / hy_mass_dist
-
-            bar_frac_mean = np.mean(bar_frac_dist, axis=0)
-            bar_frac_lower = bar_frac_mean - np.percentile(bar_frac_dist, lower, axis=0)
-            bar_frac_upper = np.percentile(bar_frac_dist, upper, axis=0) - bar_frac_mean
-            # TODO Reconcile this with issue #403, should I be returning the gm/hym, or the mean of the dist
-            bar_frac_res = Quantity([(gas_mass[0]/hy_mass[0]).value, bar_frac_lower.value, bar_frac_upper.value], '')
-
-            if str(radius.value) not in self._baryon_fraction:
-                self._baryon_fraction[str(radius.value)] = {str(conf_level): {"result": bar_frac_res,
-                                                                              "distribution": bar_frac_dist}}
-            elif str(radius.value) in self._baryon_fraction and str(conf_level) \
-                    not in self._baryon_fraction[str(radius.value)]:
-                self._baryon_fraction[str(radius.value)][str(conf_level)] = {"result": bar_frac_res,
-                                                                             "distribution": bar_frac_dist}
+        bfrac_med = np.percentile(bar_frac_dist, 50, axis=0)
+        bfrac_lower = bfrac_med - np.percentile(bar_frac_dist, lower, axis=0)
+        bfrac_upper = np.percentile(bar_frac_dist, upper, axis=0) - bfrac_med
+        bar_frac_res = Quantity([bfrac_med.value, bfrac_lower.value, bfrac_upper.value])
 
         return bar_frac_res, bar_frac_dist
 
-    def view_baryon_fraction_dist(self, radius: Quantity, conf_level: int = 90, num_real: int = 1000, figsize=(8, 8),
-                                  colour: str = "lightslategrey"):
+    def view_baryon_fraction_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8),
+                                  bins: Union[str, int] = 'auto', colour: str = "lightslategrey"):
         """
         A method which will generate a histogram of the baryon fraction distribution that resulted from the mass
         calculation at the supplied radius. If the baryon fraction for the passed radius has already been
@@ -1217,8 +1220,9 @@ class HydrostaticMass(BaseProfile1D):
 
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             baryon fraction within.
-        :param int conf_level: The confidence level for the baryon fraction uncertainties.
-        :param int num_real: The number of model realisations which should be generated for error propagation.
+        :param float conf_level: The confidence level for the mass uncertainties, the default is 68.2% (~1σ).
+        :param int/str bins: The argument to be passed to plt.hist, either a number of bins or a binning
+            algorithm name.
         :param tuple figsize: The desired size of the histogram figure.
         :param str colour: The desired colour of the histogram.
         """
@@ -1226,13 +1230,13 @@ class HydrostaticMass(BaseProfile1D):
             raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
                              "arrays of radii are not supported.")
 
-        bar_frac, bar_frac_dist = self.baryon_fraction(radius, conf_level, num_real)
+        bar_frac, bar_frac_dist = self.baryon_fraction(radius, conf_level)
         plt.figure(figsize=figsize)
         ax = plt.gca()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
         ax.yaxis.set_ticklabels([])
 
-        plt.hist(bar_frac_dist.value, bins='auto', color=colour, alpha=0.7)
+        plt.hist(bar_frac_dist.value, bins=bins, color=colour, alpha=0.7)
         plt.xlabel("Baryon Fraction")
         plt.title("Baryon Fraction Distribution at {}".format(radius.to_string()))
 
@@ -1248,13 +1252,11 @@ class HydrostaticMass(BaseProfile1D):
         plt.tight_layout()
         plt.show()
 
-    def baryon_fraction_profile(self, conf_level: int = 90, num_real: int = 1000) -> BaryonFraction:
+    def baryon_fraction_profile(self) -> BaryonFraction:
         """
         A method which uses the baryon_fraction method to construct a baryon fraction profile at the radii of
-        this HydrostaticMass profile.
+        this HydrostaticMass profile. The uncertainties on the baryon fraction are calculated at the 1σ level.
 
-        :param int conf_level: The confidence level for the uncertainties.
-        :param int num_real: The number of model realisations which should be generated for error propagation.
         :return: An XGA BaryonFraction object.
         :rtype: BaryonFraction
         """
@@ -1263,7 +1265,7 @@ class HydrostaticMass(BaseProfile1D):
         # Step through the radii of this profile
         for rad in self.radii:
             # Grabs the baryon fraction for the current radius
-            b_frac = self.baryon_fraction(rad, conf_level, num_real)[0]
+            b_frac = self.baryon_fraction(rad)[0]
 
             # Only need the actual result, not the distribution
             frac.append(b_frac[0])
