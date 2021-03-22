@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 14:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 15:16. Copyright (c) David J Turner
 from typing import Tuple, Union, List
 from warnings import warn
 
@@ -1040,76 +1040,15 @@ class HydrostaticMass(BaseProfile1D):
         # This dictionary is for measurements of the baryon fraction
         self._baryon_fraction = {}
 
-    # def alt_mass(self, radius: Quantity, conf_level: int = 68.2, particle_mass: Quantity = HY_MASS) \
-    #         -> Union[Quantity, Quantity]:
-    #
-    #     upper = 50 + (conf_level / 2)
-    #     lower = 50 - (conf_level / 2)
-    #
-    #     # Prints a warning of the mass is outside the range of the data
-    #     self.rad_check(radius)
-    #
-    #     if radius.isscalar and radius in self._masses:
-    #         already_run = True
-    #         mass_dist = self._masses[radius]
-    #     else:
-    #         already_run = False
-    #
-    #
-    #     # This grabs gas density values from the density model, need to check whether the model is in units
-    #     #  of mass or number density
-    #     if self._dens_model.y_unit.is_equivalent('1/cm^3'):
-    #         # dens_der = self._dens_model.derivative(radius, use_par_dist=True)
-    #         ln_mod = lambda r: np.log(self._dens_model(Quantity(r, self._dens_model.x_unit), True).value)
-    #         dens_der = derivative(ln_mod, np.log(radius.value), 0.001)
-    #     else:
-    #         raise NotImplementedError("NO FAM")
-    #         dens = self._dens_model.get_realisations(radius)
-    #         dens_der = self._dens_model.derivative(radius, use_par_dist=True)
-    #
-    #     # We do the same for the temperature vals, again need to check the units
-    #     if self._temp_model.y_unit.is_equivalent("keV"):
-    #         temp = (self._temp_model.get_realisations(radius)/k_B).to('K')
-    #         ln_mod = lambda r: np.log((self._temp_model(Quantity(r, self._temp_model.x_unit), True)/k_B).to('K').value)
-    #         temp_der = derivative(ln_mod, np.log(radius.value), 0.001)
-    #
-    #         # temp_der = self._temp_model.derivative(radius, use_par_dist=True)/k_B
-    #         # temp_der = temp_der.to(Unit('K')/self._temp_model.x_unit)
-    #     else:
-    #         ln_mod = lambda r: np.log(self._temp_model(Quantity(r, self._temp_model.x_unit), True).value)
-    #         temp_der = derivative(ln_mod, np.log(radius.value), 0.001)
-    #
-    #         # temp = self._temp_model.get_realisations(radius).to('K')
-    #         # temp_der = self._temp_model.derivative(radius, use_par_dist=True).to('K')
-    #
-    #     mass_dist = ((-radius[..., None] * k_B*temp)/(G*u*0.6)*(dens_der + temp_der))
-    #
-    #     # mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * HY_MASS * G)) * \
-    #     #             ((dens * temp_der) + (temp * dens_der))
-    #
-    #     # Just converts the mass/masses to the unit we normally use for them
-    #     mass_dist = mass_dist.to('Msun').T
-    #
-    #     # if radius.isscalar:
-    #     #     self._masses[radius] = mass_dist
-    #     #
-    #     # elif not self._temp_model.success or not self._dens_model.success:
-    #     #     raise XGAFitError("One or both of the fits to the temperature model and density profiles were "
-    #     #                       "not successful")
-    #     print("BASTARD")
-    #     mass_med = np.mean(mass_dist, axis=0)
-    #     mass_lower = mass_med - np.percentile(mass_dist, lower, axis=0)
-    #     mass_upper = np.percentile(mass_dist, upper, axis=0) - mass_med
-    #
-    #     mass_res = Quantity(np.array([mass_med.value, mass_lower.value, mass_upper.value]), mass_dist.unit)
-    #
-    #     return mass_res, mass_dist
-
     def mass(self, radius: Quantity, conf_level: int = 68.2) -> Union[Quantity, Quantity]:
         """
         A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
         radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
         hydrostatic mass.
+
+        If the models for temperature and density have analytical solutions to their derivative wrt to radius then
+        those will be used to calculate the gradients at radius, but if not then a numerical method will be used for
+        which dx will be set to radius/1e+6.
 
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
@@ -1118,10 +1057,6 @@ class HydrostaticMass(BaseProfile1D):
             the mass realisation distribution.
         :rtype: Union[Quantity, Quantity]
         """
-
-        raise NotImplementedError("This will be fixed very soon, just need to alter the equation to expect "
-                                  "number density profiles and use the right mean mass")
-
         upper = 50 + (conf_level / 2)
         lower = 50 - (conf_level / 2)
 
@@ -1134,31 +1069,33 @@ class HydrostaticMass(BaseProfile1D):
         else:
             already_run = False
 
+        # If the models don't have analytical solutions to their derivative then the derivative method will need
+        #  a dx to assume, so I will set one equal to radius/1e+6, should be small enough.
+        dx = radius/1e+6
         if not already_run and self._dens_model.success and self._temp_model.success:
-
             # This grabs gas density values from the density model, need to check whether the model is in units
             #  of mass or number density
             if self._dens_model.y_unit.is_equivalent('1/cm^3'):
-                dens = self._dens_model.get_realisations(radius) * particle_mass
-                dens_der = self._dens_model.derivative(radius, use_par_dist=True) * particle_mass
-            else:
                 dens = self._dens_model.get_realisations(radius)
-                dens_der = self._dens_model.derivative(radius, use_par_dist=True)
+                dens_der = self._dens_model.derivative(radius, dx, True)
+            else:
+                dens = self._dens_model.get_realisations(radius) / (MEAN_MOL_WEIGHT*m_p)
+                dens_der = self._dens_model.derivative(radius, dx, True) / (MEAN_MOL_WEIGHT*m_p)
 
             # We do the same for the temperature vals, again need to check the units
             if self._temp_model.y_unit.is_equivalent("keV"):
                 temp = (self._temp_model.get_realisations(radius)/k_B).to('K')
-                temp_der = self._temp_model.derivative(radius, use_par_dist=True)/k_B
+                temp_der = self._temp_model.derivative(radius, dx, True)/k_B
                 temp_der = temp_der.to(Unit('K')/self._temp_model.x_unit)
             else:
                 temp = self._temp_model.get_realisations(radius).to('K')
-                temp_der = self._temp_model.derivative(radius, use_par_dist=True).to('K')
+                temp_der = self._temp_model.derivative(radius, dx, True).to('K')
 
             # Please note that this is just the vanilla hydrostatic mass equation, but not written in the standard form.
-            # Here there are no logs in the derivatives, and I've also written it in such a way that mass densities are
-            #  used rather than number densities
-            mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * HY_MASS * G)) * \
-                        ((dens * temp_der) + (temp * dens_der))
+            # Here there are no logs in the derivatives, because its easier to take advantage of astropy's quantities
+            #  that way.
+            mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT*m_p) * G)) * \
+                            ((dens * temp_der) + (temp * dens_der))
 
             # Just converts the mass/masses to the unit we normally use for them
             mass_dist = mass_dist.to('Msun').T
