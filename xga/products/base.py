@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 09:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 12:31. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -677,6 +677,25 @@ class BaseProfile1D:
         :return: The model instance, and a boolean flag as to whether this was a successful fit or not.
         :rtype: Tuple[BaseModel1D, bool]
         """
+        def find_to_replace(start_pos: np.ndarray, par_lims: np.ndarray) -> np.ndarray:
+            """
+            Tiny function to generate an array of which start positions are currently invalid and should
+            be replaced.
+
+            :param np.ndarray start_pos: The current start positions of the walkers/parameters to be checked.
+            :param np.ndarray par_lims: The limits imposed on the start parameters.
+            :return: A numpy array of True and False values, True means the value should be replaced/recalculated.
+            :rtype: np.ndarray
+            """
+            # It is possible that the start parameters can be outside of the range allowed by the the priors. In which
+            #  case the MCMC fit will get super upset but not actually throw an error.
+            start_check_greater = np.greater_equal(start_pos, par_lims[:, 0])
+            start_check_lower = np.less_equal(start_pos, par_lims[:, 1])
+            # Any true value in this array is a parameter that isn't in the allowed prior range
+            to_replace_arr = ~(start_check_greater & start_check_lower)
+
+            return to_replace_arr
+
         # I'm just defining these here so that the lines don't get too long for PEP standards
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
@@ -694,8 +713,9 @@ class BaseProfile1D:
         max_like_res = minimize(lambda *args: -log_likelihood(*args, model.model), model.unitless_start_pars,
                                 args=(rads, y_data, y_errs))
 
-        # This basically finds the order of magnitude (+1) of each parameter
-        ml_rand_dev = np.power(10, np.floor(np.log10(np.abs(max_like_res.x))))
+        # This basically finds the order of magnitude of each parameter, so we know the scale on which we should
+        #  randomly perturb
+        ml_rand_dev = np.power(10, np.floor(np.log10(np.abs(max_like_res.x)))) / 10
 
         # Then that order of magnitude is multiplied by a value drawn from a standard gaussian, and this is what
         #  we perturb the maximum likelihood values with - so we get random start parameters for all
@@ -704,15 +724,38 @@ class BaseProfile1D:
 
         # It is possible that some of the start parameters we've generated are outside the prior, in which
         #  case emcee gets quite angry. Just in case I draw random values from the priors of all parameters,
-        #  ready to be substituted in if a start par is outside the allowed range
+        #  ready to be substituted in, but only if I definitely can't get the start parameters from perturbing
+        #  the max likelihood 'fit'
         rand_uniform_pos = np.random.uniform(prior_arr[:, 0], prior_arr[:, 1], size=(num_walkers, model.num_pars))
 
-        # It is possible that the start parameters can be outside of the range allowed by the the priors. In which
-        #  case the MCMC fit will get super upset but not actually throw an error.
-        start_check_greater = np.greater_equal(pos, prior_arr[:, 0])
-        start_check_lower = np.less_equal(pos, prior_arr[:, 1])
-        # Any true value in this array is a parameter that isn't in the allowed prior range
-        to_replace = ~(start_check_greater & start_check_lower)
+        # Check which of the current start parameters are currently valid
+        to_replace = find_to_replace(pos, prior_arr)
+
+        # Setting up decent starting values is very important, so first I'm going to check if every single starting
+        #  value of any parameter is outside the bounds of our priors, because if that's true then the maximum
+        #  likelihood 'fit' to get the initial starting parameters is probably a bit crappy
+        all_bad = np.all(to_replace, axis=0)
+        if any(all_bad):
+            warn("All walker starting parameters for one or more of the model parameters are outside the priors, which"
+                 "probably indicates a bad initial fit (which is used to get initial start parameters). Values will be"
+                 " drawn from the priors directly.")
+            # This replacement only affects those parameters for which ALL start positions are outside the
+            #  prior range
+            all_bad_inds = np.argwhere(all_bad).T[0]
+            pos[:, all_bad_inds] = rand_uniform_pos[:, all_bad_inds]
+            # Now need to re-calculate the to_replace array, as it is no longer valid
+            to_replace = find_to_replace(pos, prior_arr)
+
+        # Now, if there are still problems with the starting positions, we know it is likely because some of
+        #  the random perturbations of the 'best fit' start parameters are outside the priors, thus we will
+        #  iteratively try and draw more acceptable perturbations, and if there are any 'bad' start positions
+        #  left after 100 tries then they'll just get assigned randomly drawn values from the priors
+        iter_cnt = 0
+        while True in to_replace and iter_cnt < 100:
+            new_pos = max_like_res.x + ml_rand_dev * np.random.randn(num_walkers, model.num_pars)
+            pos[to_replace] = new_pos[to_replace]
+            to_replace = find_to_replace(pos, prior_arr)
+            iter_cnt += 1
 
         # So any start values that fall outside the allowed range will be swapped out with a value randomly drawn
         #  from the prior
