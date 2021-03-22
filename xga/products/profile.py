@@ -1,14 +1,14 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 22:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 14:36. Copyright (c) David J Turner
 from typing import Tuple, Union, List
 from warnings import warn
 
 import numpy as np
-from astropy.constants import k_B, G
+from astropy.constants import k_B, G, m_p
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
 
-from .. import NHC, HY_MASS, ABUND_TABLES
+from .. import NHC, HY_MASS, ABUND_TABLES, MEAN_MOL_WEIGHT
 from ..exceptions import ModelNotAssociatedError, XGAInvalidModelError, XGAFitError
 from ..models import PROF_TYPE_MODELS, BaseModel1D
 from ..products.base import BaseProfile1D
@@ -372,8 +372,8 @@ class GasDensity3D(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Gas Density"
 
-    def gas_mass(self, model: str, outer_rad: Quantity, conf_level: float = 68.2, fit_method: str = 'mcmc',
-                 particle_mass: Quantity = HY_MASS) -> Tuple[Quantity, Quantity]:
+    def gas_mass(self, model: str, outer_rad: Quantity, conf_level: float = 68.2,
+                 fit_method: str = 'mcmc') -> Tuple[Quantity, Quantity]:
         """
         A method to calculate and return the gas mass (with uncertainties). This method uses the model to generate
         a gas mass distribution (using the fit parameter distributions from the fit performed using the model), then
@@ -383,8 +383,6 @@ class GasDensity3D(BaseProfile1D):
         :param Quantity outer_rad: The radius to measure the gas mass out to.
         :param float conf_level: The confidence level to use to calculate the mass errors
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
-        :param Quantity particle_mass: Only necessary for density profiles whose units are of number density
-            rather than mass density, the average mass of the particles in the cluster.
         :return: A Quantity containing three values (mass, -err, +err), and another Quantity containing
             the entire mass distribution from the whole realisation.
         :rtype: Tuple[Quantity, Quantity]
@@ -398,12 +396,6 @@ class GasDensity3D(BaseProfile1D):
 
         if not model_obj.success:
             raise ValueError("The fit to that model was not considered a success by the fit method, cannot proceed.")
-
-        # Making sure we can definitely calculate a gas mass with the current information
-        if self._sub_type == 'num_dens' and particle_mass is None:
-            raise UnitConversionError("Cannot calculate mass from a number density profile without a particle mass")
-        elif self._sub_type == 'num_dens' and particle_mass is not None and not particle_mass.unit.is_equivalent('kg'):
-            raise UnitConversionError("The unit of particle_mass must be convertible to kg.")
 
         # Checking the input radius units
         if not outer_rad.unit.is_equivalent(self.radii_unit):
@@ -422,14 +414,13 @@ class GasDensity3D(BaseProfile1D):
         if str(model_obj) not in self._gas_masses:
             self._gas_masses[str(model_obj)] = {}
 
-        if outer_rad not in self._gas_masses[str(model_obj)] or particle_mass != HY_MASS:
+        if outer_rad not in self._gas_masses[str(model_obj)]:
             mass_dist = model_obj.volume_integral(outer_rad, use_par_dist=True)
             if self._sub_type == 'num_dens':
-                mass_dist *= particle_mass
+                mass_dist *= (MEAN_MOL_WEIGHT*m_p)
 
             mass_dist = mass_dist.to('Msun')
-            if particle_mass == HY_MASS:
-                self._gas_masses[str(model_obj)][outer_rad] = mass_dist
+            self._gas_masses[str(model_obj)][outer_rad] = mass_dist
         else:
             mass_dist = self._gas_masses[str(model_obj)][outer_rad]
 
@@ -441,7 +432,7 @@ class GasDensity3D(BaseProfile1D):
         return gas_mass, mass_dist
 
     def view_gas_mass_dist(self, model: str, outer_rad: Quantity, conf_level: int = 68.2, figsize=(8, 8),
-                           colour: str = "lightslategrey", fit_method: str = 'mcmc', particle_mass: Quantity = HY_MASS):
+                           colour: str = "lightslategrey", fit_method: str = 'mcmc'):
         """
         A method which will generate a histogram of the gas mass distribution that resulted from the gas mass
         calculation at the supplied radius. If the mass for the passed radius has already been measured it, and the
@@ -454,14 +445,12 @@ class GasDensity3D(BaseProfile1D):
         :param str colour: The desired colour of the histogram.
         :param tuple figsize: The desired size of the histogram figure.
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
-        :param Quantity particle_mass: Only necessary for density profiles whose units are of number density
-            rather than mass density, the average mass of the particles in the cluster.
         """
         if not outer_rad.isscalar:
             raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
                              "arrays of radii are not supported.")
 
-        gas_mass, gas_mass_dist = self.gas_mass(model, outer_rad, conf_level, fit_method, particle_mass)
+        gas_mass, gas_mass_dist = self.gas_mass(model, outer_rad, conf_level, fit_method)
 
         plt.figure(figsize=figsize)
         ax = plt.gca()
@@ -472,9 +461,9 @@ class GasDensity3D(BaseProfile1D):
         plt.xlabel("Gas Mass [M$_{\odot}$]")
         plt.title("Gas Mass Distribution at {}".format(outer_rad.to_string()))
 
-        lab_hy_mass = gas_mass.to("10^13Msun")
-        vals_label = str(lab_hy_mass[0].round(2).value) + "^{+" + str(lab_hy_mass[2].round(2).value) + "}" + \
-                     "_{-" + str(lab_hy_mass[1].round(2).value) + "}"
+        mass_label = gas_mass.to("10^13Msun")
+        vals_label = str(mass_label[0].round(2).value) + "^{+" + str(mass_label[2].round(2).value) + "}" + \
+                     "_{-" + str(mass_label[1].round(2).value) + "}"
         res_label = r"$\rm{M_{gas}} = " + vals_label + "10^{13}M_{\odot}$"
 
         plt.axvline(gas_mass[0].value, color='red', label=res_label)
@@ -484,8 +473,7 @@ class GasDensity3D(BaseProfile1D):
         plt.tight_layout()
         plt.show()
 
-    def gas_mass_profile(self, model: str, radii: Quantity = None, fit_method: str = 'mcmc',
-                         particle_mass: Quantity = HY_MASS) -> GasMass1D:
+    def gas_mass_profile(self, model: str, radii: Quantity = None, fit_method: str = 'mcmc') -> GasMass1D:
         """
         A method to calculate and return a gas mass profile.
 
@@ -507,7 +495,7 @@ class GasDensity3D(BaseProfile1D):
         mass_vals = []
         mass_errs = []
         for rad in radii:
-            gas_mass = self.gas_mass(model, rad, fit_method=fit_method, particle_mass=particle_mass)[0]
+            gas_mass = self.gas_mass(model, rad, fit_method=fit_method)[0]
             mass_vals.append(gas_mass.value[0])
             mass_errs.append(gas_mass[1:].max().value)
 
@@ -679,6 +667,7 @@ class APECNormalisation1D(BaseProfile1D):
         :return: The gas density profile which has been calculated from the APEC normalisation profile.
         :rtype: GasDensity3D
         """
+        raise NotImplementedError("I cannot currently trust this, I need to back through and check everything")
         # There are commonalities between this method and others in this class, so I shifted some steps into an
         #  internal method which we will call now
         cur_rads, ang_dist, hy_to_elec = self._gen_profile_setup(redshift, cosmo, abund_table)
@@ -973,9 +962,9 @@ class HydrostaticMass(BaseProfile1D):
             raise ValueError("The temperature and density profiles do not have the same central coordinate.")
         # Same reasoning with the ObsID and instrument
         elif temperature_profile.obs_id != density_profile.obs_id:
-            raise ValueError("The temperature and density profiles do not have the same associated ObsID.")
+            warn("The temperature and density profiles do not have the same associated ObsID.")
         elif temperature_profile.instrument != density_profile.instrument:
-            raise ValueError("The temperature and density profiles do not have the same associated instrument.")
+            warn("The temperature and density profiles do not have the same associated instrument.")
 
         # We see if either of the profiles have an associated spectrum
         if temperature_profile.set_ident is None and density_profile.set_ident is None:
@@ -1051,8 +1040,72 @@ class HydrostaticMass(BaseProfile1D):
         # This dictionary is for measurements of the baryon fraction
         self._baryon_fraction = {}
 
-    def mass(self, radius: Quantity, conf_level: int = 68.2, particle_mass: Quantity = HY_MASS) \
-            -> Union[Quantity, Quantity]:
+    # def alt_mass(self, radius: Quantity, conf_level: int = 68.2, particle_mass: Quantity = HY_MASS) \
+    #         -> Union[Quantity, Quantity]:
+    #
+    #     upper = 50 + (conf_level / 2)
+    #     lower = 50 - (conf_level / 2)
+    #
+    #     # Prints a warning of the mass is outside the range of the data
+    #     self.rad_check(radius)
+    #
+    #     if radius.isscalar and radius in self._masses:
+    #         already_run = True
+    #         mass_dist = self._masses[radius]
+    #     else:
+    #         already_run = False
+    #
+    #
+    #     # This grabs gas density values from the density model, need to check whether the model is in units
+    #     #  of mass or number density
+    #     if self._dens_model.y_unit.is_equivalent('1/cm^3'):
+    #         # dens_der = self._dens_model.derivative(radius, use_par_dist=True)
+    #         ln_mod = lambda r: np.log(self._dens_model(Quantity(r, self._dens_model.x_unit), True).value)
+    #         dens_der = derivative(ln_mod, np.log(radius.value), 0.001)
+    #     else:
+    #         raise NotImplementedError("NO FAM")
+    #         dens = self._dens_model.get_realisations(radius)
+    #         dens_der = self._dens_model.derivative(radius, use_par_dist=True)
+    #
+    #     # We do the same for the temperature vals, again need to check the units
+    #     if self._temp_model.y_unit.is_equivalent("keV"):
+    #         temp = (self._temp_model.get_realisations(radius)/k_B).to('K')
+    #         ln_mod = lambda r: np.log((self._temp_model(Quantity(r, self._temp_model.x_unit), True)/k_B).to('K').value)
+    #         temp_der = derivative(ln_mod, np.log(radius.value), 0.001)
+    #
+    #         # temp_der = self._temp_model.derivative(radius, use_par_dist=True)/k_B
+    #         # temp_der = temp_der.to(Unit('K')/self._temp_model.x_unit)
+    #     else:
+    #         ln_mod = lambda r: np.log(self._temp_model(Quantity(r, self._temp_model.x_unit), True).value)
+    #         temp_der = derivative(ln_mod, np.log(radius.value), 0.001)
+    #
+    #         # temp = self._temp_model.get_realisations(radius).to('K')
+    #         # temp_der = self._temp_model.derivative(radius, use_par_dist=True).to('K')
+    #
+    #     mass_dist = ((-radius[..., None] * k_B*temp)/(G*u*0.6)*(dens_der + temp_der))
+    #
+    #     # mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * HY_MASS * G)) * \
+    #     #             ((dens * temp_der) + (temp * dens_der))
+    #
+    #     # Just converts the mass/masses to the unit we normally use for them
+    #     mass_dist = mass_dist.to('Msun').T
+    #
+    #     # if radius.isscalar:
+    #     #     self._masses[radius] = mass_dist
+    #     #
+    #     # elif not self._temp_model.success or not self._dens_model.success:
+    #     #     raise XGAFitError("One or both of the fits to the temperature model and density profiles were "
+    #     #                       "not successful")
+    #     print("BASTARD")
+    #     mass_med = np.mean(mass_dist, axis=0)
+    #     mass_lower = mass_med - np.percentile(mass_dist, lower, axis=0)
+    #     mass_upper = np.percentile(mass_dist, upper, axis=0) - mass_med
+    #
+    #     mass_res = Quantity(np.array([mass_med.value, mass_lower.value, mass_upper.value]), mass_dist.unit)
+    #
+    #     return mass_res, mass_dist
+
+    def mass(self, radius: Quantity, conf_level: int = 68.2) -> Union[Quantity, Quantity]:
         """
         A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
         radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
@@ -1061,12 +1114,14 @@ class HydrostaticMass(BaseProfile1D):
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
         :param int conf_level: The confidence level for the mass uncertainties.
-        :param Quantity particle_mass: Only necessary when the density profile has units are of number density
-            rather than mass density, the average mass of the particles in the cluster.
         :return: An astropy quantity containing the mass/masses, lower and upper uncertainties, and another containing
             the mass realisation distribution.
         :rtype: Union[Quantity, Quantity]
         """
+
+        raise NotImplementedError("This will be fixed very soon, just need to alter the equation to expect "
+                                  "number density profiles and use the right mean mass")
+
         upper = 50 + (conf_level / 2)
         lower = 50 - (conf_level / 2)
 

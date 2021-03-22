@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 14:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 14:36. Copyright (c) David J Turner
 
 import json
 import os
@@ -83,6 +83,10 @@ XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
 
 # I know this is practically pointless, I could just use m_p, but I like doing things properly.
 HY_MASS = m_p + m_e
+
+# Mean molecular weight, mu
+# TODO Make sure this doesn't change with abundance table, I suspect it should
+MEAN_MOL_WEIGHT = 0.61
 
 # A centralised constant to define what radius labels are allowed
 RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]

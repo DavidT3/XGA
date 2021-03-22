@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 14:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 14:36. Copyright (c) David J Turner
 
 from copy import deepcopy
 from typing import Union, List, Tuple
@@ -19,7 +19,7 @@ from ..samples.extended import ClusterSample
 from ..sas.spec import region_setup
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
-from ..utils import NHC, ABUND_TABLES, NUM_CORES
+from ..utils import NHC, ABUND_TABLES, NUM_CORES, MEAN_MOL_WEIGHT
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
 
@@ -400,7 +400,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                 # TODO Check the origin of the mean molecular weight, see if there are different values for different
                 #  abundance tables
                 # The mean molecular weight multiplied by the proton mass
-                conv_mass = 0.61*m_p
+                conv_mass = MEAN_MOL_WEIGHT*m_p
                 dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'), sb_prof.centre,
                                          src.name, cur_obs, cur_inst, dens_rads_errs,
                                          (num_dens_err*conv_mass).to('Msun/Mpc^3'), deg_radii=dens_deg_rads)
