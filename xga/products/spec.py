@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 13:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/03/2021, 17:15. Copyright (c) David J Turner
 
 
 import os
@@ -9,7 +9,7 @@ from typing import Tuple, Union, List, Dict
 import numpy as np
 from astropy.io import fits
 from astropy.units import Quantity, Unit, UnitConversionError
-from fitsio import hdu
+from fitsio import hdu, FITS
 from matplotlib import legend_handler
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
@@ -684,6 +684,73 @@ class Spectrum(BaseProduct):
                                           "spectrum".format(m=model))
 
         return self._plot_data[model]
+
+    def get_arf_data(self) -> Tuple[Quantity, Quantity]:
+        """
+        Reads in and returns the ARF effective areas for this spectrum.
+
+        :return: The mid point of the energy bins and their corresponding effective areas.
+        :rtype: Tuple[Quantity, Quantity]
+        """
+        # Read in the ARF fits file from the arf property
+        arf_read = FITS(self.arf)
+        # Read out the data from the ARF table into python variables
+        lo_lims = arf_read[1]['ENERG_LO'].read()
+        hi_lims = arf_read[1]['ENERG_HI'].read()
+        eff_area = Quantity(arf_read[1]['SPECRESP'].read(), 'cm^2')
+
+        # The centre of the upper and lower limit values for each area is used to calculate the central energy of
+        #  the bin
+        mid_en = Quantity((hi_lims+lo_lims)/2, 'keV')
+        # And make sure to close the arf file after reading
+        arf_read.close()
+
+        # Return the energies and effective areas
+        return mid_en, eff_area
+
+    def view_arf(self, figsize: Tuple = (8, 6), xscale: str = 'linear', yscale: str = 'linear',
+                 lo_en: Quantity = Quantity(0.0, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
+        """
+        Plots the response curve for this spectrum.
+
+        :param tuple figsize: The desired size of the output figure.
+        :param str xscale: The xscale to use for the plot.
+        :param str yscale: The yscale to use for the plot.
+        :param Quantity lo_en: The lower energy limit for the x-axis.
+        :param Quantity hi_en: The upper energy limit for the y-axis.
+        """
+        if lo_en > hi_en:
+            raise ValueError("hi_en cannot be greater than lo_en")
+        else:
+            lo_en = lo_en.to("keV").value
+            hi_en = hi_en.to("keV").value
+
+        plt.figure(figsize=figsize)
+        # Set the plot up to look nice and professional.
+        ax = plt.gca()
+        ax.minorticks_on()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        # Get the data and plot it
+        ens, areas = self.get_arf_data()
+        plt.plot(ens, areas, color='black')
+
+        # Set the lower y-lim to be zero, and then the user supplied x-lims
+        plt.ylim(0)
+        plt.xlim(lo_en, hi_en)
+
+        # Set the user defined x and y scales
+        plt.xscale(xscale)
+        plt.yscale(yscale)
+
+        # Title and axis labels
+        plt.ylabel("Effective Area [cm$^{2}$]", fontsize=12)
+        plt.xlabel("Energy [keV]", fontsize=12)
+        plt.title("{o}-{i} Response Curve".format(o=self.obs_id, i=self.instrument.upper()), fontsize=14)
+
+        # Aaaand finally actually plot it
+        plt.tight_layout()
+        plt.show()
 
     def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV"),
              figsize: Tuple = (8, 6)):
