@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 22:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 09:27. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -177,7 +177,7 @@ class SimpleVikhlininDensity1D(BaseModel1D):
                          {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
-        norm_priors = [{'prior': Quantity([[1e+12, 1e+16]], 'Msun/Mpc^3'), 'type': 'uniform'},
+        norm_priors = [{'prior': Quantity([1e+12, 1e+16], 'Msun/Mpc^3'), 'type': 'uniform'},
                        {'prior': Quantity([0, 10], '1/cm^3'), 'type': 'uniform'}]
 
         priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind],

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/03/2021, 13:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 09:27. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -658,19 +658,39 @@ class GalaxyCluster(ExtendedSource):
         if isinstance(spec, Spectrum):
             spec = [spec]
 
-        total_phot = 0
+        mean_areas = []
+        rates = []
         for s in spec:
             s: Spectrum
-            # Multiplying the rate by 10000 because that is the exposure of the simulated spectra
-            #  Set in xspec_scripts/cr_conv_calc.xcm
-            total_phot += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2].value * 1e+4
 
-        # Then the total combined rate is the total number of photons / the total summed exposure (which
-        #  is just 10000 seconds multiplied by the number of spectra).
-        total_rate = Quantity(total_phot / (1e+4 * len(spec)), 'ct/s')
+            # For the current spectrum we retrieve the ARF information so that we can use it to weight things with
+            #  later
+            ens, ars = s.get_arf_data()
+            # This finds only the areas in the current energy range we're considering
+            rel_ars = ars[np.argwhere((ens <= hi_en) & (ens >= lo_en)).T[0]]
+            # And finds the mean effective area in that range
+            mean_areas.append(rel_ars.mean().value)
+
+            # Then we fetch the count rate for the fakeit run of the current spectrum
+            rates.append(s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2].value)
+
+        # Just putting rates as an array for convenience
+        rates = np.array(rates)
+        # These normalisation factors put all the conversion factors on the same footing, by weighting by
+        #  effective area of the spectra
+        norm_factors = np.array(mean_areas)/mean_areas[0]
+        # The total photons is the sum of the rates multiplied by the simulation exposure (always 1e+4 seconds)
+        #  weighted by the effective area.
+        total_phot = (rates * (1e+4/norm_factors)).sum()
+
+        # Then the total combined rate is the total number of photons / the total summed exposure, which again is a
+        #  sum of the simulation exposure weighted by the effective areas of all the spectra.
+        total_rate = Quantity(total_phot / (1e+4/norm_factors).sum(), 'ct/s')
 
         # Then we return 1/the rate because this method calculates the conversion factor from count rate to
-        #  normalisation (which is always 1 for these simulated spectra).
+        #  normalisation (which is always 1 for these simulated spectra). The normalisation has units of cmm^-5,
+        #  as is easily derived from the normalisation expression here
+        #  (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSmodelApec.html)
         return Quantity(1, 'cm^-5') / total_rate
 
 
