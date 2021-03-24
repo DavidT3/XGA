@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 12:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 15:00. Copyright (c) David J Turner
 
 from copy import deepcopy
 from typing import Union, List, Tuple
@@ -395,14 +395,15 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
             #  this function, and here is where that distinction is made
             if num_dens:
                 dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
-                                         model_r.name, cur_inst, dens_rads_errs, num_dens_err, deg_radii=dens_deg_rads)
+                                         cur_inst, model_r.name, sb_prof, dens_rads_errs, num_dens_err,
+                                         deg_radii=dens_deg_rads)
             else:
                 # TODO Check the origin of the mean molecular weight, see if there are different values for different
                 #  abundance tables
                 # The mean molecular weight multiplied by the proton mass
                 conv_mass = MEAN_MOL_WEIGHT*m_p
                 dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'), sb_prof.centre,
-                                         src.name, cur_obs, cur_inst, model_r.name, dens_rads_errs,
+                                         src.name, cur_obs, cur_inst, model_r.name, sb_prof, dens_rads_errs,
                                          (num_dens_err*conv_mass).to('Msun/Mpc^3'), deg_radii=dens_deg_rads)
 
             src.update_products(dens_prof)

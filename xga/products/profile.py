@@ -1,5 +1,6 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 12:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 15:00. Copyright (c) David J Turner
+from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
 
@@ -99,13 +100,13 @@ class SurfaceBrightness1D(BaseProfile1D):
 
         en_key = "bound_{l}-{h}_".format(l=rt.energy_bounds[0].to('keV').value, h=rt.energy_bounds[1].to('keV').value)
         if rt.psf_corrected:
-            psf_key = "_" + rt.psf_model + "_" + str(rt.psf_bins) + "_" + rt.psf_algorithm + str(rt.psf_iterations)
+            psf_key = rt.psf_model + "_" + str(rt.psf_bins) + "_" + rt.psf_algorithm + str(rt.psf_iterations) + "_"
         else:
-            psf_key = ""
+            psf_key = "_"
 
         ro = outer_rad.to('deg').value
-        self._storage_key = en_key + psf_key + self._storage_key + "_st{ps}_minsn{ms}_ro{ro}".format(ps=int(pix_step),
-                                                                                                     ms=min_snr, ro=ro)
+        self._storage_key = en_key + psf_key + "st{ps}_minsn{ms}_ro{ro}_".format(ps=int(pix_step), ms=min_snr, ro=ro) \
+                            + self._storage_key
 
     @property
     def pix_step(self) -> int:
@@ -281,7 +282,8 @@ class GasMass1D(BaseProfile1D):
     This class provides an interface to a cumulative gas mass profile of a Galaxy Cluster.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 dens_method: str, radii_err: Quantity = None, values_err: Quantity = None, deg_radii: Quantity = None):
+                 dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
+                 deg_radii: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
         Clusters.
@@ -294,6 +296,8 @@ class GasMass1D(BaseProfile1D):
         :param str inst: The instrument which this profile was generated from.
         :param str dens_method: A keyword describing the method used to generate the density profile that was
             used to measure this gas mass profile.
+        :param SurfaceBrightness1D/APECNormalisation1D associated_prof: The profile that the gas density profile
+            was measured from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
         :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
@@ -306,8 +310,20 @@ class GasMass1D(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Cumulative Gas Mass"
 
+        # The profile from which the densities here were inferred
+        self._gen_prof = associated_prof
+
+        if isinstance(associated_prof, SurfaceBrightness1D):
+            br_key = copy(self._gen_prof.storage_key)
+            en_key = "bound_{l}-{u}_".format(l=associated_prof.energy_bounds[0].value,
+                                             u=associated_prof.energy_bounds[1].value)
+            extra_info = "_" + br_key.split(en_key)[-1].split("_ra")[0] + "_"
+        else:
+            extra_info = "_"
+
         # The density class has an extra bit of information in the storage key, the method used to generate it
-        self._storage_key = "me" + dens_method + "_" + self._storage_key
+        self._storage_key = "me" + dens_method + extra_info + self._storage_key
+
         self._gen_method = dens_method
 
     @property
@@ -320,13 +336,25 @@ class GasMass1D(BaseProfile1D):
         """
         return self._gen_method
 
+    @property
+    def generation_profile(self) -> BaseProfile1D:
+        """
+        Provides the profile from which the density profile used to make this gas mass profile was measured. Either
+        a surface brightness profile if measured using SB methods, or an APEC normalisation profile if inferred
+        from annular spectra.
+
+        :return: The profile from which the density profile that made this profile was measured.
+        :rtype: Union[SurfaceBrightness1D, APECNormalisation1D]
+        """
+        return self._gen_prof
+
 
 class GasDensity3D(BaseProfile1D):
     """
     This class provides an interface to a gas density profile of a galaxy cluster.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 dens_method: str, radii_err: Quantity = None, values_err: Quantity = None,
+                 dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
                  associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
@@ -341,6 +369,8 @@ class GasDensity3D(BaseProfile1D):
         :param str obs_id: The observation which this profile was generated from.
         :param str inst: The instrument which this profile was generated from.
         :param str dens_method: A keyword describing the method used to generate this density profile.
+        :param SurfaceBrightness1D/APECNormalisation1D associated_prof: The profile that this gas density profile
+            was measured from.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
         :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. It is
@@ -390,8 +420,19 @@ class GasDensity3D(BaseProfile1D):
         # Stores the density generation method
         self._gen_method = dens_method
 
+        # The profile from which the densities here were inferred
+        self._gen_prof = associated_prof
+
+        if isinstance(associated_prof, SurfaceBrightness1D):
+            br_key = copy(self._gen_prof.storage_key)
+            en_key = "bound_{l}-{u}_".format(l=associated_prof.energy_bounds[0].value,
+                                             u=associated_prof.energy_bounds[1].value)
+            extra_info = "_" + br_key.split(en_key)[-1].split("_ra")[0] + "_"
+        else:
+            extra_info = "_"
+
         # The density class has an extra bit of information in the storage key, the method used to generate it
-        self._storage_key = "me" + dens_method + "_" + self._storage_key
+        self._storage_key = "me" + dens_method + extra_info + self._storage_key
 
     def gas_mass(self, model: str, outer_rad: Quantity, conf_level: float = 68.2,
                  fit_method: str = 'mcmc') -> Tuple[Quantity, Quantity]:
@@ -461,6 +502,17 @@ class GasDensity3D(BaseProfile1D):
         :rtype: str
         """
         return self._gen_method
+
+    @property
+    def generation_profile(self) -> BaseProfile1D:
+        """
+        Provides the profile from which this density profile was measured. Either a surface brightness profile
+        if measured using SB methods, or an APEC normalisation profile if inferred from annular spectra.
+
+        :return: The profile from which the densities were measured.
+        :rtype: Union[SurfaceBrightness1D, APECNormalisation1D]
+        """
+        return self._gen_prof
 
     def view_gas_mass_dist(self, model: str, outer_rad: Quantity, conf_level: float = 68.2, figsize=(8, 8),
                            bins: Union[str, int] = 'auto', colour: str = "lightslategrey", fit_method: str = 'mcmc'):
@@ -535,7 +587,7 @@ class GasDensity3D(BaseProfile1D):
         mass_vals = Quantity(mass_vals, 'Msun')
         mass_errs = Quantity(mass_errs, 'Msun')
         gm_prof = GasMass1D(radii, mass_vals, self.centre, self.src_name, self.obs_id, self.instrument,
-                            self._gen_method, values_err=mass_errs, deg_radii=self.deg_radii)
+                            self._gen_method, self._gen_prof, values_err=mass_errs, deg_radii=self.deg_radii)
 
         return gm_prof
 
@@ -731,8 +783,8 @@ class APECNormalisation1D(BaseProfile1D):
 
         # Set up the actual profile object and return it
         dens_prof = GasDensity3D(self.radii, gas_dens, self.centre, self.src_name, self.obs_id, self.instrument,
-                                 'spec', self.radii_err, dens_sigma, self.set_ident, self.associated_set_storage_key,
-                                 self.deg_radii)
+                                 'spec', self, self.radii_err, dens_sigma, self.set_ident,
+                                 self.associated_set_storage_key, self.deg_radii)
         return dens_prof
 
     def emission_measure_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr',
@@ -903,6 +955,7 @@ class GasTemperature3D(BaseProfile1D):
         self._y_axis_name = "3D Temperature"
 
 
+# TODO WRITE CUSTOM STORAGE KEY HERE AS WELL
 class BaryonFraction(BaseProfile1D):
     """
     A profile product which will hold a profile showing how the baryon fraction of a galaxy cluster changes
@@ -951,7 +1004,7 @@ class HydrostaticMass(BaseProfile1D):
     """
     A profile product which uses input GasTemperature3D and GasDensity3D profiles to generate a hydrostatic
     mass profile, which in turn can be used to measure the hydrostatic mass at a particular radius. In contrast
-    to other profile objects, this one calculates the y values itself.
+    to other profile objects, this one calculates the y values itself, as such any radii may be passed.
     """
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
                  density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
