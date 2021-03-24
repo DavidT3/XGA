@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 09:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 10:50. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -699,7 +699,7 @@ class BaseProfile1D:
         # I'm just defining these here so that the lines don't get too long for PEP standards
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
-        rads = self.radii.copy().value
+        rads = self.fit_radii.copy().value
         success = True
         warning_str = ""
 
@@ -862,7 +862,7 @@ class BaseProfile1D:
         """
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
-        rads = self.radii.copy().value
+        rads = self.fit_radii.copy().value
         success = True
         warning_str = ""
 
@@ -930,7 +930,7 @@ class BaseProfile1D:
         return model, success
 
     def _odr_fit(self, model: BaseModel1D, show_warn: bool):
-
+        # TODO REMEMBER TO USE THE FIT RADII PROPERTY
         # Tell the model whether we think the fit was successful or not
         # model.success = success
 
@@ -1548,6 +1548,30 @@ class BaseProfile1D:
         :rtype: Quantity
         """
         return self._radii_err
+
+    @property
+    def fit_radii(self) -> Quantity:
+        """
+        This property gives the user a sanitised set of radii that is safe to use for fitting to XGA models, by
+        which I mean if the first element is zero (true for many of XGA's profiles), then it will be replaced by
+        a value slightly above zero that won't cause divide by zeros in the fit process.
+
+        If the radius units are convertible to kpc then the zero value will be set to the equivelant of 1kpc, if
+        they have pixel units then it will be set to one pixel, and if they are equivelant to degrees then it will
+        be set to 1e−5 degrees. The value for degrees is loosely based on the value of 1kpc at a redshift of 1.
+
+        :return: A Quantity with a set of radii that are 'safe' for fitting
+        :rtype: Quantity
+        """
+        safe_rads = self._radii.copy()
+        if safe_rads[0] == 0 and self.radii_unit.is_equivalent('kpc'):
+            safe_rads[0] = Quantity(1, 'kpc').to(self.radii_unit)
+        elif safe_rads[0] == 0 and self.radii_unit.is_equivalent('pix'):
+            safe_rads[0] = Quantity(1, 'pix')
+        elif safe_rads[0] == 0 and self.radii_unit.is_equivalent('deg'):
+            safe_rads[0] = Quantity(1e-5, 'deg')
+
+        return safe_rads
 
     @property
     def radii_unit(self) -> Unit:
