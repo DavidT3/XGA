@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 17:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 11:52. Copyright (c) David J Turner
 from typing import Tuple, Union, List
 from warnings import warn
 
@@ -276,13 +276,12 @@ class SurfaceBrightness1D(BaseProfile1D):
         return match
 
 
-# TODO WRITE A CUSTOM STORAGE KEY
 class GasMass1D(BaseProfile1D):
     """
     This class provides an interface to a cumulative gas mass profile of a Galaxy Cluster.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None, deg_radii: Quantity = None):
+                 dens_method: str, radii_err: Quantity = None, values_err: Quantity = None, deg_radii: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
         Clusters.
@@ -293,6 +292,8 @@ class GasMass1D(BaseProfile1D):
         :param str source_name: The name of the source this profile is associated with.
         :param str obs_id: The observation which this profile was generated from.
         :param str inst: The instrument which this profile was generated from.
+        :param str dens_method: A keyword describing the method used to generate the density profile that was
+            used to measure this gas mass profile.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
         :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
@@ -305,15 +306,28 @@ class GasMass1D(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Cumulative Gas Mass"
 
+        # The density class has an extra bit of information in the storage key, the method used to generate it
+        self._storage_key = "me" + dens_method + "_" + self._storage_key
+        self._gen_method = dens_method
 
-# TODO WRITE A CUSTOM STORAGE KEY
+    @property
+    def density_method(self) -> str:
+        """
+        Gives the user the method used to generate the density profile used to make this gas mass profile.
+
+        :return: The string describing the method
+        :rtype: str
+        """
+        return self._gen_method
+
+
 class GasDensity3D(BaseProfile1D):
     """
     This class provides an interface to a gas density profile of a galaxy cluster.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 dens_method: str, radii_err: Quantity = None, values_err: Quantity = None,
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
         Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
@@ -326,6 +340,7 @@ class GasDensity3D(BaseProfile1D):
         :param str source_name: The name of the source this profile is associated with.
         :param str obs_id: The observation which this profile was generated from.
         :param str inst: The instrument which this profile was generated from.
+        :param str dens_method: A keyword describing the method used to generate this density profile.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
         :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. It is
@@ -371,6 +386,12 @@ class GasDensity3D(BaseProfile1D):
 
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Gas Density"
+
+        # Stores the density generation method
+        self._gen_method = dens_method
+
+        # The density class has an extra bit of information in the storage key, the method used to generate it
+        self._storage_key = "me" + dens_method + "_" + self._storage_key
 
     def gas_mass(self, model: str, outer_rad: Quantity, conf_level: float = 68.2,
                  fit_method: str = 'mcmc') -> Tuple[Quantity, Quantity]:
@@ -430,6 +451,16 @@ class GasDensity3D(BaseProfile1D):
         gas_mass = Quantity([med_mass, med_mass-low_mass, upp_mass-med_mass], mass_dist.unit)
 
         return gas_mass, mass_dist
+
+    @property
+    def density_method(self) -> str:
+        """
+        Gives the user the method used to generate this density profile.
+
+        :return: The string describing the method
+        :rtype: str
+        """
+        return self._gen_method
 
     def view_gas_mass_dist(self, model: str, outer_rad: Quantity, conf_level: float = 68.2, figsize=(8, 8),
                            bins: Union[str, int] = 'auto', colour: str = "lightslategrey", fit_method: str = 'mcmc'):
@@ -504,7 +535,7 @@ class GasDensity3D(BaseProfile1D):
         mass_vals = Quantity(mass_vals, 'Msun')
         mass_errs = Quantity(mass_errs, 'Msun')
         gm_prof = GasMass1D(radii, mass_vals, self.centre, self.src_name, self.obs_id, self.instrument,
-                            values_err=mass_errs, deg_radii=self.deg_radii)
+                            self._gen_method, values_err=mass_errs, deg_radii=self.deg_radii)
 
         return gm_prof
 
