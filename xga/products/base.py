@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 10:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 11:18. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -885,9 +885,9 @@ class BaseProfile1D:
                     warn("A parameter uncertainty is more than 10 times larger than the parameter, curve_fit "
                          "has failed.")
                     success = False
-        except RuntimeError:
-            warn("RuntimeError was raised, curve_fit has failed.")
-            warning_str = "RuntimeError in curve_fit"
+        except RuntimeError as r_err:
+            warn("{}, curve_fit has failed.".format(str(r_err)))
+            warning_str = str(r_err)
             success = False
             fit_par = np.full(len(model.model_pars), np.nan)
             fit_par_err = np.full(len(model.model_pars), np.nan)

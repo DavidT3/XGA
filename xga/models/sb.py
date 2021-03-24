@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 14:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 11:18. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -239,7 +239,7 @@ class DoubleBetaProfile1D(BaseModel1D):
             start_pars = self.compare_units(cust_start_pars, start_pars)
 
         # TODO ALSO MAKE THESE MORE SENSIBLE
-        r_core_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
+        r_core_priors = [{'prior': Quantity([1, 2000], 'kpc'), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], 'deg'), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
