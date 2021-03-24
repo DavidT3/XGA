@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 12:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 09:28. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -2068,10 +2068,15 @@ class BaseAggregateProfile1D:
 
         # Cycles through the component profiles of this aggregate profile, plotting them all
         for p_ind, p in enumerate(self._profiles):
-            if p.type == "brightness_profile" and p.psf_corrected:
-                leg_label = p.src_name + " PSF Corrected"
+            if p.obs_id != 'combined':
+                p_name = p.src_name + " {o}-{i}".format(o=p.obs_id, i=p.instrument.upper())
             else:
-                leg_label = p.src_name
+                p_name = p.src_name
+
+            if p.type == "brightness_profile" and p.psf_corrected:
+                leg_label = p_name + " PSF Corrected"
+            else:
+                leg_label = p_name
 
             # This subtracts the background if the user wants a background subtracted plot
             plot_y_vals = p.values.copy()
