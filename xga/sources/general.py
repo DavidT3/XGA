@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 20:21. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 15:42. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Union
@@ -267,7 +267,7 @@ class ExtendedSource(BaseSource):
 
         return chosen
 
-    def get_1d_brightness_profile(self, outer_rad: Quantity, obs_id: str = None, inst: str = None,
+    def get_1d_brightness_profile(self, outer_rad: Union[Quantity, str], obs_id: str = None, inst: str = None,
                                   central_coord: Quantity = None, radii: Quantity = None, lo_en: Quantity = None,
                                   hi_en: Quantity = None, combined: bool = True, pix_step: int = 1,
                                   min_snr: Union[float, int] = 0.0, psf_corr: bool = False, psf_model: str = "ELLBETA",
@@ -279,7 +279,7 @@ class ExtendedSource(BaseSource):
         method will provide profiles that partially match if there is not enough information to produce a unique
         match.
 
-        :param Quantity outer_rad: The outermost radius of the profile.
+        :param Quantity/str outer_rad: The outermost radius of the profile, either as a Quantity or a name (e.g. r500).
         :param str obs_id: The ObsID used to generate the profile in question, default is None. If this is set to
             combined then this method will search for profiles based on combined data.
         :param str inst: The instrument used to generate the profile in question, default is None. If this is set to
@@ -301,7 +301,12 @@ class ExtendedSource(BaseSource):
         :return:
         """
         # Makes sure its in our standard unit
-        outer_rad = self.convert_radius(outer_rad, 'deg')
+        if isinstance(outer_rad, str):
+            outer_rad = self.get_radius(outer_rad, 'deg')
+        elif isinstance(outer_rad, Quantity):
+            outer_rad = self.convert_radius(outer_rad, 'deg')
+        else:
+            raise ValueError("Outer radius may only be a string or an astropy quantity")
 
         # Yes there are three separate ways of triggering a search for combined profiles, I know its overkill
         if obs_id == "combined" or inst == "combined" or combined:
