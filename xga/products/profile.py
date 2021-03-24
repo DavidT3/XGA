@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 11:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 12:05. Copyright (c) David J Turner
 from typing import Tuple, Union, List
 from warnings import warn
 
@@ -731,7 +731,7 @@ class APECNormalisation1D(BaseProfile1D):
 
         # Set up the actual profile object and return it
         dens_prof = GasDensity3D(self.radii, gas_dens, self.centre, self.src_name, self.obs_id, self.instrument,
-                                 self.radii_err, dens_sigma, self.set_ident, self.associated_set_storage_key,
+                                 'spec', self.radii_err, dens_sigma, self.set_ident, self.associated_set_storage_key,
                                  self.deg_radii)
         return dens_prof
 
