@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 11:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 19:11. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -939,7 +939,7 @@ class BaseProfile1D:
         raise NotImplementedError("This fitting method is still under construction!")
 
     def fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_samples: int = 10000,
-            num_steps: int = 20000, num_walkers: int = 20, progress_bar: bool = True,
+            num_steps: int = 30000, num_walkers: int = 20, progress_bar: bool = True,
             show_warn: bool = True) -> BaseModel1D:
         """
         Method to fit a model to this profile's data, then store the resulting model parameter results. Each

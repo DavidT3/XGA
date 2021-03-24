@@ -1,7 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/03/2021, 12:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 19:11. Copyright (c) David J Turner
 
-from typing import Union
+from typing import Union, List
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -9,8 +9,11 @@ from astropy.units import Quantity
 from tqdm import tqdm
 
 from .base import BaseSample
-from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError, \
+    NoProductAvailableError
+from ..products.profile import GasDensity3D
 from ..relations.fit import *
+from ..sas.spec import region_setup
 from ..sources.extended import GalaxyCluster
 
 
@@ -390,42 +393,83 @@ class ClusterSample(BaseSample):
 
         return temps
 
-    def gas_mass(self, rad_name: str, dens_tech: str = 'inv_abel_model', conf_level: int = 90) -> Quantity:
+    def gas_mass(self, rad_name: str, dens_model: str, prof_outer_rad: Union[Quantity, str], method: str,
+                 pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True,
+                 psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
+                 set_ids: List[int] = None) -> Quantity:
         """
-        A get method for gas masses measured for the constituent clusters of this sample.
+        A convenient get method for gas masses measured for the constituent clusters of this sample, though the
+        arguments that can  be passed to retrieve gas density profiles are limited to tone-down the complexity.
+        Largely this method assumes you have measured density profiles from combined surface brightness
+        profiles, though if you have generated density profiles from annular spectra and know their set ids you may
+        pass them. Any more nuanced access to density profiles will have to be done yourself.
+
+        If the specified density model hasn't been fitted to the density profile, this method will run a fit using
+        the default settings of the fit method of XGA profiles.
 
         :param str rad_name: The name of the radius (e.g. r500) to calculate the gas mass within.
-        :param str dens_tech: The technique used to generate the density profile, default is 'inv_abel_model',
-            which is the superior of the two I have implemented as of 03/12/20.
-        :param int conf_level: The desired confidence level of the uncertainties.
+        :param str dens_model: The model fit to the density profiles to be used to calculate gas mass. If a fit
+            doesn't already exist then one will be performed with default settings.
+        :param Quantity/str prof_outer_rad: The outer radii of the density profiles, either a single radius name or a
+            Quantity containing an outer radius for each cluster. For instance if you defined a ClusterSample called
+            srcs you could pas srcs.r500 here.
+        :param str method: The method used to generate the density profile. For a profile created by fitting a model
+            to a surface brightness profile this should be the name of the model, for a profile from annular spectra
+            this should be 'spec', and for a profile generated directly from the data of a surface brightness profile
+            this should be 'onion'.
+        :param int pix_step: The width of each annulus in pixels used to generate the profile, for profiles based on
+            surface brightness.
+        :param float min_snr: The minimum signal to noise imposed upon the profile, for profiles based on
+            surface brightness.
+        :param bool psf_corr: Is the brightness profile corrected for PSF effects, for profiles based on
+            surface brightness.
+        :param str psf_model: If PSF corrected, the PSF model used, for profiles based on surface brightness.
+        :param int psf_bins: If PSF corrected, the number of bins per side, for profiles based on surface brightness.
+        :param str psf_algo: If PSF corrected, the algorithm used, for profiles based on surface brightness.
+        :param int psf_iter: If PSF corrected, the number of algorithm iterations, for profiles based on
+            surface brightness.
+        :param List[int] set_ids: A list of AnnularSpectra set IDs used to generate the density profiles, if you wish
+            to use spectrum based density profiles here.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the gas mass, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
         """
         gms = []
+        out_rad_vals = region_setup(self, prof_outer_rad, Quantity(0, 'deg'), True, '')[2]
 
-        raise NotImplementedError("This function is currently broken due to a change in how profiles are stored"
-                                  " within XGA sources, hopefully not for long though!")
+        if set_ids is not None and len(set_ids) != len(self):
+            raise ValueError("If you wish to use density profiles generated from spectra you must supply a list of "
+                             "set IDs with an entry for each cluster in this sample.")
+        elif set_ids is None:
+            set_ids = [None]*len(self)
 
         # Iterate through all of our Galaxy Clusters
-        for gcs in self._sources.values():
-            dens_profs = gcs.get_products('combined_gas_density_profile')
-            if len(dens_profs) == 0:
+        for gcs_ind, gcs in enumerate(self._sources.values()):
+            gas_mass_rad = gcs.get_radius(rad_name, 'kpc')
+            try:
+                dens_profs = gcs.get_density_profiles(out_rad_vals[gcs_ind], method, None, None, radii=None,
+                                                      pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
+                                                      psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
+                                                      psf_iter=psf_iter, set_id=set_ids[gcs_ind])
+                if isinstance(dens_profs, GasDensity3D):
+                    if dens_model not in dens_profs.good_model_fits:
+                        dens_profs.fit(dens_model)
+
+                    try:
+                        gms.append(list(dens_profs.gas_mass(dens_model, gas_mass_rad)[0].value))
+                    except ModelNotAssociatedError:
+                        gms.append([np.NaN, np.NaN, np.NaN])
+
+                else:
+                    warn("Somehow there multiple matches for {s}'s density profile, this is the developer's "
+                         "fault.".format(s=gcs.name))
+                    gms.append([np.NaN, np.NaN, np.NaN])
+
+            except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
                 gms.append([np.NaN, np.NaN, np.NaN])
                 warn("{s} doesn't have a density profile associated, please look at "
                      "sourcetools.density.".format(s=gcs.name))
-            elif len(dens_profs) != 0:
-                # This is because I store the profile products in a really dumb way which I'm going to need to
-                #  correct - but for now this will do
-                dens_prof = dens_profs[0][0]
-                # Use the density profiles gas mass method to calculate the one we want
-                gm = dens_prof.gas_mass(dens_tech, gcs.get_radius(rad_name, 'kpc'), conf_level)[0].value
-                gms.append(gm)
-
-            if len(dens_profs) > 1:
-                warn("{s} has multiple density profiles associated with it, and until I upgrade XGA I can't"
-                     " really tell them apart so I'm just taking the first one! I will fix this".format(s=gcs.name))
 
         gms = np.array(gms)
 
@@ -452,6 +496,7 @@ class ClusterSample(BaseSample):
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
         """
+        raise NotImplementedError("Changes from gas_mass need to be propagated to this method")
         # Just make sure fit method is lower case
         fit_method = fit_method.lower()
 
