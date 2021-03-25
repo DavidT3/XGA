@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/01/2021, 10:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 19:24. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -17,7 +17,7 @@ class PointSample(BaseSample):
                  peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05, back_out_rad_factor=1.5,
                  cosmology=Planck15, load_fits=False, no_prog_bar: bool = False, psf_corr: bool = False):
 
-        # People might pass a single value for point_radius, in which case things will breal
+        # People might pass a single value for point_radius, in which case things will break
         if point_radius.isscalar:
             point_radius = Quantity([point_radius.value]*len(ra), point_radius.unit)
 
@@ -28,7 +28,6 @@ class PointSample(BaseSample):
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
                          no_prog_bar=no_prog_bar)
 
-        print("Pre-generating necessary products")
         evselect_image(self, peak_lo_en, peak_hi_en)
         eexpmap(self, peak_lo_en, peak_hi_en)
         emosaic(self, "image", peak_lo_en, peak_hi_en)
@@ -39,12 +38,12 @@ class PointSample(BaseSample):
 
         # A list to store the inds of any declarations that failed due to NoValidObservations, so some
         #  attributes can be cleaned up later
-        failed_names = []
+        final_names = []
         self._point_radii = []
         dec_lb = tqdm(desc="Setting up Point Sources", total=len(self._accepted_inds), disable=no_prog_bar)
-        for ind, rd in enumerate(self._ra_decs):
+        for ind, rd in enumerate(self.ra_decs):
             r, d = rd
-            z = self._redshifts[ind]
+            z = self.redshifts[ind]
             n = self._names[ind]
             if point_radius is not None:
                 pr = point_radius[self._accepted_inds[ind]]
@@ -58,19 +57,14 @@ class PointSample(BaseSample):
                                                back_out_rad_factor, cosmology, True, load_fits, False)
                 pr = self._sources[n].point_radius
                 self._point_radii.append(pr.value)
+                final_names.append(n)
             except NoValidObservationsError:
-                failed_names.append(n)
                 self._failed_sources[n] = "CleanedNoMatch"
 
             dec_lb.update(1)
         dec_lb.close()
 
-        # This deals with any deleted sources due to NoValidObservations, this is super clunky but oh well
-        for f_n in failed_names:
-            f_ind = self._names.index(f_n)
-            del self._names[f_ind]
-            del self._ra_decs[f_ind]
-            del self._redshifts[f_ind]
+        self._names = final_names
 
         # I'm not worried about pr never having existed - declaration of a sample will fail
         #  if not data is passed.

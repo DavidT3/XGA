@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 19:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 19:24. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from .base import BaseSample
 from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NoProductAvailableError
+    NoProductAvailableError, NoValidObservationsError
 from ..products.profile import GasDensity3D
 from ..relations.fit import *
 from ..sas.spec import region_setup
@@ -42,8 +42,6 @@ class ClusterSample(BaseSample):
         # This part is super useful - it is much quicker to use the base sources to generate all
         #  necessary ratemaps, as we can do it in parallel for the entire sample, rather than one at a time as
         #  might be necessary for peak finding in the cluster init.
-        # TODO Make this logging rather than just printing
-        print("Pre-generating necessary products")
         evselect_image(self, peak_lo_en, peak_hi_en)
         eexpmap(self, peak_lo_en, peak_hi_en)
         emosaic(self, "image", peak_lo_en, peak_hi_en)
@@ -54,6 +52,9 @@ class ClusterSample(BaseSample):
         del self._sources
         self._sources = {}
 
+        # We have this final names list in case so that we don't need to remove elements of self.names if one of the
+        #  clusters doesn't pass the observation cleaning stage.
+        final_names = []
         dec_lb = tqdm(desc="Setting up Galaxy Clusters", total=len(self.names), disable=no_prog_bar)
         for ind, r in enumerate(ra):
             # Just splitting out relevant values for this particular cluster so the object declaration isn't
@@ -105,6 +106,7 @@ class ClusterSample(BaseSample):
                                                      use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                      back_out_rad_factor, cosmology, True, load_fits, clean_obs,
                                                      clean_obs_reg, clean_obs_threshold, False)
+                    final_names.append(n)
                 except PeakConvergenceFailedError:
                     warn("The peak finding algorithm has not converged for {}, using user "
                          "supplied coordinates".format(n))
@@ -112,9 +114,18 @@ class ClusterSample(BaseSample):
                                                      peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
                                                      cosmology, True, load_fits, clean_obs, clean_obs_reg,
                                                      clean_obs_threshold, False)
+                    final_names.append(n)
 
+                except NoValidObservationsError:
+                    warn("After applying the criteria for the minimum amount of cluster required on an observation, "
+                         "{} cannot be declared as all potential observations were removed".format(n))
+                    # Note we don't append n to the final_names list here, as it is effectively being removed from the
+                    #  sample
+                    self._failed_sources[n] = "Failed ObsClean"
             dec_lb.update(1)
         dec_lb.close()
+
+        self._names = final_names
 
         # And again I ask XGA to generate the merged images and exposure maps, in case any sources have been
         #  cleaned and had data removed
@@ -122,8 +133,6 @@ class ClusterSample(BaseSample):
             emosaic(self, "image", peak_lo_en, peak_hi_en)
             emosaic(self, "expmap", peak_lo_en, peak_hi_en)
 
-        # TODO Reconsider if this is even necessary, the data that has been removed should by definition
-        #  not really include the peak
         # Updates with new peaks
         if clean_obs and use_peak:
             for n in self.names:
