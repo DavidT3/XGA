@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 18:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 18:56. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -37,7 +37,30 @@ warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class BaseSource:
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=True, load_fits=False):
+    """
+    The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
+    functionality upon which the rest of XGA is built, includes selecting observations, reading in data products,
+    and storing newly created data products.
+    """
+    def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None, cosmology=Planck15,
+                 load_products: bool = True, load_fits: bool = False):
+        """
+        The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
+        others. Base functionality is included, but this type of source shouldn't often need to be instantiated by
+        a user.
+
+        :param float ra: The right ascension (in degrees) of the source.
+        :param float dec: The declination (in degrees) of the source.
+        :param float redshift: The redshift of the source, default is None. Not supplying a redshift means that
+            proper distance units such as kpc cannot be used.
+        :param str name: The name of the source, default is None in which case a name will be assembled from the
+            coordinates given.
+        :param cosmology: An astropy cosmology object to use for analysis of this source, default is Planck15.
+        :param bool load_products: Should existing XGA generated products for this source be loaded in, default
+            is True.
+        :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
+            load_products is True. Default is False.
+        """
         self._ra_dec = np.array([ra, dec])
         if name is not None:
             # We don't be liking spaces in source names, we also don't like underscores
