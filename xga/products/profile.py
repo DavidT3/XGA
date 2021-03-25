@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 15:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 18:39. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -1044,7 +1044,7 @@ class HydrostaticMass(BaseProfile1D):
         # We repeat this process with the density profile and model
         if type(density_profile) != GasDensity3D:
             raise TypeError("Only a GasDensity3D instance may be passed for density_profile, check you haven't "
-                            "accidentally passed a GasDensity3D.")
+                            "accidentally passed a GasDensity1D.")
 
         # We also need to check that someone hasn't done something dumb like pass profiles from two different
         #  clusters, so we'll compare source names.
