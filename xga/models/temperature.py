@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 16:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 16:58. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -105,10 +105,14 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         :return: The y values corresponding to the input x values.
         :rtype: Quantity
         """
-        cool_expr = ((t_min / t_zero) + np.power(x / r_cool, a_cool)) / (1 + np.power(x / r_cool, a_cool))
-        out_expr = 1 / np.power(1 + np.power(x / r_tran, 2), c_power / 2)
+        try:
+            cool_expr = ((t_min / t_zero) + (x / r_cool)**a_cool) / (1 + (x / r_cool)**a_cool)
+            out_expr = 1 / ((1 + (x / r_tran)**2)**(c_power / 2))
+            result = t_zero * cool_expr * out_expr
+        except ZeroDivisionError:
+            result = np.NaN
 
-        return t_zero * cool_expr * out_expr
+        return result
 
     def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
         """
@@ -233,16 +237,20 @@ class VikhlininTemperature1D(BaseModel1D):
         :return: The y values corresponding to the input x values.
         :rtype: Quantity
         """
-        power_rad_ratio = np.power((x / r_cool), a_cool)
-        # The rest of the model expression
-        t_cool = (power_rad_ratio + (t_min / t_zero)) / (power_rad_ratio + 1)
+        try:
+            power_rad_ratio = (x / r_cool)**a_cool
+            # The rest of the model expression
+            t_cool = (power_rad_ratio + (t_min / t_zero)) / (power_rad_ratio + 1)
 
-        # The ratio of the input radius (or radii) to the transition radius
-        rad_ratio = x / r_tran
-        t_outer = np.power(rad_ratio, -a_power) / np.power((1 + np.power(rad_ratio, b_power)),
-                                                           (c_power / b_power))
+            # The ratio of the input radius (or radii) to the transition radius
+            rad_ratio = x / r_tran
+            t_outer = rad_ratio**(-a_power) / (1 + rad_ratio**b_power)**(c_power / b_power)
+            result = t_zero * t_cool * t_outer
 
-        return t_zero * t_cool * t_outer
+        except ZeroDivisionError:
+            result = np.NaN
+
+        return result
 
 
 # So that things like fitting functions can be written generally to support different models

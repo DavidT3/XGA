@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 15:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 16:58. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -70,11 +70,11 @@ class BetaProfile1D(BaseModel1D):
                          {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
-        norm_priors = [{'prior': Quantity([0, 5], 'ct/(s*arcmin**2)'), 'type': 'uniform'},
+        norm_priors = [{'prior': Quantity([0, 3], 'ct/(s*arcmin**2)'), 'type': 'uniform'},
                        {'prior': Quantity([0, 100], 'ct/(s*kpc**2)'), 'type': 'uniform'},
                        {'prior': Quantity([0, 100], 'ct/(s*pix**2)'), 'type': 'uniform'}]
 
-        priors = [{'prior': Quantity([0, 5]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
+        priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
 
         nice_pars = [r"$\beta$", r"R$_{\rm{core}}$", "S$_{0}$"]
         info_dict = {'author': 'placeholder', 'year': 'placeholder', 'reference': 'placeholder',
@@ -95,8 +95,7 @@ class BetaProfile1D(BaseModel1D):
         :return: The y values corresponding to the input x values.
         :rtype: Quantity
         """
-        return norm * np.power((1 + (np.power(x / r_core, 2))), ((-3 * beta) + 0.5))
-        # return norm * (1 + ((x / r_core)**2)**((-3 * beta) + 0.5))
+        return norm * ((1 + ((x / r_core)**2))**((-3 * beta) + 0.5))
 
     def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
         """
@@ -244,12 +243,12 @@ class DoubleBetaProfile1D(BaseModel1D):
                          {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
-        norm_priors = [{'prior': Quantity([0, 5], 'ct/(s*arcmin**2)'), 'type': 'uniform'},
+        norm_priors = [{'prior': Quantity([0, 3], 'ct/(s*arcmin**2)'), 'type': 'uniform'},
                        {'prior': Quantity([0, 100], 'ct/(s*kpc**2)'), 'type': 'uniform'},
                        {'prior': Quantity([0, 100], 'ct/(s*pix**2)'), 'type': 'uniform'}]
 
-        priors = [{'prior': Quantity([0, 5]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind],
-                  {'prior': Quantity([0, 5]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
+        priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind],
+                  {'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
 
         nice_pars = [r"$\beta_{1}$", r"R$_{\rm{core},1}$", r"S$_{01}$", r"$\beta_{2}$", r"R$_{\rm{core},2}$",
                      r"S$_{02}$"]
@@ -277,8 +276,9 @@ class DoubleBetaProfile1D(BaseModel1D):
         :return: The y values corresponding to the input x values.
         :rtype: Quantity
         """
-        return (norm_one * np.power((1 + (np.power(x / r_core_one, 2))), ((-3 * beta_one) + 0.5))) + \
-               (norm_two * np.power((1 + (np.power(x / r_core_two, 2))), ((-3 * beta_two) + 0.5)))
+        p1 = norm_one * ((1 + ((x / r_core_one) ** 2)) ** ((-3 * beta_one) + 0.5))
+        p2 = norm_two * ((1 + ((x / r_core_two) ** 2)) ** ((-3 * beta_two) + 0.5))
+        return p1 + p2
 
     def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
         """

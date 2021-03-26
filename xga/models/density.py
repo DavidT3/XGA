@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 09:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 16:58. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -74,7 +74,7 @@ class KingProfile1D(BaseModel1D):
 
         nice_pars = [r"$\beta$", r"R$_{\rm{core}}$", "S$_{0}$"]
         info_dict = {'author': 'placeholder', 'year': 'placeholder', 'reference': 'placeholder',
-                     'general': 'The unprojected version of the beta profile, suitable for a simple fit\n'
+                     'general': 'The un-projected version of the beta profile, suitable for a simple fit\n'
                                 ' to 3D density distributions. Describes a simple isothermal sphere.'}
         super().__init__(x_unit, y_unit, start_pars, priors, 'king', 'King Profile', nice_pars, 'Gas Density',
                          info_dict)
@@ -91,7 +91,7 @@ class KingProfile1D(BaseModel1D):
         :return: The y values corresponding to the input x values.
         :rtype: Quantity
         """
-        return norm * np.power((1 + (np.power(x / r_core, 2))), (-3 * beta))
+        return norm * ((1 + (x / r_core)**2)**(-3 * beta))
 
     def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
         """
@@ -208,14 +208,18 @@ class SimpleVikhlininDensity1D(BaseModel1D):
         :return: The y values corresponding to the input x values.
         :rtype: Quantity
         """
-        # Calculates the ratio of the r_values to the r_core parameter
-        rc_rat = x / r_core
-        # Calculates the ratio of the r_values to the r_s parameter
-        rs_rat = x / r_s
+        try:
+            # Calculates the ratio of the r_values to the r_core parameter
+            rc_rat = x / r_core
+            # Calculates the ratio of the r_values to the r_s parameter
+            rs_rat = x / r_s
 
-        first_term = np.power(rc_rat, -alpha) / np.power((1 + np.power(rc_rat, 2)), ((3 * beta) - (alpha / 2)))
-        second_term = 1 / np.power(1 + np.power(rs_rat, 3), epsilon / 3)
-        result = norm * np.sqrt(first_term * second_term)
+            first_term = rc_rat**(-alpha) / ((1+rc_rat**2)**((3 * beta) - (alpha / 2)))
+            second_term = 1 / ((1 + rs_rat**3)**(epsilon / 3))
+            result = norm * np.sqrt(first_term * second_term)
+        except ZeroDivisionError:
+            result = np.NaN
+
         return result
 
     def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
@@ -351,16 +355,19 @@ class VikhlininDensity1D(BaseModel1D):
         :param Quantity r_core_two:The core radius of the small core part of the model.
         :param Quantity norm_two: The normalisation of the additive, small core part of the model.
         """
-        # Calculates the ratio of the r_values to the r_core_one parameter
-        rc1_rat = x / r_core_one
-        # Calculates the ratio of the r_values to the r_core_two parameter
-        rc2_rat = x / r_core_two
-        # Calculates the ratio of the r_values to the r_s parameter
-        rs_rat = x / r_s
+        try:
+            # Calculates the ratio of the r_values to the r_core_one parameter
+            rc1_rat = x / r_core_one
+            # Calculates the ratio of the r_values to the r_core_two parameter
+            rc2_rat = x / r_core_two
+            # Calculates the ratio of the r_values to the r_s parameter
+            rs_rat = x / r_s
 
-        first_term = np.power(rc1_rat, -alpha) / np.power((1 + np.power(rc1_rat, 2)), ((3 * beta_one) - (alpha / 2)))
-        second_term = 1 / np.power(1 + np.power(rs_rat, gamma), epsilon / gamma)
-        additive_term = 1 / np.power(1 + np.power(rc2_rat, 2), 3 * beta_two)
+            first_term = rc1_rat**(-alpha) / ((1 + rc1_rat**2)**((3 * beta_one) - (alpha / 2)))
+            second_term = 1 / ((1 + rs_rat**gamma)**(epsilon / gamma))
+            additive_term = 1 / ((1 + rc2_rat**2)**(3 * beta_two))
+        except ZeroDivisionError:
+            return np.NaN
 
         return np.sqrt((np.power(norm_one, 2) * first_term * second_term) + (np.power(norm_two, 2) * additive_term))
 
