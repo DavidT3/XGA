@@ -140,8 +140,8 @@ for {{set i 0}} {{$i <= [llength $rmf_paths]-1}} {{incr i}} {{
 
     for {{set j 0}} {{$j <= [llength $lum_lim_pairs]-1}} {{incr j}} {{
         set p [lindex $lum_lim_pairs $j]
-        set lv [expr [lindex $p 0]/(1+{redshift})]
-        set uv [expr [lindex $p 1]/(1+{redshift})]
+        set lv [lindex $p 0]
+        set uv [lindex $p 1]
         ignore **-$lv $uv-**
 
         # This specifically gets the model predicted rate, which I think is what I want
