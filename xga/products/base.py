@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 16:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 17:13. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -660,11 +660,14 @@ class BaseProfile1D:
         self._x_norm = x_norm
         self._y_norm = y_norm
 
-    def _emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
-                   num_samples: int) -> Tuple[BaseModel1D, bool]:
+    def emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
+                  num_samples: int) -> Tuple[BaseModel1D, bool]:
         """
-        An internal fitting function to fit an XGA model instance to the data in this profile using the
-        emcee affine-invariant MCMC sampler.
+        A fitting function to fit an XGA model instance to the data in this profile using the emcee
+        affine-invariant MCMC sampler, this should be called through .fit() for full functionality. An initial
+        run of curve_fit is used to find start parameters for the sampler, though if that fails a maximum
+        likelihood estimate is run, and if that fails the method will revert to using the start parameters
+        set in the model instance.
 
         :param BaseModel1D model: The model to be fit to the data.
         :param int num_steps: The number of steps each chain should take.
@@ -709,13 +712,21 @@ class BaseProfile1D:
 
         prior_list = [p['prior'].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
         prior_arr = np.array(prior_list)
-        # This finds maximum likelihood parameter values for the model+data
-        max_like_res = minimize(lambda *args: -log_likelihood(*args, model.model), model.unitless_start_pars,
-                                args=(rads, y_data, y_errs))
-        
-        # I'm now adding this checking step, which will revert to the default start parameters of the model if the
-        #  maximum likelihood estimate produced insane results.
-        base_start_pars = max_like_res.x
+
+        # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
+        #  we try maximum likelihood, and if that fails then we fall back on the default start parameters in the
+        #  model.
+        curve_fit_model, success = self._curve_fit(model, 10, show_warn=False)
+        if success or curve_fit_model.fit_warning == "Very large parameter uncertainties":
+            base_start_pars = np.array([p.value for p in curve_fit_model.model_pars])
+        else:
+            # This finds maximum likelihood parameter values for the model+data
+            max_like_res = minimize(lambda *args: -log_likelihood(*args, model.model), model.unitless_start_pars,
+                                    args=(rads, y_data, y_errs))
+            # I'm now adding this checking step, which will revert to the default start parameters of the model if the
+            #  maximum likelihood estimate produced insane results.
+            base_start_pars = max_like_res.x
+
         # So if any of the max likelihood pars are outside their prior, we just revert back to the original
         #  start parameters of the model. This step may make the checks performed later for instances where all
         #  start positions for a parameter are outside the prior a bit pointless, but I'm leaving them in for safety.
@@ -859,8 +870,8 @@ class BaseProfile1D:
 
     def _curve_fit(self, model: BaseModel1D, num_samples: int, show_warn: bool) -> Tuple[BaseModel1D, bool]:
         """
-        An internal function to fit an XGA model instance to the data in this profile using the
-        non-linear least squares curve_fit routine from scipy.
+        A function to fit an XGA model instance to the data in this profile using the non-linear least squares
+        curve_fit routine from scipy, this should be called through .fit() for full functionality
 
         :param BaseModel1D model: An instance of the model to be fit to this profile.
         :param int num_samples: The number of random samples to be drawn and stored in the model
@@ -904,8 +915,6 @@ class BaseProfile1D:
                 frac_err = np.divide(fit_par_err, fit_par, where=fit_par != 0)
                 if frac_err.max() > 10:
                     warning_str = "Very large parameter uncertainties"
-                    warn("A parameter uncertainty is more than 10 times larger than the parameter, curve_fit "
-                         "has failed.")
                     success = False
         except RuntimeError as r_err:
             warn("{}, curve_fit has failed.".format(str(r_err)))
@@ -1033,7 +1042,7 @@ class BaseProfile1D:
 
         # Running the requested fitting method
         if not already_done and method == 'mcmc':
-            model, success = self._emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn, num_samples)
+            model, success = self.emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn, num_samples)
         elif not already_done and method == 'curve_fit':
             model, success = self._curve_fit(model, num_samples, show_warn)
         elif not already_done and method == 'odr':
