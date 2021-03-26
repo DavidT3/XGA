@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 15:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 16:39. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -876,11 +876,22 @@ class BaseProfile1D:
         rads = self.fit_radii.copy().value
         success = True
         warning_str = ""
+        
+        lower_bounds = []
+        upper_bounds = []
+        for prior_ind, prior in enumerate(model.par_priors):
+            if prior['type'] == 'uniform':
+                conv_prior = prior['prior'].to(model.par_units[prior_ind]).value
+                lower_bounds.append(conv_prior[0])
+                upper_bounds.append(conv_prior[1])
+            else:
+                lower_bounds.append(-np.inf)
+                upper_bounds.append(np.inf)
 
         # Curve fit is a simple non-linear least squares implementation, its alright but fragile
         try:
             fit_par, fit_cov = curve_fit(model.model, rads, y_data, p0=model.unitless_start_pars, sigma=y_errs,
-                                         absolute_sigma=True)
+                                         absolute_sigma=True, bounds=(lower_bounds, upper_bounds))
 
             # If there is an infinite value in the covariance matrix, it means curve_fit was
             #  unable to estimate it properly
@@ -957,6 +968,9 @@ class BaseProfile1D:
         profile can store one instance of a type of model per fit method. So for instance you could fit both
         a 'beta' and 'double_beta' model to a surface brightness profile with curve_fit, and then you could
         fit 'double_beta' again with MCMC.
+
+        If any of the parameters of the passed model have a uniform prior associated, and the chosen method
+        is curve_fit, then those priors will be used to place bounds on those parameters.
 
         :param str/BaseModel1D model: Either an instance of an XGA model to be fit to this profile, or the name
             of a profile (e.g. 'beta', or 'simple_vikhlinin_dens').
