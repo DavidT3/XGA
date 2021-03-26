@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:41. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 15:00. Copyright (c) David J Turner
 
 from typing import List
 
@@ -9,9 +9,7 @@ import numpy as np
 # This set of functions is to support the MCMC fitting found in the BaseProfile class(es) - its here because
 #  local functions can't be pickled
 
-
-def log_likelihood(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray,
-                   m_func) -> np.ndarray:
+def log_likelihood(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray, m_func) -> np.ndarray:
     """
     Uses a simple Gaussian likelihood function, returns the logged value.
 
@@ -24,7 +22,7 @@ def log_likelihood(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.nd
     :return: The log-likelihood value.
     :rtype: np.ndarray
     """
-    return -0.5 * np.sum(np.power(y - m_func(r, *theta), 2) / y_err ** 2)
+    return -np.sum(np.log(y_err*np.sqrt(2*np.pi)) + (((y - m_func(r, *theta))**2) / (2*y_err**2)))
 
 
 def log_uniform_prior(theta: np.ndarray, pr: List) -> float:
@@ -74,6 +72,10 @@ def log_prob(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.ndarray,
         ret_val = -np.inf
     else:
         ret_val = lp + log_likelihood(theta, r, y, y_err, m_func)
+
+    if np.isnan(ret_val):
+        ret_val = -np.inf
+
     return ret_val
 
 

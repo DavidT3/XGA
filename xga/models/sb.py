@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 11:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 15:00. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -70,7 +70,7 @@ class BetaProfile1D(BaseModel1D):
                          {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
-        norm_priors = [{'prior': Quantity([0, 100], 'ct/(s*arcmin**2)'), 'type': 'uniform'},
+        norm_priors = [{'prior': Quantity([0, 5], 'ct/(s*arcmin**2)'), 'type': 'uniform'},
                        {'prior': Quantity([0, 100], 'ct/(s*kpc**2)'), 'type': 'uniform'},
                        {'prior': Quantity([0, 100], 'ct/(s*pix**2)'), 'type': 'uniform'}]
 
@@ -244,7 +244,7 @@ class DoubleBetaProfile1D(BaseModel1D):
                          {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
-        norm_priors = [{'prior': Quantity([0, 100], 'ct/(s*arcmin**2)'), 'type': 'uniform'},
+        norm_priors = [{'prior': Quantity([0, 5], 'ct/(s*arcmin**2)'), 'type': 'uniform'},
                        {'prior': Quantity([0, 100], 'ct/(s*kpc**2)'), 'type': 'uniform'},
                        {'prior': Quantity([0, 100], 'ct/(s*pix**2)'), 'type': 'uniform'}]
 
