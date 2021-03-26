@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 15:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 15:58. Copyright (c) David J Turner
 
 from typing import List
 
@@ -22,7 +22,12 @@ def log_likelihood(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.nd
     :return: The log-likelihood value.
     :rtype: np.ndarray
     """
-    return -np.sum(np.log(y_err*np.sqrt(2*np.pi)) + (((y - m_func(r, *theta))**2) / (2*y_err**2)))
+    # Just in case something goes wrong in the model function
+    try:
+        lik = -np.sum(np.log(y_err*np.sqrt(2*np.pi)) + (((y - m_func(r, *theta))**2) / (2*y_err**2)))
+    except ZeroDivisionError:
+        lik = np.NaN
+    return lik
 
 
 def log_uniform_prior(theta: np.ndarray, pr: List) -> float:
