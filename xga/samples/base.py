@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2021, 16:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 19:17. Copyright (c) David J Turner
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -17,15 +17,18 @@ from ..sourcetools.misc import coord_to_name
 
 
 class BaseSample:
+    """
+    The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
+    interesting X-ray sources easy.
+    """
     def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None, cosmology=Planck15,
                  load_products: bool = True, load_fits: bool = False, no_prog_bar: bool = False):
         if len(ra) == 0:
             raise ValueError("You have passed an empty array for the RA values.")
 
-        # Slight duplication of data here, but I'm going to save the inputted information into attributes,
-        #  that way I don't have to iterate through my sources everytime the user might want to pull it out
-        self._ra_decs = []
-        self._redshifts = []
+        # There used to be a set of attributes storing the basic information (ra, dec, and redshifts) about
+        #  the sources in this sample, but for subclasses its actually way more convenient for the properties
+        #  to just pull the information out of the sources.
         # This is an empty list so that if no name is passed the automatically generated names can be added during
         #  declaration
         self._names = []
@@ -61,8 +64,6 @@ class BaseSample:
                 n = temp.name
                 self._sources[n] = temp
                 self._names.append(n)
-                self._ra_decs.append((r, d))
-                self._redshifts.append(z)
                 self._accepted_inds.append(ind)
             except (NoMatchFoundError, NoValidObservationsError):
                 if n is not None:
@@ -99,7 +100,8 @@ class BaseSample:
         :return: List of source RA-DEC positions as supplied at sample initialisation.
         :rtype: Quantity
         """
-        return Quantity(self._ra_decs, 'deg')
+
+        return Quantity([s.ra_dec.value for s in self._sources.values()], 'deg')
 
     @property
     def redshifts(self) -> ndarray:
@@ -110,7 +112,7 @@ class BaseSample:
         :return: List of redshifts.
         :rtype: ndarray
         """
-        return np.array(self._redshifts)
+        return np.array([s.redshift for s in self._sources.values()])
 
     @property
     def cosmo(self):
@@ -263,7 +265,7 @@ class BaseSample:
         """
         print("\n-----------------------------------------------------")
         print("Number of Sources - {}".format(len(self)))
-        print("Redshift Information - {}".format(self._redshifts[0] is not None))
+        print("Redshift Information - {}".format(self.redshifts[0] is not None))
         print("-----------------------------------------------------\n")
 
     # The length of the sample object will be the number of associated sources.
@@ -331,8 +333,6 @@ class BaseSample:
 
         # Now the standard stored values
         del self._names[key]
-        del self._ra_decs[key]
-        del self._redshifts[key]
         del self._accepted_inds[key]
 
         # This function is specific to the Sample type, as some Sample classes have extra information stored

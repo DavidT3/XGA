@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/02/2021, 17:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 14:36. Copyright (c) David J Turner
 
 import json
 import os
@@ -9,7 +9,7 @@ from typing import List, Tuple
 import pandas as pd
 import pkg_resources
 from astropy.constants import m_p, m_e
-from astropy.units import Quantity, def_unit
+from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import read_header
 from fitsio.header import FITSHDR
@@ -77,12 +77,16 @@ with open(pkg_resources.resource_filename(__name__, "files/xspec_model_units.jso
 ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
 # TODO Populate this further, also actually calculate and verify these myself, the value here is taken
 #  from pyproffit code
-# Conversion from Hydrogen number density to electron number density
+# For a fully ionised plasma, this is the electron-to-proton ratio
 NHC = {"angr": 1.199}
 XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
 
 # I know this is practically pointless, I could just use m_p, but I like doing things properly.
 HY_MASS = m_p + m_e
+
+# Mean molecular weight, mu
+# TODO Make sure this doesn't change with abundance table, I suspect it should
+MEAN_MOL_WEIGHT = 0.61
 
 # A centralised constant to define what radius labels are allowed
 RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
@@ -365,6 +369,12 @@ else:
 
     xmm_sky = def_unit("xmm_sky")
     xmm_det = def_unit("xmm_det")
+    # These are largely defined so that I can use them for when I'm normalising profile plots, that way
+    #  the view method can just write the units nicely the way it normally does
+    r200 = def_unit('r200', format={'latex': r"\mathrm{R_{200}}"})
+    r500 = def_unit('r500', format={'latex': r"\mathrm{R_{500}}"})
+    r2500 = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
+    add_enabled_units([r200, r500, r2500, xmm_det, xmm_det])
 
 
 

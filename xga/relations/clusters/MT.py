@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2021, 16:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 18:39. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.units import Quantity
@@ -9,19 +9,19 @@ from ...products.relation import ScalingRelation
 
 # These are from the classic M-T relation published by Arnaud
 arnaud_m200 = ScalingRelation(np.array([1.72, 5.34]), np.array([0.10, 0.22]), power_law, Quantity(5, 'keV'),
-                              Quantity(1e+14, 'solMass'), r"T$_{\rm{x}}$", "E(z)$^{-1}$M$_{200}$",
+                              Quantity(1e+14, 'solMass'), r"T$_{\rm{x}}$", "E(z)M$_{200}$",
                               relation_author='Arnaud et al.', relation_year='2005',
                               relation_doi='10.1051/0004-6361:20052856',
                               relation_name='Hydrostatic Mass-Temperature', x_lims=Quantity([1, 12], 'keV'))
 
 arnaud_m500 = ScalingRelation(np.array([1.71, 3.84]), np.array([0.09, 0.14]), power_law, Quantity(5, 'keV'),
-                              Quantity(1e+14, 'solMass'), r"T$_{\rm{x}}$", "E(z)$^{-1}$M$_{500}$",
+                              Quantity(1e+14, 'solMass'), r"T$_{\rm{x}}$", "E(z)M$_{500}$",
                               relation_author='Arnaud et al.', relation_year='2005',
                               relation_doi='10.1051/0004-6361:20052856',
                               relation_name='Hydrostatic Mass-Temperature', x_lims=Quantity([1, 12], 'keV'))
 
 arnaud_m2500 = ScalingRelation(np.array([1.70, 1.69]), np.array([0.07, 0.05]), power_law, Quantity(5, 'keV'),
-                               Quantity(1e+14, 'solMass'), r"T$_{\rm{x}}$", "E(z)$^{-1}$M$_{2500}$",
+                               Quantity(1e+14, 'solMass'), r"T$_{\rm{x}}$", "E(z)M$_{2500}$",
                                relation_author='Arnaud et al.', relation_year='2005',
                                relation_doi='10.1051/0004-6361:20052856',
                                relation_name='Hydrostatic Mass-Temperature', x_lims=Quantity([1, 12], 'keV'))

@@ -1,11 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/02/2021, 23:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 11:54. Copyright (c) David J Turner
 
 import os
 import warnings
 from typing import List, Union, Tuple
 
-from astropy.units import Quantity
+from astropy.units import Quantity, UnitConversionError
 
 from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES
 from ...samples.base import BaseSample
@@ -64,7 +64,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
 
 
 def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_en: Quantity, hi_en: Quantity,
-                  fit_method: str, abund_table: str) -> Union[List[BaseSource], BaseSample]:
+                  fit_method: str, abund_table: str, timeout: Quantity) -> Union[List[BaseSource], BaseSample]:
     """
     This performs some checks that are common to all the model fit functions, also makes sure the necessary spectra
     have been generated.
@@ -73,8 +73,11 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
-    :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
+    :param str abund_table: The abundance table to use for the fit.
+    :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
+        Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
+        fits.
     :return: Most likely just the passed in sources, but if a single source was passed
     then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
@@ -110,6 +113,10 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
     if abund_table not in ABUND_TABLES:
         raise ValueError("{f} is not an XSPEC abundance table, allowed abundance tables are; "
                          "{a}.".format(f=fit_method, a=", ".join(ABUND_TABLES)))
+
+    if not timeout.unit.is_equivalent('second'):
+        raise UnitConversionError("The timeout quantity must be in units which can be converted to seconds, you have"
+                                  " passed a quantity with units of {}".format(timeout.unit.to_string()))
 
     return sources
 

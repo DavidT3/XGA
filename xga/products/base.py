@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 17:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 17:13. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -10,14 +10,15 @@ import corner
 import emcee as em
 import numpy as np
 from astropy.units import Quantity, UnitConversionError, Unit, deg
+from getdist import plots, MCSamples
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
+from tabulate import tabulate
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
     ModelNotAssociatedError
-from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_MODELS, PROF_TYPE_MODELS_STARTS, PROF_TYPE_MODELS_PRIORS, \
-    MODEL_PUBLICATION_PAR_NAMES
+from ..models import PROF_TYPE_MODELS, BaseModel1D, MODEL_PUBLICATION_NAMES
 from ..models.fitting import log_likelihood, log_prob
 from ..utils import SASERROR_LIST, SASWARNING_LIST
 
@@ -492,7 +493,8 @@ class BaseProfile1D:
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
+                 y_norm: Quantity = Quantity(1, '')):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -512,6 +514,10 @@ class BaseProfile1D:
         :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
             units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
             values converted to degrees, and allows this object to construct a predictable storage key.
+        :param Quantity x_norm: An astropy quantity to use to normalise the x-axis values, this is only used when
+            plotting if the user tells the view method that they wish for the plot to use normalised x-axis data.
+        :param Quantity y_norm: An astropy quantity to use to normalise the y-axis values, this is only used when
+            plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
         """
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
@@ -598,13 +604,13 @@ class BaseProfile1D:
         #  when I wanted to know but this is easier.
         self._prof_type = "base"
 
+        # The currently implemented and allowed types of fitting for a profile
+        self._fit_methods = ['curve_fit', 'mcmc', 'odr']
+        self._nice_fit_methods = {'curve_fit': 'Curve Fit', 'mcmc': 'MCMC', 'odr': 'ODR'}
+
         # Here is where information about fitted models is stored (and any failed fit attempts)
-        self._good_model_fits = {}
-        self._bad_model_fits = {}
-        # Previously I stored model realisations in self._good_model_fits, but I'm splitting out into its
-        #  own attribute. Primarily because I want to be able to add realisations from non-model sources in
-        #  the Density1D profile product.
-        self._realisations = {}
+        self._good_model_fits = {m: {} for m in self._fit_methods}
+        self._bad_model_fits = {m: {} for m in self._fit_methods}
 
         # Some types of profiles will support a background value (like surface brightness), which will
         #  need to be incorporated into the fit and plotting.
@@ -613,9 +619,6 @@ class BaseProfile1D:
         # Need to be able to store upper and lower energy bounds for those profiles that
         #  have them (like brightness profiles for instance)
         self._energy_bounds = (None, None)
-
-        # This is where allowed realisation types are stored, but there are none for the base profile
-        self._allowed_real_types = []
 
         # Checking the if associated_set_id is supplied, so is set_storage_key, and vica versa
         if not all([associated_set_id is None, set_storage_key is None]) and \
@@ -652,303 +655,408 @@ class BaseProfile1D:
         #  profile subclasses
         self._usable = True
 
-    def fit(self, model: str, method: str = "mcmc", priors: list = None, start_pars: list = None,
-            model_real: int = 1000, model_rad_steps: int = 300, conf_level: int = 90, num_walkers: int = 20,
-            num_steps: int = 20000, progress_bar: bool = True, show_errors: bool = True):
-        """
-        The fitting method for 1D XGA profile products, it uses the type of profile which is calling the method
-        to determine what models are allowed to be fit to the data. It also allowed for different fit methods,
-        including scipy's curve_fit implementation of non-linear least squares, and emcee's ensemble MCMC fitter.
+        # These are the normalisation values for plotting (and possibly fitting at some point). I don't check their
+        #  units at any point because the user is welcome to normalise their plots by whatever value they wish
+        self._x_norm = x_norm
+        self._y_norm = y_norm
 
-        :param str model: The name of the model to fit to the profile, the allowed_models method can be used to
-            find a list of legal models for a specific type of profile.
-        :param str method: Which fitting method should be used, default is "mcmc".
-        :param list priors: The priors to use for the given model (IF USING MCMC FITTING), though default values
-            will be used if no priors are passed. This should be a nested list, with one entry per parameter, and each
-            entry being a list with two values, a lower limit and an upper limit (in that order).
-        :param list start_pars: The start parameters to use for the given model (IF USING CURVE FIT), though default
-            values will be used if no start parameters are passed. This should be a list, with one entry per model
-            parameter.
-        :param int model_real: The number of realisations of the fitted model to generate for uncertainty measurement.
-        :param int model_rad_steps: The number of radial steps to use to generate realisations of the model.
-        :param int conf_level: The confidence level to calculate uncertainties at.
-        :param int num_walkers: The number of walkers for the emcee ensemble MCMC fitter to use, if using MCMC fitting.
-        :param int num_steps: The number of steps for each walker to take, if using MCMC fitting.
-        :param bool progress_bar: Controls whether a progress bar should be shown for MCMC fitting.
-        :param bool show_errors: If there are errors during MCMC fitting, should they be displayed.
+    def emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
+                  num_samples: int) -> Tuple[BaseModel1D, bool]:
         """
-        # These are the currently allowed fitting methods
+        A fitting function to fit an XGA model instance to the data in this profile using the emcee
+        affine-invariant MCMC sampler, this should be called through .fit() for full functionality. An initial
+        run of curve_fit is used to find start parameters for the sampler, though if that fails a maximum
+        likelihood estimate is run, and if that fails the method will revert to using the start parameters
+        set in the model instance.
+
+        :param BaseModel1D model: The model to be fit to the data.
+        :param int num_steps: The number of steps each chain should take.
+        :param int num_walkers: The number of walkers to be run for the ensemble sampler.
+        :param bool progress_bar: Whether a progress bar should be displayed.
+        :param bool show_warn: Should warnings be printed out, otherwise they are just stored in the model
+            instance (this also happens if show_warn is True).
+        :param int num_samples: The number of random samples to take from the posterior distributions of
+            the model parameters.
+        :return: The model instance, and a boolean flag as to whether this was a successful fit or not.
+        :rtype: Tuple[BaseModel1D, bool]
+        """
+        def find_to_replace(start_pos: np.ndarray, par_lims: np.ndarray) -> np.ndarray:
+            """
+            Tiny function to generate an array of which start positions are currently invalid and should
+            be replaced.
+
+            :param np.ndarray start_pos: The current start positions of the walkers/parameters to be checked.
+            :param np.ndarray par_lims: The limits imposed on the start parameters.
+            :return: A numpy array of True and False values, True means the value should be replaced/recalculated.
+            :rtype: np.ndarray
+            """
+            # It is possible that the start parameters can be outside of the range allowed by the the priors. In which
+            #  case the MCMC fit will get super upset but not actually throw an error.
+            start_check_greater = np.greater_equal(start_pos, par_lims[:, 0])
+            start_check_lower = np.less_equal(start_pos, par_lims[:, 1])
+            # Any true value in this array is a parameter that isn't in the allowed prior range
+            to_replace_arr = ~(start_check_greater & start_check_lower)
+
+            return to_replace_arr
+
+        # I'm just defining these here so that the lines don't get too long for PEP standards
+        y_data = (self.values.copy() - self._background).value
+        y_errs = self.values_err.copy().value
+        rads = self.fit_radii.copy().value
+        success = True
+        warning_str = ""
+
+        for prior in model.par_priors:
+            if prior['type'] != 'uniform':
+                raise NotImplementedError("Sorry but I don't yet support non-uniform priors for profile fitting!")
+
+        prior_list = [p['prior'].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
+        prior_arr = np.array(prior_list)
+
+        # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
+        #  we try maximum likelihood, and if that fails then we fall back on the default start parameters in the
+        #  model.
+        curve_fit_model, success = self._curve_fit(model, 10, show_warn=False)
+        if success or curve_fit_model.fit_warning == "Very large parameter uncertainties":
+            base_start_pars = np.array([p.value for p in curve_fit_model.model_pars])
+        else:
+            # This finds maximum likelihood parameter values for the model+data
+            max_like_res = minimize(lambda *args: -log_likelihood(*args, model.model), model.unitless_start_pars,
+                                    args=(rads, y_data, y_errs))
+            # I'm now adding this checking step, which will revert to the default start parameters of the model if the
+            #  maximum likelihood estimate produced insane results.
+            base_start_pars = max_like_res.x
+
+        # So if any of the max likelihood pars are outside their prior, we just revert back to the original
+        #  start parameters of the model. This step may make the checks performed later for instances where all
+        #  start positions for a parameter are outside the prior a bit pointless, but I'm leaving them in for safety.
+        if find_to_replace(base_start_pars, prior_arr).any():
+            warn("Maximum likelihood estimator has produced at least one start parameter that is outside"
+                 " the allowed values defined by the prior, reverting to default start parameters for this model.")
+            base_start_pars = model.unitless_start_pars
+
+        # This basically finds the order of magnitude of each parameter, so we know the scale on which we should
+        #  randomly perturb
+        ml_rand_dev = np.power(10, np.floor(np.log10(np.abs(base_start_pars)))) / 10
+
+        # Then that order of magnitude is multiplied by a value drawn from a standard gaussian, and this is what
+        #  we perturb the maximum likelihood values with - so we get random start parameters for all
+        #  of our walkers
+        pos = base_start_pars + (ml_rand_dev * np.random.randn(num_walkers, model.num_pars))
+
+        # It is possible that some of the start parameters we've generated are outside the prior, in which
+        #  case emcee gets quite angry. Just in case I draw random values from the priors of all parameters,
+        #  ready to be substituted in, but only if I definitely can't get the start parameters from perturbing
+        #  the max likelihood 'fit'
+        rand_uniform_pos = np.random.uniform(prior_arr[:, 0], prior_arr[:, 1], size=(num_walkers, model.num_pars))
+
+        # Check which of the current start parameters are currently valid
+        to_replace = find_to_replace(pos, prior_arr)
+
+        # Setting up decent starting values is very important, so first I'm going to check if every single starting
+        #  value of any parameter is outside the bounds of our priors, because if that's true then the maximum
+        #  likelihood 'fit' to get the initial starting parameters is probably a bit crappy
+        all_bad = np.all(to_replace, axis=0)
+        if any(all_bad):
+            warn("All walker starting parameters for one or more of the model parameters are outside the priors, which"
+                 "probably indicates a bad initial fit (which is used to get initial start parameters). Values will be"
+                 " drawn from the priors directly.")
+            # This replacement only affects those parameters for which ALL start positions are outside the
+            #  prior range
+            all_bad_inds = np.argwhere(all_bad).T[0]
+            pos[:, all_bad_inds] = rand_uniform_pos[:, all_bad_inds]
+            # Now need to re-calculate the to_replace array, as it is no longer valid
+            to_replace = find_to_replace(pos, prior_arr)
+
+        # Now, if there are still problems with the starting positions, we know it is likely because some of
+        #  the random perturbations of the 'best fit' start parameters are outside the priors, thus we will
+        #  iteratively try and draw more acceptable perturbations, and if there are any 'bad' start positions
+        #  left after 100 tries then they'll just get assigned randomly drawn values from the priors
+        iter_cnt = 0
+        while True in to_replace and iter_cnt < 100:
+            new_pos = base_start_pars + ml_rand_dev * np.random.randn(num_walkers, model.num_pars)
+            pos[to_replace] = new_pos[to_replace]
+            to_replace = find_to_replace(pos, prior_arr)
+            iter_cnt += 1
+
+        # So any start values that fall outside the allowed range will be swapped out with a value randomly drawn
+        #  from the prior
+        pos[to_replace] = rand_uniform_pos[to_replace]
+
+        # This instantiates an Ensemble sampler with the number of walkers specified by the user,
+        #  with the log probability as defined in the functions above
+        sampler = em.EnsembleSampler(num_walkers, model.num_pars, log_prob, args=(rads, y_data, y_errs, model.model,
+                                                                                  prior_list))
+        try:
+            # So now we start the sampler, running for the number of steps specified on function call, with
+            #  the starting parameters defined in the if statement above this.
+            sampler.run_mcmc(pos, num_steps, progress=progress_bar)
+            model.acceptance_fraction = np.mean(sampler.acceptance_fraction)
+            success = True
+        except ValueError as bugger:
+            warning_str = str(bugger)
+            model.fit_warning = warning_str
+            success = False
+
+        rng = np.random.default_rng()
+        if success:
+            # The auto-correlation can produce an error that basically says not to trust the chains
+            try:
+                # The sampler has a convenient auto-correlation time derivation, which returns the
+                #  auto-correlation time for each parameter - with this I simply choose the highest one and
+                #  round up to the nearest 100 to use as the burn-in
+                auto_corr = np.mean(sampler.get_autocorr_time())
+                # Find the nearest hundred above the mean auto-correlation time, then multiply by two for
+                #  burn-in region
+                cut_off = int(np.ceil(auto_corr / 100) * 100)*2
+                success = True
+            except ValueError as bugger:
+                model.fit_warning = str(bugger)
+                success = False
+                cut_off = None
+            except em.autocorr.AutocorrError as bugger:
+                model.fit_warning = str(bugger)
+                cut_off = int(0.3 * num_steps)
+
+            # Store the chosen cut off in the model instance
+            model.cut_off = cut_off
+
+            # If the fit is considered to have not completely failed then we store distributions and parameters
+            #  in the model intance
+            if success:
+                # I am not going to thin the chains, apparently that can actually increase variance?
+                flat_samp = sampler.get_chain(discard=cut_off, flat=True)
+                # Construct a numpy array representing the indices of the flattened chains
+                all_inds = np.arange(flat_samp.shape[0])
+                # Use the numpy random submodule to choose randomly sample the flattened chains
+                chosen_inds = rng.choice(all_inds, num_samples)
+                chosen = flat_samp[chosen_inds, :]
+                # Then give those chains the correct units and store them in the model instance
+                par_dists = [Quantity(chosen[:, p_ind], model.par_units[p_ind]) for p_ind in range(model.num_pars)]
+                model.par_dists = par_dists
+
+                # Start constructing the uncertainties on the parameters, though with a more complex model where the
+                #  parameters distributions are not gaussian using these parameter values would not be appropriate
+                model_par_errs = []
+                for p_dist in par_dists:
+                    # Store the current unit
+                    u = p_dist.unit
+                    # Measure the 50th percentile value of the current parameter distribution
+                    fiftieth = np.percentile(p_dist, 50).value
+                    # Find the upper and lower bounds of the 1sigma region of the distribution
+                    upper = np.percentile(p_dist, 84.1).value
+                    lower = np.percentile(p_dist, 15.9).value
+                    # Store the upper and lower uncertainties with the correct units
+                    model_par_errs.append(Quantity([fiftieth-lower, upper-fiftieth], u))
+
+                # Store the model parameter and uncertainties in the model instance
+                model.model_pars = [p_dist.mean() for p_dist in par_dists]
+                model.model_par_errs = model_par_errs
+
+        # Store the sampler in the model instance, useful for getting raw chains etc again in the future
+        model.emcee_sampler = sampler
+
+        # I show all the warnings at once, if the user wants that
+        if model.fit_warning != "" and show_warn:
+            print(model.fit_warning)
+
+        # Tell the model whether we think the fit was successful or not
+        model.success = success
+
+        # And finally storing the fit method used in the model itself
+        model.fit_method = "mcmc"
+
+        return model, success
+
+    def _curve_fit(self, model: BaseModel1D, num_samples: int, show_warn: bool) -> Tuple[BaseModel1D, bool]:
+        """
+        A function to fit an XGA model instance to the data in this profile using the non-linear least squares
+        curve_fit routine from scipy, this should be called through .fit() for full functionality
+
+        :param BaseModel1D model: An instance of the model to be fit to this profile.
+        :param int num_samples: The number of random samples to be drawn and stored in the model
+            parameter distribution property.
+        :param bool show_warn: Should warnings be printed out, otherwise they are just stored in the model
+            instance (this also happens if show_warn is True).
+        :return: The model (with best fit parameters stored within it), and a boolean flag as to whether the
+            fit was successful or not.
+        :rtype: Tuple[BaseModel1D, bool]
+        """
+        y_data = (self.values.copy() - self._background).value
+        y_errs = self.values_err.copy().value
+        rads = self.fit_radii.copy().value
+        success = True
+        warning_str = ""
+        
+        lower_bounds = []
+        upper_bounds = []
+        for prior_ind, prior in enumerate(model.par_priors):
+            if prior['type'] == 'uniform':
+                conv_prior = prior['prior'].to(model.par_units[prior_ind]).value
+                lower_bounds.append(conv_prior[0])
+                upper_bounds.append(conv_prior[1])
+            else:
+                lower_bounds.append(-np.inf)
+                upper_bounds.append(np.inf)
+
+        # Curve fit is a simple non-linear least squares implementation, its alright but fragile
+        try:
+            fit_par, fit_cov = curve_fit(model.model, rads, y_data, p0=model.unitless_start_pars, sigma=y_errs,
+                                         absolute_sigma=True, bounds=(lower_bounds, upper_bounds))
+
+            # If there is an infinite value in the covariance matrix, it means curve_fit was
+            #  unable to estimate it properly
+            if np.inf in fit_cov:
+                warning_str = "Infinity in covariance matrix"
+                success = False
+            else:
+                # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
+                fit_par_err = np.sqrt(np.diagonal(fit_cov))
+                frac_err = np.divide(fit_par_err, fit_par, where=fit_par != 0)
+                if frac_err.max() > 10:
+                    warning_str = "Very large parameter uncertainties"
+                    success = False
+        except RuntimeError as r_err:
+            warn("{}, curve_fit has failed.".format(str(r_err)))
+            warning_str = str(r_err)
+            success = False
+            fit_par = np.full(len(model.model_pars), np.nan)
+            fit_par_err = np.full(len(model.model_pars), np.nan)
+
+        # Using the parameter values and the covariance matrix I generate parameter distributions to store in the
+        #  model instance.
+        # Apparently this is what we should be using for random numbers from numpy now!
+        rng = np.random.default_rng()
+        if success:
+            # I generate num_samples random points from the distribution of each parameter
+            ext_model_par = np.repeat(fit_par[..., None], num_samples, axis=1).T
+            ext_model_par_err = np.repeat(fit_par_err[..., None], num_samples, axis=1).T
+            # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
+            model_par_dists = rng.normal(ext_model_par, ext_model_par_err)
+            par_dists = [Quantity(model_par_dists[:, p_ind], model.par_units[p_ind])
+                         for p_ind in range(0, len(fit_par))]
+            model.par_dists = par_dists
+
+        # Now we put the values BACK into quantities
+        fit_par = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par)]
+        fit_par_err = [Quantity(p, model.par_units[p_ind]) for p_ind, p in enumerate(fit_par_err)]
+
+        # And pass them into the model
+        model.model_pars = fit_par
+        model.model_par_errs = fit_par_err
+
+        if not success:
+            model.fit_warning = warning_str
+
+        if show_warn and warning_str != "":
+            warn(warning_str)
+
+        # Tell the model whether we think the fit was successful or not
+        model.success = success
+
+        # And finally storing the fit method used in the model itself
+        model.fit_method = "curve_fit"
+
+        # And then the model gets sent back
+        return model, success
+
+    def _odr_fit(self, model: BaseModel1D, show_warn: bool):
+        # TODO REMEMBER TO USE THE FIT RADII PROPERTY
+        # Tell the model whether we think the fit was successful or not
+        # model.success = success
+
+        # And finally storing the fit method used in the model itself
+        model.fit_method = "odr"
+        raise NotImplementedError("This fitting method is still under construction!")
+
+    def fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_samples: int = 10000,
+            num_steps: int = 30000, num_walkers: int = 20, progress_bar: bool = True,
+            show_warn: bool = True) -> BaseModel1D:
+        """
+        Method to fit a model to this profile's data, then store the resulting model parameter results. Each
+        profile can store one instance of a type of model per fit method. So for instance you could fit both
+        a 'beta' and 'double_beta' model to a surface brightness profile with curve_fit, and then you could
+        fit 'double_beta' again with MCMC.
+
+        If any of the parameters of the passed model have a uniform prior associated, and the chosen method
+        is curve_fit, then those priors will be used to place bounds on those parameters.
+
+        :param str/BaseModel1D model: Either an instance of an XGA model to be fit to this profile, or the name
+            of a profile (e.g. 'beta', or 'simple_vikhlinin_dens').
+        :param str method: The fit method to use, either 'curve_fit', 'mcmc', or 'odr'.
+        :param int num_samples: The number of random samples to draw to create the parameter distributions
+            that are saved in the model.
+        :param int num_steps: Only applicable if using MCMC fitting, the number of steps each walker should take.
+        :param int num_walkers: Only applicable if using MCMC fitting, the number of walkers to initialise
+            for the ensemble sampler.
+        :param bool progress_bar: Only applicable if using MCMC fitting, should a progress bar be shown.
+        :param bool show_warn: Should warnings be printed out, otherwise they are just stored in the model
+            instance (this also happens if show_warn is True).
+        :return: The fitted model object. The fitted model is also stored within the profile object.
+        :rtype: BaseModel1D
+        """
+        # Make sure the method is lower case
         method = method.lower()
-        fit_methods = ["curve_fit", "mcmc"]
-        # Checking that the user hasn't chosen a method that isn't allowed
-        if method not in fit_methods:
-            raise ValueError("{0} is not an accepted fitting method, please choose one of these; "
-                             "{1}".format(method, ", ".join(fit_methods)))
-        elif method == "curve_fit" and priors is not None:
-            warn("You have chosen curve_fit, and also provided priors, these will not be used.")
 
-        # Stopping the user from making stupid model choices
+        # This chunk is just checking inputs and making sure they're valid
+        # Put the allowed models for this profile type into a string
+        allowed = ", ".join(PROF_TYPE_MODELS[self._prof_type])
         if self._prof_type == "base":
             raise XGAFitError("A BaseProfile1D object currently cannot have a model fitted to it, as there"
                               " is no physical context.")
-        elif model not in PROF_TYPE_MODELS[self._prof_type]:
-            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
-            prof_name = self._y_axis_name.lower()
-            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
-                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
-        else:
-            model_func = PROF_TYPE_MODELS[self._prof_type][model]
-
-        # Changes confidence level to expected input for numpy percentile function
-        upper = 50 + (conf_level / 2)
-        lower = 50 - (conf_level / 2)
-
-        # I used to grab the variable names from the function signature, but now I've implemented dictionaries
-        #  that contain 'nice' parameter names for all the models (nice as in LaTeX formatted etc.)
-        model_par_names = MODEL_PUBLICATION_PAR_NAMES[model]
-        if start_pars is not None and len(start_pars) != len(model_par_names):
-            raise ValueError("start_pars must either be None, or have an entry for each parameter expected by"
-                             " the chosen model; {0} expects {1}".format(model, ", ".join(model_par_names)))
-        elif start_pars is None:
-            # If the user doesn't supply any starting parameters then we just have to use the default ones
-            start_pars = PROF_TYPE_MODELS_STARTS[self._prof_type][model]
-
-        # Even though we won't always need priors I'm just grab them anyway
-        if priors is not None and len(priors) != len(model_par_names):
-            raise ValueError("priors must either be None, or have an entry for each parameter expected by"
-                             " the chosen model; {0} expects {1}".format(model, ", ".join(model_par_names)))
-        elif priors is None:
-            # If the user doesn't supply any priors then we use the default ones
-            priors = PROF_TYPE_MODELS_PRIORS[self._prof_type][model]
+        elif isinstance(model, str) and model.lower() not in PROF_TYPE_MODELS[self._prof_type]:
+            raise XGAInvalidModelError("{p} is not available for this type of profile, please use one of the "
+                                       "following models {a}".format(p=model, a=allowed))
+        elif isinstance(model, str):
+            model = PROF_TYPE_MODELS[self._prof_type][model](self.radii_unit, self.values_unit)
+        elif isinstance(model, BaseModel1D) and model.name not in PROF_TYPE_MODELS[self._prof_type]:
+            raise XGAInvalidModelError("{p} is not available for this type of profile, please use one of the "
+                                       "following models {a}".format(p=model, a=allowed))
+        elif isinstance(model, BaseModel1D) and (model.x_unit != self.radii_unit or model.y_unit != self.values_unit):
+            raise UnitConversionError("The model instance passed to the fit method has units that are incompatible, "
+                                      "with the data. This profile has an radius unit of {r} and a value unit of "
+                                      "{v}".format(r=self.radii_unit.to_string(), v=self.values_unit.to_string()))
 
         # I don't think I'm going to allow any fits without value uncertainties - just seems daft
         if self._values_err is None:
             raise XGAFitError("You cannot fit to a profile that doesn't have value uncertainties.")
 
-        # Check whether a good fit result already exists for this model
-        if model in self._good_model_fits:
-            warn("{} already has a successful fit result for this profile".format(model))
+        # Checking that the method passed is valid
+        if method not in self._fit_methods:
+            allowed = ", ".join(self._fit_methods)
+            raise XGAFitError("{me} is not a valid fitting method, please use one of these; {a}".format(me=method,
+                                                                                                        a=allowed))
+
+        # Check whether a good fit result already exists for this model. We use the storage_key property that
+        #  XGA model objects generate from their name and their start parameters
+        if model.name in self._good_model_fits[method]:
+            warn("{m} already has a successful fit result for this profile using {me}, with those start "
+                 "parameters".format(m=model.name, me=method))
             already_done = True
+        elif model.name in self._bad_model_fits[method]:
+            warn("{m} already has a failed fit result for this profile using {me} with those start "
+                 "parameters".format(m=model.name, me=method))
+            already_done = False
         else:
             already_done = False
 
-        # Check whether this fit is in the bad fit dictionary
-        if model in self._bad_model_fits:
-            warn("{} already has a failed fit result for this profile".format(model))
-
-        # Now we do the actual fitting part
-        if method == "curve_fit" and not already_done:
-            success = True
-            # Curve fit is a simple non-linear least squares implementation, its alright but fragile
-            try:
-                fit_par, fit_cov = curve_fit(model_func, self._radii.value, self.values.value
-                                             - self._background.value, p0=start_pars, sigma=self._values_err.value,
-                                             absolute_sigma=True)
-                # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
-                fit_par_err = np.sqrt(np.diagonal(fit_cov))
-                frac_err = np.divide(fit_par_err, fit_par, where=fit_par != 0)
-                if frac_err.max() > 10:
-                    warn("A parameter uncertainty is more than 10 times larger than the parameter, curve_fit "
-                         "has failed.")
-                    success = False
-                # If there is an infinite value in the covariance matrix, it means curve_fit was
-                #  unable to estimate it properly
-                if np.inf in fit_cov:
-                    success = False
-            except RuntimeError:
-                warn("RuntimeError was raised, curve_fit has failed.")
-                success = False
-                fit_par = np.full(len(start_pars), np.nan)
-                fit_par_err = np.full(len(start_pars), np.nan)
-
-        elif method == "mcmc" and not already_done:
-            # I'm just defining these here so that the lines don't get too long for PEP standards
-            r_dat = self.radii.value
-            v_dat = self.values.value - self.background.value
-            v_err = self.values_err.value
-            n_par = len(priors)
-            prior_arr = np.array(priors)
-
-            for_max_like = lambda *args: -log_likelihood(*args, model_func)
-            # This finds maximum likelihood parameter values for the model+data
-            max_like_res = minimize(for_max_like, start_pars, args=(r_dat, v_dat, v_err))
-
-            # This basically finds the order of magnitude (+1) of each parameter
-            ml_rand_dev = np.power(10, np.floor(np.log10(np.abs(max_like_res.x))))
-
-            # Then that order of magnitude is multiplied by a value drawn from a standard gaussian, and this is what
-            #  we perturb the maximum likelihood values with - so we get random start parameters for all
-            #  of our walkers
-            pos = max_like_res.x + ml_rand_dev*np.random.randn(num_walkers, n_par)
-
-            # It is possible that some of the start parameters we've generated are outside the prior, in which
-            #  case emcee gets quite angry. Just in case I draw random values from the priors of all parameters,
-            #  ready to be substituted in if a start par is outside the allowed range
-            rand_uniform_pos = np.random.uniform(prior_arr[:, 0], prior_arr[:, 1], size=(num_walkers, n_par))
-
-            # It is possible that the start parameters can be outside of the range allowed by the the priors. In which
-            #  case the MCMC fit will get super upset but not actually throw an error.
-            start_check_greater = np.greater_equal(pos, prior_arr[:, 0])
-            start_check_lower = np.less_equal(pos, prior_arr[:, 1])
-            # Any true value in this array is a parameter that isn't in the allowed prior range
-            to_replace = ~(start_check_greater & start_check_lower)
-
-            # So any start values that fall outside the allowed range will be swapped out with a value randomly drawn
-            #  from the prior
-            pos[to_replace] = rand_uniform_pos[to_replace]
-
-            # This instantiates an Ensemble sampler with the number of walkers specified by the user,
-            #  with the log probability as defined in the functions above
-            sampler = em.EnsembleSampler(num_walkers, n_par, log_prob, args=(r_dat, v_dat, v_err,
-                                                                             model_func, priors))
-            try:
-                # So now we start the sampler, running for the number of steps specified on function call, with
-                #  the starting parameters defined in the if statement above this.
-                sampler.run_mcmc(pos, num_steps, progress=progress_bar)
-                success = True
-            except ValueError as bugger:
-                if show_errors:
-                    print("SAMPLER ERROR", bugger)
-                success = False
-
-            if success:
-                # The auto-correlation can produce an error that basically says not to trust the chains
-                try:
-                    # The sampler has a convenient auto-correlation time derivation, which returns the
-                    #  auto-correlation time for each parameter - with this I simply choose the highest one and
-                    #  round up to the nearest 100 to use as the burn-in
-                    auto_corr = sampler.get_autocorr_time()
-                    cut_off = int(np.ceil(auto_corr.max() / 100) * 100)
-                    success = True
-                except ValueError as bugger:
-                    if show_errors:
-                        print("AUTOCORRELATION VALUE ERROR", bugger)
-                    success = False
-                except em.autocorr.AutocorrError as bugger:
-                    warn("AUTOCORRELATION ERROR " + str(bugger))
-                    cut_off = int(0.1 * num_steps)
-        # Now do some checks after the fit has run, primarily for any infinite values
-        if not already_done and method == "curve_fit" and ((np.inf in fit_par or np.inf in fit_par_err)
-                                 or (True in np.isnan(fit_par) or True in np.isnan(fit_par_err))):
-            # This is obviously bad, and enough of a reason to call a fit bad as an outright failure to fit
-            success = False
-
-        # If the fit succeeded to our satisfaction then it gets stored in the good dictionary, otherwise we record
-        #  it in the bad dictionary.
-        if not already_done and success and method == "curve_fit":
-            ext_model_par = np.repeat(fit_par[..., None], model_real, axis=1).T
-            ext_model_par_err = np.repeat(fit_par_err[..., None], model_real, axis=1).T
-
-            # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
-            model_par_dists = np.random.normal(ext_model_par, ext_model_par_err)
-
-            # No longer need these now we've drawn the random samples
-            del ext_model_par
-            del ext_model_par_err
-
-            # Setting up some radii between 0 and the maximum radius to sample the model at
-            if self._radii_err is None:
-                model_radii = np.linspace(0, self._radii[-1].value, model_rad_steps)
-            else:
-                model_radii = np.linspace(0, self._radii[-1].value + self._radii_err[-1].value, model_rad_steps)
-
-            # Copies the chosen radii model_real times, much as with the ext_model_par definition
-            ext_model_radii = np.repeat(model_radii[..., None], model_real, axis=1)
-
-            # Generates model_real realisations of the model at the model_radii
-            model_realisations = model_func(ext_model_radii, *model_par_dists.T)
-
-            # Calculates the mean model value at each radius step
-            model_mean = np.mean(model_realisations, axis=1)
-            # Then calculates the values for the upper and lower limits (defined by the
-            #  confidence level) for each radii
-            model_lower = np.percentile(model_realisations, lower, axis=1)
-            model_upper = np.percentile(model_realisations, upper, axis=1)
-
-            # Store these realisations for statistics later on
-            self._good_model_fits[model] = {"par": fit_par, "par_err": fit_par_err, "start_pars": start_pars,
-                                            "model_func": model_func, "par_names": model_par_names,
-                                            "conf_level": conf_level, "par_err_1sig": fit_par_err}
-            self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
-                                         "conf_level": conf_level, "mod_real_mean": model_mean,
-                                         "mod_real_lower": model_lower, "mod_real_upper": model_upper}
-
-        elif not already_done and success and method == "mcmc":
-            thinning = int(num_steps / model_real)
-            flat_samp = sampler.get_chain(discard=cut_off, thin=thinning, flat=True)
-            pars_lower = np.percentile(flat_samp, lower, axis=0)
-            pars_upper = np.percentile(flat_samp, upper, axis=0)
-            fit_par = np.mean(flat_samp, axis=0)
-            fit_par_mi = fit_par - pars_lower
-            fit_par_pl = pars_upper - fit_par
-            fit_par_1sig = np.std(flat_samp, axis=0)
-
-            # Setting up some radii between 0 and the maximum radius to sample the model at
-            if self._radii_err is None:
-                model_radii = np.linspace(0, self._radii[-1].value, model_rad_steps)
-            else:
-                model_radii = np.linspace(0, self._radii[-1].value + self._radii_err[-1].value, model_rad_steps)
-
-            # Copies the chosen radii model_real times, much as with the ext_model_par definition
-            ext_model_radii = np.repeat(model_radii[..., None], flat_samp.shape[0], axis=1)
-
-            # Generates model_real realisations of the model at the model_radii
-            model_realisations = model_func(ext_model_radii, *flat_samp.T)
-            model_mean = np.mean(model_realisations, axis=1)
-            model_lower = np.percentile(model_realisations, lower, axis=1)
-            model_upper = np.percentile(model_realisations, upper, axis=1)
-
-            self._good_model_fits[model] = {"par": fit_par, "par_err_mi": fit_par_mi, "par_err_pl": fit_par_pl,
-                                            "model_func": model_func, "sampler": sampler, "thinning": thinning,
-                                            "cut_off": cut_off, "par_names": model_par_names,
-                                            "conf_level": conf_level, "par_err_1sig": fit_par_1sig}
-            self._realisations[model] = {"mod_real": model_realisations, "mod_radii": model_radii,
-                                         "conf_level": conf_level, "mod_real_mean": model_mean,
-                                         "mod_real_lower": model_lower, "mod_real_upper": model_upper}
-
-        elif not already_done and not success and method == "mcmc":
-            self._bad_model_fits[model] = {"start_pars": start_pars}
-
-        elif not already_done and not success and method == "curve_fit":
-            self._bad_model_fits[model] = {"priors": priors}
-
-    def get_realisation(self, real_type: str) -> Dict:
-        """
-        Get method for model realisation data, this includes the array of realisations, the radii at which
-        the realisations are generated, the upper and lower bounds, the mean, and the confidence level.
-
-        :param str real_type: The type of realisation to be retrieved, most often a model name, or the key
-            associated with a particular function that generated realisations (such as inv_abel_model).
-        :return: The realisation dictionary with relevant information in it, or None if no matching
-            realisation exists.
-        :rtype: Dict
-        """
-        if real_type in self._allowed_real_types or real_type in self._good_model_fits:
-            return self._realisations[real_type]
+        # Running the requested fitting method
+        if not already_done and method == 'mcmc':
+            model, success = self.emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn, num_samples)
+        elif not already_done and method == 'curve_fit':
+            model, success = self._curve_fit(model, num_samples, show_warn)
+        elif not already_done and method == 'odr':
+            model, success = self._odr_fit(model, show_warn)
         else:
-            return None
+            model = self.get_model_fit(model.name, method)
 
-    def get_model_fit(self, model) -> Dict:
-        """
-        Get method for parameters of fitted models.
+        # Storing the model in the internal dictionaries depending on whether the fit was successful or not
+        if not already_done and success:
+            self._good_model_fits[method][model.name] = model
+        elif not already_done and not success:
+            self._bad_model_fits[method][model.name] = model
 
-        :param model: The name of the model for which to retrieve parameters.
-        :return: A dictionary containing the fit parameters, their uncertainties, an instance of the model
-            function, and the initial parameters.
-        :rtype: Dict
-        """
-        if model not in PROF_TYPE_MODELS[self._prof_type]:
-            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
-            prof_name = self._y_axis_name.lower()
-            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
-                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
-        elif model in self._bad_model_fits:
-            raise XGAFitError("An attempt was made to fit {}, but it failed, no fit data can be "
-                              "retrieved.".format(model))
-        elif model not in self._good_model_fits:
-            raise ModelNotAssociatedError("{} is valid for this profile, but hasn't been fit yet".format(model))
-
-        return self._good_model_fits[model]
+        return model
 
     def allowed_models(self):
         """
@@ -957,78 +1065,103 @@ class BaseProfile1D:
         """
         # Base profile don't have any type of model associated with them, so just making an empty list
         if self._prof_type == "base":
-            allowed = []
+            warn("There are no implemented models for this profile type")
         else:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
 
-        # These set up the dictionary of printables, and variables that store the longest entry for each column
-        to_print = {}
-        # Initial values are the column sizes of the headers
-        longest_name = 12
-        longest_pars = 21
-        longest_defaults = 26
-        for model in allowed:
-            # Function object grabbed
-            model_func = PROF_TYPE_MODELS[self._prof_type][model]
-            # Looking for the variables in the function signature
-            model_sig = inspect.signature(model_func)
-            # Ignore the first argument, as it will be radius
-            model_par_names = ", ".join([p.name for p in list(model_sig.parameters.values())[1:]])
-            # The default start parameters of the fit
-            start_pars = ", ".join([str(p) for p in PROF_TYPE_MODELS_STARTS[self._prof_type][model]])
-            to_print[model] = [model, model_par_names, start_pars]
-            if len(model) > longest_name:
-                longest_name = len(model)
-            if len(model_par_names) > longest_pars:
-                longest_pars = len(model_par_names)
-            if len(start_pars) > longest_defaults:
-                longest_defaults = len(start_pars)
+            # These just roll through the available models for this type of profile and construct strings of
+            #  parameter names and start parameters to put in the table
+            model_par_names = []
+            model_par_starts = []
+            for m in allowed:
+                exp_pars = ""
+                par_len = 0
+                def_starts = ""
+                def_len = 0
 
-        if longest_name % 2 != 0:
-            longest_name += 3
+                # This chunk of code tries to make sure that the strings aren't too long to display nicely
+                #  in the table
+                mod_inst = PROF_TYPE_MODELS[self._prof_type][m]()
+                for p_ind, p in enumerate(list(inspect.signature(mod_inst.model).parameters.values())[1:]):
+                    if par_len > 35:
+                        exp_pars += ' \n'
+                        par_len = 0
+                    next_par = '{}, '.format(p.name)
+                    par_len += len(next_par)
+                    exp_pars += next_par
+
+                    if def_len > 35:
+                        def_starts += ' \n'
+                        def_len = 0
+                    next_def = '{}, '.format(str(mod_inst.start_pars[p_ind]))
+                    def_len += len(next_def)
+                    def_starts += next_def
+
+                # We slice out the last character because we know its going to be a spurious comma, just
+                #  because of the lazy way I wrote the loop above
+                model_par_names.append(exp_pars[:-2])
+                model_par_starts.append(def_starts[:-2])
+
+            # Construct the table data and display it using tabulate module
+            tab_dat = [[allowed[i], model_par_names[i], model_par_starts[i]] for i in range(0, len(allowed))]
+            print(tabulate(tab_dat, ["MODEL NAME", "EXPECTED PARAMETERS", "DEFAULT START VALUES"],
+                           tablefmt="fancy_grid"))
+
+    def get_model_fit(self, model: str, method: str) -> BaseModel1D:
+        """
+        A get method for fitted model objects associated with this profile. Models for which the fit failed will
+        also be returned, but a warning will be shown to inform the user that the fit failed.
+
+        :param str model: The name of the model to retrieve.
+        :param str method: The method which was used to fit the model.
+        :return: An instance of an XGA model object that was fitted to this profile and updated with the
+            parameter values.
+        :rtype: BaseModel1D
+        """
+        if model not in PROF_TYPE_MODELS[self._prof_type]:
+            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
+            prof_name = self._y_axis_name.lower()
+            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
+                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
+        elif model in self._bad_model_fits[method]:
+            warn("An attempt was made to fit {m} with {me} but it failed, so treat the model with "
+                 "suspicion".format(m=model, me=method))
+            ret_model = self._bad_model_fits[method][model]
+        elif model not in self._good_model_fits[method]:
+            raise ModelNotAssociatedError("{m} is valid for this profile, but hasn't been fit with {me} "
+                                          "yet".format(m=model, me=method))
         else:
-            longest_name += 2
+            ret_model = self._good_model_fits[method][model]
 
-        if longest_pars % 2 != 0:
-            longest_pars += 3
+        return ret_model
+
+    def add_model_fit(self, model: BaseModel1D, method: str):
+        """
+        There are rare circumstances where XGA processes might wish to add a model to a profile from the outside,
+        which is what this method allows you to do.
+
+        :param BaseModel1D model: The XGA model object to add to the profile.
+        :param str method: The method used to fit the model.
+        """
+
+        # Checking that the method passed is valid
+        if method not in self._fit_methods:
+            allowed = ", ".join(self._fit_methods)
+            raise XGAFitError("{me} is not a valid fitting method, please use one of these; {a}".format(me=method,
+                                                                                                        a=allowed))
+        # Checking that the model is valid for this particular profile
+        allowed = ", ".join(PROF_TYPE_MODELS[self._prof_type])
+        if model.name not in PROF_TYPE_MODELS[self._prof_type]:
+            raise XGAInvalidModelError("{p} is not valid for this type of profile, please use one of the "
+                                       "following models {a}".format(p=model.name, a=allowed))
+        elif model.x_unit != self.radii_unit or model.y_unit != self.values_unit:
+            raise UnitConversionError("The model instance passed to the fit method has units that are incompatible, "
+                                      "with the data. This profile has an radius unit of {r} and a value unit of "
+                                      "{v}".format(r=self.radii_unit.to_string(), v=self.values_unit.to_string()))
+        elif not model.success:
+            raise ValueError("Please only add successful models to this profile.")
         else:
-            longest_pars += 2
-
-        if longest_defaults % 2 != 0:
-            longest_defaults += 3
-        else:
-            longest_defaults += 2
-
-        # This next lot is just boring string formatting and printing, I'm sure you can figure it out.
-        first_col = "|" + " " * np.ceil((longest_name - 12) / 2).astype(int) + " MODEL NAME " + " " * np.ceil(
-            (longest_name - 12) / 2).astype(int) + "|"
-
-        second_col = " " * np.ceil((longest_pars - 21) / 2).astype(int) + " EXPECTED PARAMETERS " + " " * np.ceil(
-            (longest_pars - 21) / 2).astype(int) + "|"
-
-        third_col = " "*np.ceil((longest_defaults-26) / 2).astype(int) + " DEFAULT START PARAMETERS " + \
-                    " " * np.ceil((longest_defaults-26) / 2).astype(int) + "|"
-        comb = first_col + second_col + third_col
-        print("\n" + "-"*len(comb))
-        print(first_col + second_col + third_col)
-        print("-"*len(comb))
-        for model in to_print:
-            # I know this code is disgustingly ugly, but its not really important that you know how it works
-            # And perhaps I'll rewrite it at some point, who knows
-            the_line = "|" + " " * np.ceil((len(first_col) - len(to_print[model][0])) / 2).astype(int) + \
-                       to_print[model][0] + " " * np.ceil((len(first_col) -
-                                                           len(to_print[model][0])) / 2).astype(int) \
-                       + "|"
-
-            the_line += " "*np.ceil((len(second_col) -
-                                     len(to_print[model][1])) / 2).astype(int) + to_print[model][1] + \
-                        " "*np.ceil((len(second_col)-len(to_print[model][1])) / 2).astype(int) + "|"
-
-            the_line += " " * np.ceil((len(third_col) -
-                                       len(to_print[model][2])) / 2).astype(int) + to_print[model][
-                2] + " " * np.ceil((len(third_col) - len(to_print[model][2])) / 2).astype(int) + "|"
-            print(the_line)
-        print("-" * len(comb) + "\n")
+            self._good_model_fits[method][model.name] = model
 
     def get_sampler(self, model: str) -> em.EnsembleSampler:
         """
@@ -1038,79 +1171,74 @@ class BaseProfile1D:
         performed, and that the fit was performed with Emcee and not another method.
 
         :param str model: The name of the model for which to retrieve the sampler.
-        :return: The Emcee sampler used to fit the user supplied model - if applicable.
+        :return: The Emcee sampler used to fit the user supplied model.
         :rtype: em.EnsembleSampler
         """
-        if model not in PROF_TYPE_MODELS[self._prof_type]:
-            allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
-            prof_name = self._y_axis_name.lower()
-            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
-                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
-        elif model in self._bad_model_fits:
-            raise XGAFitError("An attempt was made to fit {}, but it failed, no fit data can be "
-                              "retrieved.".format(model))
-        elif model not in self._good_model_fits:
-            raise XGAFitError("{} is valid for this profile, but hasn't been fit yet".format(model))
-        elif model in self._good_model_fits and "sampler" not in self._good_model_fits[model]:
-            raise XGAFitError("{} was not fit with MCMC, and as such the sampler object cannot be "
-                              "retrieved.".format(model))
+        model = self.get_model_fit(model, 'mcmc')
+        return model.emcee_sampler
 
-        return self._good_model_fits[model]["sampler"]
-
-    def get_chains(self, model: str) -> np.ndarray:
+    def get_chains(self, model: str, discard: Union[bool, int] = True, flatten: bool = True,
+                   thin: int = 1) -> np.ndarray:
         """
         Get method for the sampler chains of an MCMC fit to the user supplied model. get_sampler is
         called to retrieve the sampler object, as well as perform validity checks on the model name.
+
         :param str model: The name of the model for which to retrieve the chains.
-        :return: The sampler chains, with burn-in discarded, and with thinning applied.
+        :param bool/int discard: Whether steps should be discarded for burn-in. If True then the cut off decided
+            using the auto-correlation time will be used. If an integer is passed then this will be used as the
+            number of steps to discard, and if False then no steps will be discarded.
+        :param bool flatten: Should the chains of the multiple walkers be flattened into one chain per parameter.
+        :param int thin: The thinning that should be applied to the chains. The default is 1, which means no
+            thinning is applied.
+        :return: The requested chains.
         :rtype: np.ndarray
         """
-        sampler = self.get_sampler(model)
-        m_info = self.get_model_fit(model)
+        model = self.get_model_fit(model, 'mcmc')
 
-        return sampler.get_chain(discard=m_info["cut_off"], thin=m_info["thinning"])
+        if isinstance(discard, bool) and discard:
+            chains = model.emcee_sampler.get_chain(discard=model.cut_off, flat=flatten, thin=thin)
+        elif isinstance(discard, int):
+            chains = model.emcee_sampler.get_chain(discard=discard, flat=flatten, thin=thin)
+        else:
+            chains = model.emcee_sampler.get_chain(flat=flatten, thin=thin)
 
-    def get_flat_samples(self, model: str) -> np.ndarray:
+        return chains
+
+    def view_chains(self, model: str, discard: Union[bool, int] = True, thin: int = 1, figsize: Tuple = None):
         """
-        Get method for the flattened samples of an MCMC fit to the user supplied model. get_sampler is
-        called to retrieve the sampler object, as well as perform validity checks on the model name.
-
-        :param str model: The name of the model for which to retrieve the flat samples.
-        :return: The flattened posterior samples, with burn-in discarded, and with thinning applied.
-        :rtype: np.ndarray
-        """
-        sampler = self.get_sampler(model)
-        m_info = self.get_model_fit(model)
-
-        return sampler.get_chain(discard=m_info["cut_off"], thin=m_info["thinning"], flat=True)
-
-    def view_chains(self, model: str, figsize: Tuple = None):
-        """
-        Simple view method to quickly look at the MCMC chains for a given model fit, though bear in the mind that
-        these chains have already been thinned.
+        Simple view method to quickly look at the MCMC chains for a given model fit.
 
         :param str model: The name of the model for which to view the MCMC chains.
+        :param bool/int discard: Whether steps should be discarded for burn-in. If True then the cut off decided
+            using the auto-correlation time will be used. If an integer is passed then this will be used as the
+            number of steps to discard, and if False then no steps will be discarded.
+        :param int thin: The thinning that should be applied to the chains. The default is 1, which means no
+            thinning is applied.
         :param Tuple figsize: Desired size of the figure, if None will be set automatically.
         """
-        chains = self.get_chains(model)
-        m_info = self.get_model_fit(model)
+        chains = self.get_chains(model, discard, thin=thin, flatten=False)
+        model_obj = self.get_model_fit(model, 'mcmc')
 
         if figsize is None:
-            fig, axes = plt.subplots(nrows=len(m_info["par_names"]), figsize=(12, 2*len(m_info["par_names"])),
-                                     sharex='col')
+            fig, axes = plt.subplots(nrows=model_obj.num_pars, figsize=(12, 2*model_obj.num_pars), sharex='col')
         else:
-            fig, axes = plt.subplots(len(m_info["par_names"]), figsize=figsize, sharex='col')
+            fig, axes = plt.subplots(model_obj.num_pars, figsize=figsize, sharex='col')
 
-        plt.suptitle("{m} Parameter Chains".format(m=MODEL_PUBLICATION_NAMES[model]), fontsize=14, y=1.02)
+        plt.suptitle("{m} Parameter Chains".format(m=model_obj.publication_name), fontsize=14, y=1.02)
 
-        for i in range(len(m_info["par_names"])):
+        for i in range(model_obj.num_pars):
+            cur_unit = model_obj.par_units[i]
+            if cur_unit == Unit(''):
+                par_unit_name = ""
+            else:
+                par_unit_name = r" $\left[" + cur_unit.to_string("latex").strip("$") + r"\right]$"
             ax = axes[i]
             ax.plot(chains[:, :, i], "k", alpha=0.3)
             ax.set_xlim(0, len(chains))
-            ax.set_ylabel(m_info["par_names"][i], fontsize=13)
+            ax.set_ylabel(model_obj.par_publication_names[i] + par_unit_name, fontsize=13)
             ax.yaxis.set_label_coords(-0.1, 0.5)
 
-        axes[-1].set_xlabel("Thinned Step Number", fontsize=13)
+        axes[-1].set_xlabel("Step Number", fontsize=13)
         plt.tight_layout()
         plt.show()
 
@@ -1121,63 +1249,41 @@ class BaseProfile1D:
         :param str model: The name of the model for which to view the corner plot.
         :param Tuple figsize: The desired figure size.
         """
-        m_info = self.get_model_fit(model)
-        samples = self.get_flat_samples(model)
+        flat_chains = self.get_chains(model, flatten=True)
+        model_obj = self.get_model_fit(model, 'mcmc')
 
-        frac_conf_lev = [(50 - (m_info["conf_level"] / 2))/100, 0.5, (50 + (m_info["conf_level"] / 2))/100]
-        fig = corner.corner(samples, labels=m_info["par_names"], figsize=figsize, quantiles=frac_conf_lev,
-                            show_titles=True)
+        frac_conf_lev = [(50 - 34.1)/100, 0.5, (50 + 34.1)/100]
+        fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
+                            quantiles=frac_conf_lev, show_titles=True)
         t = self._y_axis_name
-        plt.suptitle("{m} - {s} {t} Profile - {c}% Confidence".format(m=MODEL_PUBLICATION_NAMES[model], s=self.src_name,
-                                                                      t=t, c=m_info["conf_level"]), fontsize=14, y=1.02)
+        plt.suptitle("{m} - {s} {t} Profile".format(m=model_obj.publication_name, s=self.src_name, t=t),
+                     fontsize=14, y=1.02)
         plt.show()
 
-    def add_realisation(self, real_type: str, radii: Quantity, realisation: Quantity, conf_level: int = 90):
+    def view_getdist_corner(self, model: str, settings: dict = {}, figsize: tuple = (10, 10)):
         """
-        A method to add a realisation generated by some external process (such as the density
-        measurement functions).
+        A view method to see a corner plot generated with the getdist module, using flattened chains with
+        burn-in removed (whatever the getdist message might say).
 
-        :param str real_type: The type of realisation being added.
-        :param Quantity radii: The radii at which the realisation is generated.
-        :param Quantity realisation: The values of the realisation.
-        :param int conf_level: The confidence level.
+        :param str model: The name of the model for which to view the corner plot.
+        :param dict settings: The settings dictionary for a getdist MCSample.
+        :param tuple figsize: A tuple to set the size of the figure.
         """
-        if real_type not in self._allowed_real_types:
-            raise ValueError("{r} is not an acceptable realisation type, this profile object currently supports"
-                             " the following; {a}".format(r=real_type, a=", ".join(self._allowed_real_types)))
-        elif real_type in self._realisations:
-            warn("There was already a realisation of this type stored in this profile, it has been overwritten.")
+        # Grab the flattened chains
+        flat_chains = self.get_chains(model, flatten=True)
+        model_obj = self.get_model_fit(model, 'mcmc')
 
-        if radii.shape[0] != realisation.shape[0]:
-            raise ValueError("First axis of radii and realisation arrays must be the same length.")
+        # Need to remove $ from the labels because getdist adds them itself
+        stripped_labels = [n.replace('$', '') for n in model_obj.par_publication_names]
 
-        # Check that the radii units are alright
-        if not radii.unit.is_equivalent(self.radii_unit):
-            raise UnitConversionError("The supplied radii cannot be converted to the radius unit"
-                                      " of this profile ({u})".format(u=self.radii_unit.to_string()))
-        else:
-            radii = radii.to(self.radii_unit)
+        # Setup the getdist sample object
+        gd_samp = MCSamples(samples=flat_chains, names=model_obj.par_names, labels=stripped_labels,
+                            settings=settings)
 
-        # Check that the realisation unit are alright
-        if not realisation.unit.is_equivalent(self.values_unit):
-            raise UnitConversionError("The supplied realisation cannot be converted to the values unit"
-                                      " of this profile ({u})".format(u=self.values_unit.to_string()))
-        else:
-            realisation = realisation.to(self.values_unit)
-
-        upper = 50 + (conf_level / 2)
-        lower = 50 - (conf_level / 2)
-
-        # Calculates the mean model value at each radius step
-        model_mean = np.mean(realisation, axis=1)
-        # Then calculates the values for the upper and lower limits (defined by the
-        #  confidence level) for each radii
-        model_lower = np.percentile(realisation, lower, axis=1)
-        model_upper = np.percentile(realisation, upper, axis=1)
-
-        self._realisations[real_type] = {"mod_real": realisation, "mod_radii": radii, "conf_level": conf_level,
-                                         "mod_real_mean": model_mean, "mod_real_lower": model_lower,
-                                         "mod_real_upper": model_upper}
+        # And generate the triangle plot
+        g = plots.get_subplot_plotter(width_inch=figsize[0])
+        g.triangle_plot([gd_samp], filled=True)
+        plt.show()
 
     def generate_data_realisations(self, num_real: int):
         """
@@ -1207,10 +1313,12 @@ class BaseProfile1D:
         return realisations
 
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
-             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {}):
+             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
+             normalise_x: bool = False, normalise_y: bool = False, x_label: str = None, y_label: str = None):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
-        and their residuals.
+        and their residuals. The models are plotted by generating random model realisations from the parameter
+        distributions, then plotting the median values, with 1sigma confidence limits.
 
         :param Tuple figsize: The desired size of the figure, the default is (10, 7)
         :param str xscale: The scaling to be applied to the x axis, default is log.
@@ -1226,6 +1334,12 @@ class BaseProfile1D:
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
             the dictionary key they are stored under is what they will be labelled.
             e.g. ({'r500': Quantity(), 'r200': Quantity()}
+        :param bool normalise_x: Should the x-axis be normalised with the x_norm value passed on the definition of
+            the profile object.
+        :param bool normalise_y: Should the y-axis be normalised with the x_norm value passed on the definition of
+            the profile object.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
         """
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
@@ -1235,9 +1349,21 @@ class BaseProfile1D:
 
         # Default is to show models, but that flag is set to False here if there are none, otherwise we get
         #  extra plotted stuff that doesn't make sense
-        if len(self._good_model_fits) == 0:
+        if len(self.good_model_fits) == 0:
             models = False
             just_models = False
+
+        # If the user wants the x-axis to be normalised then we grab the value from the profile (though of course
+        #  if the user didn't set it initially then self.x_norm will also be 1
+        if normalise_x:
+            x_norm = self.x_norm
+        else:
+            # Otherwise we set x_norm to a harmless values with no units and unity value
+            x_norm = Quantity(1, '')
+        if normalise_y:
+            y_norm = self.y_norm
+        else:
+            y_norm = Quantity(1, '')
 
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1260,30 +1386,30 @@ class BaseProfile1D:
             leg_label = self.src_name
 
         # This subtracts the background if the user wants a background subtracted plot
-        sub_values = self.values.value.copy()
+        plot_y_vals = self.values.copy()
         if back_sub:
-            sub_values -= self.background.value
+            plot_y_vals -= self.background
 
-        # As we plot on a log-log scale, it can be annoying if there is a radius value (because of course
-        #  log scaled don't like 0 values) - so I'm going to perturb it slightly if there is an r=0 value
-        # TODO DECIDE HOW TO ACTUALLY DO THIS
-        rad_vals = self.radii.value
-        # if rad_vals[0] == 0:
-        #     # This makes the value of the first radius 1% of the maximum radius
-        #     rad_vals[0] = rad_vals[1] * 0.01
+        rad_vals = self.fit_radii.copy()
+        plot_y_vals /= y_norm
+        rad_vals /= x_norm
 
         # Now the actual plotting of the data
         if self.radii_err is not None and self.values_err is None:
-            line = main_ax.errorbar(rad_vals, sub_values, xerr=self.radii_err.value, fmt="x", capsize=2,
+            x_errs = (self.radii_err.copy() / x_norm).value
+            line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
                                     label=leg_label)
         elif self.radii_err is None and self.values_err is not None:
-            line = main_ax.errorbar(rad_vals, sub_values, yerr=self.values_err.value, fmt="x", capsize=2,
+            y_errs = (self.values_err.copy() / y_norm).value
+            line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
                                     label=leg_label)
         elif self.radii_err is not None and self.values_err is not None:
-            line = main_ax.errorbar(rad_vals, sub_values, xerr=self.radii_err.value,
-                                    yerr=self.values_err.value, fmt="x", capsize=2, label=leg_label)
+            x_errs = (self.radii_err.copy() / x_norm).value
+            y_errs = (self.values_err.copy() / y_norm).value
+            line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
+                                    label=leg_label)
         else:
-            line = main_ax.plot(rad_vals, sub_values, 'x', label=leg_label)
+            line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
 
         if just_models and models:
             line[0].set_visible(False)
@@ -1297,36 +1423,54 @@ class BaseProfile1D:
                             color=line[0].get_color())
 
         if models:
-            for model in self._good_model_fits:
-                model_func = PROF_TYPE_MODELS[self._prof_type][model]
-                info = self.get_realisation(model)
-                pars = self.get_model_fit(model)["par"]
+            for method in self._good_model_fits:
+                for model in self._good_model_fits[method]:
+                    model_obj = self._good_model_fits[method][model]
+                    lo_rad = self.radii.min()
+                    hi_rad = self.radii.max()
+                    mod_rads = np.linspace(lo_rad, hi_rad, 100)
+                    mod_reals = model_obj.get_realisations(mod_rads)
+                    # mean_model = np.mean(mod_reals, axis=1)
+                    median_model = np.percentile(mod_reals, 50, axis=1)
 
-                mod_line = main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars),
-                                        label=MODEL_PUBLICATION_NAMES[model])
-                model_colour = mod_line[0].get_color()
-                main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
-                                     where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=model_colour,
-                                     alpha=0.7, interpolate=True)
-                main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=model_colour, linestyle="dashed")
-                main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=model_colour, linestyle="dashed")
+                    upper_model = np.percentile(mod_reals, 84.1, axis=1)
+                    lower_model = np.percentile(mod_reals, 15.9, axis=1)
 
-                # This calculates and plots the residuals between the model and the data on the extra
-                #  axis we added near the beginning of this method
-                res_ax.plot(self.radii.value, model_func(self.radii.value, *pars) - sub_values, 'D',
-                            color=model_colour)
+                    mod_lab = model_obj.publication_name + " - {}".format(self._nice_fit_methods[method])
+                    mod_line = main_ax.plot(mod_rads.value/x_norm.value, median_model.value/y_norm,
+                                            label=mod_lab)
+                    model_colour = mod_line[0].get_color()
+
+                    main_ax.fill_between(mod_rads.value/x_norm.value, lower_model.value/y_norm.value,
+                                         upper_model.value/y_norm.value, alpha=0.7, interpolate=True,
+                                         where=upper_model.value >= lower_model.value, facecolor=model_colour)
+                    main_ax.plot(mod_rads.value/x_norm.value, lower_model.value/y_norm.value, color=model_colour,
+                                 linestyle="dashed")
+                    main_ax.plot(mod_rads.value/x_norm.value, upper_model.value/y_norm.value, color=model_colour,
+                                 linestyle="dashed")
+
+                    # This calculates and plots the residuals between the model and the data on the extra
+                    #  axis we added near the beginning of this method
+                    res = np.percentile(model_obj.get_realisations(self.radii), 50, axis=1) - (plot_y_vals*y_norm)
+                    res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
-        x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
-        y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
+        x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + plot_y_vals.unit.to_string("latex").strip("$") + r"\right]$"
 
-        # Setting the main plot's x label
-        main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
-        if self._background.value == 0 or not back_sub:
-            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        if x_label is None:
+            # Setting the main plot's x label
+            main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
         else:
+            main_ax.set_xlabel(x_label + " {}".format(x_unit), fontsize=13)
+
+        if y_label is None and (self._background.value == 0 or not back_sub):
+            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        elif y_label is None:
             # If background has been subtracted it will be mentioned in the y axis label
             main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        elif y_label is not None:
+            main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
 
         main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
         # This makes sure legend keys are shown, even if the data is hidden
@@ -1357,7 +1501,9 @@ class BaseProfile1D:
             res_ax.set_ylabel("Model - Data", fontsize=13)
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
-        if models and custom_title is None:
+        if models and custom_title is None and len(self.good_model_fits) == 1:
+            title_str = "{l} Profile - with model".format(l=self._y_axis_name)
+        elif models and custom_title is None and len(self.good_model_fits) > 1:
             title_str = "{l} Profile - with models".format(l=self._y_axis_name)
         elif not models and custom_title is None:
             title_str = "{l} Profile".format(l=self._y_axis_name)
@@ -1371,14 +1517,12 @@ class BaseProfile1D:
         # Actually plots the title
         plt.suptitle(title_str, y=0.91)
 
-        # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
-        main_ylims = main_ax.get_ylim()
-        y_pos = main_ylims[1]*0.90
         # If the user has passed radii to plot, then we plot them
         for r_name in draw_rads:
-            main_ax.axvline(draw_rads[r_name].value, linestyle='dashed', color='black')
-            main_ax.text(draw_rads[r_name].value * 1.01, y_pos, r_name, rotation=90, verticalalignment='center',
-                         color='black', fontsize=14)
+            d_rad = (draw_rads[r_name] / x_norm).value
+            main_ax.axvline(d_rad, linestyle='dashed', color='black')
+            main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
+                             color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
         # Use the axis limits quite a lot in this next bit, so read them out into variables
         x_axis_lims = main_ax.get_xlim()
@@ -1409,7 +1553,13 @@ class BaseProfile1D:
         :return: A list of model names.
         :rtype: Dict
         """
-        return list(self._good_model_fits.keys())
+        models = []
+        for method in self._good_model_fits:
+            for model in self._good_model_fits[method]:
+                if model not in models:
+                    models.append(model)
+
+        return models
 
     # None of these properties concerning the radii and values are going to have setters, if the user
     #  wants to modify it then they can define a new product.
@@ -1432,6 +1582,30 @@ class BaseProfile1D:
         :rtype: Quantity
         """
         return self._radii_err
+
+    @property
+    def fit_radii(self) -> Quantity:
+        """
+        This property gives the user a sanitised set of radii that is safe to use for fitting to XGA models, by
+        which I mean if the first element is zero (true for many of XGA's profiles), then it will be replaced by
+        a value slightly above zero that won't cause divide by zeros in the fit process.
+
+        If the radius units are convertible to kpc then the zero value will be set to the equivelant of 1kpc, if
+        they have pixel units then it will be set to one pixel, and if they are equivelant to degrees then it will
+        be set to 1e−5 degrees. The value for degrees is loosely based on the value of 1kpc at a redshift of 1.
+
+        :return: A Quantity with a set of radii that are 'safe' for fitting
+        :rtype: Quantity
+        """
+        safe_rads = self._radii.copy()
+        if safe_rads[0] == 0 and self.radii_unit.is_equivalent('kpc'):
+            safe_rads[0] = Quantity(1, 'kpc').to(self.radii_unit)
+        elif safe_rads[0] == 0 and self.radii_unit.is_equivalent('pix'):
+            safe_rads[0] = Quantity(1, 'pix')
+        elif safe_rads[0] == 0 and self.radii_unit.is_equivalent('deg'):
+            safe_rads[0] = Quantity(1e-5, 'deg')
+
+        return safe_rads
 
     @property
     def radii_unit(self) -> Unit:
@@ -1646,6 +1820,62 @@ class BaseProfile1D:
         """
         return self._usable
 
+    @property
+    def x_norm(self) -> Quantity:
+        """
+        The normalisation value for x-axis data passed on the definition of the this profile object.
+
+        :return: An astropy quantity containing the normalisation value.
+        :rtype: Quantity
+        """
+        return self._x_norm
+
+    @x_norm.setter
+    def x_norm(self, new_val: Quantity):
+        """
+        The setter for the normalisation value for x-axis data passed on the definition of the this profile object.
+        :param Quantity new_val: The new value for the normalisation of x-axis data.
+        """
+        self._x_norm = new_val
+
+    @property
+    def y_norm(self) -> Quantity:
+        """
+        The normalisation value for y-axis data passed on the definition of the this profile object.
+
+        :return: An astropy quantity containing the normalisation value.
+        :rtype: Quantity
+        """
+        return self._y_norm
+
+    @y_norm.setter
+    def y_norm(self, new_val: Quantity):
+        """
+        The setter for the normalisation value for y-axis data passed on the definition of the this profile object.
+        :param Quantity new_val: The new value for the normalisation of y-axis data.
+        """
+        self._y_norm = new_val
+
+    @property
+    def fit_options(self) -> List[str]:
+        """
+        Returns the supported fit options for XGA profiles.
+
+        :return: List of supported fit options.
+        :rtype: List[str]
+        """
+        return self._fit_methods
+
+    @property
+    def nice_fit_names(self) -> List[str]:
+        """
+        Returns nicer looking names for the supported fit options of XGA profiles.
+
+        :return: List of nice fit options.
+        :rtype: List[str]
+        """
+        return self._nice_fit_methods
+
     def __len__(self):
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
@@ -1720,6 +1950,11 @@ class BaseAggregateProfile1D:
         #  first component because we've already checked that they're all the same type
         self._y_axis_name = self._profiles[0].y_axis_label
 
+        # Here I grab all the x_norm and y_norms, so that the view method of this aggregate profile can also
+        #  apply normalisation to the separate profiles if the user wants
+        self._x_norms = [p.x_norm for p in self._profiles]
+        self._y_norms = [p.y_norm for p in self._profiles]
+
     @property
     def radii_unit(self) -> Unit:
         """
@@ -1771,9 +2006,58 @@ class BaseAggregateProfile1D:
         """
         return self._energy_bounds
 
+    @property
+    def x_norms(self) -> List[Quantity]:
+        """
+        The collated x normalisation values for the constituent profiles of this aggregate profile.
+
+        :return: A list of astropy quantities which represent the x-normalisations of the different profiles.
+        :rtype: List[Quantity]
+        """
+        return self._x_norms
+
+    @x_norms.setter
+    def x_norms(self, new_vals: List[Quantity]):
+        """
+        Setter for the collated x normalisation values for the constituent profiles of this aggregate profile.
+
+        :param List[Quantity] new_vals: A list of astropy quantities that the profile's x-axis values are
+            to be normalised by, there must be one entry for each profile.
+        """
+        if len(new_vals) == len(self._x_norms):
+            self._x_norms = new_vals
+        else:
+            raise ValueError("The new list passed for x-axis normalisations must be the same length"
+                             " as the original.")
+
+    @property
+    def y_norms(self) -> List[Quantity]:
+        """
+        The collated y normalisation values for the constituent profiles of this aggregate profile.
+
+        :return: A list of astropy quantities which represent the y-normalisations of the different profiles.
+        :rtype: List[Quantity]
+        """
+        return self._y_norms
+
+    @y_norms.setter
+    def y_norms(self, new_vals: List[Quantity]):
+        """
+        Setter for the collated y normalisation values for the constituent profiles of this aggregate profile.
+
+        :param List[Quantity] new_vals: A list of astropy quantities that the profile's y-axis values are
+            to be normalised by, there must be one entry for each profile.
+        """
+        if len(new_vals) == len(self._y_norms):
+            self._y_norms = new_vals
+        else:
+            raise ValueError("The new list passed for y-axis normalisations must be the same length"
+                             " as the original.")
+
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
              ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
-             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}):
+             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, normalise_x: bool = False,
+             normalise_y: bool = False, x_label: str = None, y_label: str = None):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -1793,7 +2077,14 @@ class BaseAggregateProfile1D:
         :param str custom_title: A plot title to replace the automatically generated title, default is None.
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
             the dictionary key they are stored under is what they will be labelled.
-            e.g. ({'r500': Quantity(), 'r200': Quantity()}
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}. If normalise_x option is also used, and the x-norm values
+            are not the same for each profile, then draw_rads will be disabled.
+        :param bool normalise_x: Should the x-axis values be normalised with the x_norm value passed on the
+            definition of the constituent profile objects.
+        :param bool normalise_y: Should the y-axis values be normalised with the y_norm value passed on the
+            definition of the constituent profile objects.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -1801,6 +2092,22 @@ class BaseAggregateProfile1D:
         if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
             raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
                                       "{}".format(self.radii_unit.to_string()))
+
+        # Set up the x normalisation and y normalisation variables
+        if normalise_x:
+            x_norms = self.x_norms
+        else:
+            x_norms = [Quantity(1, '') for n in self.x_norms]
+
+        if normalise_y:
+            y_norms = self.y_norms
+        else:
+            y_norms = [Quantity(1, '') for n in self.y_norms]
+
+        # Need to make sure that draw_rads, if set, is compatible with the normalisations. The problem is that
+        #  if the profiles all have different normalisations then the draw_rads values can't be normalised
+        if len(draw_rads) != 0 and len(set(x_norms)) != 1:
+            draw_rads = {}
 
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1818,29 +2125,42 @@ class BaseAggregateProfile1D:
         main_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
         # Cycles through the component profiles of this aggregate profile, plotting them all
-        for p in self._profiles:
-            if p.type == "brightness_profile" and p.psf_corrected:
-                leg_label = p.src_name + " PSF Corrected"
+        for p_ind, p in enumerate(self._profiles):
+            if p.obs_id != 'combined':
+                p_name = p.src_name + " {o}-{i}".format(o=p.obs_id, i=p.instrument.upper())
             else:
-                leg_label = p.src_name
+                p_name = p.src_name
+
+            if p.type == "brightness_profile" and p.psf_corrected:
+                leg_label = p_name + " PSF Corrected"
+            else:
+                leg_label = p_name
 
             # This subtracts the background if the user wants a background subtracted plot
-            sub_values = p.values.value.copy()
+            plot_y_vals = p.values.copy()
             if back_sub:
-                sub_values -= p.background.value
+                plot_y_vals -= p.background
+
+            rad_vals = p.radii.copy()
+            plot_y_vals /= y_norms[p_ind]
+            rad_vals /= x_norms[p_ind]
 
             # Now the actual plotting of the data
             if p.radii_err is not None and p.values_err is None:
-                line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, fmt="x", capsize=2,
+                x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
+                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
                                         label=leg_label)
             elif p.radii_err is None and p.values_err is not None:
-                line = main_ax.errorbar(p.radii.value, sub_values, yerr=p.values_err.value, fmt="x", capsize=2,
+                y_errs = (p.values_err.copy() / y_norms[p_ind]).value
+                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
                                         label=leg_label)
             elif p.radii_err is not None and p.values_err is not None:
-                line = main_ax.errorbar(p.radii.value, sub_values, xerr=p.radii_err.value, yerr=p.values_err.value,
-                                        fmt="x", capsize=2, label=leg_label)
+                x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
+                y_errs = (p.values_err.copy() / y_norms[p_ind]).value
+                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
+                                        label=leg_label)
             else:
-                line = main_ax.plot(p.radii.value, sub_values, 'x', label=leg_label)
+                line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
 
             # If the user only wants the models to be plotted, then this goes through the matplotlib
             #  artist objects that make up the line plot and hides them.
@@ -1859,40 +2179,66 @@ class BaseAggregateProfile1D:
 
             # If the user passes a model name, and that model has been fitted to the data, then that
             #  model will be plotted
-            if model is not None and model in p.good_model_fits:
-                model_func = PROF_TYPE_MODELS[self._prof_type][model]
-                info = p.get_realisation(model)
-                pars = p.get_model_fit(model)["par"]
+            if model is not None:
+                # I've put them in this order because I would prefer mcmc over odr, and odr over curve_fit
+                for method in ['mcmc', 'odr', 'curve_fit']:
+                    try:
+                        model_obj = p.get_model_fit(model, method)
+                        lo_rad = p.radii.min()
+                        hi_rad = p.radii.max()
+                        mod_rads = np.linspace(lo_rad, hi_rad, 100)
+                        mod_reals = model_obj.get_realisations(mod_rads)
+                        median_model = np.percentile(mod_reals, 50, axis=1)
 
-                colour = line[0].get_color()
-                main_ax.plot(info["mod_radii"], model_func(info["mod_radii"], *pars), color=colour)
-                main_ax.fill_between(info["mod_radii"], info["mod_real_lower"], info["mod_real_upper"],
-                                     where=info["mod_real_upper"] >= info["mod_real_lower"], facecolor=colour,
-                                     alpha=0.7, interpolate=True)
-                main_ax.plot(info["mod_radii"], info["mod_real_lower"], color=colour, linestyle="dashed")
-                main_ax.plot(info["mod_radii"], info["mod_real_upper"], color=colour, linestyle="dashed")
+                        upper_model = np.percentile(mod_reals, 84.1, axis=1)
+                        lower_model = np.percentile(mod_reals, 15.9, axis=1)
 
-                # This calculates and plots the residuals between the model and the data on the extra
-                #  axis we added near the beginning of this method
-                res_ax.plot(p.radii.value, model_func(p.radii.value, *pars)-sub_values, 'D', color=colour)
+                        colour = line[0].get_color()
+
+                        mod_lab = model_obj.publication_name + " - {}".format(p.nice_fit_names[method])
+                        mod_line = main_ax.plot(mod_rads.value / x_norms[p_ind].value,
+                                                median_model.value/y_norms[p_ind], color=colour)
+
+                        main_ax.fill_between(mod_rads.value / x_norms[p_ind].value,
+                                             lower_model.value / y_norms[p_ind].value,
+                                             upper_model.value / y_norms[p_ind].value, alpha=0.7, interpolate=True,
+                                             where=upper_model.value >= lower_model.value, facecolor=colour)
+                        main_ax.plot(mod_rads.value / x_norms[p_ind].value, lower_model.value / y_norms[p_ind].value,
+                                     color=colour, linestyle="dashed")
+                        main_ax.plot(mod_rads.value / x_norms[p_ind].value, upper_model.value / y_norms[p_ind].value,
+                                     color=colour, linestyle="dashed")
+
+                        # This calculates and plots the residuals between the model and the data on the extra
+                        #  axis we added near the beginning of this method
+                        res = np.percentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
+                              (plot_y_vals * y_norms[p_ind])
+                        res_ax.plot(rad_vals.value, res.value, 'D', color=colour)
+
+                        break
+                    except ModelNotAssociatedError:
+                        pass
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
-        x_unit = r"$\left[" + self.radii_unit.to_string("latex").strip("$") + r"\right]$"
-        y_unit = r"$\left[" + self.values_unit.to_string("latex").strip("$") + r"\right]$"
+        x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
+        y_unit = r"$\left[" + plot_y_vals.unit.to_string("latex").strip("$") + r"\right]$"
 
-        # Setting the main plot's x label
-        main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
-        if not self._back_avail or not back_sub:
-            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        if x_label is None:
+            # Setting the main plot's x label
+            main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
         else:
+            main_ax.set_xlabel(x_label + " {}".format(x_unit), fontsize=13)
+
+        if y_label is None and (not self._back_avail or not back_sub):
+            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        elif y_label is None:
             # If background has been subtracted it will be mentioned in the y axis label
             main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+        elif y_label is not None:
+            main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
 
         # Adds a legend with source names to the side if the user requested it
         # I let the user decide because there could be quite a few names in it and it could get messy
         if legend:
-            # TODO I'd like this to dynamically choose the number of columns depending on the number of
-            #  profiles but I got bored figuring how to do it
             main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
             # This makes sure legend keys are shown, even if the data is hidden
             for leg_key in main_leg.legendHandles:
@@ -1931,15 +2277,12 @@ class BaseAggregateProfile1D:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
 
-        # Calculate the y midpoint of the main axis, which is where any extra radius labels will be placed
-        main_ylims = main_ax.get_ylim()
-        y_mid = (main_ylims[1] - main_ylims[0]) / 2
         # If the user has passed radii to plot, then we plot them
         for r_name in draw_rads:
-            main_ax.axvline(draw_rads[r_name].value, linestyle='dashed', color='black')
-            main_ax.text(draw_rads[r_name].value * 1.01, y_mid, r_name, rotation=90, verticalalignment='center',
-                         color='black', fontsize=14)
-
+            d_rad = (draw_rads[r_name] / x_norms[0]).value
+            main_ax.axvline(d_rad, linestyle='dashed', color='black')
+            main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
+                             color='black', fontsize=14, xycoords=('data', 'axes fraction'))
         # And of course actually showing it
         plt.show()
 

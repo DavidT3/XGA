@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/02/2021, 12:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 18:56. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -37,7 +37,30 @@ warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class BaseSource:
-    def __init__(self, ra, dec, redshift=None, name=None, cosmology=Planck15, load_products=True, load_fits=False):
+    """
+    The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
+    functionality upon which the rest of XGA is built, includes selecting observations, reading in data products,
+    and storing newly created data products.
+    """
+    def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None, cosmology=Planck15,
+                 load_products: bool = True, load_fits: bool = False):
+        """
+        The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
+        others. Base functionality is included, but this type of source shouldn't often need to be instantiated by
+        a user.
+
+        :param float ra: The right ascension (in degrees) of the source.
+        :param float dec: The declination (in degrees) of the source.
+        :param float redshift: The redshift of the source, default is None. Not supplying a redshift means that
+            proper distance units such as kpc cannot be used.
+        :param str name: The name of the source, default is None in which case a name will be assembled from the
+            coordinates given.
+        :param cosmology: An astropy cosmology object to use for analysis of this source, default is Planck15.
+        :param bool load_products: Should existing XGA generated products for this source be loaded in, default
+            is True.
+        :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
+            load_products is True. Default is False.
+        """
         self._ra_dec = np.array([ra, dec])
         if name is not None:
             # We don't be liking spaces in source names, we also don't like underscores
@@ -2286,8 +2309,6 @@ class BaseSource:
         for o in to_remove:
             for i in to_remove[o]:
                 del self._products[o][i]
-                # del self._reg_masks[o][i]
-                # del self._back_masks[o][i]
                 del self._instruments[o][self._instruments[o].index(i)]
 
             if len(self._instruments[o]) == 0:
@@ -2296,11 +2317,8 @@ class BaseSource:
                 del self._initial_regions[o]
                 del self._initial_region_matches[o]
                 del self._regions[o]
-                # del self._back_regions[o]
                 del self._other_regions[o]
                 del self._alt_match_regions[o]
-                # del self._within_source_regions[o]
-                # del self._within_back_regions[o]
                 if self._peaks is not None:
                     del self._peaks[o]
 
@@ -2308,6 +2326,9 @@ class BaseSource:
                 if o in self._onaxis:
                     del self._onaxis[self._onaxis.index(o)]
                 del self._instruments[o]
+
+        if len(self._obs) == 0:
+            raise NoValidObservationsError("No observations remain associated with {} after cleaning".format(self.name))
 
     @property
     def luminosity_distance(self) -> Quantity:
@@ -2344,12 +2365,12 @@ class BaseSource:
         """
         This method uses exposure maps and region masks to determine which ObsID/instrument combinations
         are not contributing to the analysis. It calculates the area intersection of the mask and exposure
-        map, and if (for a given ObsID-Instrument) the ratio of that area to the full area of the region
+        maps, and if (for a given ObsID-Instrument) the ratio of that area to the full area of the region
         calculated is less than the threshold fraction, that ObsID-instrument will be included in the returned
         rejection dictionary.
 
         :param str reg_type: The region type for which to calculate the area intersection.
-        :param float threshold_fraction: Area to max area ratios below this value will mean the
+        :param float threshold_fraction: Intersection area/ full region area ratios below this value will mean an
             ObsID-Instrument is rejected.
         :return: A dictionary of ObsID keys on the top level, then instruments a level down, that
             should be rejected according to the criteria supplied to this method.
@@ -2382,21 +2403,19 @@ class BaseSource:
 
         if max(list(full_area.values())) == 0:
             # Everything has to be rejected in this case
-            return deepcopy(self._instruments)
-            # raise NoMatchFoundError("There doesn't appear to be any intersection between any {r} mask and "
-            #                         "the data from the simple match".format(r=reg_type))
-
-        reject_dict = {}
-        for o in area:
-            for i in area[o]:
-                if full_area[o] != 0:
-                    frac = (area[o][i] / full_area[o])
-                else:
-                    frac = 0
-                if frac <= threshold_fraction and o not in reject_dict:
-                    reject_dict[o] = [i]
-                elif frac <= threshold_fraction and o in reject_dict:
-                    reject_dict[o].append(i)
+            reject_dict = deepcopy(self._instruments)
+        else:
+            reject_dict = {}
+            for o in area:
+                for i in area[o]:
+                    if full_area[o] != 0:
+                        frac = (area[o][i] / full_area[o])
+                    else:
+                        frac = 0
+                    if frac <= threshold_fraction and o not in reject_dict:
+                        reject_dict[o] = [i]
+                    elif frac <= threshold_fraction and o in reject_dict:
+                        reject_dict[o].append(i)
 
         return reject_dict
 

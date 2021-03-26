@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/02/2021, 15:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 11:54. Copyright (c) David J Turner
 
 import os
 from typing import List, Union
@@ -181,7 +181,9 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
     # New feature of XSPEC interface, tells the xspec_call decorator what type of output from the script
     #  to expect
     run_type = "conv_factors"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None
+    # I don't allow the user to set a timeout for fakeit runs because its unnecessary, but the run code still
+    #  needs a value
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, Quantity(1, 'hour')
 
 
 
