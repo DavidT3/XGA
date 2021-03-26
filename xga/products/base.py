@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 19:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 15:58. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -712,15 +712,26 @@ class BaseProfile1D:
         # This finds maximum likelihood parameter values for the model+data
         max_like_res = minimize(lambda *args: -log_likelihood(*args, model.model), model.unitless_start_pars,
                                 args=(rads, y_data, y_errs))
+        
+        # I'm now adding this checking step, which will revert to the default start parameters of the model if the
+        #  maximum likelihood estimate produced insane results.
+        base_start_pars = max_like_res.x
+        # So if any of the max likelihood pars are outside their prior, we just revert back to the original
+        #  start parameters of the model. This step may make the checks performed later for instances where all
+        #  start positions for a parameter are outside the prior a bit pointless, but I'm leaving them in for safety.
+        if find_to_replace(base_start_pars, prior_arr).any():
+            warn("Maximum likelihood estimator has produced at least one start parameter that is outside"
+                 " the allowed values defined by the prior, reverting to default start parameters for this model.")
+            base_start_pars = model.unitless_start_pars
 
         # This basically finds the order of magnitude of each parameter, so we know the scale on which we should
         #  randomly perturb
-        ml_rand_dev = np.power(10, np.floor(np.log10(np.abs(max_like_res.x)))) / 10
+        ml_rand_dev = np.power(10, np.floor(np.log10(np.abs(base_start_pars)))) / 10
 
         # Then that order of magnitude is multiplied by a value drawn from a standard gaussian, and this is what
         #  we perturb the maximum likelihood values with - so we get random start parameters for all
         #  of our walkers
-        pos = max_like_res.x + ml_rand_dev * np.random.randn(num_walkers, model.num_pars)
+        pos = base_start_pars + (ml_rand_dev * np.random.randn(num_walkers, model.num_pars))
 
         # It is possible that some of the start parameters we've generated are outside the prior, in which
         #  case emcee gets quite angry. Just in case I draw random values from the priors of all parameters,
@@ -752,7 +763,7 @@ class BaseProfile1D:
         #  left after 100 tries then they'll just get assigned randomly drawn values from the priors
         iter_cnt = 0
         while True in to_replace and iter_cnt < 100:
-            new_pos = max_like_res.x + ml_rand_dev * np.random.randn(num_walkers, model.num_pars)
+            new_pos = base_start_pars + ml_rand_dev * np.random.randn(num_walkers, model.num_pars)
             pos[to_replace] = new_pos[to_replace]
             to_replace = find_to_replace(pos, prior_arr)
             iter_cnt += 1
@@ -1356,7 +1367,7 @@ class BaseProfile1D:
         if back_sub:
             plot_y_vals -= self.background
 
-        rad_vals = self.radii.copy()
+        rad_vals = self.fit_radii.copy()
         plot_y_vals /= y_norm
         rad_vals /= x_norm
 
