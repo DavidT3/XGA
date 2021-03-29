@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 19:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 19:22. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -144,6 +144,7 @@ class ClusterSample(BaseSample):
                         rt = self._sources[n].get_products("combined_ratemap", extra_key=en_key)[0]
                         peak = self._sources[n].find_peak(rt)
                         self._sources[n].peak = peak[0]
+                        self._sources[n].default_coord = peak[0]
                     except PeakConvergenceFailedError:
                         pass
 

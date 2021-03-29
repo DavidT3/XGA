@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 17:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 19:22. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -101,6 +101,12 @@ class GalaxyCluster(ExtendedSource):
                     from ..sas import emosaic
                     emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+
+                    if use_peak:
+                        rt = self.get_combined_ratemaps(peak_lo_en, peak_hi_en)
+                        peak = self.find_peak(rt)
+                        self.peak = peak
+                        self.default_coord = peak
 
         # Throws an error if a poor choice of region has been made
         elif clean_obs and clean_obs_reg not in self._radii:
