@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 18:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 14:19. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -1113,6 +1113,13 @@ class HydrostaticMass(BaseProfile1D):
                                                     progress, show_warn)
         density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps, num_walkers, progress,
                                             show_warn)
+
+        # Have to check whether the fits were actually successful, as the fit method will return a model instance
+        #  either way
+        if not temperature_model.success:
+            raise XGAFitError("The fit to the temperature was unsuccessful, cannot define hydrostatic mass profile.")
+        if not density_model.success:
+            raise XGAFitError("The fit to the density was unsuccessful, cannot define hydrostatic mass profile.")
 
         self._temp_model = temperature_model
         self._dens_model = density_model
