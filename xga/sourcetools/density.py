@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 15:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 10:06. Copyright (c) David J Turner
 
 from copy import deepcopy
 from typing import Union, List, Tuple
@@ -220,10 +220,16 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
                                                 psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
                                                 psf_iter=psf_iter)
     except NoProductAvailableError:
-        sb_prof, success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],
-                                             src.background_radius_factors[1], int_mask, src.redshift, pix_step, kpc,
-                                             src.cosmo, min_snr)
-        if not success:
+        try:
+            sb_prof, success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],
+                                                 src.background_radius_factors[1], int_mask, src.redshift, pix_step,
+                                                 kpc, src.cosmo, min_snr)
+        except ValueError:
+            sb_prof = None
+            success = False
+            warn("Background region for brightness profile is all zeros for {}".format(src.name))
+
+        if sb_prof is not None and not success:
             warn("Minimum SNR rebinning failed for {}".format(src.name))
 
     return sb_prof
@@ -337,7 +343,10 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     for src_ind, src in enumerate(sources):
         sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                           psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
-        src.update_products(sb_prof)
+        if sb_prof is None:
+            continue
+        else:
+            src.update_products(sb_prof)
 
         # Fit the user chosen model to sb_prof
         cur_model = model[src_ind]
