@@ -1,8 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 17:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 17:35. Copyright (c) David J Turner
 
 import inspect
 import os
+from copy import deepcopy
 from typing import Tuple, List, Dict, Union
 from warnings import warn
 
@@ -716,7 +717,7 @@ class BaseProfile1D:
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
         #  we try maximum likelihood, and if that fails then we fall back on the default start parameters in the
         #  model.
-        curve_fit_model, success = self._curve_fit(model, 10, show_warn=False)
+        curve_fit_model, success = self._curve_fit(deepcopy(model), 10, show_warn=False)
         if success or curve_fit_model.fit_warning == "Very large parameter uncertainties":
             base_start_pars = np.array([p.value for p in curve_fit_model.model_pars])
         else:

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 16:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 17:35. Copyright (c) David J Turner
 
 from typing import Union, List
 from warnings import warn
@@ -130,6 +130,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, link_norm, abund_table,
                                                        group_spec, spec_min_counts, spec_min_sn, over_sample,
                                                        num_cores)
+    rads_dict = {str(sources[r_ind]): r for r_ind, r in enumerate(outer_rads)}
 
     # This checks and sets up a predictable structure for the models needed for this measurement.
     sb_model = model_check(sources, sb_model)
@@ -145,11 +146,12 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
 
     # Here we take only the sources that have a successful global temperature measurement
     cut_sources = [src for src_ind, src in enumerate(sources) if has_glob_temp[src_ind]]
+    cut_rads = Quantity([rads_dict[str(src)] for src in cut_sources])
     if len(cut_sources) == 0:
         raise ValueError("No sources have a successful global temperature measurement.")
 
     # Attempt to measure their 3D temperature profiles
-    temp_profs = onion_deproj_temp_prof(cut_sources, outer_radius, min_snr=temp_min_snr, min_counts=spec_min_counts,
+    temp_profs = onion_deproj_temp_prof(cut_sources, cut_rads, min_snr=temp_min_snr, min_counts=spec_min_counts,
                                         min_sn=spec_min_sn, over_sample=over_sample, link_norm=link_norm,
                                         abund_table=abund_table, num_cores=num_cores)
     # This just allows us to quickly lookup the temperature profile we need later
@@ -159,6 +161,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     #  stuff first because its more difficult, and why should we waste time on a density profile if the temperature
     #  profile cannot even be measured.
     cut_cut_sources = [cut_sources[prof_ind] for prof_ind, prof in enumerate(temp_profs) if prof is not None]
+    cut_cut_rads = Quantity([rads_dict[str(src)] for src in cut_cut_sources])
 
     # And checking again if this stage of the measurement worked out
     if len(cut_cut_sources) == 0:
@@ -167,7 +170,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     # We also need to setup the sb model list for our cut sample
     sb_models_cut = [sb_model_dict[str(src)] for src in cut_cut_sources]
     # Now we run the inverse abel density profile generator
-    dens_profs = inv_abel_fitted_model(cut_cut_sources, sb_models_cut, fit_method, outer_radius, pix_step=sb_pix_step,
+    dens_profs = inv_abel_fitted_model(cut_cut_sources, sb_models_cut, fit_method, cut_cut_rads, pix_step=sb_pix_step,
                                        min_snr=sb_min_snr, abund_table=abund_table, num_steps=num_steps,
                                        num_walkers=num_walkers, group_spec=group_spec, min_counts=spec_min_counts,
                                        min_sn=spec_min_sn, over_sample=over_sample, conv_outer_radius=global_radius,
@@ -178,7 +181,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     # So I can return a list of profiles, a tad more elegant than fetching them from the sources sometimes
     final_mass_profs = []
     # Better to use a with statement for tqdm, so its shut down if something fails inside
-    with tqdm(desc="Generating Hydrostatic Mass Profiles", total=len(cut_cut_sources)) as onwards:
+    with tqdm(desc="Generating hydrostatic mass profiles", total=len(cut_cut_sources)) as onwards:
         for src in sources:
             # If every stage of this analysis has worked then we setup the hydro mass profile
             if str(src) in dens_prof_dict and dens_prof_dict[str(src)] is not None:
