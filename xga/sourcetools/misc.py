@@ -1,7 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2021, 14:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 13:48. Copyright (c) David J Turner
 
+from copy import deepcopy
 from subprocess import Popen, PIPE
+from typing import Union, List
 
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
@@ -9,6 +11,9 @@ from astropy.units import Quantity
 from numpy import array, ndarray, pi
 
 from ..exceptions import HeasoftError
+from ..models import BaseModel1D
+from ..samples import BaseSample
+from ..sources import BaseSource
 
 
 def nh_lookup(coord_pair: Quantity) -> ndarray:
@@ -138,6 +143,33 @@ def coord_to_name(coord_pair: Quantity, survey: str = None) -> str:
 
     return name
 
+
+def model_check(sources: Union[List[BaseSource], BaseSample, BaseSource],
+                model: Union[str, List[str], BaseModel1D, List[BaseModel1D]]) -> Union[List[BaseModel1D], List[str]]:
+    """
+    Very simple function that checks if a passed set of models is appropriately structured for the number of sources
+    that have been passed. I can't imagine why a user would need this directly, its only here as these checks
+    have to be performed in multiple places in sourcetools.
+
+    :param List[BaseSource]/BaseSample/BaseSource sources: The source(s).
+    :param str/List[str]/BaseModel1D/List[BaseModel1D] model: The model(s).
+    :return: A list of model instances, or names of models.
+    :rtype: Union[List[BaseModel1D], List[str]]
+    """
+    if isinstance(model, (str, BaseModel1D)) and len(sources) == 1:
+        model = [model]
+    elif isinstance(model, str) and len(sources) != 1:
+        model = [model]*len(sources)
+    elif isinstance(model, BaseModel1D) and len(sources) != 1:
+        model = [deepcopy(model) for s_ind in range(len(sources))]
+    elif isinstance(model, list) and len(model) != len(sources):
+        raise ValueError("If you pass a list of model names (or model instances), then that list must be the same"
+                         " length as the number of sources passed for analysis.")
+    else:
+        raise TypeError("The model argument must either be a string model name, a single instance of a model, a list"
+                        " of model names, or a list of model instances.")
+
+    return model
 
 
 
