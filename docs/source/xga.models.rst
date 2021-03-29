@@ -9,6 +9,14 @@ Module contents
    :undoc-members:
    :show-inheritance:
 
+models.base module
+---------------------
+
+.. automodule:: xga.models.base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 models.density module
 ---------------------
 
