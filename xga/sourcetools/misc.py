@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 15:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 17:24. Copyright (c) David J Turner
 
 from copy import deepcopy
 from subprocess import Popen, PIPE
@@ -163,7 +163,10 @@ def model_check(sources,
     elif isinstance(model, list) and len(model) != len(sources):
         raise ValueError("If you pass a list of model names (or model instances), then that list must be the same"
                          " length as the number of sources passed for analysis.")
-    else:
+    elif isinstance(model, list) and not all([isinstance(m, (str, BaseModel1D)) for m in model]):
+        raise TypeError("If you pass a list, then every element must be either a string model name, or a "
+                        "model instance.")
+    elif not isinstance(model, (list, BaseModel1D, str)):
         raise TypeError("The model argument must either be a string model name, a single instance of a model, a list"
                         " of model names, or a list of model instances.")
 

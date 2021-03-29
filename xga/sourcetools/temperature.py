@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 16:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 17:24. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -416,7 +416,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         raise NotImplementedError("This method isn't implemented yet")
 
     # So we can iterate through sources without worrying if there's more than one cluster
-    if not isinstance(sources, BaseSample):
+    if not isinstance(sources, (BaseSample, list)):
         sources = [sources]
 
     all_3d_temp_profs = []
