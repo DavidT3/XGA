@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 15:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 16:06. Copyright (c) David J Turner
 
 from typing import Union, List
 from warnings import warn
@@ -42,8 +42,7 @@ def _setup_global(sources, outer_radius, global_radius, link_norm: bool, abund_t
                      over_sample=over_sample, num_cores=num_cores, abund_table=abund_table, group_spec=group_spec)
 
     has_glob_temp = []
-    for src, src_ind in enumerate(sources):
-        src: GalaxyCluster
+    for src_ind, src in enumerate(sources):
         try:
             src.get_temperature('tbabs*apec', global_out_rads[src_ind], group_spec=group_spec, min_counts=min_counts,
                                 min_sn=min_sn, over_sample=over_sample)
@@ -108,7 +107,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
         is fitted to the surface brightness profile. This overrides the default method for the model, which is either
         'analytical' for models with an analytical solution to the inverse abel transform, or 'direct' for
         models which don't have an analytical solution. Default is None.
-    :param int/float temp_min_snr: The minimum signal to noise for a temperature measurement annulus.
+    :param int/float temp_min_snr: The minimum signal to noise for a temperature measurement annulus, default is 30.
     :param bool link_norm: Sets whether the normalisation parameter is linked across the spectra in an individual
         annulus during the XSPEC fit. Normally the default is False, but here I have set it to True so one global
         normalisation profile is produced rather than separate profiles for individual ObsID-inst combinations.

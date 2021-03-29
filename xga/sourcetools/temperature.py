@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 13:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 16:06. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -334,7 +334,7 @@ def grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii:
 
 
 def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
-                           annulus_method: str = 'min_snr', min_snr: float = 20,
+                           annulus_method: str = 'min_snr', min_snr: float = 30,
                            min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
                            use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
