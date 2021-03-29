@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 18:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 19:16. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -205,6 +205,20 @@ class BaseSource:
         :rtype: Quantity
         """
         return self._default_coord
+
+    @default_coord.setter
+    def default_coord(self, new_coord: Quantity):
+        """
+        Setter for the default analysis coordinate of this source.
+
+        :param Quantity new_coord: The new default coordinate.
+        """
+        if not new_coord.unit.is_equivalent('deg'):
+            raise UnitConversionError("The new coordinate must be in degrees")
+        else:
+            new_coord = new_coord.to("deg")
+
+        self._default_coord = new_coord
 
     def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
         """
