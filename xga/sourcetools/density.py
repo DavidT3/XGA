@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 13:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 15:04. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -257,7 +257,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     :param GalaxyCluster/ClusterSample sources: A GalaxyCluster or ClusterSample object to measure density
         profiles for.
     :param str/List[str]/BaseModel1D/List[BaseModel1D] model: The model(s) to be fit to the cluster surface
-        profile(s). You may pass the string name of a profile (for single or multiple clusters), a single instance
+        profile(s). You may pass the string name of a model (for single or multiple clusters), a single instance
         of an XGA model class (for single or multiple clusters), a list of string names (one entry for each cluster
         being analysed), or a list of XGA model instances (one entry for each cluster being analysed).
     :param str fit_method: The method for the profile object to use to fit the model, default is mcmc.
