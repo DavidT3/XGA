@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 13:48. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 15:17. Copyright (c) David J Turner
 
 from copy import deepcopy
 from subprocess import Popen, PIPE
@@ -12,8 +12,6 @@ from numpy import array, ndarray, pi
 
 from ..exceptions import HeasoftError
 from ..models import BaseModel1D
-from ..samples import BaseSample
-from ..sources import BaseSource
 
 
 def nh_lookup(coord_pair: Quantity) -> ndarray:
@@ -144,7 +142,7 @@ def coord_to_name(coord_pair: Quantity, survey: str = None) -> str:
     return name
 
 
-def model_check(sources: Union[List[BaseSource], BaseSample, BaseSource],
+def model_check(sources,
                 model: Union[str, List[str], BaseModel1D, List[BaseModel1D]]) -> Union[List[BaseModel1D], List[str]]:
     """
     Very simple function that checks if a passed set of models is appropriately structured for the number of sources
