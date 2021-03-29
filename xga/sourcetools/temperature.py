@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 11:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 13:50. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -341,8 +341,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
-                           abund_table: str = "angr", num_data_real: int = 300, sigma: int = 2,
-                           num_cores: int = NUM_CORES):
+                           abund_table: str = "angr", num_data_real: int = 300, sigma: int = 1,
+                           num_cores: int = NUM_CORES) -> List[GasTemperature3D]:
     """
     This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using
     the 'onion peeling' deprojection method. It will also generate any projected temperature profiles that may be
@@ -395,8 +395,11 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param str abund_table: The abundance table to use both for the conversion from n_exn_p to n_e^2 during density
         calculation, and the XSPEC fit.
     :param int num_data_real: The number of random realisations to generate when propagating profile uncertainties.
-    :param int sigma: What sigma uncertainties should newly created profiles have, the default is 2σ.
+    :param int sigma: What sigma uncertainties should newly created profiles have, the default is 1σ.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :return: A list of the 3D temperature profiles measured by this function, though if the measurement was not
+        successful an entry of None will be added to the list.
+    :rtype: List[GasTemperature3D]
     """
     if annulus_method not in ALLOWED_ANN_METHODS:
         a_meth = ", ".join(ALLOWED_ANN_METHODS)
@@ -416,6 +419,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     if not isinstance(sources, BaseSample):
         sources = [sources]
 
+    all_3d_temp_profs = []
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof
     for src_ind, src in enumerate(sources):
         cur_rads = ann_rads[src_ind]
@@ -429,6 +433,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                                         over_sample)
         except NoProductAvailableError:
             warn("{s} doesn't have a matching projected temperature profile, skipping.")
+            all_3d_temp_profs.append(None)
             continue
 
         if not link_norm:
@@ -481,11 +486,13 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                             proj_temp.radii_err, temp_3d_sigma, proj_temp.set_ident,
                                             proj_temp.associated_set_storage_key, proj_temp.deg_radii)
             src.update_products(temp_3d_prof)
+            all_3d_temp_profs.append(temp_3d_prof)
 
         else:
             warn("The projected temperature profile for {src} is not considered usable by XGA".format(src=src.name))
+            all_3d_temp_profs.append(None)
 
-
+    return all_3d_temp_profs
 
 
 
