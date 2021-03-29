@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 17:35. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 18:16. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1427,8 +1427,8 @@ class BaseProfile1D:
             for method in self._good_model_fits:
                 for model in self._good_model_fits[method]:
                     model_obj = self._good_model_fits[method][model]
-                    lo_rad = self.radii.min()
-                    hi_rad = self.radii.max()
+                    lo_rad = self.fit_radii.min()
+                    hi_rad = self.fit_radii.max()
                     mod_rads = np.linspace(lo_rad, hi_rad, 100)
                     mod_reals = model_obj.get_realisations(mod_rads)
                     # mean_model = np.mean(mod_reals, axis=1)
@@ -1452,7 +1452,7 @@ class BaseProfile1D:
 
                     # This calculates and plots the residuals between the model and the data on the extra
                     #  axis we added near the beginning of this method
-                    res = np.percentile(model_obj.get_realisations(self.radii), 50, axis=1) - (plot_y_vals*y_norm)
+                    res = np.percentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) - (plot_y_vals*y_norm)
                     res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
