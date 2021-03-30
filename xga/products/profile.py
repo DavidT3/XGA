@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 14:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/03/2021, 14:36. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -999,7 +999,6 @@ class BaryonFraction(BaseProfile1D):
         self._y_axis_name = "Baryon Fraction"
 
 
-# TODO WRITE CUSTOM STORAGE KEY HERE AS WELL
 class HydrostaticMass(BaseProfile1D):
     """
     A profile product which uses input GasTemperature3D and GasDensity3D profiles to generate a hydrostatic
@@ -1130,6 +1129,15 @@ class HydrostaticMass(BaseProfile1D):
 
         super().__init__(radii, mass_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
                          self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii)
+
+        # Need a custom storage key for this mass profile, incorporating all the information we have about what
+        #  went into it, density profile, temperature profile, radii, density and temperature models.
+        dens_part = "dprof_{}".format(self._dens_prof.storage_key)
+        temp_part = "tprof_{}".format(self._temp_prof.storage_key)
+        cur_part = self.storage_key
+        new_part = "tm{t}_dm{d}".format(t=self._temp_model.name, d=self._dens_model.name)
+        whole_new = "{n}_{c}_{t}_{d}".format(n=new_part, c=cur_part, t=temp_part, d=dens_part)
+        self._storage_key = whole_new
 
         # Setting the type
         self._prof_type = "hydrostatic_mass"

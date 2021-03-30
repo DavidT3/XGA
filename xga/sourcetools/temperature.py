@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/03/2021, 11:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/03/2021, 14:36. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -111,7 +111,7 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
         #  as they are, while also issuing a warning
         acceptable = True
         warn("The min_width combined with the outer radius of the source means that there are only {} initial"
-             " annuli, normally four is the minimum number I will allow, so I will do no rebinning.")
+             " annuli, normally four is the minimum number I will allow, so I will do no re-binning.".format(max_ann))
         cur_num_ann = ann_masks.shape[2]
         snrs = []
         for i in range(cur_num_ann):
