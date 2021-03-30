@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/03/2021, 10:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/03/2021, 11:14. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -112,6 +112,13 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
         acceptable = True
         warn("The min_width combined with the outer radius of the source means that there are only {} initial"
              " annuli, normally four is the minimum number I will allow, so I will do no rebinning.")
+        cur_num_ann = ann_masks.shape[2]
+        snrs = []
+        for i in range(cur_num_ann):
+            # We're calling the signal to noise calculation method of the ratemap for all of our annuli
+            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative))
+        # Becomes a numpy array because they're nicer to work with
+        snrs = np.array(snrs)
 
     while not acceptable:
         # How many annuli are there at this point in the loop?
