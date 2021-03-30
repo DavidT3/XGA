@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 17:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/03/2021, 10:58. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -86,7 +86,6 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     # These are the initial bins, with imposed minimum width, I have to add one to max_ann because linspace wants the
     #  total number of values to generate, and while there are max_ann annuli, there are max_ann+1 radial boundaries
     init_rads = np.linspace(0, outer_rad, max_ann+1).astype(int)
-
     # Converts the source's default analysis coordinates to pixels
     pix_centre = rt.coord_conv(source.default_coord, 'pix')
     # Sets up a mask to correct for interlopers and weird edge effects
@@ -103,9 +102,17 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     # Generates the requested annular masks, making sure to apply the correcting mask
     ann_masks = annular_mask(pix_centre, init_rads[:-1], init_rads[1:], rt.shape)*corr_mask[..., None]
 
-    # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
     cur_rads = init_rads.copy()
-    acceptable = False
+    if max_ann > 4:
+        # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
+        acceptable = False
+    else:
+        # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
+        #  as they are, while also issuing a warning
+        acceptable = True
+        warn("The min_width combined with the outer radius of the source means that there are only {} initial"
+             " annuli, normally four is the minimum number I will allow, so I will do no rebinning.")
+
     while not acceptable:
         # How many annuli are there at this point in the loop?
         cur_num_ann = ann_masks.shape[2]
