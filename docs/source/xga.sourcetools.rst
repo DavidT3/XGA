@@ -9,6 +9,22 @@ sourcetools.density module
    :undoc-members:
    :show-inheritance:
 
+sourcetools.temperature module
+--------------------------
+
+.. automodule:: xga.sourcetools.temperature
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+sourcetools.mass module
+--------------------------
+
+.. automodule:: xga.sourcetools.mass
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 sourcetools.match module
 ------------------------
 
@@ -33,3 +49,10 @@ sourcetools.stack module
    :undoc-members:
    :show-inheritance:
 
+sourcetools.deproj module
+--------------------------
+
+.. automodule:: xga.sourcetools.deproj
+   :members:
+   :undoc-members:
+   :show-inheritance:

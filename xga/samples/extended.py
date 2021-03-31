@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 19:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 16:58. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -144,6 +144,7 @@ class ClusterSample(BaseSample):
                         rt = self._sources[n].get_products("combined_ratemap", extra_key=en_key)[0]
                         peak = self._sources[n].find_peak(rt)
                         self._sources[n].peak = peak[0]
+                        self._sources[n].default_coord = peak[0]
                     except PeakConvergenceFailedError:
                         pass
 
@@ -489,6 +490,66 @@ class ClusterSample(BaseSample):
 
         return Quantity(gms, 'Msun')
 
+    def hydrostatic_mass(self, rad_name: str, temp_model_name: str = None, dens_model_name: str = None) -> Quantity:
+        """
+        A simple method for fetching hydrostatic masses of this sample of clusters. This function is limited, and if
+        you have generated multiple hydrostatic mass profiles you may have to use the get_hydrostatic_mass_profiles
+        function of each source directly, or use the returned profiles from the function that generated them.
+
+        If only one hydrostatic mass profile has been generated for each source, then you do not need to specify model
+        names, but if the same temperature and density profiles have been used to make a hydrostatic mass profile but
+        with different models then you may use them.
+
+        A mass will be set to NaN if either of the uncertainties are larger than the mass value, if the mass value
+        is less than 1e+12 solar masses, if the mass value is greater than 1e+16 solar masses, or if no hydrostatic
+        mass profile is available.
+
+        :param str rad_name: The name of the radius (e.g. r500) to calculate the hydrostatic mass within.
+        :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :param str dens_model_name: The name of the model used to fit the density profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :return: An Nx3 array Quantity where N is the number of clusters. First column is the hydrostatic mass, second
+            column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
+        :rtype: Quantity
+        """
+        ms = []
+
+        # Iterate through all of our Galaxy Clusters
+        for gcs_ind, gcs in enumerate(self._sources.values()):
+            actual_rad = gcs.get_radius(rad_name, 'kpc')
+            try:
+                mass_profs = gcs.get_hydrostatic_mass_profiles(temp_model_name=temp_model_name,
+                                                               dens_model_name=dens_model_name)
+                if isinstance(mass_profs, list):
+                    raise ValueError("There are multiple matching hydrostatic mass profiles associated with {}, "
+                                     "you will have to retrieve masses manually.")
+                else:
+                    cur_mass = mass_profs.mass(actual_rad)[0]
+                    if cur_mass[1] > cur_mass[0] or cur_mass[2] > cur_mass[0]:
+                        ms.append([np.NaN, np.NaN, np.NaN])
+                        warn("{s}'s mass uncertainties are larger than the mass value.")
+                    elif cur_mass[0] < Quantity(1e+12, 'Msun'):
+                        ms.append([np.NaN, np.NaN, np.NaN])
+                        warn("{s}'s mass is less than 1e+12 solar masses")
+                    elif cur_mass[0] > Quantity(1e+16, 'Msun'):
+                        ms.append([np.NaN, np.NaN, np.NaN])
+                        warn("{s}'s mass is greater than 1e+16 solar masses")
+                    else:
+                        ms.append(cur_mass.value)
+            except NoProductAvailableError:
+                # If no dens_prof has been run or something goes wrong then NaNs are added
+                ms.append([np.NaN, np.NaN, np.NaN])
+                warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name))
+
+        ms = np.array(ms)
+        # We're going to throw an error if all the masses are NaN, because obviously something is wrong
+        check_ms = ms[~np.isnan(ms)]
+        if len(check_ms) == 0:
+            raise ValueError("All hydrostatic masses appear to be NaN.")
+
+        return Quantity(ms, 'Msun')
+
     def gm_richness(self, rad_name: str, dens_model: str, prof_outer_rad: Union[Quantity, str], dens_method: str,
                     x_norm: Quantity = Quantity(60), y_norm: Quantity = Quantity(1e+12, 'solMass'),
                     fit_method: str = 'odr', start_pars: list = None, pix_step: int = 1,
@@ -805,6 +866,212 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
+    def mass_Tx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(4, 'keV'),
+                y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
+                model: str = 'tbabs*apec', tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                temp_model_name: str = None, dens_model_name: str = None) -> ScalingRelation:
+        """
+        A convenience function to generate a hydrostatic mass-temperature relation for this sample of galaxy clusters.
 
+        :param str outer_radius: The outer radius of the region used to measure temperature and the radius
+            out to which you wish to measure mass.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str model: The name of the model that the luminosities and temperatures were measured with.
+        :param str/Quantity tx_inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the temperature (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum. You may also pass a quantity containing radius values, with one value for each
+            source in this sample.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :param str dens_model_name: The name of the model used to fit the density profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
+        """
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
 
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name,
+                                       dens_model_name) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        m_data = m_vals[:, 0]
+        m_err = m_vals[:, 1:]
 
+        # Read out the temperature values into variables just for convenience sake
+        t_vals = self.Tx(model, outer_radius, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
+        t_data = t_vals[:, 0]
+        t_errs = t_vals[:, 1:]
+
+        if outer_radius in ['r200', 'r500', 'r2500']:
+            rn = outer_radius[1:]
+        else:
+            raise ValueError("As this is a method for a whole population, please use a named radius such as "
+                             "r200, r500, or r2500.")
+
+        x_name = r"T$_{\rm{x," + rn + '}}$'
+        y_name = r"E(z)$^{-1}$M$_{\rm{hydro," + rn + "}}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, m_data, m_err, t_data, t_errs, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name,
+                                                   x_name=x_name)
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, m_data, m_err, t_data, t_errs, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=x_name)
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(m_data, m_err, t_data, t_errs, y_norm, x_norm,
+                                              y_name=y_name, x_name=x_name)
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
+
+        return scale_rel
+
+    def mass_richness(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(60),
+                      y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
+                      temp_model_name: str = None, dens_model_name: str = None) -> ScalingRelation:
+        """
+        A convenience function to generate a hydrostatic mass-richness relation for this sample of galaxy clusters.
+
+        :param str outer_radius: The name of the radius (e.g. r500) to get values for.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :param str dens_model_name: The name of the model used to fit the density profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
+        """
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
+
+        # Read out the richness values into variables just for convenience sake
+        r_data = self.richness[:, 0]
+        r_errs = self.richness[:, 1]
+
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name,
+                                       dens_model_name) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        m_data = m_vals[:, 0]
+        m_err = m_vals[:, 1:]
+
+        if outer_radius in ['r200', 'r500', 'r2500']:
+            rn = outer_radius[1:]
+        else:
+            raise ValueError("As this is a method for a whole population, please use a named radius such as "
+                             "r200, r500, or r2500.")
+
+        y_name = r"E(z)$^{-1}$M$_{\rm{hydro," + rn + "}}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, m_data, m_err, r_data, r_errs, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name,
+                                                   x_name=r"$\lambda$")
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, m_data, m_err, r_data, r_errs, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(m_data, m_err, r_data, r_errs, y_norm, x_norm,
+                                              y_name=y_name, x_name=r"$\lambda$")
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
+
+        return scale_rel
+
+    def mass_Lx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(1e+44, 'erg/s'),
+                y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
+                model: str = 'tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
+                hi_en: Quantity = Quantity(2.0, 'keV'), lx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                temp_model_name: str = None, dens_model_name: str = None) -> ScalingRelation:
+        """
+        This generates a mass vs Lx scaling relation for this sample of Galaxy Clusters. If you have run fits
+        to find core excised luminosity, and wish to use it in this scaling relation, then you can specify the inner
+        radius of those spectra using lx_inner_radius.
+
+        :param str outer_radius: The name of the radius (e.g. r500) to get values for.
+        :param Quantity x_norm: Quantity to normalise the x data by.
+        :param Quantity y_norm: Quantity to normalise the y data by.
+        :param str fit_method: The name of the fit method to use to generate the scaling relation.
+        :param list start_pars: The start parameters for the fit run.
+        :param str model: The name of the model that the luminosities and temperatures were measured with.
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param str/Quantity lx_inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the Lx. The same rules as tx_inner_radius apply, and this option
+            is particularly useful if you have measured core-excised luminosity an wish to use it in a scaling relation.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :param str dens_model_name: The name of the model used to fit the density profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :return: The XGA ScalingRelation object generated for this sample.
+        :rtype: ScalingRelation
+        """
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
+
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name,
+                                       dens_model_name) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        m_data = m_vals[:, 0]
+        m_err = m_vals[:, 1:]
+
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        lx_vals = self.Lx(model, outer_radius, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
+                          over_sample)
+        lx_data = lx_vals[:, 0]
+        lx_err = lx_vals[:, 1:]
+
+        if outer_radius in ['r200', 'r500', 'r2500']:
+            rn = outer_radius[1:]
+        else:
+            raise ValueError("As this is a method for a whole population, please use a named radius such as "
+                             "r200, r500, or r2500.")
+
+        if lx_inner_radius.value != 0:
+            lx_rn = "Core-Excised " + rn
+        else:
+            lx_rn = rn
+
+        x_name = r"L$_{\rm{x," + lx_rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}}$"
+        y_name = r"E(z)$^{-1}$M$_{\rm{hydro," + rn + "}}$"
+        if fit_method == 'curve_fit':
+            scale_rel = scaling_relation_curve_fit(power_law, m_data, m_err, lx_data, lx_err, y_norm, x_norm,
+                                                   start_pars=start_pars, y_name=y_name,
+                                                   x_name=x_name)
+        elif fit_method == 'odr':
+            scale_rel = scaling_relation_odr(power_law, m_data, m_err, lx_data, lx_err, y_norm, x_norm,
+                                             start_pars=start_pars, y_name=y_name, x_name=x_name)
+        elif fit_method == 'lira':
+            scale_rel = scaling_relation_lira(m_data, m_err, lx_data, lx_err, y_norm, x_norm,
+                                              y_name=y_name, x_name=x_name)
+        elif fit_method == 'emcee':
+            scaling_relation_emcee()
+        else:
+            raise ValueError('{e} is not a valid fitting method, please choose one of these: '
+                             '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
+
+        return scale_rel

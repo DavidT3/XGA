@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/02/2021, 12:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 16:06. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -513,14 +513,16 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
     :param int num_cores: The number of cores to use (if running locally), default is set to
         90% of available.
     :param bool force_regen: This will force all the constituent spectra of the set to be regenerated, use this
-        if your call to this function was interupted and an incomplete AnnularSpectrum is being read in.
+        if your call to this function was interrupted and an incomplete AnnularSpectrum is being read in.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     # If its a single source I put it into an iterable object (i.e. a list), just for convenience
     if isinstance(sources, BaseSource):
         sources = [sources]
+    elif isinstance(sources, list) and not all([isinstance(s, BaseSource) for s in sources]):
+        raise TypeError("If a list is passed, each element must be a source.")
     # And the only other option is a BaseSample instance, so if it isn't that then we get angry
-    elif not isinstance(sources, BaseSample):
+    elif not isinstance(sources, (BaseSample, list)):
         raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
 
     # I just want to make sure that nobody passes anything daft for the radii

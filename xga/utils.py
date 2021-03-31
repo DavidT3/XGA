@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/03/2021, 14:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 10:47. Copyright (c) David J Turner
 
 import json
 import os
@@ -30,9 +30,6 @@ CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/",
               "compute_mode": "local"}
 # Will have to make it clear in the documentation what is allowed here, and which can be left out
-# TODO Figure out how on earth to deal with separate exp1 and exp2 etc events lists/images.
-#  For now just ignore them I guess?
-# TODO I am assuming here that there is just one event list per observation, may only be safe for XCS?
 XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required/{obs_id}/pn_exp1_clean_evts.fits",
              "clean_mos1_evts": "/this/is/required/{obs_id}/mos1_exp1_clean_evts.fits",
@@ -49,13 +46,15 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "mos2_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_expmap.fits",
              "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
 # List of XMM products supported by XGA that are allowed to be energy bound
-ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap",
-                         "combined_brightness_profile", "combined_gas_density_profile", "combined_gas_mass_profile"]
+ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap"]
+# These are the built in profile types
+PROFILE_PRODUCTS = ["brightness_profile", "gas_density_profile", "gas_mass_profile", "1d_apec_norm_profile",
+                    "1d_proj_temperature_profile", "gas_temperature_profile", "baryon_fraction_profile",
+                    "1d_proj_metallicity_profile", "1d_emission_measure_profile", "hydrostatic_mass_profile"]
+COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
 # List of all XMM products supported by XGA
-ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "brightness_profile",
-                    "gas_density_profile", "gas_mass_profile", "1d_apec_norm_profile", "combined_spectrum",
-                    "combined_1d_apec_norm_profile", "combined_1d_proj_temperature_profile", "gas_temperature_profile",
-                    "combined_gas_temperature_profile"] + ENERGY_BOUND_PRODUCTS
+ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
+                    ] + ENERGY_BOUND_PRODUCTS + PROFILE_PRODUCTS + COMBINED_PROFILE_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]
 
 # Here we read in files that list the errors and warnings in SAS

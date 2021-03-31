@@ -1,7 +1,6 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 15:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 15:04. Copyright (c) David J Turner
 
-from copy import deepcopy
 from typing import Union, List, Tuple
 from warnings import warn
 
@@ -10,6 +9,7 @@ from astropy.constants import m_p
 from astropy.units import Quantity, kpc
 from tqdm import tqdm
 
+from .misc import model_check
 from .temperature import min_snr_proj_temp_prof, ALLOWED_ANN_METHODS
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.profile import radial_brightness
@@ -220,10 +220,16 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
                                                 psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
                                                 psf_iter=psf_iter)
     except NoProductAvailableError:
-        sb_prof, success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],
-                                             src.background_radius_factors[1], int_mask, src.redshift, pix_step, kpc,
-                                             src.cosmo, min_snr)
-        if not success:
+        try:
+            sb_prof, success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],
+                                                 src.background_radius_factors[1], int_mask, src.redshift, pix_step,
+                                                 kpc, src.cosmo, min_snr)
+        except ValueError:
+            sb_prof = None
+            success = False
+            warn("Background region for brightness profile is all zeros for {}".format(src.name))
+
+        if sb_prof is not None and not success:
             warn("Minimum SNR rebinning failed for {}".format(src.name))
 
     return sb_prof
@@ -239,7 +245,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                           group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                           obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
                           conv_outer_radius: Quantity = "r500", inv_abel_method: str = None, num_cores: int = NUM_CORES,
-                          show_warn: bool = True):
+                          show_warn: bool = True) -> List[GasDensity3D]:
     """
     A photometric galaxy cluster gas density calculation method where a surface brightness profile is fit with
     a model and an inverse abel transform is used to infer the 3D count-rate/volume profile. Then a conversion factor
@@ -251,7 +257,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     :param GalaxyCluster/ClusterSample sources: A GalaxyCluster or ClusterSample object to measure density
         profiles for.
     :param str/List[str]/BaseModel1D/List[BaseModel1D] model: The model(s) to be fit to the cluster surface
-        profile(s). You may pass the string name of a profile (for single or multiple clusters), a single instance
+        profile(s). You may pass the string name of a model (for single or multiple clusters), a single instance
         of an XGA model class (for single or multiple clusters), a list of string names (one entry for each cluster
         being analysed), or a list of XGA model instances (one entry for each cluster being analysed).
     :param str fit_method: The method for the profile object to use to fit the model, default is mcmc.
@@ -301,8 +307,9 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         models which don't have an analytical solution. Default is None.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
     :param bool show_warn: Should fit warnings be shown on screen.
-    :return: The source/sample object passed in to this function.
-    :rtype: GalaxyCluster/ClusterSample
+    :return: A list of the 3D gas density profiles measured by this function, though if the measurement was not
+        successful an entry of None will be added to the list.
+    :rtype: List[GasDensity3D]
     """
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
@@ -316,28 +323,22 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     # Need to sort out the type of model input that the user chose, and make sure its ready to be passed into the
     #  the fit method of the surface brightness profile(s)
     # First we check the number of arguments passed for the model
-    if isinstance(model, (str, BaseModel1D)) and len(sources) == 1:
-        model = [model]
-    elif isinstance(model, str) and len(sources) != 1:
-        model = [model]*len(sources)
-    elif isinstance(model, BaseModel1D) and len(sources) != 1:
-        model = [deepcopy(model) for s_ind in range(len(sources))]
-    elif isinstance(model, list) and len(model) != len(sources):
-        raise ValueError("If you pass a list of model names (or model instances), then that list must be the same"
-                         " length as the number of sources passed for analysis.")
-    else:
-        raise TypeError("The model argument must either be a string model name, a single instance of a model, a list"
-                        " of model names, or a list of model instances.")
+    model = model_check(sources, model)
 
     dens_prog = tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
                      total=len(sources), position=0)
 
+    final_dens_profs = []
     # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
     e_to_p_ratio = NHC[abund_table]
     for src_ind, src in enumerate(sources):
         sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                           psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
-        src.update_products(sb_prof)
+        if sb_prof is None:
+            final_dens_profs.append(None)
+            continue
+        else:
+            src.update_products(sb_prof)
 
         # Fit the user chosen model to sb_prof
         cur_model = model[src_ind]
@@ -407,9 +408,14 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                          (num_dens_err*conv_mass).to('Msun/Mpc^3'), deg_radii=dens_deg_rads)
 
             src.update_products(dens_prof)
+            final_dens_profs.append(dens_prof)
+        else:
+            final_dens_profs.append(None)
+
         dens_prog.update(1)
     dens_prog.close()
-    return sources
+
+    return final_dens_profs
 
 
 def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],

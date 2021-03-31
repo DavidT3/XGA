@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/02/2021, 11:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/03/2021, 14:36. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -86,7 +86,6 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     # These are the initial bins, with imposed minimum width, I have to add one to max_ann because linspace wants the
     #  total number of values to generate, and while there are max_ann annuli, there are max_ann+1 radial boundaries
     init_rads = np.linspace(0, outer_rad, max_ann+1).astype(int)
-
     # Converts the source's default analysis coordinates to pixels
     pix_centre = rt.coord_conv(source.default_coord, 'pix')
     # Sets up a mask to correct for interlopers and weird edge effects
@@ -103,9 +102,24 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     # Generates the requested annular masks, making sure to apply the correcting mask
     ann_masks = annular_mask(pix_centre, init_rads[:-1], init_rads[1:], rt.shape)*corr_mask[..., None]
 
-    # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
     cur_rads = init_rads.copy()
-    acceptable = False
+    if max_ann > 4:
+        # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
+        acceptable = False
+    else:
+        # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
+        #  as they are, while also issuing a warning
+        acceptable = True
+        warn("The min_width combined with the outer radius of the source means that there are only {} initial"
+             " annuli, normally four is the minimum number I will allow, so I will do no re-binning.".format(max_ann))
+        cur_num_ann = ann_masks.shape[2]
+        snrs = []
+        for i in range(cur_num_ann):
+            # We're calling the signal to noise calculation method of the ratemap for all of our annuli
+            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative))
+        # Becomes a numpy array because they're nicer to work with
+        snrs = np.array(snrs)
+
     while not acceptable:
         # How many annuli are there at this point in the loop?
         cur_num_ann = ann_masks.shape[2]
@@ -334,15 +348,15 @@ def grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii:
 
 
 def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
-                           annulus_method: str = 'min_snr', min_snr: float = 20,
+                           annulus_method: str = 'min_snr', min_snr: float = 30,
                            min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
                            use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
-                           abund_table: str = "angr", num_data_real: int = 300, sigma: int = 2,
-                           num_cores: int = NUM_CORES):
+                           abund_table: str = "angr", num_data_real: int = 300, sigma: int = 1,
+                           num_cores: int = NUM_CORES) -> List[GasTemperature3D]:
     """
     This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using
     the 'onion peeling' deprojection method. It will also generate any projected temperature profiles that may be
@@ -395,8 +409,11 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param str abund_table: The abundance table to use both for the conversion from n_exn_p to n_e^2 during density
         calculation, and the XSPEC fit.
     :param int num_data_real: The number of random realisations to generate when propagating profile uncertainties.
-    :param int sigma: What sigma uncertainties should newly created profiles have, the default is 2σ.
+    :param int sigma: What sigma uncertainties should newly created profiles have, the default is 1σ.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :return: A list of the 3D temperature profiles measured by this function, though if the measurement was not
+        successful an entry of None will be added to the list.
+    :rtype: List[GasTemperature3D]
     """
     if annulus_method not in ALLOWED_ANN_METHODS:
         a_meth = ", ".join(ALLOWED_ANN_METHODS)
@@ -413,9 +430,10 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         raise NotImplementedError("This method isn't implemented yet")
 
     # So we can iterate through sources without worrying if there's more than one cluster
-    if not isinstance(sources, BaseSample):
+    if not isinstance(sources, (BaseSample, list)):
         sources = [sources]
 
+    all_3d_temp_profs = []
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof
     for src_ind, src in enumerate(sources):
         cur_rads = ann_rads[src_ind]
@@ -429,6 +447,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                                         over_sample)
         except NoProductAvailableError:
             warn("{s} doesn't have a matching projected temperature profile, skipping.")
+            all_3d_temp_profs.append(None)
             continue
 
         if not link_norm:
@@ -481,11 +500,13 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                             proj_temp.radii_err, temp_3d_sigma, proj_temp.set_ident,
                                             proj_temp.associated_set_storage_key, proj_temp.deg_radii)
             src.update_products(temp_3d_prof)
+            all_3d_temp_profs.append(temp_3d_prof)
 
         else:
             warn("The projected temperature profile for {src} is not considered usable by XGA".format(src=src.name))
+            all_3d_temp_profs.append(None)
 
-
+    return all_3d_temp_profs
 
 
 

@@ -1,8 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/03/2021, 17:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 12:14. Copyright (c) David J Turner
 
 import inspect
 import os
+from copy import deepcopy
 from typing import Tuple, List, Dict, Union
 from warnings import warn
 
@@ -660,6 +661,11 @@ class BaseProfile1D:
         self._x_norm = x_norm
         self._y_norm = y_norm
 
+        if radii_err is not None:
+            self._outer_rad = radii[-1] + radii_err[-1]
+        else:
+            self._outer_rad = radii[-1]
+
     def emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
                   num_samples: int) -> Tuple[BaseModel1D, bool]:
         """
@@ -716,7 +722,7 @@ class BaseProfile1D:
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
         #  we try maximum likelihood, and if that fails then we fall back on the default start parameters in the
         #  model.
-        curve_fit_model, success = self._curve_fit(model, 10, show_warn=False)
+        curve_fit_model, success = self._curve_fit(deepcopy(model), 10, show_warn=False)
         if success or curve_fit_model.fit_warning == "Very large parameter uncertainties":
             base_start_pars = np.array([p.value for p in curve_fit_model.model_pars])
         else:
@@ -1426,8 +1432,8 @@ class BaseProfile1D:
             for method in self._good_model_fits:
                 for model in self._good_model_fits[method]:
                     model_obj = self._good_model_fits[method][model]
-                    lo_rad = self.radii.min()
-                    hi_rad = self.radii.max()
+                    lo_rad = self.fit_radii.min()
+                    hi_rad = self.fit_radii.max()
                     mod_rads = np.linspace(lo_rad, hi_rad, 100)
                     mod_reals = model_obj.get_realisations(mod_rads)
                     # mean_model = np.mean(mod_reals, axis=1)
@@ -1451,7 +1457,7 @@ class BaseProfile1D:
 
                     # This calculates and plots the residuals between the model and the data on the extra
                     #  axis we added near the beginning of this method
-                    res = np.percentile(model_obj.get_realisations(self.radii), 50, axis=1) - (plot_y_vals*y_norm)
+                    res = np.percentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) - (plot_y_vals*y_norm)
                     res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
@@ -1875,6 +1881,16 @@ class BaseProfile1D:
         :rtype: List[str]
         """
         return self._nice_fit_methods
+
+    @property
+    def outer_radius(self) -> Quantity:
+        """
+        Property that returns the outer radius used for the generation of this profile.
+
+        :return: The outer radius used in the generation of the profile.
+        :rtype: Quantity
+        """
+        return self._outer_rad
 
     def __len__(self):
         """
