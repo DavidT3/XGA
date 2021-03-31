@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 19:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 16:03. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -489,6 +489,66 @@ class ClusterSample(BaseSample):
             raise ValueError("All gas masses appear to be NaN.")
 
         return Quantity(gms, 'Msun')
+
+    def hydrostatic_mass(self, rad_name: str, temp_model_name: str = None, dens_model_name: str = None) -> Quantity:
+        """
+        A simple method for fetching hydrostatic masses of this sample of clusters. This function is limited, and if
+        you have generated multiple hydrostatic mass profiles you may have to use the get_hydrostatic_mass_profiles
+        function of each source directly, or use the returned profiles from the function that generated them.
+
+        If only one hydrostatic mass profile has been generated for each source, then you do not need to specify model
+        names, but if the same temperature and density profiles have been used to make a hydrostatic mass profile but
+        with different models then you may use them.
+
+        A mass will be set to NaN if either of the uncertainties are larger than the mass value, if the mass value
+        is less than 1e+12 solar masses, if the mass value is greater than 1e+16 solar masses, or if no hydrostatic
+        mass profile is available.
+
+        :param str rad_name: The name of the radius (e.g. r500) to calculate the hydrostatic mass within.
+        :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :param str dens_model_name: The name of the model used to fit the density profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :return: An Nx3 array Quantity where N is the number of clusters. First column is the hydrostatic mass, second
+            column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
+        :rtype: Quantity
+        """
+        ms = []
+
+        # Iterate through all of our Galaxy Clusters
+        for gcs_ind, gcs in enumerate(self._sources.values()):
+            actual_rad = gcs.get_radius(rad_name, 'kpc')
+            try:
+                mass_profs = gcs.get_hydrostatic_mass_profiles(temp_model_name=temp_model_name,
+                                                               dens_model_name=dens_model_name)
+                if isinstance(mass_profs, list):
+                    raise ValueError("There are multiple matching hydrostatic mass profiles associated with {}, "
+                                     "you will have to retrieve masses manually.")
+                else:
+                    cur_mass = mass_profs.mass(actual_rad)[0]
+                    if cur_mass[1] > cur_mass[0] or cur_mass[2] > cur_mass[0]:
+                        ms.append([np.NaN, np.NaN, np.NaN])
+                        warn("{s}'s mass uncertainties are larger than the mass value.")
+                    elif cur_mass[0] < Quantity(1e+12, 'Msun'):
+                        ms.append([np.NaN, np.NaN, np.NaN])
+                        warn("{s}'s mass is less than 1e+12 solar masses")
+                    elif cur_mass[0] > Quantity(1e+16, 'Msun'):
+                        ms.append([np.NaN, np.NaN, np.NaN])
+                        warn("{s}'s mass is greater than 1e+16 solar masses")
+                    else:
+                        ms.append(cur_mass.value)
+            except NoProductAvailableError:
+                # If no dens_prof has been run or something goes wrong then NaNs are added
+                ms.append([np.NaN, np.NaN, np.NaN])
+                warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name))
+
+        ms = np.array(ms)
+        # We're going to throw an error if all the masses are NaN, because obviously something is wrong
+        check_ms = ms[~np.isnan(ms)]
+        if len(check_ms) == 0:
+            raise ValueError("All hydrostatic masses appear to be NaN.")
+
+        return Quantity(ms, 'Msun')
 
     def gm_richness(self, rad_name: str, dens_model: str, prof_outer_rad: Union[Quantity, str], dens_method: str,
                     x_norm: Quantity = Quantity(60), y_norm: Quantity = Quantity(1e+12, 'solMass'),
