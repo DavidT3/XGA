@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 12:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 13:09. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -1389,6 +1389,26 @@ class HydrostaticMass(BaseProfile1D):
         :rtype: GasDensity3D
         """
         return self._dens_prof
+
+    @property
+    def temperature_model(self) -> BaseModel1D:
+        """
+        A method to provide access to the model that was fit to the temperature profile.
+
+        :return: The fit temperature model.
+        :rtype: BaseModel1D
+        """
+        return self._temp_model
+
+    @property
+    def density_model(self) -> BaseModel1D:
+        """
+        A method to provide access to the model that was fit to the density profile.
+
+        :return: The fit density profile.
+        :rtype: BaseModel1D
+        """
+        return self._dens_model
 
     def rad_check(self, rad: Quantity):
         """
