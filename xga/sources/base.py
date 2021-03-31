@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 19:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 14:28. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -2933,10 +2933,6 @@ class BaseSource:
         else:
             rad_info = False
 
-        if search_key not in ALLOWED_PRODUCTS:
-            warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.")
-
         broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False)
         matched_prods = []
         for p in broad_prods:
@@ -2983,11 +2979,11 @@ class BaseSource:
         if all([obs_id is None, inst is None]):
             search_key = "combined_" + search_key
 
-        if search_key not in ALLOWED_PRODUCTS:
-            warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.")
-
         search_key = profile_type + "_profile"
+        if search_key not in ALLOWED_PRODUCTS:
+            warnings.warn("{} seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.".format(search_key))
+
         matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]

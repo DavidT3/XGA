@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 12:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 14:28. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -13,7 +13,8 @@ from .general import ExtendedSource
 from ..exceptions import NoRegionsError, NoProductAvailableError
 from ..imagetools import radial_brightness
 from ..products import Spectrum, BaseProfile1D
-from ..products.profile import ProjectedGasTemperature1D, APECNormalisation1D, GasDensity3D, GasTemperature3D
+from ..products.profile import ProjectedGasTemperature1D, APECNormalisation1D, GasDensity3D, GasTemperature3D, \
+    HydrostaticMass
 from ..sourcetools import ang_to_rad, rad_to_ang
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -605,13 +606,57 @@ class GalaxyCluster(ExtendedSource):
 
         return matched_prods
 
-    def get_hydrostatic_mass_profiles(self, outer_rad: Union[Quantity, str], dens_method: str = None, obs_id: str = None,
-                             inst: str = None, central_coord: Quantity = None, radii: Quantity = None,
-                             pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True,
-                             psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-                             link_norm: bool = False, group_spec: bool = True, min_counts: int = 5,
-                             min_sn: float = None, over_sample: float = None, set_id: int = None):
-        pass
+    def get_hydrostatic_mass_profiles(self, temp_prof: GasTemperature3D = None, temp_model_name: str = None,
+                                      dens_prof: GasDensity3D = None, dens_model_name: str = None,
+                                      radii: Quantity = None) -> Union[HydrostaticMass, List[HydrostaticMass]]:
+        """
+        A get method for hydrostatic mass profiles associated with this galaxy cluster. This works in a slightly
+        different way to the temperature and density profile get methods, as you can pass the gas temperature and
+        density profiles used to generate a hydrostatic mass profile to find it. If none of the optional
+        arguments are passed then all hydrostatic mass profiles associated with this source will be returned, if
+        only some are passed then mass profiles which match the limited information will be found.
+
+        :param GasTemperature3D temp_prof: The temperature profile used to generate the required hydrostatic mass
+            profile, default is None.
+        :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :param GasDensity3D dens_prof: The density profile used to generate the required hydrostatic mass
+            profile, default is None.
+        :param str dens_model_name: The name of the model used to fit the density profile used to generate the
+            required hydrostatic mass profile, default is None.
+        :param Quantity radii: The radii at which the hydrostatic mass profile was measured, default is None.
+        :return: Either a single hydrostatic mass profile, when there is a unique match, or a list of hydrostatic
+            mass profiles if there is not.
+        :rtype: Union[HydrostaticMass, List[HydrostaticMass]]
+        """
+        # Get all the hydrostatic mass profiles associated with this source
+        matched_prods = self.get_profiles('combined_hydrostatic_mass')
+
+        # Convert the radii to degrees for comparison with deg radii later
+        if radii is not None:
+            radii = self.convert_radius(radii, 'deg')
+
+        # Checking steps, looking for matches with the information passed by the user.
+        if temp_prof is not None:
+            matched_prods = [p for p in matched_prods if p.temperature_profile != temp_prof]
+
+        if dens_prof is not None:
+            matched_prods = [p for p in matched_prods if p.density_profile != dens_prof]
+
+        if temp_model_name is not None:
+            matched_prods = [p for p in matched_prods if p.temperature_model.name != temp_model_name]
+
+        if dens_model_name is not None:
+            matched_prods = [p for p in matched_prods if p.density_model.name != dens_model_name]
+
+        if radii is not None:
+            matched_prods = [p for p in matched_prods if p.deg_radii != radii]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("No matching hydrostatic mass profiles can be found.")
+        return matched_prods
 
     def view_brightness_profile(self, reg_type: str, central_coord: Quantity = None, pix_step: int = 1,
                                 min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
