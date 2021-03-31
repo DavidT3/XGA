@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 18:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 12:14. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -660,6 +660,11 @@ class BaseProfile1D:
         #  units at any point because the user is welcome to normalise their plots by whatever value they wish
         self._x_norm = x_norm
         self._y_norm = y_norm
+
+        if radii_err is not None:
+            self._outer_rad = radii[-1] + radii_err[-1]
+        else:
+            self._outer_rad = radii[-1]
 
     def emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
                   num_samples: int) -> Tuple[BaseModel1D, bool]:
@@ -1876,6 +1881,16 @@ class BaseProfile1D:
         :rtype: List[str]
         """
         return self._nice_fit_methods
+
+    @property
+    def outer_radius(self) -> Quantity:
+        """
+        Property that returns the outer radius used for the generation of this profile.
+
+        :return: The outer radius used in the generation of the profile.
+        :rtype: Quantity
+        """
+        return self._outer_rad
 
     def __len__(self):
         """

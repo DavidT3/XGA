@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 18:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 12:14. Copyright (c) David J Turner
 
 from typing import Union, List
 from warnings import warn
@@ -217,6 +217,9 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
 
             onwards.update(1)
 
+    # In case only one source is being analysed
+    if len(final_mass_profs) == 1:
+        final_mass_profs = final_mass_profs[0]
     return final_mass_profs
 
 

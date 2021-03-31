@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/03/2021, 14:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 12:14. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -129,16 +129,6 @@ class SurfaceBrightness1D(BaseProfile1D):
         :rtype: float
         """
         return self._min_snr
-
-    @property
-    def outer_radius(self) -> Quantity:
-        """
-        Property that returns the outer radius used for the generation of this profile.
-
-        :return: The outer radius used in the generation of the profile.
-        :rtype: Quantity
-        """
-        return self._outer_rad
 
     @property
     def psf_corrected(self) -> bool:
