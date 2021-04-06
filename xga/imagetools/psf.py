@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 10:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 10:54. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -17,7 +17,7 @@ from ..products import PSFGrid, Image
 from ..samples.base import BaseSample
 from ..sas import evselect_image, psfgen, emosaic
 from ..sources import BaseSource
-from ..utils import NUM_CORES, OUTPUT, COMPUTE_MODE
+from ..utils import NUM_CORES, OUTPUT
 
 
 def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_model: str = "ELLBETA",
@@ -131,11 +131,6 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
 
     # Should have cleaned it so that only those sources that need it will have PSFs generated
     psfgen(sub_sources, bins, psf_model, num_cores=num_cores)
-
-    # This function isn't split out to be submitted to HPC jobs, unlike SAS tasks, so I make sure the num
-    #  of cores is set to 1 to minimise resource usage.
-    if COMPUTE_MODE != "local":
-        num_cores = 1
 
     corr_prog_message = 'PSF Correcting Observations - Currently {}'
     corr_progress = tqdm(desc=corr_prog_message.format(''), total=len(sub_sources), disable=len(sub_sources) == 0)

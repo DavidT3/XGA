@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 10:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 10:54. Copyright (c) David J Turner
 
 import json
 import os
@@ -27,8 +27,7 @@ BLACKLIST_FILE = os.path.join(CONFIG_PATH, 'blacklist.csv')
 # XGA config file path
 CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 # Section of the config file for setting up the XGA module
-XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/",
-              "compute_mode": "local"}
+XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/"}
 # Will have to make it clear in the documentation what is allowed here, and which can be left out
 XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required/{obs_id}/pn_exp1_clean_evts.fits",
