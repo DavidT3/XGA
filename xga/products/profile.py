@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 12:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 18:05. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -757,7 +757,8 @@ class APECNormalisation1D(BaseProfile1D):
         # Angular diameter distance is calculated using the cosmology which was associated with the cluster
         #  at definition
         conv_factor = (4 * np.pi * e_to_p_ratio * (ang_dist * (1 + redshift)) ** 2) / 10 ** -14
-        to_mass_dens = (1+e_to_p_ratio) * MEAN_MOL_WEIGHT*m_p
+        num_gas_scale = (1+e_to_p_ratio)
+        conv_mass = MEAN_MOL_WEIGHT*m_p
 
         # Generating random normalisation profile realisations from DATA
         norm_real = self.generate_data_realisations(num_real)
@@ -770,10 +771,11 @@ class APECNormalisation1D(BaseProfile1D):
         # Using a loop here is ugly and relatively slow, but it should be okay
         for i in range(0, num_real):
             if num_dens:
-                gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @ norm_real[i, :] * conv_factor)
+                gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @
+                                               norm_real[i, :] * conv_factor) * num_gas_scale
             else:
                 gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @
-                                               norm_real[i, :] * conv_factor) * to_mass_dens
+                                               norm_real[i, :] * conv_factor) * num_gas_scale * conv_mass
 
         if not num_dens:
             # Convert the realisations to the correct unit
