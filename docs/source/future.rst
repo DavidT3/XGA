@@ -3,10 +3,6 @@ Planned XGA Features
 
 * **Upper Limit X-ray Luminosities** - These luminosities are measured from photometric products when there are not sufficient X-ray counts to generate a spectrum. This will involve integrating a tool that I have already written for XCS into the structure of XGA, though rather than measuring upper limit luminosities from a single image, I intend to measure them from the combined data.
 
-* **Support for common job-based HPC architectures** - Currently I only support parallisation on standard local machines, in the future I will support submitting jobs through Slurm and SGE.
-
-* **Annular Spectra** - A feature that is currently under active development, we will be able to easily generate annular spectra for a given extended source, then fit those spectra.
-
 * **Source Finder** - It is likely that I will extend my Hierarchical Clustering Peak Finder into a full source finder, as well as completing the implementation of a convolutional peak finder/source finder, which was inspired by my friend and colleague Lucas Porth.
 
 * **More XSPEC Models** - Including a two temperature APEC model, and support for custom user defined models.

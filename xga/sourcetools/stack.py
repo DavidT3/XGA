@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 17:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 10:54. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -16,7 +16,7 @@ from ..exceptions import NoRegionsError, NoProductAvailableError, XGAFitError, M
 from ..imagetools.profile import radial_brightness
 from ..samples.extended import ClusterSample
 from ..sources import GalaxyCluster
-from ..utils import NUM_CORES, COMPUTE_MODE
+from ..utils import NUM_CORES
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
 
@@ -331,11 +331,6 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
 
         return interp_brightness, src_id
 
-    # This function isn't split out to be submitted to HPC jobs, unlike SAS tasks, so I make sure the num
-    #  of cores is set to 1 to minimise resource usage.
-    if COMPUTE_MODE != "local":
-        num_cores = 1
-
     # This is an internal function that does setup checks common to both stacking of data and models
     _stack_setup_checks(sources, scale_radius, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
 
@@ -609,11 +604,6 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
                  + " - profile set to NaNs.")
 
         return model_brightness, src_id
-
-    # This function isn't split out to be submitted to HPC jobs, unlike SAS tasks, so I make sure the num
-    #  of cores is set to 1 to minimise resource usage.
-    if COMPUTE_MODE != "local":
-        num_cores = 1
 
     # This is an internal function that does setup checks common to both stacking of data and models
     _stack_setup_checks(sources, scale_radius, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)

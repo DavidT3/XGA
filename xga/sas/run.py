@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/01/2021, 18:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 10:54. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -10,10 +10,8 @@ from typing import Tuple
 
 from tqdm import tqdm
 
-from .. import COMPUTE_MODE
-from ..exceptions import SASNotFoundError, SASGenerationError
-from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpectra
 from ..exceptions import SASGenerationError
+from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpectra
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
@@ -140,7 +138,7 @@ def sas_call(sas_func):
         raised_errors = []
         # Making sure something is defined for this variable
         prod_type_str = ""
-        if to_execute and COMPUTE_MODE == "local" and len(all_run) > 0:
+        if to_execute and len(all_run) > 0:
             # Will run the commands locally in a pool
             prod_type_str = ", ".join(set(all_type))
             with tqdm(total=len(all_run), desc="Generating products of type(s) " + prod_type_str,
@@ -185,14 +183,6 @@ def sas_call(sas_func):
                                      error_callback=err_callback, callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
-
-        elif to_execute and COMPUTE_MODE == "sge" and len(all_run) > 0:
-            # This section will run the code on an HPC that uses the Sun Grid Engine for job submission.
-            raise NotImplementedError("How did you even get here?")
-
-        elif to_execute and COMPUTE_MODE == "slurm" and len(all_run) > 0:
-            # This section will run the code on an HPC that uses slurm for job submission.
-            raise NotImplementedError("How did you even get here?")
 
         elif to_execute and len(all_run) == 0:
             # It is possible to call a wrapped SAS function and find that the products already exist.

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/03/2021, 08:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 10:54. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -15,7 +15,6 @@ import pandas as pd
 from fitsio import FITS
 from tqdm import tqdm
 
-from .. import COMPUTE_MODE
 from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
@@ -162,7 +161,7 @@ def xspec_call(xspec_func):
         elif run_type == "conv_factors":
             desc = "Running XSPEC Simulations"
 
-        if COMPUTE_MODE == "local" and len(script_list) > 0:
+        if len(script_list) > 0:
             # This mode runs the XSPEC locally in a multiprocessing pool.
             with tqdm(total=len(script_list), desc=desc) as fit, Pool(cores) as pool:
                 def callback(results_in):
@@ -186,14 +185,6 @@ def xspec_call(xspec_func):
                     pool.apply_async(execute_cmd, args=(s, pth, src, run_type, timeout), callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
-
-        elif COMPUTE_MODE == "sge" and len(script_list) > 0:
-            # This section will run the code on an HPC that uses the Sun Grid Engine for job submission.
-            raise NotImplementedError("How did you even get here?")
-
-        elif COMPUTE_MODE == "slurm" and len(script_list) > 0:
-            # This section will run the code on an HPC that uses slurm for job submission.
-            raise NotImplementedError("How did you even get here?")
 
         elif len(script_list) == 0:
             warnings.warn("All XSPEC operations had already been run.")
