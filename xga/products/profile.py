@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 13:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 12:16. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -727,18 +727,21 @@ class APECNormalisation1D(BaseProfile1D):
 
         return cur_rads, ang_dist, e_to_p_ratio
 
-    def gas_density_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr', num_real: int = 100,
-                            sigma: int = 2) -> GasDensity3D:
+    def gas_density_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr', num_real: int = 10000,
+                            sigma: int = 1, num_dens: bool = True) -> GasDensity3D:
         """
         A method to calculate the gas density profile from the APEC normalisation profile, which in turn was
-        measured from XSPEC fits of an AnnularSpectra.
+        measured from XSPEC fits of an AnnularSpectra. This method supports the generation of both number density
+        and mass density profiles through the use of the num_dens keyword.
 
         :param float redshift: The redshift of the source that this profile was generated from.
         :param cosmo: The chosen cosmology.
         :param str abund_table: The abundance table to used for the conversion from n_e x n_H to n_e^2 during density
             calculation. Default is the famous Anders & Grevesse table.
         :param int num_real: The number of data realisations which should be generated to infer density errors.
-        :param int sigma: What sigma of error should the density profile be created with, the default is 2σ.
+        :param int sigma: What sigma of error should the density profile be created with, the default is 1σ.
+        :param bool num_dens: If True then a number density profile will be generated, otherwise a mass density profile
+        will be generated.
         :return: The gas density profile which has been calculated from the APEC normalisation profile.
         :rtype: GasDensity3D
         """
@@ -755,24 +758,33 @@ class APECNormalisation1D(BaseProfile1D):
         #  at definition
         conv_factor = (4 * np.pi * e_to_p_ratio * (ang_dist * (1 + redshift)) ** 2) / 10 ** -14
         to_mass_dens = (1+e_to_p_ratio) * MEAN_MOL_WEIGHT*m_p
-        gas_dens = np.sqrt(np.linalg.inv(vol_intersects.T) @ self.values * conv_factor) * to_mass_dens
 
+        # Generating random normalisation profile realisations from DATA
         norm_real = self.generate_data_realisations(num_real)
-        gas_dens_reals = Quantity(np.zeros(norm_real.shape), gas_dens.unit)
+
+        if num_dens:
+            gas_dens_reals = Quantity(np.zeros(norm_real.shape), "cm^-3")
+        else:
+            gas_dens_reals = Quantity(np.zeros(norm_real.shape), "kg cm^-3")
+
         # Using a loop here is ugly and relatively slow, but it should be okay
         for i in range(0, num_real):
-            gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @ norm_real[i, :] * conv_factor) * \
-                                    to_mass_dens
+            if num_dens:
+                gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @ norm_real[i, :] * conv_factor)
+            else:
+                gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @
+                                               norm_real[i, :] * conv_factor) * to_mass_dens
 
-        # Convert the profile and the realisations to the correct unit
-        gas_dens = gas_dens.to("Msun/Mpc^3")
-        gas_dens_reals = gas_dens_reals.to("Msun/Mpc^3")
+        if not num_dens:
+            # Convert the realisations to the correct unit
+            gas_dens_reals = gas_dens_reals.to("Msun/Mpc^3")
 
+        med_dens = np.percentile(gas_dens_reals, 50, axis=0)
         # Calculates the standard deviation of each data point, this is how we estimate the density errors
         dens_sigma = np.std(gas_dens_reals, axis=0)*sigma
 
         # Set up the actual profile object and return it
-        dens_prof = GasDensity3D(self.radii, gas_dens, self.centre, self.src_name, self.obs_id, self.instrument,
+        dens_prof = GasDensity3D(self.radii, med_dens, self.centre, self.src_name, self.obs_id, self.instrument,
                                  'spec', self, self.radii_err, dens_sigma, self.set_ident,
                                  self.associated_set_storage_key, self.deg_radii)
         return dens_prof

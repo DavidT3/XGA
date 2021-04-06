@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 15:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 12:16. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -419,14 +419,14 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
 
 
 def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
-                          annulus_method: str = 'min_snr', min_snr: float = 20,
+                          num_dens: bool = True, annulus_method: str = 'min_snr', min_snr: float = 20,
                           min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
                           use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
                           hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                           psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                           over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
-                          abund_table: str = "angr", num_data_real: int = 300, sigma: int = 2,
+                          abund_table: str = "angr", num_data_real: int = 10000, sigma: int = 1,
                           num_cores: int = NUM_CORES):
     """
     A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First checks whether the
@@ -441,6 +441,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
         the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
         generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param bool num_dens: If True then a number density profile will be generated, otherwise a mass density profile
+        will be generated.
     :param str annulus_method:
     :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
@@ -501,28 +503,39 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
 
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and the
     #  gas_density_profile method of APECNormalisation1D
-    for src_ind, src in enumerate(sources):
-        cur_rads = ann_rads[src_ind]
 
-        try:
-            # The normalisation profile(s) from the fit that produced the projected temperature profile. Possible
-            #  this will be a list of profiles if link_norm == False
-            apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn,
-                                                        over_sample)
-        except NoProductAvailableError:
-            warn("{s} doesn't have a matching apec normalisation profile, skipping.")
-            continue
+    final_dens_profs = []
+    with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as dens_prog:
+        for src_ind, src in enumerate(sources):
+            cur_rads = ann_rads[src_ind]
 
-        if not link_norm:
-            # obs_id =
-            # inst =
-            raise NotImplementedError("I haven't decided on what the behaviour will be when there are multiple "
-                                      "normalisation profiles.")
-        else:
-            obs_id = 'combined'
-            inst = 'combined'
+            try:
+                # The normalisation profile(s) from the fit that produced the projected temperature profile. Possible
+                #  this will be a list of profiles if link_norm == False
+                apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn,
+                                                            over_sample)
 
-        # Seeing as we're here, I might as well make a  density profile from the apec normalisation profile
-        dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real, sigma)
-        # Then I store it in the source
-        src.update_products(dens_prof)
+                if not link_norm:
+                    # obs_id =
+                    # inst =
+                    raise NotImplementedError("I haven't decided on what the behaviour will be when there are multiple "
+                                              "normalisation profiles.")
+                else:
+                    obs_id = 'combined'
+                    inst = 'combined'
+
+                # Seeing as we're here, I might as well make a  density profile from the apec normalisation profile
+                dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real,
+                                                               sigma, num_dens)
+                # Then I store it in the source
+                src.update_products(dens_prof)
+                final_dens_profs.append(dens_prof)
+
+            except NoProductAvailableError:
+                warn("{s} doesn't have a matching apec normalisation profile, skipping.")
+                final_dens_profs.append(None)
+                continue
+
+            dens_prog.update(1)
+
+    return final_dens_profs
