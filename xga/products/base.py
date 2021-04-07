@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 12:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/04/2021, 09:58. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -572,6 +572,19 @@ class BaseProfile1D:
         if deg_radii is not None:
             deg_radii = deg_radii.to("deg")
             self._deg_radii = deg_radii
+
+        # Finally I'm going to make a check for infinite or NaN values in the passed value,
+        #  radius, and uncertainty quantities
+        if np.isnan(radii).any() or np.isinf(radii).any():
+            raise ValueError("The radii quantity has NaN or infinite values")
+        if np.isnan(values).any() or np.isinf(values).any():
+            raise ValueError("The values quantity has NaN or infinite values")
+        if radii_err is not None and (np.isnan(radii_err).any() or np.isinf(radii_err).any()):
+            raise ValueError("The radii_err quantity has NaN or infinite values")
+        if values_err is not None and (np.isnan(values_err).any() or np.isinf(values_err).any()):
+            raise ValueError("The values_err quantity has NaN or infinite values")
+        if deg_radii is not None and (np.isnan(deg_radii).any() or np.isinf(deg_radii).any()):
+            raise ValueError("The deg_radii quantity has NaN or infinite values")
 
         # Storing the key values in attributes
         self._radii = radii

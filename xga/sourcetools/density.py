@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 19:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/04/2021, 09:58. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -228,7 +228,8 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
         except ValueError:
             sb_prof = None
             success = False
-            warn("Background region for brightness profile is all zeros for {}".format(src.name))
+            # No longer just background region failure that can set this off
+            # warn("Background region for brightness profile is all zeros for {}".format(src.name))
 
         if sb_prof is not None and not success:
             warn("Minimum SNR rebinning failed for {}".format(src.name))
@@ -456,23 +457,32 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                 cur_inst = inst[src_ind]
                 cur_obs = obs_id[src_ind]
 
-            # I now allow the user to decide if they want to generate number or mass density profiles using
-            #  this function, and here is where that distinction is made
-            if num_dens:
-                dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
-                                         cur_inst, model_r.name, sb_prof, dens_rads_errs, num_dens_err,
-                                         deg_radii=dens_deg_rads)
-            else:
-                # TODO Check the origin of the mean molecular weight, see if there are different values for different
-                #  abundance tables
-                # The mean molecular weight multiplied by the proton mass
-                conv_mass = MEAN_MOL_WEIGHT*m_p
-                dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'), sb_prof.centre,
-                                         src.name, cur_obs, cur_inst, model_r.name, sb_prof, dens_rads_errs,
-                                         (num_dens_err*conv_mass).to('Msun/Mpc^3'), deg_radii=dens_deg_rads)
+            try:
+                # I now allow the user to decide if they want to generate number or mass density profiles using
+                #  this function, and here is where that distinction is made
+                if num_dens:
+                    dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
+                                             cur_inst, model_r.name, sb_prof, dens_rads_errs, num_dens_err,
+                                             deg_radii=dens_deg_rads)
+                else:
+                    # TODO Check the origin of the mean molecular weight, see if there are different values for
+                    #  different abundance tables
+                    # The mean molecular weight multiplied by the proton mass
+                    conv_mass = MEAN_MOL_WEIGHT*m_p
+                    dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
+                                             sb_prof.centre, src.name, cur_obs, cur_inst, model_r.name, sb_prof,
+                                             dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
+                                             deg_radii=dens_deg_rads)
 
-            src.update_products(dens_prof)
-            final_dens_profs.append(dens_prof)
+                src.update_products(dens_prof)
+                final_dens_profs.append(dens_prof)
+
+            # If, for some reason, there are some inf/NaN values in any of the quantities passed to the GasDensity3D
+            #  declaration, this is where an error will be thrown
+            except ValueError:
+                final_dens_profs.append(None)
+                warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
+                     " in it.".format(src.name))
         else:
             final_dens_profs.append(None)
 

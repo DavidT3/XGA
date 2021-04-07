@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 12:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/04/2021, 09:58. Copyright (c) David J Turner
 
 from typing import Union, List
 from warnings import warn
@@ -181,8 +181,9 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     # So I can return a list of profiles, a tad more elegant than fetching them from the sources sometimes
     final_mass_profs = []
     # Better to use a with statement for tqdm, so its shut down if something fails inside
-    with tqdm(desc="Generating hydrostatic mass profiles", total=len(sources)) as onwards:
+    with tqdm(desc="Generating {} hydrostatic mass profile", total=len(sources)) as onwards:
         for src in sources:
+            onwards.set_description(onwards.format(src.name))
             # If every stage of this analysis has worked then we setup the hydro mass profile
             if str(src) in dens_prof_dict and dens_prof_dict[str(src)] is not None:
                 # This fetches out the correct density and temperature profiles
@@ -216,6 +217,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                 final_mass_profs.append(None)
 
             onwards.update(1)
+        onwards.set_description("complete")
 
     # In case only one source is being analysed
     if len(final_mass_profs) == 1:
