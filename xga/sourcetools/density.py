@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/04/2021, 09:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/04/2021, 12:20. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -501,7 +501,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                           over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
                           abund_table: str = "angr", num_data_real: int = 10000, sigma: int = 1,
-                          num_cores: int = NUM_CORES)  -> List[GasDensity3D]:
+                          num_cores: int = NUM_CORES) -> List[GasDensity3D]:
     """
     A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First checks whether the
     required annular spectra already exist and have been fit using XSPEC, if not then they are generated and fitted,

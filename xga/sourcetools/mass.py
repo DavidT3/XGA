@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/04/2021, 09:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/04/2021, 12:20. Copyright (c) David J Turner
 
 from typing import Union, List
 from warnings import warn
@@ -181,9 +181,10 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     # So I can return a list of profiles, a tad more elegant than fetching them from the sources sometimes
     final_mass_profs = []
     # Better to use a with statement for tqdm, so its shut down if something fails inside
-    with tqdm(desc="Generating {} hydrostatic mass profile", total=len(sources)) as onwards:
+    prog_desc = "Generating {} hydrostatic mass profile"
+    with tqdm(desc=prog_desc.format("None"), total=len(sources)) as onwards:
         for src in sources:
-            onwards.set_description(onwards.format(src.name))
+            onwards.set_description(prog_desc.format(src.name))
             # If every stage of this analysis has worked then we setup the hydro mass profile
             if str(src) in dens_prof_dict and dens_prof_dict[str(src)] is not None:
                 # This fetches out the correct density and temperature profiles
@@ -197,9 +198,11 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                 # Set up the hydrogen mass profile using the temperature radii as they will tend to be spaced a lot
                 #  wider than the density radii.
                 try:
-                    hy_mass = HydrostaticMass(t_prof, t_model, d_prof, d_model, t_prof.radii, t_prof.radii_err,
-                                              t_prof.deg_radii, fit_method, num_walkers, num_steps, show_warn=show_warn,
-                                              progress=False)
+                    rads = t_prof.radii.copy()[1:]
+                    rad_errs = t_prof.radii_err.copy()[1:]
+                    deg_rads = src.convert_radius(rads, 'deg')
+                    hy_mass = HydrostaticMass(t_prof, t_model, d_prof, d_model, rads, rad_errs, deg_rads, fit_method,
+                                              num_walkers, num_steps, show_warn=show_warn, progress=False)
                     # Add the profile to the source storage structure
                     src.update_products(hy_mass)
                     # Also put it into a list for returning
