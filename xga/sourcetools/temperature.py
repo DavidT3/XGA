@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/03/2021, 14:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/04/2021, 10:59. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -459,8 +459,10 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             obs_id = 'combined'
             inst = 'combined'
 
-        # There are reasons that a projected temperature profile can be considered unusable, so we must check
-        if proj_temp.usable:
+        # There are reasons that a projected temperature profile can be considered unusable, so we must check. Also
+        #  make sure to only use those profiles that have a minimum of 4 annuli. The len operator retrieves the number
+        #  of radial data points a profile has
+        if proj_temp.usable and len(proj_temp) > 3:
             # Also make an Emission Measure profile, used for weighting the contributions from different
             #  shells to annuli
             em_prof = apec_norm_prof.emission_measure_profile(src.redshift, src.cosmo, abund_table,
