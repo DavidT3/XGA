@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 14:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/04/2021, 09:34. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -652,9 +652,7 @@ class GalaxyCluster(ExtendedSource):
         if radii is not None:
             matched_prods = [p for p in matched_prods if p.deg_radii != radii]
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        if isinstance(matched_prods, list) and len(matched_prods) == 0:
             raise NoProductAvailableError("No matching hydrostatic mass profiles can be found.")
         return matched_prods
 
