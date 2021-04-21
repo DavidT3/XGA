@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -169,7 +169,7 @@ class BaseSample:
         """
         return self._failed_sources
 
-    def Lx(self, model: str, outer_radius: Union[str, Quantity],
+    def Lx(self, outer_radius: Union[str, Quantity], model: str,
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
            over_sample: float = None):
@@ -216,7 +216,7 @@ class BaseSample:
         for src_ind, src in enumerate(self._sources.values()):
             try:
                 # Fetch the luminosity from a given source using the dedicated method
-                lx_val = src.get_luminosities(model, out_rads[src_ind], inn_rads[src_ind], lo_en, hi_en, group_spec,
+                lx_val = src.get_luminosities(out_rads[src_ind], model, inn_rads[src_ind], lo_en, hi_en, group_spec,
                                               min_counts, min_sn, over_sample)
                 frac_err = lx_val[1:] / lx_val[0]
                 if len(frac_err[frac_err > 1]) == 0:

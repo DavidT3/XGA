@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
 
 import warnings
 from typing import List, Union
@@ -158,7 +158,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
         # If the fit has already been performed we do not wish to perform it again
         try:
-            res = source.get_results(model, out_rad_vals[src_ind], inn_rad_vals[src_ind], 'kT', group_spec, min_counts,
+            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'kT', group_spec, min_counts,
                                      min_sn, over_sample)
         except ModelNotAssociatedError:
             script_paths.append(script_file)
@@ -296,7 +296,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
         # If the fit has already been performed we do not wish to perform it again
         try:
-            res = source.get_results(model, out_rad_vals[src_ind], inn_rad_vals[src_ind], None, group_spec, min_counts,
+            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], None, group_spec, min_counts,
                                      min_sn, over_sample)
         except ModelNotAssociatedError:
             script_paths.append(script_file)

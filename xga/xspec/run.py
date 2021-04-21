@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -262,7 +262,7 @@ def xspec_call(xspec_func):
 
                             # The add_fit_data method formats the luminosities nicely, so we grab them back out
                             #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
-                            processed_lums = spec.get_luminosities(model)
+                            processed_lums = spec.get_luminosities(, model
                             if spec.instrument not in inst_lums:
                                 inst_lums[spec.instrument] = processed_lums
 
@@ -335,7 +335,7 @@ def xspec_call(xspec_func):
                             # Otherwise we can just add a single normalisation profile
                             s.update_products(norm_profs)
 
-                        if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec'):
+                        if 'Abundanc' in ann_spec.get_results('constant*tbabs*apec', 0):
                             met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
                             s.update_products(met_prof)
 

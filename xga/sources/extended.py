@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -304,9 +304,79 @@ class GalaxyCluster(ExtendedSource):
 
         return Quantity(r_list)
 
+    def get_results(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None):
+        """
+        Important method that will retrieve fit results from the source object. Either for a specific
+        parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
+        all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
+        column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
+        of such numpy arrays, with the keys corresponding to parameter names.
+
+        This overrides the BaseSource method, but the only difference is that this has a default model, which
+        is what single_temp_apec fits (constant*tbabs*apec).
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param str par: The name of the parameter you want a result for.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :return: The requested result value, and uncertainties.
+        """
+        return super().get_results(outer_radius, model, inner_radius, par, group_spec, min_counts, min_sn, over_sample)
+
+    def get_luminosities(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
+                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
+                         hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                         over_sample: float = None):
+        """
+        Get method for luminosities calculated from model fits to spectra associated with this source.
+        Either for given energy limits (that must have been specified when the fit was first performed), or
+        for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
+        the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
+
+        This overrides the BaseSource method, but the only difference is that this has a default model, which
+        is what single_temp_apec fits (constant*tbabs*apec).
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str model: The name of the fitted model that you're requesting the luminosities
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :return: The requested luminosity value, and uncertainties.
+        """
+        return super().get_luminosities(outer_radius, model, inner_radius, lo_en, hi_en, group_spec, min_counts,
+                                        min_sn, over_sample)
+
     # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
     #  justified considering how often the cluster temperature is used in X-ray cluster studies.
-    def get_temperature(self, model: str, outer_radius: Union[str, Quantity],
+    def get_temperature(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                         min_counts: int = 5, min_sn: float = None, over_sample: float = None):
         """
@@ -314,12 +384,12 @@ class GalaxyCluster(ExtendedSource):
         from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
         column 1 is err-, and column 2 is err+).
 
-        :param str model: The name of the fitted model that you're requesting the results
-            from (e.g. constant*tbabs*apec).
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
             region files), then any inner radius will be ignored.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
         :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
             for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
@@ -332,7 +402,7 @@ class GalaxyCluster(ExtendedSource):
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The temperature value, and uncertainties.
         """
-        res = self.get_results(model, outer_radius, inner_radius, "kT", group_spec, min_counts, min_sn, over_sample)
+        res = self.get_results(outer_radius, model, inner_radius, "kT", group_spec, min_counts, min_sn, over_sample)
 
         return Quantity(res, 'keV')
 
