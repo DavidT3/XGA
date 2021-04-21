@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 08:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:01. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -541,9 +541,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
                           hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                           psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                          over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
-                          abund_table: str = "angr", num_data_real: int = 10000, sigma: int = 1,
-                          num_cores: int = NUM_CORES) -> List[GasDensity3D]:
+                          over_sample: float = None, one_rmf: bool = True, abund_table: str = "angr",
+                          num_data_real: int = 10000, sigma: int = 1, num_cores: int = NUM_CORES) -> List[GasDensity3D]:
     """
     A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First checks whether the
     required annular spectra already exist and have been fit using XSPEC, if not then they are generated and fitted,
@@ -590,9 +589,6 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
-    :param bool link_norm: Sets whether the normalisation parameter is linked across the spectra in an individual
-        annulus during the XSPEC fit. Normally the default is False, but here I have set it to True so one global
-        normalisation profile is produced rather than separate profiles for individual ObsID-inst combinations.
     :param str abund_table: The abundance table to use both for the conversion from n_exn_p to n_e^2 during density
         calculation, and the XSPEC fit.
     :param int num_data_real: The number of random realisations to generate when propagating profile uncertainties.
@@ -611,8 +607,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
         # This returns the boundary radii for the annuli
         ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined, use_worst, lo_en,
                                           hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
-                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, link_norm,
-                                          abund_table, num_cores)
+                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, abund_table,
+                                          num_cores)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
@@ -629,20 +625,11 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
             cur_rads = ann_rads[src_ind]
 
             try:
-                # The normalisation profile(s) from the fit that produced the projected temperature profile. Possible
-                #  this will be a list of profiles if link_norm == False
-                apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn,
-                                                            over_sample)
+                # The normalisation profile(s) from the fit that produced the projected temperature profile.
+                apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample)
 
-                if not link_norm:
-                    # obs_id =
-                    # inst =
-                    raise NotImplementedError("I haven't decided on what the behaviour will be when there are multiple "
-                                              "normalisation profiles.")
-                else:
-                    obs_id = 'combined'
-                    inst = 'combined'
-
+                obs_id = 'combined'
+                inst = 'combined'
                 # Seeing as we're here, I might as well make a  density profile from the apec normalisation profile
                 dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real,
                                                                sigma, num_dens)
