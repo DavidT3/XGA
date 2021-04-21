@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 10:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 10:54. Copyright (c) David J Turner
 
 import json
 import os
@@ -27,8 +27,7 @@ BLACKLIST_FILE = os.path.join(CONFIG_PATH, 'blacklist.csv')
 # XGA config file path
 CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 # Section of the config file for setting up the XGA module
-XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/",
-              "compute_mode": "local"}
+XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/"}
 # Will have to make it clear in the documentation what is allowed here, and which can be left out
 XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required/{obs_id}/pn_exp1_clean_evts.fits",
@@ -84,7 +83,7 @@ XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
 HY_MASS = m_p + m_e
 
 # Mean molecular weight, mu
-# TODO Make sure this doesn't change with abundance table, I suspect it should
+# TODO Make sure this doesn't change with abundance table, I think it might?
 MEAN_MOL_WEIGHT = 0.61
 
 # A centralised constant to define what radius labels are allowed
@@ -350,21 +349,13 @@ else:
     CENSUS, BLACKLIST = observation_census(xga_conf)
     OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
 
-    # These are the different ways the SAS runs can be partitioned out
-    allowed_compute = ["local", "sge", "slurm"]
-    COMPUTE_MODE = xga_conf["XGA_SETUP"]["compute_mode"].lower()
-    if COMPUTE_MODE not in allowed_compute:
-        raise ValueError("{0} is not a valid compute mode - "
-                         "please choose from:\n {1}".format(xga_conf["XGA_SETUP"]["compute_mode"],
-                                                            ", ".join(allowed_compute)))
-    elif COMPUTE_MODE == "local":
+    if "num_cores" in xga_conf["XGA_SETUP"]:
+        # If the user has set a number of cores in the config file then we'll use that.
+        NUM_CORES = int(xga_conf["XGA_SETUP"]["num_cores"])
+    else:
         # Going to allow multi-core processing to use 90% of available cores by default, but
         # this can be over-ridden in individual SAS calls.
         NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
-
-    # TODO Remove this once I have figured out how to support HPCs
-    elif COMPUTE_MODE in ["sge", "slurm"]:
-        raise NotImplementedError("I don't support HPCs yet!")
 
     xmm_sky = def_unit("xmm_sky")
     xmm_det = def_unit("xmm_det")
