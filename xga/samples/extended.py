@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 16:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 10:58. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -13,7 +13,6 @@ from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, Pa
     NoProductAvailableError, NoValidObservationsError
 from ..products.profile import GasDensity3D
 from ..relations.fit import *
-from ..sas.spec import region_setup
 from ..sources.extended import GalaxyCluster
 
 
@@ -444,6 +443,9 @@ class ClusterSample(BaseSample):
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
         """
+        # Has to be here to prevent circular import unfortunately
+        from ..sas.spec import region_setup
+
         gms = []
         out_rad_vals = region_setup(self, prof_outer_rad, Quantity(0, 'deg'), True, '')[2]
 
