@@ -1,9 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 15:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
 
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy.constants import m_p
 from astropy.units import Quantity, kpc
@@ -19,6 +20,7 @@ from ..samples.extended import ClusterSample
 from ..sas.spec import region_setup
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
+from ..sourcetools.deproj import shell_ann_vol_intersect
 from ..utils import NHC, ABUND_TABLES, NUM_CORES, MEAN_MOL_WEIGHT
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
@@ -134,8 +136,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         for src in sources:
             try:
                 # A temporary temperature variable
-                temp_temp = src.get_temperature("tbabs*apec", conv_outer_radius, inner_radius, group_spec, min_counts,
-                                                min_sn, over_sample)[0]
+                temp_temp = src.get_temperature(conv_outer_radius, "constant*tbabs*apec", inner_radius, group_spec,
+                                                min_counts, min_sn, over_sample)[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
                 warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
                      "3keV".format(s=src.name))
@@ -227,12 +229,117 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
         except ValueError:
             sb_prof = None
             success = False
-            warn("Background region for brightness profile is all zeros for {}".format(src.name))
+            # No longer just background region failure that can set this off
+            # warn("Background region for brightness profile is all zeros for {}".format(src.name))
 
         if sb_prof is not None and not success:
             warn("Minimum SNR rebinning failed for {}".format(src.name))
 
     return sb_prof
+
+
+def _onion_peel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity] = "r500",
+                    num_dens: bool = True, use_peak: bool = True, pix_step: int = 1, min_snr: Union[int, float] = 0.0,
+                    abund_table: str = "angr", lo_en: Quantity = Quantity(0.5, 'keV'),
+                    hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True, psf_model: str = "ELLBETA",
+                    psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_samples: int = 10000,
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
+                    conv_outer_radius: Quantity = "r500",  num_cores: int = NUM_CORES):
+
+    raise NotImplementedError("This isn't finished at the moment")
+    # Run the setup function, calculates the factors that translate 3D countrate to density
+    #  Also checks parameters and runs any spectra/fits that need running
+    sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
+                                                      hi_en, group_spec, min_counts, min_sn, over_sample, obs_id, inst,
+                                                      conv_temp, conv_outer_radius, num_cores)
+
+    # Calls the handy spectrum region setup function to make a predictable set of outer radius values
+    out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
+
+    final_dens_profs = []
+    # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
+    e_to_p_ratio = NHC[abund_table]
+    with tqdm(desc="Generating density profiles based on onion-peeled data", total=len(sources)) as dens_onwards:
+        for src_ind, src in enumerate(sources):
+            sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                              psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
+            if sb_prof is None:
+                final_dens_profs.append(None)
+                continue
+            else:
+                src.update_products(sb_prof)
+
+            rad_bounds = sb_prof.annulus_bounds.to("cm")
+            vol_intersects = shell_ann_vol_intersect(rad_bounds, rad_bounds)
+            print(vol_intersects.min())
+            plt.imshow(vol_intersects.value)
+            plt.show()
+            # Generating random normalisation profile realisations from DATA
+            sb_reals = sb_prof.generate_data_realisations(num_samples) * sb_prof.areas
+
+            # Using a loop here is ugly and relatively slow, but it should be okay
+            transformed = []
+            for i in range(0, num_samples):
+                transformed.append(np.linalg.inv(vol_intersects.T) @ sb_reals[i, :])
+
+            transformed = Quantity(transformed)
+            print(np.percentile(transformed, 50, axis=0))
+            import sys
+            sys.exit()
+
+            # We convert the volume element to cm^3 now, this is the unit we expect for the density conversion
+            transformed = transformed.to('ct/(s*cm^3)')
+            num_dens_dist = np.sqrt(transformed * conv_factors[src_ind]) * (1 + e_to_p_ratio)
+
+            print(np.where(np.isnan(np.sqrt(transformed * conv_factors[src_ind])))[0].shape)
+            import sys
+            sys.exit()
+
+            med_num_dens = np.percentile(num_dens_dist, 50, axis=1)
+            num_dens_err = np.std(num_dens_dist, axis=1)
+
+            # Setting up the instrument and ObsID to pass into the density profile definition
+            if obs_id[src_ind] is None:
+                cur_inst = "combined"
+                cur_obs = "combined"
+            else:
+                cur_inst = inst[src_ind]
+                cur_obs = obs_id[src_ind]
+
+            dens_rads = sb_prof.radii.copy()
+            dens_rads_errs = sb_prof.radii_err.copy()
+            dens_deg_rads = sb_prof.deg_radii.copy()
+            print(np.where(np.isnan(transformed)))
+            print(med_num_dens)
+            try:
+                # I now allow the user to decide if they want to generate number or mass density profiles using
+                #  this function, and here is where that distinction is made
+                if num_dens:
+                    dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
+                                             cur_inst, 'onion', sb_prof, dens_rads_errs, num_dens_err,
+                                             deg_radii=dens_deg_rads)
+                else:
+                    # The mean molecular weight multiplied by the proton mass
+                    conv_mass = MEAN_MOL_WEIGHT * m_p
+                    dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens * conv_mass).to('Msun/Mpc^3'),
+                                             sb_prof.centre, src.name, cur_obs, cur_inst, 'onion', sb_prof,
+                                             dens_rads_errs, (num_dens_err * conv_mass).to('Msun/Mpc^3'),
+                                             deg_radii=dens_deg_rads)
+
+                src.update_products(dens_prof)
+                final_dens_profs.append(dens_prof)
+
+            # If, for some reason, there are some inf/NaN values in any of the quantities passed to the GasDensity3D
+            #  declaration, this is where an error will be thrown
+            except ValueError:
+                final_dens_profs.append(None)
+                warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
+                     " in it.".format(src.name))
+
+            dens_onwards.update(1)
+
+    return final_dens_profs
 
 
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
@@ -392,23 +499,32 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                 cur_inst = inst[src_ind]
                 cur_obs = obs_id[src_ind]
 
-            # I now allow the user to decide if they want to generate number or mass density profiles using
-            #  this function, and here is where that distinction is made
-            if num_dens:
-                dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
-                                         cur_inst, model_r.name, sb_prof, dens_rads_errs, num_dens_err,
-                                         deg_radii=dens_deg_rads)
-            else:
-                # TODO Check the origin of the mean molecular weight, see if there are different values for different
-                #  abundance tables
-                # The mean molecular weight multiplied by the proton mass
-                conv_mass = MEAN_MOL_WEIGHT*m_p
-                dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'), sb_prof.centre,
-                                         src.name, cur_obs, cur_inst, model_r.name, sb_prof, dens_rads_errs,
-                                         (num_dens_err*conv_mass).to('Msun/Mpc^3'), deg_radii=dens_deg_rads)
+            try:
+                # I now allow the user to decide if they want to generate number or mass density profiles using
+                #  this function, and here is where that distinction is made
+                if num_dens:
+                    dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
+                                             cur_inst, model_r.name, sb_prof, dens_rads_errs, num_dens_err,
+                                             deg_radii=dens_deg_rads)
+                else:
+                    # TODO Check the origin of the mean molecular weight, see if there are different values for
+                    #  different abundance tables
+                    # The mean molecular weight multiplied by the proton mass
+                    conv_mass = MEAN_MOL_WEIGHT*m_p
+                    dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
+                                             sb_prof.centre, src.name, cur_obs, cur_inst, model_r.name, sb_prof,
+                                             dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
+                                             deg_radii=dens_deg_rads)
 
-            src.update_products(dens_prof)
-            final_dens_profs.append(dens_prof)
+                src.update_products(dens_prof)
+                final_dens_profs.append(dens_prof)
+
+            # If, for some reason, there are some inf/NaN values in any of the quantities passed to the GasDensity3D
+            #  declaration, this is where an error will be thrown
+            except ValueError:
+                final_dens_profs.append(None)
+                warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
+                     " in it.".format(src.name))
         else:
             final_dens_profs.append(None)
 
@@ -419,15 +535,14 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
 
 
 def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
-                          annulus_method: str = 'min_snr', min_snr: float = 20,
+                          num_dens: bool = True, annulus_method: str = 'min_snr', min_snr: float = 20,
                           min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
                           use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
                           hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                           psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                          over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
-                          abund_table: str = "angr", num_data_real: int = 300, sigma: int = 2,
-                          num_cores: int = NUM_CORES):
+                          over_sample: float = None, one_rmf: bool = True, abund_table: str = "angr",
+                          num_data_real: int = 10000, sigma: int = 1, num_cores: int = NUM_CORES) -> List[GasDensity3D]:
     """
     A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First checks whether the
     required annular spectra already exist and have been fit using XSPEC, if not then they are generated and fitted,
@@ -441,6 +556,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
         the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
         generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param bool num_dens: If True then a number density profile will be generated, otherwise a mass density profile
+        will be generated.
     :param str annulus_method:
     :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
@@ -472,14 +589,14 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
-    :param bool link_norm: Sets whether the normalisation parameter is linked across the spectra in an individual
-        annulus during the XSPEC fit. Normally the default is False, but here I have set it to True so one global
-        normalisation profile is produced rather than separate profiles for individual ObsID-inst combinations.
     :param str abund_table: The abundance table to use both for the conversion from n_exn_p to n_e^2 during density
         calculation, and the XSPEC fit.
     :param int num_data_real: The number of random realisations to generate when propagating profile uncertainties.
     :param int sigma: What sigma uncertainties should newly created profiles have, the default is 2σ.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :return: A list of the 3D gas density profiles measured by this function, though if the measurement was not
+        successful an entry of None will be added to the list.
+    :rtype: List[GasDensity3D]
     """
     if annulus_method not in ALLOWED_ANN_METHODS:
         a_meth = ", ".join(ALLOWED_ANN_METHODS)
@@ -490,8 +607,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
         # This returns the boundary radii for the annuli
         ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined, use_worst, lo_en,
                                           hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
-                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, link_norm,
-                                          abund_table, num_cores)
+                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, abund_table,
+                                          num_cores)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
@@ -501,28 +618,30 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
 
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and the
     #  gas_density_profile method of APECNormalisation1D
-    for src_ind, src in enumerate(sources):
-        cur_rads = ann_rads[src_ind]
 
-        try:
-            # The normalisation profile(s) from the fit that produced the projected temperature profile. Possible
-            #  this will be a list of profiles if link_norm == False
-            apec_norm_prof = src.get_apec_norm_profiles(cur_rads, link_norm, group_spec, min_counts, min_sn,
-                                                        over_sample)
-        except NoProductAvailableError:
-            warn("{s} doesn't have a matching apec normalisation profile, skipping.")
-            continue
+    final_dens_profs = []
+    with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as dens_prog:
+        for src_ind, src in enumerate(sources):
+            cur_rads = ann_rads[src_ind]
 
-        if not link_norm:
-            # obs_id =
-            # inst =
-            raise NotImplementedError("I haven't decided on what the behaviour will be when there are multiple "
-                                      "normalisation profiles.")
-        else:
-            obs_id = 'combined'
-            inst = 'combined'
+            try:
+                # The normalisation profile(s) from the fit that produced the projected temperature profile.
+                apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample)
 
-        # Seeing as we're here, I might as well make a  density profile from the apec normalisation profile
-        dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real, sigma)
-        # Then I store it in the source
-        src.update_products(dens_prof)
+                obs_id = 'combined'
+                inst = 'combined'
+                # Seeing as we're here, I might as well make a  density profile from the apec normalisation profile
+                dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real,
+                                                               sigma, num_dens)
+                # Then I store it in the source
+                src.update_products(dens_prof)
+                final_dens_profs.append(dens_prof)
+
+            except NoProductAvailableError:
+                warn("{s} doesn't have a matching apec normalisation profile, skipping.")
+                final_dens_profs.append(None)
+                continue
+
+            dens_prog.update(1)
+
+    return final_dens_profs

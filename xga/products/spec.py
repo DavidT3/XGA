@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/03/2021, 17:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
 
 
 import os
@@ -1278,7 +1278,7 @@ class AnnularSpectra(BaseAggregateProduct):
         because this is an aggregate product of all the relevant spectra, storing them just as source objects
         store spectra that don't exist in a spectrum set.
 
-        :param str model: The XSPEC definition of the model used to perform the fit. e.g. tbabs*apec
+        :param str model: The XSPEC definition of the model used to perform the fit. e.g. constant*tbabs*apec
         :param tab_line: A dictionary of table lines with fit data, the keys of the dictionary being
             the relevant annulus ID for the fit.
         :param dict lums: A dictionary of the luminosities measured during the fits, the keys of the
@@ -1351,7 +1351,8 @@ class AnnularSpectra(BaseAggregateProduct):
         of such numpy arrays, with the keys corresponding to parameter names.
 
         :param int annulus_ident: The annulus for which you wish to retrieve the fit results.
-        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str model: The name of the fitted model that you're requesting the results from
+            (e.g. constant*tbabs*apec).
         :param str par: The name of the parameter you want a result for.
         :return: The requested result value, and uncertainties.
         """
@@ -1409,7 +1410,8 @@ class AnnularSpectra(BaseAggregateProduct):
         and upper energy bounds may be passed.
 
         :param int annulus_ident: The annulus for which you wish to retrieve the luminosities.
-        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
         :return: The requested luminosity value, and uncertainties. If a specific energy range has been supplied

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 16:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -13,7 +13,6 @@ from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, Pa
     NoProductAvailableError, NoValidObservationsError
 from ..products.profile import GasDensity3D
 from ..relations.fit import *
-from ..sas.spec import region_setup
 from ..sources.extended import GalaxyCluster
 
 
@@ -314,19 +313,59 @@ class ClusterSample(BaseSample):
 
         return Quantity(rads, 'kpc')
 
-    def Tx(self, model: str = 'tbabs*apec', outer_radius: Union[str, Quantity] = 'r500',
+    def Lx(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
+           inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
+           hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+           over_sample: float = None):
+        """
+        A get method for luminosities measured for the constituent sources of this sample. An error will be
+        thrown if luminosities haven't been measured for the given region and model, no default model has been
+        set, unlike the Tx method of ClusterSample. An extra condition that aims to only return 'good' data has
+        been included, so that any Lx measurement with an uncertainty greater than value will be set to NaN, and
+        a warning will be issued.
+
+        This overrides the BaseSample method, but the only difference is that this has a default model, which
+        is what single_temp_apec fits (constant*tbabs*apec).
+
+        :param str model: The name of the fitted model that you're requesting the luminosities
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). You may also pass a quantity containing radius values,
+            with one value for each source in this sample.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum. You may also pass a quantity containing radius values, with one value for each
+            source in this sample.
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal to noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
+            column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
+        :rtype: Quantity
+        """
+        return super().Lx(outer_radius, model, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn, over_sample)
+
+    def Tx(self, outer_radius: Union[str, Quantity] = 'r500', model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
            min_sn: float = None, over_sample: float = None):
         """
         A get method for temperatures measured for the constituent clusters of this sample. An error will be
         thrown if temperatures haven't been measured for the given region (the default is R_500) and model (default
-        is the tbabs*apec model which single_temp_apec fits to cluster spectra). Any clusters for which temperature
-        fits failed will return NaN temperatures, and with temperature greater than 25keV is considered failed, any
-        temperature with a negative error value is considered failed, any temperature where the Tx-low err is less
-        than zero isn't returned, and any temperature where one of the errors is more than three times larger than
-        the other is considered failed.
+        is the constant*tbabs*apec model which single_temp_apec fits to cluster spectra). Any clusters for which
+        temperature fits failed will return NaN temperatures, and with temperature greater than 25keV is considered
+        failed, any temperature with a negative error value is considered failed, any temperature where the Tx-low
+        err is less than zero isn't returned, and any temperature where one of the errors is more than three times
+        larger than the other is considered failed.
 
-        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
@@ -360,7 +399,7 @@ class ClusterSample(BaseSample):
         for src_ind, gcs in enumerate(self._sources.values()):
             try:
                 # Fetch the temperature from a given cluster using the dedicated method
-                gcs_temp = gcs.get_temperature(model, out_rads[src_ind], inn_rads[src_ind], group_spec, min_counts,
+                gcs_temp = gcs.get_temperature(out_rads[src_ind], model, inn_rads[src_ind], group_spec, min_counts,
                                                min_sn, over_sample).value
 
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
@@ -444,6 +483,9 @@ class ClusterSample(BaseSample):
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
         """
+        # Has to be here to prevent circular import unfortunately
+        from ..sas.spec import region_setup
+
         gms = []
         out_rad_vals = region_setup(self, prof_outer_rad, Quantity(0, 'deg'), True, '')[2]
 
@@ -630,9 +672,9 @@ class ClusterSample(BaseSample):
     #  make a scaling relation with a core excised temperature.
     def gm_Tx(self, rad_name: str, dens_model: str, prof_outer_rad: Union[Quantity, str], dens_method: str,
               x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+12, 'solMass'),
-              fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec', group_spec: bool = True,
-              min_counts: int = 5, min_sn: float = None, over_sample: float = None,  pix_step: int = 1,
-              min_snr: Union[float, int] = 0.0, psf_corr: bool = True, psf_model: str = "ELLBETA",
+              fit_method: str = 'odr', start_pars: list = None, model: str = 'constant*tbabs*apec',
+              group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+              pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True, psf_model: str = "ELLBETA",
               psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, set_ids: List[int] = None) \
             -> ScalingRelation:
         """
@@ -679,7 +721,7 @@ class ClusterSample(BaseSample):
         fit_method = fit_method.lower()
 
         # Read out the temperature values into variables just for convenience sake
-        t_vals = self.Tx(model, rad_name, Quantity(0, 'deg'), group_spec, min_counts, min_sn, over_sample)
+        t_vals = self.Tx(rad_name, model, Quantity(0, 'deg'), group_spec, min_counts, min_sn, over_sample)
         t_data = t_vals[:, 0]
         t_errs = t_vals[:, 1:]
 
@@ -716,7 +758,7 @@ class ClusterSample(BaseSample):
 
     def Lx_richness(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(60),
                     y_norm: Quantity = Quantity(1e+44, 'erg/s'), fit_method: str = 'odr', start_pars: list = None,
-                    model: str = 'tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
+                    model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
                     hi_en: Quantity = Quantity(2.0, 'keV'), inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                     group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                     over_sample: float = None) -> ScalingRelation:
@@ -755,7 +797,7 @@ class ClusterSample(BaseSample):
         r_errs = self.richness[:, 1]
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        lx_vals = self.Lx(model, outer_radius, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
+        lx_vals = self.Lx(outer_radius, model, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
                           over_sample) * self.cosmo.inv_efunc(self.redshifts)[..., None]
         lx_data = lx_vals[:, 0]
         lx_err = lx_vals[:, 1:]
@@ -786,8 +828,8 @@ class ClusterSample(BaseSample):
 
     def Lx_Tx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(4, 'keV'),
               y_norm: Quantity = Quantity(1e+44, 'erg/s'), fit_method: str = 'odr', start_pars: list = None,
-              model: str = 'tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-              tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+              model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
+              hi_en: Quantity = Quantity(2.0, 'keV'), tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
               lx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
               min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> ScalingRelation:
         """
@@ -825,13 +867,13 @@ class ClusterSample(BaseSample):
         fit_method = fit_method.lower()
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        lx_vals = self.Lx(model, outer_radius, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
+        lx_vals = self.Lx(outer_radius, model, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
                           over_sample) * self.cosmo.inv_efunc(self.redshifts)[..., None]
         lx_data = lx_vals[:, 0]
         lx_err = lx_vals[:, 1:]
 
         # Read out the temperature values into variables just for convenience sake
-        t_vals = self.Tx(model, outer_radius, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
+        t_vals = self.Tx(outer_radius, model, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
         t_data = t_vals[:, 0]
         t_errs = t_vals[:, 1:]
 
@@ -868,7 +910,7 @@ class ClusterSample(BaseSample):
 
     def mass_Tx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(4, 'keV'),
                 y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
-                model: str = 'tbabs*apec', tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                model: str = 'constant*tbabs*apec', tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                 temp_model_name: str = None, dens_model_name: str = None) -> ScalingRelation:
         """
@@ -909,7 +951,7 @@ class ClusterSample(BaseSample):
         m_err = m_vals[:, 1:]
 
         # Read out the temperature values into variables just for convenience sake
-        t_vals = self.Tx(model, outer_radius, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
+        t_vals = self.Tx(outer_radius, model, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
         t_data = t_vals[:, 0]
         t_errs = t_vals[:, 1:]
 
@@ -997,7 +1039,7 @@ class ClusterSample(BaseSample):
 
     def mass_Lx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(1e+44, 'erg/s'),
                 y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
-                model: str = 'tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
+                model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
                 hi_en: Quantity = Quantity(2.0, 'keV'), lx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                 temp_model_name: str = None, dens_model_name: str = None) -> ScalingRelation:
@@ -1040,7 +1082,7 @@ class ClusterSample(BaseSample):
         m_err = m_vals[:, 1:]
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        lx_vals = self.Lx(model, outer_radius, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
+        lx_vals = self.Lx(outer_radius, model, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
                           over_sample)
         lx_data = lx_vals[:, 0]
         lx_err = lx_vals[:, 1:]

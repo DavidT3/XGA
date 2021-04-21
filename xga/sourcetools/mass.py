@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 12:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
 
 from typing import Union, List
 from warnings import warn
@@ -21,8 +21,8 @@ from ..sourcetools.temperature import onion_deproj_temp_prof
 from ..xspec.fit import single_temp_apec
 
 
-def _setup_global(sources, outer_radius, global_radius, link_norm: bool, abund_table: str, group_spec: bool,
-                  min_counts: int, min_sn: float, over_sample: float, num_cores: int):
+def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_spec: bool, min_counts: int,
+                  min_sn: float, over_sample: float, num_cores: int):
 
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
     global_out_rads = region_setup(sources, global_radius, Quantity(0, 'arcsec'), False, '')[-1]
@@ -38,14 +38,14 @@ def _setup_global(sources, outer_radius, global_radius, link_norm: bool, abund_t
     # We do this here (even though its also in the density measurement), because if we can't measure a global
     #  temperature then its absurdly unlikely that we'll be able to measure a temperature profile, so we can avoid
     #  even trying and save some time.
-    single_temp_apec(sources, global_radius, link_norm=link_norm, min_counts=min_counts, min_sn=min_sn,
-                     over_sample=over_sample, num_cores=num_cores, abund_table=abund_table, group_spec=group_spec)
+    single_temp_apec(sources, global_radius, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                     num_cores=num_cores, abund_table=abund_table, group_spec=group_spec)
 
     has_glob_temp = []
     for src_ind, src in enumerate(sources):
         try:
-            src.get_temperature('tbabs*apec', global_out_rads[src_ind], group_spec=group_spec, min_counts=min_counts,
-                                min_sn=min_sn, over_sample=over_sample)
+            src.get_temperature(global_out_rads[src_ind], 'constant*tbabs*apec', group_spec=group_spec,
+                                min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
             has_glob_temp.append(True)
         except ModelNotAssociatedError:
             warn("The global temperature fit for {} has failed, and as such we're very unlikely to be able to measure "
@@ -61,10 +61,9 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                              temp_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]], global_radius: Quantity,
                              fit_method: str = "mcmc", num_walkers: int = 20, num_steps: int = 20000,
                              sb_pix_step: int = 1, sb_min_snr: Union[int, float] = 0.0, inv_abel_method: str = None,
-                             temp_min_snr: float = 20, link_norm: bool = True, abund_table: str = "angr",
-                             group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
-                             over_sample: float = None, num_cores: int = NUM_CORES, show_warn: bool = True) \
-        -> List[HydrostaticMass]:
+                             temp_min_snr: float = 20, abund_table: str = "angr", group_spec: bool = True,
+                             spec_min_counts: int = 5, spec_min_sn: float = None, over_sample: float = None,
+                             num_cores: int = NUM_CORES, show_warn: bool = True) -> List[HydrostaticMass]:
     """
     A convenience function that should allow the user to easily measure hydrostatic masses of a sample of galaxy
     clusters, elegantly dealing with any sources that have inadequate data or aren't fit properly. For the sake
@@ -108,9 +107,6 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
         'analytical' for models with an analytical solution to the inverse abel transform, or 'direct' for
         models which don't have an analytical solution. Default is None.
     :param int/float temp_min_snr: The minimum signal to noise for a temperature measurement annulus, default is 30.
-    :param bool link_norm: Sets whether the normalisation parameter is linked across the spectra in an individual
-        annulus during the XSPEC fit. Normally the default is False, but here I have set it to True so one global
-        normalisation profile is produced rather than separate profiles for individual ObsID-inst combinations.
     :param str abund_table: The abundance table to use for fitting, and the conversion factor required during density
         calculations.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
@@ -127,9 +123,8 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
         successful an entry of None will be added to the list.
     :rtype: List[HydrostaticMass]
     """
-    sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, link_norm, abund_table,
-                                                       group_spec, spec_min_counts, spec_min_sn, over_sample,
-                                                       num_cores)
+    sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, abund_table, group_spec,
+                                                       spec_min_counts, spec_min_sn, over_sample, num_cores)
     rads_dict = {str(sources[r_ind]): r for r_ind, r in enumerate(outer_rads)}
 
     # This checks and sets up a predictable structure for the models needed for this measurement.
@@ -152,8 +147,8 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
 
     # Attempt to measure their 3D temperature profiles
     temp_profs = onion_deproj_temp_prof(cut_sources, cut_rads, min_snr=temp_min_snr, min_counts=spec_min_counts,
-                                        min_sn=spec_min_sn, over_sample=over_sample, link_norm=link_norm,
-                                        abund_table=abund_table, num_cores=num_cores)
+                                        min_sn=spec_min_sn, over_sample=over_sample, abund_table=abund_table,
+                                        num_cores=num_cores)
     # This just allows us to quickly lookup the temperature profile we need later
     temp_prof_dict = {str(cut_sources[p_ind]): p for p_ind, p in enumerate(temp_profs)}
 
@@ -181,8 +176,10 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     # So I can return a list of profiles, a tad more elegant than fetching them from the sources sometimes
     final_mass_profs = []
     # Better to use a with statement for tqdm, so its shut down if something fails inside
-    with tqdm(desc="Generating hydrostatic mass profiles", total=len(sources)) as onwards:
+    prog_desc = "Generating {} hydrostatic mass profile"
+    with tqdm(desc=prog_desc.format("None"), total=len(sources)) as onwards:
         for src in sources:
+            onwards.set_description(prog_desc.format(src.name))
             # If every stage of this analysis has worked then we setup the hydro mass profile
             if str(src) in dens_prof_dict and dens_prof_dict[str(src)] is not None:
                 # This fetches out the correct density and temperature profiles
@@ -196,9 +193,11 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                 # Set up the hydrogen mass profile using the temperature radii as they will tend to be spaced a lot
                 #  wider than the density radii.
                 try:
-                    hy_mass = HydrostaticMass(t_prof, t_model, d_prof, d_model, t_prof.radii, t_prof.radii_err,
-                                              t_prof.deg_radii, fit_method, num_walkers, num_steps, show_warn=show_warn,
-                                              progress=False)
+                    rads = t_prof.radii.copy()[1:]
+                    rad_errs = t_prof.radii_err.copy()[1:]
+                    deg_rads = src.convert_radius(rads, 'deg')
+                    hy_mass = HydrostaticMass(t_prof, t_model, d_prof, d_model, rads, rad_errs, deg_rads, fit_method,
+                                              num_walkers, num_steps, show_warn=show_warn, progress=False)
                     # Add the profile to the source storage structure
                     src.update_products(hy_mass)
                     # Also put it into a list for returning
@@ -216,6 +215,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                 final_mass_profs.append(None)
 
             onwards.update(1)
+        onwards.set_description("complete")
 
     # In case only one source is being analysed
     if len(final_mass_profs) == 1:
