@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2021, 17:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -108,7 +108,7 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
         for src in sources:
             try:
                 # A temporary temperature variable
-                temp_temp = src.get_temperature("tbabs*apec", scale_radius)[0]
+                temp_temp = src.get_temperature("constant*tbabs*apec", scale_radius)[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
                 warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
                      "3keV".format(s=src.name))

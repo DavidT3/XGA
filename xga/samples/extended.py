@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 10:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -313,19 +313,20 @@ class ClusterSample(BaseSample):
 
         return Quantity(rads, 'kpc')
 
-    def Tx(self, model: str = 'tbabs*apec', outer_radius: Union[str, Quantity] = 'r500',
+    def Tx(self, model: str = 'constant*tbabs*apec', outer_radius: Union[str, Quantity] = 'r500',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
            min_sn: float = None, over_sample: float = None):
         """
         A get method for temperatures measured for the constituent clusters of this sample. An error will be
         thrown if temperatures haven't been measured for the given region (the default is R_500) and model (default
-        is the tbabs*apec model which single_temp_apec fits to cluster spectra). Any clusters for which temperature
-        fits failed will return NaN temperatures, and with temperature greater than 25keV is considered failed, any
-        temperature with a negative error value is considered failed, any temperature where the Tx-low err is less
-        than zero isn't returned, and any temperature where one of the errors is more than three times larger than
-        the other is considered failed.
+        is the constant*tbabs*apec model which single_temp_apec fits to cluster spectra). Any clusters for which
+        temperature fits failed will return NaN temperatures, and with temperature greater than 25keV is considered
+        failed, any temperature with a negative error value is considered failed, any temperature where the Tx-low
+        err is less than zero isn't returned, and any temperature where one of the errors is more than three times
+        larger than the other is considered failed.
 
-        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
@@ -632,9 +633,9 @@ class ClusterSample(BaseSample):
     #  make a scaling relation with a core excised temperature.
     def gm_Tx(self, rad_name: str, dens_model: str, prof_outer_rad: Union[Quantity, str], dens_method: str,
               x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+12, 'solMass'),
-              fit_method: str = 'odr', start_pars: list = None, model: str = 'tbabs*apec', group_spec: bool = True,
-              min_counts: int = 5, min_sn: float = None, over_sample: float = None,  pix_step: int = 1,
-              min_snr: Union[float, int] = 0.0, psf_corr: bool = True, psf_model: str = "ELLBETA",
+              fit_method: str = 'odr', start_pars: list = None, model: str = 'constant*tbabs*apec',
+              group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+              pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True, psf_model: str = "ELLBETA",
               psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, set_ids: List[int] = None) \
             -> ScalingRelation:
         """
@@ -718,7 +719,7 @@ class ClusterSample(BaseSample):
 
     def Lx_richness(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(60),
                     y_norm: Quantity = Quantity(1e+44, 'erg/s'), fit_method: str = 'odr', start_pars: list = None,
-                    model: str = 'tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
+                    model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
                     hi_en: Quantity = Quantity(2.0, 'keV'), inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                     group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                     over_sample: float = None) -> ScalingRelation:
@@ -788,8 +789,8 @@ class ClusterSample(BaseSample):
 
     def Lx_Tx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(4, 'keV'),
               y_norm: Quantity = Quantity(1e+44, 'erg/s'), fit_method: str = 'odr', start_pars: list = None,
-              model: str = 'tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-              tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+              model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
+              hi_en: Quantity = Quantity(2.0, 'keV'), tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
               lx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
               min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> ScalingRelation:
         """
@@ -870,7 +871,7 @@ class ClusterSample(BaseSample):
 
     def mass_Tx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(4, 'keV'),
                 y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
-                model: str = 'tbabs*apec', tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                model: str = 'constant*tbabs*apec', tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                 temp_model_name: str = None, dens_model_name: str = None) -> ScalingRelation:
         """
@@ -999,7 +1000,7 @@ class ClusterSample(BaseSample):
 
     def mass_Lx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(1e+44, 'erg/s'),
                 y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
-                model: str = 'tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
+                model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
                 hi_en: Quantity = Quantity(2.0, 'keV'), lx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                 temp_model_name: str = None, dens_model_name: str = None) -> ScalingRelation:

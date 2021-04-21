@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 15:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
 
 import warnings
 from typing import List, Union
@@ -138,7 +138,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
         # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
         #  limits. For this function they will be hardcoded, for simplicities sake, and we're only going to
-        #  check the temperature, as its the main thing we're fitting for with tbabs*apec
+        #  check the temperature, as its the main thing we're fitting for with constant*tbabs*apec
         if spectrum_checking:
             check_list = "{kT}"
             check_lo_lims = "{0.01}"

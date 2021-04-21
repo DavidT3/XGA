@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 16:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1953,7 +1953,7 @@ class BaseSource:
         ever be used by the user, just other parts of XGA, hence why I've asked for a spec_storage_key to be passed
         in rather than all the spectrum configuration options individually.
 
-        :param str model: The XSPEC definition of the model used to perform the fit. e.g. tbabs*apec
+        :param str model: The XSPEC definition of the model used to perform the fit. e.g. constant*tbabs*apec
         :param tab_line: The table line with the fit data.
         :param dict lums: The various luminosities measured during the fit.
         :param str spec_storage_key: The storage key of any spectrum that was used in this particular fit. The
@@ -2023,7 +2023,8 @@ class BaseSource:
         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
         of such numpy arrays, with the keys corresponding to parameter names.
 
-        :param str model: The name of the fitted model that you're requesting the results from (e.g. tbabs*apec).
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
@@ -2101,7 +2102,8 @@ class BaseSource:
         for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
         the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
 
-        :param str model: The name of the fitted model that you're requesting the luminosities from (e.g. tbabs*apec).
+        :param str model: The name of the fitted model that you're requesting the luminosities
+            from (e.g. constant*tbabs*apec).
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in

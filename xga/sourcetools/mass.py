@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
 
 from typing import Union, List
 from warnings import warn
@@ -44,8 +44,8 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     has_glob_temp = []
     for src_ind, src in enumerate(sources):
         try:
-            src.get_temperature('tbabs*apec', global_out_rads[src_ind], group_spec=group_spec, min_counts=min_counts,
-                                min_sn=min_sn, over_sample=over_sample)
+            src.get_temperature('constant*tbabs*apec', global_out_rads[src_ind], group_spec=group_spec,
+                                min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
             has_glob_temp.append(True)
         except ModelNotAssociatedError:
             warn("The global temperature fit for {} has failed, and as such we're very unlikely to be able to measure "
