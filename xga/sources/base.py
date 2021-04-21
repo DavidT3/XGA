@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 31/03/2021, 14:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 16:46. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -796,7 +796,7 @@ class BaseSource:
                         for model in ann_results[set_id]:
                             rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model],
                                                       ann_obs_order[set_id][model])
-                            if model == "tbabs*apec":
+                            if model == "constant*tbabs*apec":
                                 temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
                                 self.update_products(temp_prof)
 
@@ -811,7 +811,7 @@ class BaseSource:
                                     # Otherwise we can just add a single normalisation profile
                                     self.update_products(norm_profs)
 
-                                if 'Abundanc' in rel_ann_spec.get_results(0, 'tbabs*apec'):
+                                if 'Abundanc' in rel_ann_spec.get_results(0, 'constant*tbabs*apec'):
                                     met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
                                     self.update_products(met_prof)
                     except (NoProductAvailableError, ValueError):

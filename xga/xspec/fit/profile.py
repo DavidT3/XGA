@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 11:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 16:46. Copyright (c) David J Turner
 
 from typing import List, Union
 
@@ -20,7 +20,7 @@ from ...sources import BaseSource
 def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, List[Quantity]],
                              start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
                              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
-                             freeze_met: bool = True, link_norm: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
+                             freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
                              hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                              abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
                              min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
@@ -41,12 +41,11 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
     :param bool freeze_met: Whether the metallicity parameter in the fit should be frozen.
-    :param bool link_norm: Whether the normalisations of different spectra should be linked during fitting.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
-    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which
-        should be equivelant to 1sigma errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec
-        /manual/XSerror.html) correctly.
+    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
+        equivelant to 1σ errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSerror.html)
+        correctly.
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
@@ -67,13 +66,14 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
     """
+
     # We make sure the requested sets of annular spectra have actually been generated
     spectrum_set(sources, radii, group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # Unfortunately, a very great deal of this function is going to be copied from the original single_temp_apec
-    model = "tbabs*apec"
-    par_names = "{nH kT Abundanc Redshift norm}"
+    model = "constant*tbabs*apec"
+    par_names = "{factor nH kT Abundanc Redshift norm}"
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
     lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
 
@@ -116,25 +116,21 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
             t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = "{{{0} {1} {2} {3} {4}}}".format(source.nH.to("10^22 cm^-2").value, t,
-                                                          start_met, source.redshift, 1.)
+            par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, t, start_met,
+                                                              source.redshift, 1.)
 
             # Set up the TCL list that defines which parameters are frozen, dependant on user input
             if freeze_nh and freeze_met:
-                freezing = "{T F T T F}"
+                freezing = "{F T F T T F}"
             elif not freeze_nh and freeze_met:
-                freezing = "{F F T T F}"
+                freezing = "{F F F T T F}"
             elif freeze_nh and not freeze_met:
-                freezing = "{T F F T F}"
+                freezing = "{F T F F T F}"
             elif not freeze_nh and not freeze_met:
-                freezing = "{F F F T F}"
+                freezing = "{F F F F T F}"
 
-            # Set up the TCL list that defines which parameters are linked across different spectra,
-            #  dependant on user input
-            if link_norm:
-                linking = "{T T T T T}"
-            else:
-                linking = "{T T T T F}"
+            # Set up the TCL list that defines which parameters are linked across different spectra
+            linking = "{F T T T T T}"
 
             # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
             #  limits. For this function they will be hardcoded, for simplicities sake, and we're only going to
@@ -156,7 +152,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                                                         specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                         par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf,
                                                         source.redshift, spectrum_checking, check_list, check_lo_lims,
-                                                        check_hi_lims, check_err_lims)
+                                                        check_hi_lims, check_err_lims, True)
 
             try:
                 res = ann_spec.get_results(0, 'tbabs*apec', 'kT')

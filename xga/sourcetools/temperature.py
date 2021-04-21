@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/04/2021, 10:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 16:46. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -165,8 +165,8 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                           over_sample: float = None, one_rmf: bool = True, link_norm: bool = True,
-                           abund_table: str = "angr", num_cores: int = NUM_CORES) -> List[Quantity]:
+                           over_sample: float = None, one_rmf: bool = True, abund_table: str = "angr",
+                           num_cores: int = NUM_CORES) -> List[Quantity]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using signal to noise measurements
@@ -210,9 +210,6 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
-    :param bool link_norm: Sets whether the normalisation parameter is linked across the spectra in an individual
-        annulus during the XSPEC fit. Normally the default is False, but here I have set it to True so one global
-        normalisation profile is produced rather than separate profiles for individual ObsID-inst combinations.
     :param str abund_table: The abundance table to use during the XSPEC fits.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :return: A list of non-scalar astropy quantities containing the annular radii used to generate the
@@ -267,8 +264,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         sources = sources[0]
 
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                             over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, link_norm=link_norm,
-                             abund_table=abund_table)
+                             over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, abund_table=abund_table)
 
     return all_rads
 
