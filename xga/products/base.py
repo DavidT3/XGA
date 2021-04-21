@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/04/2021, 09:58. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 08:30. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -735,7 +735,7 @@ class BaseProfile1D:
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
         #  we try maximum likelihood, and if that fails then we fall back on the default start parameters in the
         #  model.
-        curve_fit_model, success = self._curve_fit(deepcopy(model), 10, show_warn=False)
+        curve_fit_model, success = self.nlls_fit(deepcopy(model), 10, show_warn=False)
         if success or curve_fit_model.fit_warning == "Very large parameter uncertainties":
             base_start_pars = np.array([p.value for p in curve_fit_model.model_pars])
         else:
@@ -841,7 +841,7 @@ class BaseProfile1D:
             model.cut_off = cut_off
 
             # If the fit is considered to have not completely failed then we store distributions and parameters
-            #  in the model intance
+            #  in the model instance
             if success:
                 # I am not going to thin the chains, apparently that can actually increase variance?
                 flat_samp = sampler.get_chain(discard=cut_off, flat=True)
@@ -887,7 +887,7 @@ class BaseProfile1D:
 
         return model, success
 
-    def _curve_fit(self, model: BaseModel1D, num_samples: int, show_warn: bool) -> Tuple[BaseModel1D, bool]:
+    def nlls_fit(self, model: BaseModel1D, num_samples: int, show_warn: bool) -> Tuple[BaseModel1D, bool]:
         """
         A function to fit an XGA model instance to the data in this profile using the non-linear least squares
         curve_fit routine from scipy, this should be called through .fit() for full functionality
@@ -980,6 +980,7 @@ class BaseProfile1D:
         return model, success
 
     def _odr_fit(self, model: BaseModel1D, show_warn: bool):
+        # TODO MAKE THIS A NON-INTERNAL METHOD WHEN ITS WRITTEN
         # TODO REMEMBER TO USE THE FIT RADII PROPERTY
         # Tell the model whether we think the fit was successful or not
         # model.success = success
@@ -1063,7 +1064,7 @@ class BaseProfile1D:
         if not already_done and method == 'mcmc':
             model, success = self.emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn, num_samples)
         elif not already_done and method == 'curve_fit':
-            model, success = self._curve_fit(model, num_samples, show_warn)
+            model, success = self.nlls_fit(model, num_samples, show_warn)
         elif not already_done and method == 'odr':
             model, success = self._odr_fit(model, show_warn)
         else:

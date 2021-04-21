@@ -1,9 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/04/2021, 12:20. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 08:30. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
 
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy.constants import m_p
 from astropy.units import Quantity, kpc
@@ -237,7 +238,7 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
     return sb_prof
 
 
-def onion_peel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity] = "r500",
+def _onion_peel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity] = "r500",
                     num_dens: bool = True, use_peak: bool = True, pix_step: int = 1, min_snr: Union[int, float] = 0.0,
                     abund_table: str = "angr", lo_en: Quantity = Quantity(0.5, 'keV'),
                     hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True, psf_model: str = "ELLBETA",
@@ -245,18 +246,20 @@ def onion_peel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                     group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                     obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
                     conv_outer_radius: Quantity = "r500",  num_cores: int = NUM_CORES):
+
+    raise NotImplementedError("This isn't finished at the moment")
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
                                                       hi_en, group_spec, min_counts, min_sn, over_sample, obs_id, inst,
                                                       conv_temp, conv_outer_radius, num_cores)
 
-    raise NotImplementedError("This is still being worked on")
-
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
 
     final_dens_profs = []
+    # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
+    e_to_p_ratio = NHC[abund_table]
     with tqdm(desc="Generating density profiles based on onion-peeled data", total=len(sources)) as dens_onwards:
         for src_ind, src in enumerate(sources):
             sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
@@ -269,8 +272,11 @@ def onion_peel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
 
             rad_bounds = sb_prof.annulus_bounds.to("cm")
             vol_intersects = shell_ann_vol_intersect(rad_bounds, rad_bounds)
+            print(vol_intersects.min())
+            plt.imshow(vol_intersects.value)
+            plt.show()
             # Generating random normalisation profile realisations from DATA
-            sb_reals = sb_prof.generate_data_realisations(num_samples)
+            sb_reals = sb_prof.generate_data_realisations(num_samples) * sb_prof.areas
 
             # Using a loop here is ugly and relatively slow, but it should be okay
             transformed = []
@@ -278,26 +284,62 @@ def onion_peel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                 transformed.append(np.linalg.inv(vol_intersects.T) @ sb_reals[i, :])
 
             transformed = Quantity(transformed)
-            print(transformed)
-            if sb_prof.values_unit.is_equivalent('ct/(s*arcmin**2)'):
-                # If the SB profile is in count/s/arcmin^2 then the abel transform will have
-                #  units of ct/s/(arcmin^2 kpc), so I create a quantity which will convert the arcmin^2 to kpc^2
-                conv = Quantity(ang_to_rad(Quantity(1, 'arcmin'), src.redshift, src.cosmo).to("kpc").value,
-                                'kpc/arcmin') ** 2
-                transformed /= conv
-            elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
-                pass
-            else:
-                raise NotImplementedError(
-                    "Haven't yet added support for surface brightness profiles in other units, "
-                    "don't really know you even got here.")
-
-            # We convert the volume element to cm^3 now, this is the unit we expect for the density conversion
-            print(transformed)
-            transformed = transformed.to('ct/(s*cm^3)')
-            print(transformed)
+            print(np.percentile(transformed, 50, axis=0))
             import sys
             sys.exit()
+
+            # We convert the volume element to cm^3 now, this is the unit we expect for the density conversion
+            transformed = transformed.to('ct/(s*cm^3)')
+            num_dens_dist = np.sqrt(transformed * conv_factors[src_ind]) * (1 + e_to_p_ratio)
+
+            print(np.where(np.isnan(np.sqrt(transformed * conv_factors[src_ind])))[0].shape)
+            import sys
+            sys.exit()
+
+            med_num_dens = np.percentile(num_dens_dist, 50, axis=1)
+            num_dens_err = np.std(num_dens_dist, axis=1)
+
+            # Setting up the instrument and ObsID to pass into the density profile definition
+            if obs_id[src_ind] is None:
+                cur_inst = "combined"
+                cur_obs = "combined"
+            else:
+                cur_inst = inst[src_ind]
+                cur_obs = obs_id[src_ind]
+
+            dens_rads = sb_prof.radii.copy()
+            dens_rads_errs = sb_prof.radii_err.copy()
+            dens_deg_rads = sb_prof.deg_radii.copy()
+            print(np.where(np.isnan(transformed)))
+            print(med_num_dens)
+            try:
+                # I now allow the user to decide if they want to generate number or mass density profiles using
+                #  this function, and here is where that distinction is made
+                if num_dens:
+                    dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
+                                             cur_inst, 'onion', sb_prof, dens_rads_errs, num_dens_err,
+                                             deg_radii=dens_deg_rads)
+                else:
+                    # The mean molecular weight multiplied by the proton mass
+                    conv_mass = MEAN_MOL_WEIGHT * m_p
+                    dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens * conv_mass).to('Msun/Mpc^3'),
+                                             sb_prof.centre, src.name, cur_obs, cur_inst, 'onion', sb_prof,
+                                             dens_rads_errs, (num_dens_err * conv_mass).to('Msun/Mpc^3'),
+                                             deg_radii=dens_deg_rads)
+
+                src.update_products(dens_prof)
+                final_dens_profs.append(dens_prof)
+
+            # If, for some reason, there are some inf/NaN values in any of the quantities passed to the GasDensity3D
+            #  declaration, this is where an error will be thrown
+            except ValueError:
+                final_dens_profs.append(None)
+                warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
+                     " in it.".format(src.name))
+
+            dens_onwards.update(1)
+
+    return final_dens_profs
 
 
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
