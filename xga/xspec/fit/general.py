@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 14:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 15:36. Copyright (c) David J Turner
 
 import warnings
 from typing import List, Union
@@ -118,7 +118,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         # Whatever start temperature is passed gets converted to keV, this will be put in the template
         t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
         # Another TCL list, this time of the parameter start values for this model.
-        par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1, source.nH.to("10^22 cm^-2").value, t, start_met,
+        par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, t, start_met,
                                                           source.redshift, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependant on user input
@@ -174,10 +174,10 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
               lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_pho_index: float = 1.,
               lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-              freeze_nh: bool = True, link_norm: bool = False, par_fit_stat: float = 1., lum_conf: float = 68.,
-              abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
-              min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-              num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr')):
+              freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
+              fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+              over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
+              timeout: Quantity = Quantity(1, 'hr')):
     """
     This is a convenience function for fitting a tbabs absorbed powerlaw (or zpowerlw if redshifted
     is selected) to source spectra.
@@ -199,7 +199,6 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.    :param start_pho_index:
-    :param bool link_norm: Whether the normalisations of different spectra should be linked during fitting.
     :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which
         should be equivelant to 1sigma errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec
         /manual/XSerror.html) correctly.
@@ -221,7 +220,6 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
     """
-    raise NotImplementedError("Making some changes to XSPEC fitting and haven't implemented support here")
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
@@ -232,11 +230,11 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
     lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
     if redshifted:
-        model = "tbabs*zpowerlw"
-        par_names = "{nH PhoIndex Redshift norm}"
+        model = "constant*tbabs*zpowerlw"
+        par_names = "{factor nH PhoIndex Redshift norm}"
     else:
-        model = "tbabs*powerlaw"
-        par_names = "{nH PhoIndex norm}"
+        model = "constant*tbabs*powerlaw"
+        par_names = "{factor nH PhoIndex norm}"
 
     script_paths = []
     outfile_paths = []
@@ -260,31 +258,27 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         if redshifted and source.redshift is None:
             raise ValueError("You cannot supply a source without a redshift if you have elected to fit zpowerlw.")
         elif redshifted and source.redshift is not None:
-            par_values = "{{{0} {1} {2} {3}}}".format(source.nH.to("10^22 cm^-2").value, start_pho_index,
-                                                      source.redshift, 1.)
+            par_values = "{{{0} {1} {2} {3} {4}}}".format(1., source.nH.to("10^22 cm^-2").value, start_pho_index,
+                                                          source.redshift, 1.)
         else:
-            par_values = "{{{0} {1} {2}}}".format(source.nH.to("10^22 cm^-2").value, start_pho_index, 1.)
+            par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, start_pho_index, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependant on user input
         if redshifted and freeze_nh:
-            freezing = "{T F T F}"
+            freezing = "{F T F T F}"
         elif not redshifted and freeze_nh:
-            freezing = "{T F F}"
+            freezing = "{F T F F}"
         elif redshifted and not freeze_nh:
-            freezing = "{F F T F}"
+            freezing = "{F F F T F}"
         elif not redshifted and not freeze_nh:
-            freezing = "{F F F}"
+            freezing = "{F F F F}"
 
         # Set up the TCL list that defines which parameters are linked across different spectra,
         #  dependant on user input
-        if redshifted and link_norm:
-            linking = "{T T T T}"
-        elif not redshifted and link_norm:
-            linking = "{T T T}"
-        if redshifted and not link_norm:
-            linking = "{T T T F}"
-        elif not redshifted and not link_norm:
-            linking = "{T T F}"
+        if redshifted:
+            linking = "{F T T T T}"
+        else:
+            linking = "{F T T T}"
 
         # If the powerlaw with redshift has been chosen, then we use the redshift attached to the source object
         #  If not we just pass a filler redshift and the luminosities are invalid
@@ -298,7 +292,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
-                                                    "{}", "{}", "{}")
+                                                    "{}", "{}", "{}", True)
 
         # If the fit has already been performed we do not wish to perform it again
         try:
