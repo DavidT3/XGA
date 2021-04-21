@@ -64,6 +64,19 @@ set par_values {pv}
 set linking {lk}
 set freezing {fr}
 
+# This flag is set to true if we are using a multiplicative constant to account for the different normalisations
+#  you tend to get from different observations/instruments. If so then the first spectrum's factor will be frozen
+#  at one, as long as the first parameter in the par_names list is 'factor'
+set norm_scale {ns}
+if {{($norm_scale == True) && ([lindex $par_names 0] != "factor")}} {{
+    # If the outside world has set norm_scale to True, but the first parameter of the model isn't a constant factor,
+    #  then we play it safe and change the norm_scale value so no constant is expected
+    set norm_scale False
+}} elseif {{($norm_scale == True) && ([lindex $par_names 0] == "factor")}} {{
+    # Makes absolutely sure that the start value of the constant is 1 if it is there
+    lset par_values 0 1
+}}
+
 # The confidence interval for parameter error estimation, I don't quite know what the parameter corresponds to,
 #  but the tutorials say that 2.706 is equivalent to the 90% confidence region, 9.0 is equivalent to the 3 sigma
 #  range, and 1.0 is equivelant to 1sigma
@@ -85,6 +98,15 @@ set lum_upp_lims {lul}
 # Running the spectral gauntlet
 #################################################
 if {{$run_pre_check == True}} {{
+
+    # Here we set up a copy of the freezing list
+    set check_freezing $freezing
+    # If we have a constant out the front that is designed to help scale the normalisation when doing
+    #  simultaneous fits then it has to be frozen for this process - as we're fitting one spectrum at a time
+    #  for the checks
+    if {{$norm_scale == True}} {{
+        lset check_freezing 0 T
+    }}
 
     # Setting up arrays to store the limits in, that way future code can just pass a parameter name and
     #  get the required limit back
@@ -153,7 +175,7 @@ if {{$run_pre_check == True}} {{
         # All link parameters are set to False, as these spectra all need to have models fit separately for
         #  the cleaning step
         set link_arr($temp_key) F
-        set freeze_arr($temp_key) [lindex $freezing $i]
+        set freeze_arr($temp_key) [lindex $check_freezing $i]
         }}
 
     # Here we iterate through the parameters and set them up in the XSPEC model
@@ -170,7 +192,6 @@ if {{$run_pre_check == True}} {{
                 }}
             lappend sep_par_lst $cur_par
         }} else {{
-            puts $sep_par_lst
             set sep_cnt 1
             set sep_par_lst {{$cur_par}}
         }}
@@ -232,7 +253,6 @@ if {{$run_pre_check == True}} {{
 
             # If the parameter meets our quality cuts then the spectrum is added to the good_spec_paths list
             if {{$par_val > $check_lo_lim($pname) && $par_val < $check_hi_lim($pname) && $lo_err < $check_err_lim($pname) && $hi_err < $check_err_lim($pname)}} {{
-                puts $cur_sp
                 lappend good_spec_paths $cur_sp
             }}
         }}
@@ -391,8 +411,10 @@ for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
         }}
 
     # And finally if the current parameter isn't meant to be able to vary then we must freeze it, or thaw it
-    #  if it should be allowed to vary
-    if {{$freeze_arr($cur_par) == "T"}} {{
+    #  if it should be allowed to vary. If we know that we have a constant at the front to deal with different
+    #  norms for different observations, and that the current parameter is the first model's factor, then we freeze it
+    #  at one, whereas all the rest are allowed to vary
+    if {{($freeze_arr($cur_par) == "T") || (($norm_scale == True) && ($i == 1))}} {{
         freeze $i
     }} else {{
         thaw $i
@@ -400,6 +422,7 @@ for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
 
     incr sep_cnt
     }}
+
 #################################################
 # Run fit and calculate final uncertainties
 #################################################
