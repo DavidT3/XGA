@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:46. Copyright (c) David J Turner
 
 import os
 import shutil
@@ -262,7 +262,7 @@ def xspec_call(xspec_func):
 
                             # The add_fit_data method formats the luminosities nicely, so we grab them back out
                             #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
-                            processed_lums = spec.get_luminosities(, model
+                            processed_lums = spec.get_luminosities(model)
                             if spec.instrument not in inst_lums:
                                 inst_lums[spec.instrument] = processed_lums
 
