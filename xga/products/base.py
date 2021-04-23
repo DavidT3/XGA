@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 08:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/04/2021, 16:47. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1019,8 +1019,12 @@ class BaseProfile1D:
         method = method.lower()
 
         # This chunk is just checking inputs and making sure they're valid
-        # Put the allowed models for this profile type into a string
-        allowed = ", ".join(PROF_TYPE_MODELS[self._prof_type])
+        if self._prof_type in PROF_TYPE_MODELS:
+            # Put the allowed models for this profile type into a string
+            allowed = ", ".join(PROF_TYPE_MODELS[self._prof_type])
+        else:
+            allowed = ""
+
         if self._prof_type == "base":
             raise XGAFitError("A BaseProfile1D object currently cannot have a model fitted to it, as there"
                               " is no physical context.")

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/04/2021, 16:47. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -17,7 +17,7 @@ from astropy.units import Quantity, UnitBase, Unit, UnitConversionError, deg
 from fitsio import FITS
 from numpy import ndarray
 from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
-from regions import read_ds9, PixelRegion, CompoundSkyRegion
+from regions import read_ds9, PixelRegion
 
 from .. import xga_conf
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
@@ -1522,147 +1522,6 @@ class BaseSource:
         sn = rt.signal_to_noise(src_mask, bck_mask, exp_corr, allow_negative)
 
         return sn
-
-    def get_sas_region(self, reg_type: str, obs_id: str, inst: str, output_unit: UnitBase = xmm_sky) \
-            -> Tuple[str, str]:
-        """
-        Converts region objects into strings that can be used as part of a SAS command; for instance producing
-        a spectrum within one region. This method returns both the source region and associated background
-        region with nuisance objects drilled out.
-
-        :param str reg_type: The type of region to generate a SAS region string for.
-        :param str obs_id: The ObsID for which we wish to generate the SAS region string.
-        :param str inst: The XMM instrument for which we wish to generate the SAS region string.
-        :param UnitBase output_unit: The distance unit used by the output SAS region string.
-        :return: A SAS region which will include source emission and exclude nuisance sources, and
-            another SAS region which will include background emission and exclude nuisance sources.
-        :rtype: Tuple[str, str]
-        """
-
-        def sas_shape(reg: SkyRegion, im: Image) -> str:
-            """
-            This will convert the input SkyRegion into an appropriate SAS compatible region string, for use
-            with tools such as evselect.
-
-            :param SkyRegion reg: The region object to convert into a SAS region.
-            :param Image im: An XGA image object for use in unit conversions.
-            :return: A SAS region string describing the input SkyRegion
-            :rtype: str
-            """
-            # This function is just the same process implemented for different region shapes and types
-            # I convert the width/height/radius in degrees to the chosen output_unit
-            # Then construct a SAS region string and return it.
-            if type(reg) == EllipseSkyRegion:
-                cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
-                conv_cen = im.coord_conv(cen, output_unit)
-                # Have to divide the width by two, I need to know the half-width for SAS regions
-                w = Quantity([reg.center.ra.value + (reg.width.value / 2), reg.center.dec.value], 'deg')
-                conv_w = abs((im.coord_conv(w, output_unit) - conv_cen)[0])
-                # Have to divide the height by two, I need to know the half-height for SAS regions
-                h = Quantity([reg.center.ra.value, reg.center.dec.value + (reg.height.value / 2)], 'deg')
-                conv_h = abs((im.coord_conv(h, output_unit) - conv_cen)[1])
-                shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
-                                                                                 cy=conv_cen[1].value,
-                                                                                 w=conv_w.value, h=conv_h.value,
-                                                                                 rot=reg.angle.value)
-            elif type(reg) == CircleSkyRegion:
-                cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
-                conv_cen = im.coord_conv(cen, output_unit)
-                rad = Quantity([reg.center.ra.value + reg.radius.value, reg.center.dec.value], 'deg')
-                conv_rad = abs((im.coord_conv(rad, output_unit) - conv_cen)[0])
-                shape_str = "(({t}) IN circle({cx},{cy},{r}))".format(t=c_str, cx=conv_cen[0].value,
-                                                                      cy=conv_cen[1].value, r=conv_rad.value)
-            elif type(reg) == CompoundSkyRegion and type(reg.region1) == EllipseSkyRegion:
-                cen = Quantity([reg.region1.center.ra.value, reg.region1.center.dec.value], 'deg')
-                conv_cen = im.coord_conv(cen, output_unit)
-                w_i = Quantity([reg.region1.center.ra.value + (reg.region2.width.value / 2),
-                                reg.region1.center.dec.value], 'deg')
-                conv_w_i = abs((im.coord_conv(w_i, output_unit) - conv_cen)[0])
-                w_o = Quantity([reg.region1.center.ra.value + (reg.region1.width.value / 2),
-                                reg.region1.center.dec.value], 'deg')
-                conv_w_o = abs((im.coord_conv(w_o, output_unit) - conv_cen)[0])
-
-                h_i = Quantity([reg.region1.center.ra.value,
-                                reg.region1.center.dec.value + (reg.region2.height.value / 2)], 'deg')
-                conv_h_i = abs((im.coord_conv(h_i, output_unit) - conv_cen)[1])
-                h_o = Quantity([reg.region1.center.ra.value,
-                                reg.region1.center.dec.value + (reg.region1.height.value / 2)], 'deg')
-                conv_h_o = abs((im.coord_conv(h_o, output_unit) - conv_cen)[1])
-
-                shape_str = "(({t}) IN elliptannulus({cx},{cy},{wi},{hi},{wo},{ho},{rot},{rot}))"
-                shape_str = shape_str.format(t=c_str, cx=conv_cen[0].value, cy=conv_cen[1].value,
-                                             wi=conv_w_i.value, hi=conv_h_i.value, wo=conv_w_o.value,
-                                             ho=conv_h_o.value, rot=reg.region1.angle.value)
-            elif type(reg) == CompoundSkyRegion and type(reg.region1) == CircleSkyRegion:
-                cen = Quantity([reg.region1.center.ra.value, reg.region1.center.dec.value], 'deg')
-                conv_cen = im.coord_conv(cen, output_unit)
-                r_i = Quantity([reg.region1.center.ra.value + reg.region2.radius.value,
-                                reg.region1.center.dec.value], 'deg')
-                conv_r_i = abs((im.coord_conv(r_i, output_unit) - conv_cen)[0])
-                r_o = Quantity([reg.region1.center.ra.value + reg.region1.radius.value,
-                                reg.region1.center.dec.value], 'deg')
-                conv_r_o = abs((im.coord_conv(r_o, output_unit) - conv_cen)[0])
-
-                shape_str = "(({t}) IN annulus({cx},{cy},{ri},{ro}))"
-                shape_str = shape_str.format(t=c_str, cx=conv_cen[0].value, cy=conv_cen[1].value,
-                                             ri=conv_r_i.value, ro=conv_r_o.value)
-            else:
-                shape_str = ""
-                raise TypeError("{} is an illegal region type for this method, "
-                                "I don't even know how you got here".format(type(reg)))
-
-            return shape_str
-
-        allowed_rtype = ["r2500", "r500", "r200", "region", "custom", "point"]
-
-        if output_unit == xmm_det:
-            c_str = "DETX,DETY"
-        elif output_unit == xmm_sky:
-            c_str = "X,Y"
-        else:
-            raise NotImplementedError("Only detector and sky coordinates are currently "
-                                      "supported for generating SAS region strings.")
-
-        if type(self) == BaseSource:
-            raise TypeError("BaseSource class does not have the necessary information "
-                            "to select a source region.")
-        elif obs_id not in self.obs_ids:
-            raise NotAssociatedError("The ObsID {o} is not associated with {s}.".format(o=obs_id, s=self.name))
-        elif reg_type not in allowed_rtype:
-            raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-        elif reg_type == "region":
-            source, back = self.source_back_regions("region", obs_id)
-            source_interlopers = self.within_region(source)
-            background_interlopers = self.within_region(back)
-        elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
-            raise ValueError("There is no {r} associated with {s}".format(r=reg_type, s=self.name))
-        elif reg_type != "region" and reg_type in self._radii:
-            source, back = self.source_back_regions(reg_type, obs_id)
-            source_interlopers = self.within_region(source)
-            background_interlopers = self.within_region(back)
-        elif reg_type != "region" and reg_type not in self._radii:
-            raise ValueError("{} is a valid region type, but is not associated with this "
-                             "source.".format(reg_type))
-        else:
-            raise ValueError("OH NO")
-
-        rel_im = self.get_products("image", obs_id, inst, just_obj=True)[0]
-        source = sas_shape(source, rel_im)
-        src_interloper = [sas_shape(i, rel_im) for i in source_interlopers]
-        back = sas_shape(back, rel_im)
-        back_interloper = [sas_shape(i, rel_im) for i in background_interlopers]
-
-        if len(src_interloper) == 0:
-            final_src = source
-        else:
-            final_src = source + " &&! " + " &&! ".join(src_interloper)
-
-        if len(back_interloper) == 0:
-            final_back = back
-        else:
-            final_back = back + " &&! " + " &&! ".join(back_interloper)
-
-        return final_src, final_back
 
     def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity,
                              deg_central_coord: Quantity, interloper_regions: np.ndarray = None) -> np.ndarray:
