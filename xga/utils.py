@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 10:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 17:08. Copyright (c) David J Turner
 
 import json
 import os
@@ -348,6 +348,8 @@ else:
     # Read dataframe of ObsIDs and pointing coordinates into constant
     CENSUS, BLACKLIST = observation_census(xga_conf)
     OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
+    if not os.path.exists(OUTPUT + "profiles"):
+        os.makedirs(OUTPUT + "profiles")
 
     if "num_cores" in xga_conf["XGA_SETUP"]:
         # If the user has set a number of cores in the config file then we'll use that.

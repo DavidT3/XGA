@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 15:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 17:08. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1611,7 +1611,7 @@ class BaseProfile1D:
         :rtype: str
         """
         if self._save_path is None:
-            temp_path = OUTPUT + "{pt}_{sn}_{id}.xga"
+            temp_path = OUTPUT + "profiles/{sn}/{pt}_{sn}_{id}.xga"
             rand_prof_id = randint(0, 1e+8)
             while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)):
                 rand_prof_id = randint(0, 1e+8)
