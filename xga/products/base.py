@@ -1,9 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 10:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 15:22. Copyright (c) David J Turner
 
 import inspect
 import os
+import pickle
 from copy import deepcopy
+from random import randint
 from typing import Tuple, List, Dict, Union
 from warnings import warn
 
@@ -21,7 +23,7 @@ from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitErro
     ModelNotAssociatedError
 from ..models import PROF_TYPE_MODELS, BaseModel1D, MODEL_PUBLICATION_NAMES
 from ..models.fitting import log_likelihood, log_prob
-from ..utils import SASERROR_LIST, SASWARNING_LIST
+from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT
 
 
 class BaseProduct:
@@ -687,6 +689,8 @@ class BaseProfile1D:
             self._outer_rad = radii[-1] + radii_err[-1]
         else:
             self._outer_rad = radii[-1]
+
+        self._save_path = None
 
     def emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
                   num_samples: int) -> Tuple[BaseModel1D, bool]:
@@ -1577,6 +1581,43 @@ class BaseProfile1D:
 
         # And of course actually showing it
         plt.show()
+
+    def save(self, save_path: str = None):
+        """
+        This method pickles and saves the profile object. This will be called automatically when the profile
+        is initialised, and when changes are made to the profile (such as when a model is fitted). The save
+        file is a pickled version of this object.
+
+        :param str save_path: The path where this profile should be saved. By default this is None, which means
+            this method will use the save_path attribute of the profile.
+        """
+        #  Checks to see if the user has supplied their own custom save path.
+        if save_path is None and self._save_path is not None:
+            save_path = self.save_path
+        elif save_path is None and self._save_path is None:
+            raise TypeError("Base profiles cannot be saved")
+
+        # Pickles and saves this profile instance.
+        with open(save_path, 'wb') as picklo:
+            pickle.dump(self, picklo)
+
+    @property
+    def save_path(self) -> str:
+        """
+        Property getter that assembles the default XGA save path of this profile. The file name contains
+        limited information; the type of profile, the source name, and a random integer.
+
+        :return: The default XGA save path for this profile.
+        :rtype: str
+        """
+        if self._save_path is None:
+            temp_path = OUTPUT + "{pt}_{sn}_{id}.xga"
+            rand_prof_id = randint(0, 1e+8)
+            while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)):
+                rand_prof_id = randint(0, 1e+8)
+            self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)
+
+        return self._save_path
 
     @property
     def good_model_fits(self) -> List:
