@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/04/2021, 16:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 10:39. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -585,6 +585,15 @@ class BaseProfile1D:
             raise ValueError("The values_err quantity has NaN or infinite values")
         if deg_radii is not None and (np.isnan(deg_radii).any() or np.isinf(deg_radii).any()):
             raise ValueError("The deg_radii quantity has NaN or infinite values")
+
+        # And now we will check that no uncertainty values are negative, as that does not make sense yet can
+        #  happen sometimes when XSPEC cannot constrain a parameter (for instance).
+        if radii_err is not None and (radii_err < 0).any():
+            raise ValueError("The radii_err quantity has negative values, which does not make sense "
+                             "for an uncertainty.")
+        if values_err is not None and (values_err < 0).any():
+            raise ValueError("The radii_err quantity has negative values, which does not make sense "
+                             "for an uncertainty.")
 
         # Storing the key values in attributes
         self._radii = radii
