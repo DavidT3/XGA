@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 17:25. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1093,6 +1093,8 @@ class BaseProfile1D:
         elif not already_done and not success:
             self._bad_model_fits[method][model.name] = model
 
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
         return model
 
     def allowed_models(self):
@@ -1199,6 +1201,9 @@ class BaseProfile1D:
             raise ValueError("Please only add successful models to this profile.")
         else:
             self._good_model_fits[method][model.name] = model
+
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     def get_sampler(self, model: str) -> em.EnsembleSampler:
         """
@@ -1781,6 +1786,8 @@ class BaseProfile1D:
         Setter for the name attribute of this profile, what source object it was derived from.
         """
         self._src_name = new_name
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     @property
     def obs_id(self) -> str:
@@ -1849,6 +1856,8 @@ class BaseProfile1D:
         if not isinstance(new_name, str):
             raise TypeError("Axis labels must be strings!")
         self._y_axis_name = new_name
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     @property
     def associated_set_storage_key(self) -> str:
@@ -1911,6 +1920,8 @@ class BaseProfile1D:
         :param Quantity new_val: The new value for the normalisation of x-axis data.
         """
         self._x_norm = new_val
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     @property
     def y_norm(self) -> Quantity:
@@ -1929,6 +1940,8 @@ class BaseProfile1D:
         :param Quantity new_val: The new value for the normalisation of y-axis data.
         """
         self._y_norm = new_val
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     @property
     def fit_options(self) -> List[str]:

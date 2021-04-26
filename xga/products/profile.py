@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 18:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 17:25. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -211,6 +211,9 @@ class SurfaceBrightness1D(BaseProfile1D):
         if not isinstance(new_val, bool):
             raise TypeError("min_snr_succeeded must be a boolean variable.")
         self._succeeded = new_val
+
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     @property
     def pixel_bins(self) -> np.ndarray:
@@ -481,6 +484,8 @@ class GasDensity3D(BaseProfile1D):
         low_mass = np.percentile(mass_dist, 50 - (conf_level/2)).value
         gas_mass = Quantity([med_mass, med_mass-low_mass, upp_mass-med_mass], mass_dist.unit)
 
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
         return gas_mass, mass_dist
 
     @property
