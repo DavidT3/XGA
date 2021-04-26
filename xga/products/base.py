@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 17:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 17:42. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1597,9 +1597,9 @@ class BaseProfile1D:
             this method will use the save_path attribute of the profile.
         """
         #  Checks to see if the user has supplied their own custom save path.
-        if save_path is None and self._save_path is not None:
+        if save_path is None and self.save_path is not None:
             save_path = self.save_path
-        elif save_path is None and self._save_path is None:
+        elif save_path is None and self.save_path is None:
             raise TypeError("Base profiles cannot be saved")
 
         # Pickles and saves this profile instance.
@@ -1615,7 +1615,7 @@ class BaseProfile1D:
         :return: The default XGA save path for this profile.
         :rtype: str
         """
-        if self._save_path is None:
+        if self._save_path is None and self._prof_type != "base":
             temp_path = OUTPUT + "profiles/{sn}/{pt}_{sn}_{id}.xga"
             rand_prof_id = randint(0, 1e+8)
             while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)):
