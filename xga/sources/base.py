@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/04/2021, 16:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 11:09. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -324,124 +324,135 @@ class BaseSource:
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict, odf_dict
 
-    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D]):
+    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D,
+                                              List[BaseProduct], List[BaseAggregateProduct], List[BaseProfile1D]]):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
-        but will overwrite existing products with a warning. Raises errors if the ObsID is not associated
-        with this source or the instrument is not associated with the ObsID.
+        but will overwrite existing products. Raises errors if the ObsID is not associated
+        with this source or the instrument is not associated with the ObsID. Lists of products can also be passed
+        and will be added to the source storage structure, these lists may also contain None values, as typically
+        XGA will return None if a profile fails to generate (for instance), in which case that entry will simply
+        be ignored.
 
-        :param BaseProduct/BaseAggregateProduct/BaseProfile1D prod_obj: The new product object to be
-            added to the source object.
+        :param BaseProduct/BaseAggregateProduct/BaseProfile1D/List[BaseProduct]/List[BaseProfile1D] prod_obj: The
+            new product object(s) to be added to the source object.
         """
         # Aggregate products are things like PSF grids and sets of annular spectra.
-        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D)):
+        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D, list)) and prod_obj is not None:
             raise TypeError("Only product objects can be assigned to sources.")
+        elif isinstance(prod_obj, list) and not all([isinstance(p, (BaseProduct, BaseAggregateProduct, BaseProfile1D))
+                                                     or p is None for p in prod_obj]):
+            raise TypeError("If a list is passed, only product objects (or None values) may be included.")
+        elif not isinstance(prod_obj, list):
+            prod_obj = [prod_obj]
 
-        en_bnds = prod_obj.energy_bounds
-        if en_bnds[0] is not None and en_bnds[1] is not None and not hasattr(prod_obj, 'storage_key'):
-            extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
-            # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
-            #  this variable with just the energy key
-            en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
-        elif type(prod_obj) == Spectrum or type(prod_obj) == AnnularSpectra or isinstance(prod_obj, BaseProfile1D):
-            extra_key = prod_obj.storage_key
-        elif type(prod_obj) == PSFGrid:
-            # The first part of the key is the model used (by default its ELLBETA for example), and
-            #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
-            extra_key = prod_obj.model + "_" + str(prod_obj.num_bins)
-        else:
-            extra_key = None
+        for po in prod_obj:
+            if po is not None:
+                en_bnds = po.energy_bounds
+                if en_bnds[0] is not None and en_bnds[1] is not None and not hasattr(po, 'storage_key'):
+                    extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+                    # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
+                    #  this variable with just the energy key
+                    en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D):
+                    extra_key = po.storage_key
+                elif type(po) == PSFGrid:
+                    # The first part of the key is the model used (by default its ELLBETA for example), and
+                    #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
+                    extra_key = po.model + "_" + str(po.num_bins)
+                else:
+                    extra_key = None
 
-        # Secondary checking step now I've added PSF correction
-        if type(prod_obj) == Image and prod_obj.psf_corrected:
-            extra_key += "_" + prod_obj.psf_model + "_" + str(prod_obj.psf_bins) + "_" + \
-                         prod_obj.psf_algorithm + str(prod_obj.psf_iterations)
+                # Secondary checking step now I've added PSF correction
+                if type(po) == Image and po.psf_corrected:
+                    extra_key += "_" + po.psf_model + "_" + str(po.psf_bins) + "_" + po.psf_algorithm + \
+                                 str(po.psf_iterations)
 
-        # All information about where to place it in our storage hierarchy can be pulled from the product
-        # object itself
-        obs_id = prod_obj.obs_id
-        inst = prod_obj.instrument
-        p_type = prod_obj.type
+                # All information about where to place it in our storage hierarchy can be pulled from the product
+                # object itself
+                obs_id = po.obs_id
+                inst = po.instrument
+                p_type = po.type
 
-        # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
-        #  together - merged products do get a 'combined' prefix on their product type key though
-        if obs_id == "combined":
-            p_type = "combined_" + p_type
+                # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
+                #  together - merged products do get a 'combined' prefix on their product type key though
+                if obs_id == "combined":
+                    p_type = "combined_" + p_type
 
-        # 'Combined' will effectively be stored as another ObsID
-        if "combined" not in self._products:
-            self._products["combined"] = {}
+                # 'Combined' will effectively be stored as another ObsID
+                if "combined" not in self._products:
+                    self._products["combined"] = {}
 
-        # The product gets the name of this source object added to it
-        prod_obj.src_name = self.name
+                # The product gets the name of this source object added to it
+                po.src_name = self.name
 
-        # Double check that something is trying to add products from another source to the current one.
-        if obs_id != "combined" and obs_id not in self._products:
-            raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
-        elif inst != "combined" and inst not in self._products[obs_id]:
-            raise NotAssociatedError("{i} is not associated with XMM observation {o}".format(i=inst, o=obs_id))
+                # Double check that something is trying to add products from another source to the current one.
+                if obs_id != "combined" and obs_id not in self._products:
+                    raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
+                elif inst != "combined" and inst not in self._products[obs_id]:
+                    raise NotAssociatedError("{i} is not associated with XMM observation {o}".format(i=inst, o=obs_id))
 
-        if extra_key is not None and obs_id != "combined":
-            # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
-            if extra_key not in self._products[obs_id][inst]:
-                self._products[obs_id][inst][extra_key] = {}
-            self._products[obs_id][inst][extra_key][p_type] = prod_obj
+                if extra_key is not None and obs_id != "combined":
+                    # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
+                    if extra_key not in self._products[obs_id][inst]:
+                        self._products[obs_id][inst][extra_key] = {}
+                    self._products[obs_id][inst][extra_key][p_type] = po
 
-        elif extra_key is None and obs_id != "combined":
-            self._products[obs_id][inst][p_type] = prod_obj
+                elif extra_key is None and obs_id != "combined":
+                    self._products[obs_id][inst][p_type] = po
 
-        # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
-        #  and ObsID = 'combined'
-        elif extra_key is not None and obs_id == "combined":
-            if extra_key not in self._products[obs_id]:
-                self._products[obs_id][extra_key] = {}
-            self._products[obs_id][extra_key][p_type] = prod_obj
+                # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
+                #  and ObsID = 'combined'
+                elif extra_key is not None and obs_id == "combined":
+                    if extra_key not in self._products[obs_id]:
+                        self._products[obs_id][extra_key] = {}
+                    self._products[obs_id][extra_key][p_type] = po
 
-        elif extra_key is None and obs_id == "combined":
-            self._products[obs_id][p_type] = prod_obj
+                elif extra_key is None and obs_id == "combined":
+                    self._products[obs_id][p_type] = po
 
-        # This is for an image being added, so we look for a matching exposure map. If it exists we can
-        #  make a ratemap
-        if p_type == "image":
-            # No chance of an expmap being PSF corrected, so we just use the energy key to
-            #  look for one that matches our new image
-            exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False) if en_key in prod]
-            if len(exs) == 1:
-                new_rt = RateMap(prod_obj, exs[0][-1])
-                new_rt.src_name = self.name
-                self._products[obs_id][inst][extra_key]["ratemap"] = new_rt
+                # This is for an image being added, so we look for a matching exposure map. If it exists we can
+                #  make a ratemap
+                if p_type == "image":
+                    # No chance of an expmap being PSF corrected, so we just use the energy key to
+                    #  look for one that matches our new image
+                    exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False) if en_key in prod]
+                    if len(exs) == 1:
+                        new_rt = RateMap(po, exs[0][-1])
+                        new_rt.src_name = self.name
+                        self._products[obs_id][inst][extra_key]["ratemap"] = new_rt
 
-        # However, if its an exposure map that's been added, we have to look for matching image(s). There
-        #  could be multiple, because there could be a normal image, and a PSF corrected image
-        elif p_type == "expmap":
-            # PSF corrected extra keys are built on top of energy keys, so if the en_key is within the extra
-            #  key string it counts as a match
-            ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False)
-                   if en_key in prod[-2]]
-            # If there is at least one match, we can go to work
-            if len(ims) != 0:
-                for im in ims:
-                    new_rt = RateMap(im[-1], prod_obj)
-                    new_rt.src_name = self.name
-                    self._products[obs_id][inst][im[-2]]["ratemap"] = new_rt
+                # However, if its an exposure map that's been added, we have to look for matching image(s). There
+                #  could be multiple, because there could be a normal image, and a PSF corrected image
+                elif p_type == "expmap":
+                    # PSF corrected extra keys are built on top of energy keys, so if the en_key is within the extra
+                    #  key string it counts as a match
+                    ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False)
+                           if en_key in prod[-2]]
+                    # If there is at least one match, we can go to work
+                    if len(ims) != 0:
+                        for im in ims:
+                            new_rt = RateMap(im[-1], po)
+                            new_rt.src_name = self.name
+                            self._products[obs_id][inst][im[-2]]["ratemap"] = new_rt
 
-        # The same behaviours hold for combined_image and combined_expmap, but they get
-        #  stored in slightly different places
-        elif p_type == "combined_image":
-            exs = [prod for prod in self.get_products("combined_expmap", just_obj=False) if en_key in prod]
-            if len(exs) == 1:
-                new_rt = RateMap(prod_obj, exs[0][-1])
-                new_rt.src_name = self.name
-                # Remember obs_id for combined products is just 'combined'
-                self._products[obs_id][extra_key]["combined_ratemap"] = new_rt
+                # The same behaviours hold for combined_image and combined_expmap, but they get
+                #  stored in slightly different places
+                elif p_type == "combined_image":
+                    exs = [prod for prod in self.get_products("combined_expmap", just_obj=False) if en_key in prod]
+                    if len(exs) == 1:
+                        new_rt = RateMap(po, exs[0][-1])
+                        new_rt.src_name = self.name
+                        # Remember obs_id for combined products is just 'combined'
+                        self._products[obs_id][extra_key]["combined_ratemap"] = new_rt
 
-        elif p_type == "combined_expmap":
-            ims = [prod for prod in self.get_products("combined_image", just_obj=False) if en_key in prod[-2]]
-            if len(ims) != 0:
-                for im in ims:
-                    new_rt = RateMap(im[-1], prod_obj)
-                    new_rt.src_name = self.name
-                    self._products[obs_id][im[-2]]["combined_ratemap"] = new_rt
+                elif p_type == "combined_expmap":
+                    ims = [prod for prod in self.get_products("combined_image", just_obj=False) if en_key in prod[-2]]
+                    if len(ims) != 0:
+                        for im in ims:
+                            new_rt = RateMap(im[-1], po)
+                            new_rt.src_name = self.name
+                            self._products[obs_id][im[-2]]["combined_ratemap"] = new_rt
 
     def _existing_xga_products(self, read_fits: bool):
         """
