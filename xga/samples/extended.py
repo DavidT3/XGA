@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/04/2021, 14:30. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -596,8 +596,8 @@ class ClusterSample(BaseSample):
                     x_norm: Quantity = Quantity(60), y_norm: Quantity = Quantity(1e+12, 'solMass'),
                     fit_method: str = 'odr', start_pars: list = None, pix_step: int = 1,
                     min_snr: Union[float, int] = 0.0, psf_corr: bool = True, psf_model: str = "ELLBETA",
-                    psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, set_ids: List[int] = None) \
-            -> ScalingRelation:
+                    psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, set_ids: List[int] = None,
+                    inv_efunc: bool = False) -> ScalingRelation:
         """
         This generates a Gas Mass vs Richness scaling relation for this sample of Galaxy Clusters.
 
@@ -628,9 +628,23 @@ class ClusterSample(BaseSample):
             surface brightness.
         :param List[int] set_ids: A list of AnnularSpectra set IDs used to generate the density profiles, if you wish
             to use spectrum based density profiles here.
+        :param bool inv_efunc: Should the inverse E(z) function be applied to the y-axis, if False then the
+            non-inverse will be applied.
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
         """
+        if rad_name in ['r200', 'r500', 'r2500']:
+            rn = rad_name[1:]
+        else:
+            rn = rad_name
+
+        if inv_efunc:
+            y_name = "E(z)$^{-1}$M$_{g," + rn + "}$"
+            e_factor = self.cosmo.inv_efunc(self.redshifts)
+        else:
+            y_name = "E(z)M$_{g," + rn + "}$"
+            e_factor = self.cosmo.efunc(self.redshifts)
+
         # Just make sure fit method is lower case
         fit_method = fit_method.lower()
 
@@ -641,16 +655,10 @@ class ClusterSample(BaseSample):
         # Read out the gas mass values, and multiply by the inverse e function for each cluster
         gm_vals = self.gas_mass(rad_name, dens_model, prof_outer_rad, dens_method, pix_step, min_snr, psf_corr,
                                 psf_model, psf_bins, psf_algo, psf_iter, set_ids)
-        gm_vals *= self.cosmo.inv_efunc(self.redshifts)[..., None]
+        gm_vals *= e_factor[..., None]
         gm_data = gm_vals[:, 0]
         gm_err = gm_vals[:, 1:]
 
-        if rad_name in ['r200', 'r500', 'r2500']:
-            rn = rad_name[1:]
-        else:
-            rn = rad_name
-
-        y_name = "E(z)$^{-1}$M$_{g," + rn + "}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, gm_data, gm_err, r_data, r_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name, x_name=r"$\lambda$")
@@ -675,8 +683,8 @@ class ClusterSample(BaseSample):
               fit_method: str = 'odr', start_pars: list = None, model: str = 'constant*tbabs*apec',
               group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
               pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True, psf_model: str = "ELLBETA",
-              psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, set_ids: List[int] = None) \
-            -> ScalingRelation:
+              psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, set_ids: List[int] = None,
+              inv_efunc: bool = False) -> ScalingRelation:
         """
         This generates a Gas Mass vs Tx scaling relation for this sample of Galaxy Clusters.
 
@@ -715,8 +723,23 @@ class ClusterSample(BaseSample):
         :param List[int] set_ids: A list of AnnularSpectra set IDs used to generate the density profiles, if you wish
             to use spectrum based density profiles here.
         :return: The XGA ScalingRelation object generated for this sample.
+        :param bool inv_efunc: Should the inverse E(z) function be applied to the y-axis, if False then the
+            non-inverse will be applied.
         :rtype: ScalingRelation
         """
+
+        if rad_name in ['r200', 'r500', 'r2500']:
+            rn = rad_name[1:]
+        else:
+            rn = rad_name
+
+        if inv_efunc:
+            e_factor = self.cosmo.inv_efunc(self.redshifts)
+            y_name = r"E(z)$^{-1}$M$_{\rm{g}," + rn + "}$"
+        else:
+            e_factor = self.cosmo.efunc(self.redshifts)
+            y_name = r"E(z)M$_{\rm{g}," + rn + "}$"
+
         # Just make sure fit method is lower case
         fit_method = fit_method.lower()
 
@@ -728,17 +751,11 @@ class ClusterSample(BaseSample):
         # Read out the mass values, and multiply by the inverse e function for each cluster
         gm_vals = self.gas_mass(rad_name, dens_model, prof_outer_rad, dens_method, pix_step, min_snr, psf_corr,
                                 psf_model, psf_bins, psf_algo, psf_iter, set_ids)
-        gm_vals *= self.cosmo.inv_efunc(self.redshifts)[..., None]
+        gm_vals *= e_factor[..., None]
         gm_data = gm_vals[:, 0]
         gm_err = gm_vals[:, 1:]
 
-        if rad_name in ['r200', 'r500', 'r2500']:
-            rn = rad_name[1:]
-        else:
-            rn = rad_name
-
         x_name = r"T$_{\rm{x}," + rn + '}$'
-        y_name = r"E(z)$^{-1}$M$_{\rm{g}," + rn + "}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, gm_data, gm_err, t_data, t_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name, x_name=x_name)
@@ -761,7 +778,7 @@ class ClusterSample(BaseSample):
                     model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
                     hi_en: Quantity = Quantity(2.0, 'keV'), inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                     group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                    over_sample: float = None) -> ScalingRelation:
+                    over_sample: float = None, inv_efunc: bool = True) -> ScalingRelation:
         """
         This generates a Lx vs richness scaling relation for this sample of Galaxy Clusters. If you have run fits
         to find core excised luminosity, and wish to use it in this scaling relation, then please don't forget
@@ -787,8 +804,23 @@ class ClusterSample(BaseSample):
             desired result were grouped by minimum signal to noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The XGA ScalingRelation object generated for this sample.
+        :param bool inv_efunc: Should the inverse E(z) function be applied to the y-axis, if False then the
+            non-inverse will be applied.
         :rtype: ScalingRelation
         """
+        if outer_radius in ['r200', 'r500', 'r2500']:
+            rn = outer_radius[1:]
+        else:
+            raise ValueError("As this is a method for a whole population, please use a named radius such as "
+                             "r200, r500, or r2500.")
+
+        if inv_efunc:
+            y_name = "E(z)$^{-1}$L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+            e_factor = self.cosmo.inv_efunc(self.redshifts)
+        else:
+            y_name = "E(z)L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+            e_factor = self.cosmo.efunc(self.redshifts)
+
         # Just make sure fit method is lower case
         fit_method = fit_method.lower()
 
@@ -798,16 +830,10 @@ class ClusterSample(BaseSample):
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
         lx_vals = self.Lx(outer_radius, model, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
-                          over_sample) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+                          over_sample) * e_factor[..., None]
         lx_data = lx_vals[:, 0]
         lx_err = lx_vals[:, 1:]
 
-        if outer_radius in ['r200', 'r500', 'r2500']:
-            rn = outer_radius[1:]
-        else:
-            raise ValueError("As this is a method for a whole population, please use a named radius such as "
-                             "r200, r500, or r2500.")
-        y_name = "E(z)$^{-1}$L$_{x," + rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, r_data, r_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name,
@@ -831,7 +857,8 @@ class ClusterSample(BaseSample):
               model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
               hi_en: Quantity = Quantity(2.0, 'keV'), tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
               lx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-              min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> ScalingRelation:
+              min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+              inv_efunc: bool = True) -> ScalingRelation:
         """
         This generates a Lx vs Tx scaling relation for this sample of Galaxy Clusters. If you have run fits
         to find core excised luminosity, and wish to use it in this scaling relation, then you can specify the inner
@@ -860,22 +887,11 @@ class ClusterSample(BaseSample):
         :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal to noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool inv_efunc: Should the inverse E(z) function be applied to the y-axis, if False then the
+            non-inverse will be applied.
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
         """
-        # Just make sure fit method is lower case
-        fit_method = fit_method.lower()
-
-        # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        lx_vals = self.Lx(outer_radius, model, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
-                          over_sample) * self.cosmo.inv_efunc(self.redshifts)[..., None]
-        lx_data = lx_vals[:, 0]
-        lx_err = lx_vals[:, 1:]
-
-        # Read out the temperature values into variables just for convenience sake
-        t_vals = self.Tx(outer_radius, model, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
-        t_data = t_vals[:, 0]
-        t_errs = t_vals[:, 1:]
 
         if outer_radius in ['r200', 'r500', 'r2500']:
             rn = outer_radius[1:]
@@ -888,8 +904,28 @@ class ClusterSample(BaseSample):
         else:
             lx_rn = rn
 
+        if inv_efunc:
+            y_name = "E(z)$^{-1}$L$_{x," + lx_rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+            e_factor = self.cosmo.inv_efunc(self.redshifts)
+        else:
+            y_name = "E(z)L$_{x," + lx_rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
+            e_factor = self.cosmo.efunc(self.redshifts)
+
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
+
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        lx_vals = self.Lx(outer_radius, model, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
+                          over_sample) * e_factor[..., None]
+        lx_data = lx_vals[:, 0]
+        lx_err = lx_vals[:, 1:]
+
+        # Read out the temperature values into variables just for convenience sake
+        t_vals = self.Tx(outer_radius, model, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
+        t_data = t_vals[:, 0]
+        t_errs = t_vals[:, 1:]
+
         x_name = r"T$_{x," + rn + '}$'
-        y_name = "E(z)$^{-1}$L$_{x," + lx_rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, lx_data, lx_err, t_data, t_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name,
@@ -912,7 +948,7 @@ class ClusterSample(BaseSample):
                 y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
                 model: str = 'constant*tbabs*apec', tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                temp_model_name: str = None, dens_model_name: str = None) -> ScalingRelation:
+                temp_model_name: str = None, dens_model_name: str = None, inv_efunc: bool = False) -> ScalingRelation:
         """
         A convenience function to generate a hydrostatic mass-temperature relation for this sample of galaxy clusters.
 
@@ -938,15 +974,30 @@ class ClusterSample(BaseSample):
             required hydrostatic mass profile, default is None.
         :param str dens_model_name: The name of the model used to fit the density profile used to generate the
             required hydrostatic mass profile, default is None.
+        :param bool inv_efunc: Should the inverse E(z) function be applied to the y-axis, if False then the
+            non-inverse will be applied.
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
         """
+
+        if outer_radius in ['r200', 'r500', 'r2500']:
+            rn = outer_radius[1:]
+        else:
+            raise ValueError("As this is a method for a whole population, please use a named radius such as "
+                             "r200, r500, or r2500.")
+
+        if inv_efunc:
+            y_name = r"E(z)$^{-1}$M$_{\rm{hydro," + rn + "}}$"
+            e_factor = self.cosmo.inv_efunc(self.redshifts)
+        else:
+            y_name = r"E(z)M$_{\rm{hydro," + rn + "}}$"
+            e_factor = self.cosmo.efunc(self.redshifts)
+
         # Just make sure fit method is lower case
         fit_method = fit_method.lower()
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name,
-                                       dens_model_name) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name, dens_model_name) * e_factor[..., None]
         m_data = m_vals[:, 0]
         m_err = m_vals[:, 1:]
 
@@ -955,14 +1006,7 @@ class ClusterSample(BaseSample):
         t_data = t_vals[:, 0]
         t_errs = t_vals[:, 1:]
 
-        if outer_radius in ['r200', 'r500', 'r2500']:
-            rn = outer_radius[1:]
-        else:
-            raise ValueError("As this is a method for a whole population, please use a named radius such as "
-                             "r200, r500, or r2500.")
-
         x_name = r"T$_{\rm{x," + rn + '}}$'
-        y_name = r"E(z)$^{-1}$M$_{\rm{hydro," + rn + "}}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, m_data, m_err, t_data, t_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name,
@@ -983,7 +1027,7 @@ class ClusterSample(BaseSample):
 
     def mass_richness(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(60),
                       y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
-                      temp_model_name: str = None, dens_model_name: str = None) -> ScalingRelation:
+                      temp_model_name: str = None, dens_model_name: str = None, inv_efunc: bool = False) -> ScalingRelation:
         """
         A convenience function to generate a hydrostatic mass-richness relation for this sample of galaxy clusters.
 
@@ -996,9 +1040,24 @@ class ClusterSample(BaseSample):
             required hydrostatic mass profile, default is None.
         :param str dens_model_name: The name of the model used to fit the density profile used to generate the
             required hydrostatic mass profile, default is None.
+        :param bool inv_efunc: Should the inverse E(z) function be applied to the y-axis, if False then the
+            non-inverse will be applied.
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
         """
+        if outer_radius in ['r200', 'r500', 'r2500']:
+            rn = outer_radius[1:]
+        else:
+            raise ValueError("As this is a method for a whole population, please use a named radius such as "
+                             "r200, r500, or r2500.")
+
+        if inv_efunc:
+            y_name = r"E(z)$^{-1}$M$_{\rm{hydro," + rn + "}}$"
+            e_factor = self.cosmo.inv_efunc(self.redshifts)
+        else:
+            y_name = r"E(z)M$_{\rm{hydro," + rn + "}}$"
+            e_factor = self.cosmo.efunc(self.redshifts)
+
         # Just make sure fit method is lower case
         fit_method = fit_method.lower()
 
@@ -1007,18 +1066,10 @@ class ClusterSample(BaseSample):
         r_errs = self.richness[:, 1]
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name,
-                                       dens_model_name) * self.cosmo.inv_efunc(self.redshifts)[..., None]
+        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name, dens_model_name) * e_factor[..., None]
         m_data = m_vals[:, 0]
         m_err = m_vals[:, 1:]
 
-        if outer_radius in ['r200', 'r500', 'r2500']:
-            rn = outer_radius[1:]
-        else:
-            raise ValueError("As this is a method for a whole population, please use a named radius such as "
-                             "r200, r500, or r2500.")
-
-        y_name = r"E(z)$^{-1}$M$_{\rm{hydro," + rn + "}}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, m_data, m_err, r_data, r_errs, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name,
@@ -1042,7 +1093,7 @@ class ClusterSample(BaseSample):
                 model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
                 hi_en: Quantity = Quantity(2.0, 'keV'), lx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                temp_model_name: str = None, dens_model_name: str = None) -> ScalingRelation:
+                temp_model_name: str = None, dens_model_name: str = None, inv_efunc: bool = False) -> ScalingRelation:
         """
         This generates a mass vs Lx scaling relation for this sample of Galaxy Clusters. If you have run fits
         to find core excised luminosity, and wish to use it in this scaling relation, then you can specify the inner
@@ -1069,24 +1120,11 @@ class ClusterSample(BaseSample):
             required hydrostatic mass profile, default is None.
         :param str dens_model_name: The name of the model used to fit the density profile used to generate the
             required hydrostatic mass profile, default is None.
+        :param bool inv_efunc: Should the inverse E(z) function be applied to the y-axis, if False then the
+            non-inverse will be applied.
         :return: The XGA ScalingRelation object generated for this sample.
         :rtype: ScalingRelation
         """
-        # Just make sure fit method is lower case
-        fit_method = fit_method.lower()
-
-        # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name,
-                                       dens_model_name) * self.cosmo.inv_efunc(self.redshifts)[..., None]
-        m_data = m_vals[:, 0]
-        m_err = m_vals[:, 1:]
-
-        # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        lx_vals = self.Lx(outer_radius, model, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
-                          over_sample)
-        lx_data = lx_vals[:, 0]
-        lx_err = lx_vals[:, 1:]
-
         if outer_radius in ['r200', 'r500', 'r2500']:
             rn = outer_radius[1:]
         else:
@@ -1098,8 +1136,28 @@ class ClusterSample(BaseSample):
         else:
             lx_rn = rn
 
+        if inv_efunc:
+            y_name = r"E(z)$^{-1}$M$_{\rm{hydro," + rn + "}}$"
+            e_factor = self.cosmo.inv_efunc(self.redshifts)
+        else:
+            y_name = r"E(z)M$_{\rm{hydro," + rn + "}}$"
+            e_factor = self.cosmo.efunc(self.redshifts)
+
+        # Just make sure fit method is lower case
+        fit_method = fit_method.lower()
+
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name, dens_model_name) * e_factor[..., None]
+        m_data = m_vals[:, 0]
+        m_err = m_vals[:, 1:]
+
+        # Read out the luminosity values, and multiply by the inverse e function for each cluster
+        lx_vals = self.Lx(outer_radius, model, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
+                          over_sample)
+        lx_data = lx_vals[:, 0]
+        lx_err = lx_vals[:, 1:]
+
         x_name = r"L$_{\rm{x," + lx_rn + ',' + str(lo_en.value) + '-' + str(hi_en.value) + "}}$"
-        y_name = r"E(z)$^{-1}$M$_{\rm{hydro," + rn + "}}$"
         if fit_method == 'curve_fit':
             scale_rel = scaling_relation_curve_fit(power_law, m_data, m_err, lx_data, lx_err, y_norm, x_norm,
                                                    start_pars=start_pars, y_name=y_name,
