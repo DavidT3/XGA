@@ -1,9 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 23/04/2021, 16:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/04/2021, 08:33. Copyright (c) David J Turner
 
 import inspect
 import os
+import pickle
 from copy import deepcopy
+from random import randint
 from typing import Tuple, List, Dict, Union
 from warnings import warn
 
@@ -21,7 +23,7 @@ from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitErro
     ModelNotAssociatedError
 from ..models import PROF_TYPE_MODELS, BaseModel1D, MODEL_PUBLICATION_NAMES
 from ..models.fitting import log_likelihood, log_prob
-from ..utils import SASERROR_LIST, SASWARNING_LIST
+from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT
 
 
 class BaseProduct:
@@ -586,6 +588,15 @@ class BaseProfile1D:
         if deg_radii is not None and (np.isnan(deg_radii).any() or np.isinf(deg_radii).any()):
             raise ValueError("The deg_radii quantity has NaN or infinite values")
 
+        # And now we will check that no uncertainty values are negative, as that does not make sense yet can
+        #  happen sometimes when XSPEC cannot constrain a parameter (for instance).
+        if radii_err is not None and (radii_err < 0).any():
+            raise ValueError("The radii_err quantity has negative values, which does not make sense "
+                             "for an uncertainty.")
+        if values_err is not None and (values_err < 0).any():
+            raise ValueError("The radii_err quantity has negative values, which does not make sense "
+                             "for an uncertainty.")
+
         # Storing the key values in attributes
         self._radii = radii
         self._values = values
@@ -678,6 +689,8 @@ class BaseProfile1D:
             self._outer_rad = radii[-1] + radii_err[-1]
         else:
             self._outer_rad = radii[-1]
+
+        self._save_path = None
 
     def emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
                   num_samples: int) -> Tuple[BaseModel1D, bool]:
@@ -1080,6 +1093,8 @@ class BaseProfile1D:
         elif not already_done and not success:
             self._bad_model_fits[method][model.name] = model
 
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
         return model
 
     def allowed_models(self):
@@ -1186,6 +1201,9 @@ class BaseProfile1D:
             raise ValueError("Please only add successful models to this profile.")
         else:
             self._good_model_fits[method][model.name] = model
+
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     def get_sampler(self, model: str) -> em.EnsembleSampler:
         """
@@ -1569,6 +1587,43 @@ class BaseProfile1D:
         # And of course actually showing it
         plt.show()
 
+    def save(self, save_path: str = None):
+        """
+        This method pickles and saves the profile object. This will be called automatically when the profile
+        is initialised, and when changes are made to the profile (such as when a model is fitted). The save
+        file is a pickled version of this object.
+
+        :param str save_path: The path where this profile should be saved. By default this is None, which means
+            this method will use the save_path attribute of the profile.
+        """
+        #  Checks to see if the user has supplied their own custom save path.
+        if save_path is None and self.save_path is not None:
+            save_path = self.save_path
+        elif save_path is None and self.save_path is None:
+            raise TypeError("Base profiles cannot be saved")
+
+        # Pickles and saves this profile instance.
+        with open(save_path, 'wb') as picklo:
+            pickle.dump(self, picklo)
+
+    @property
+    def save_path(self) -> str:
+        """
+        Property getter that assembles the default XGA save path of this profile. The file name contains
+        limited information; the type of profile, the source name, and a random integer.
+
+        :return: The default XGA save path for this profile.
+        :rtype: str
+        """
+        if self._save_path is None and self._prof_type != "base":
+            temp_path = OUTPUT + "profiles/{sn}/{pt}_{sn}_{id}.xga"
+            rand_prof_id = randint(0, 1e+8)
+            while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)):
+                rand_prof_id = randint(0, 1e+8)
+            self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)
+
+        return self._save_path
+
     @property
     def good_model_fits(self) -> List:
         """
@@ -1731,6 +1786,8 @@ class BaseProfile1D:
         Setter for the name attribute of this profile, what source object it was derived from.
         """
         self._src_name = new_name
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     @property
     def obs_id(self) -> str:
@@ -1799,6 +1856,8 @@ class BaseProfile1D:
         if not isinstance(new_name, str):
             raise TypeError("Axis labels must be strings!")
         self._y_axis_name = new_name
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     @property
     def associated_set_storage_key(self) -> str:
@@ -1861,6 +1920,8 @@ class BaseProfile1D:
         :param Quantity new_val: The new value for the normalisation of x-axis data.
         """
         self._x_norm = new_val
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     @property
     def y_norm(self) -> Quantity:
@@ -1879,6 +1940,8 @@ class BaseProfile1D:
         :param Quantity new_val: The new value for the normalisation of y-axis data.
         """
         self._y_norm = new_val
+        # This method means that a change has happened to the model, so it should be re-saved
+        self.save()
 
     @property
     def fit_options(self) -> List[str]:
@@ -1945,13 +2008,13 @@ class BaseAggregateProfile1D:
             raise TypeError("All component profiles must be of the same type")
 
         # This checks that all profiles have the same x units
-        x_units = [p.radii_unit for p in profiles]
+        x_units = [p.radii_unit.to_string() for p in profiles]
         if len(set(x_units)) != 1:
             raise TypeError("All component profiles must have the same radii units.")
 
         # THis checks that they all have the same y units. This is likely to be true if they are the same
         #  type, but you never know
-        y_units = [p.values_unit for p in profiles]
+        y_units = [p.values_unit.to_string() for p in profiles]
         if len(set(y_units)) != 1:
             raise TypeError("All component profiles must have the same value units.")
 

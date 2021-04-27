@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 11:10. Copyright (c) David J Turner
 
 
 import os
@@ -1526,28 +1526,35 @@ class AnnularSpectra(BaseAggregateProduct):
                 # The obs key was made up of the ObsID and instrument joined by a -
                 obs_id, inst = obs_key.split('-')
 
-            if par == 'kT' and upper_limit is None:
-                new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
-                                                     inst, rad_errors, par_errs, associated_set_id=self.set_ident,
-                                                     set_storage_key=self.storage_key, deg_radii=mid_radii_deg)
-            elif par == 'kT' and upper_limit is not None:
-                new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
-                                                     inst, rad_errors, par_errs, upper_limit, self.set_ident,
-                                                     self.storage_key, deg_radii=mid_radii_deg)
-            elif par == 'Abundanc':
-                new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
-                                                     inst, rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                     mid_radii_deg)
-            elif par == 'norm':
-                new_prof = APECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
-                                               rad_errors, par_errs, self.set_ident, self.storage_key, mid_radii_deg)
-            else:
-                prof_type = "1d_proj_{}"
-                new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst, par,
-                                     prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
-                                     mid_radii_deg)
+            try:
+                if par == 'kT' and upper_limit is None:
+                    new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
+                                                         inst, rad_errors, par_errs, associated_set_id=self.set_ident,
+                                                         set_storage_key=self.storage_key, deg_radii=mid_radii_deg)
+                elif par == 'kT' and upper_limit is not None:
+                    new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
+                                                         inst, rad_errors, par_errs, upper_limit, self.set_ident,
+                                                         self.storage_key, deg_radii=mid_radii_deg)
+                elif par == 'Abundanc':
+                    new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
+                                                         inst, rad_errors, par_errs, self.set_ident, self.storage_key,
+                                                         mid_radii_deg)
+                elif par == 'norm':
+                    new_prof = APECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
+                                                   rad_errors, par_errs, self.set_ident, self.storage_key,
+                                                   mid_radii_deg)
+                else:
+                    prof_type = "1d_proj_{}"
+                    new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst, par,
+                                         prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
+                                         mid_radii_deg)
 
-            profs.append(new_prof)
+                profs.append(new_prof)
+
+            # This gets triggered if any funny values are present in the quantities passed to the profile declaration.
+            #  Infinite/NaN values, negative errors (which can happen in XSPEC fits) etc.
+            except ValueError:
+                profs.append(None)
 
         if len(profs) == 1:
             profs = profs[0]
