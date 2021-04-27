@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 17:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/04/2021, 08:33. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -2008,13 +2008,13 @@ class BaseAggregateProfile1D:
             raise TypeError("All component profiles must be of the same type")
 
         # This checks that all profiles have the same x units
-        x_units = [p.radii_unit for p in profiles]
+        x_units = [p.radii_unit.to_string() for p in profiles]
         if len(set(x_units)) != 1:
             raise TypeError("All component profiles must have the same radii units.")
 
         # THis checks that they all have the same y units. This is likely to be true if they are the same
         #  type, but you never know
-        y_units = [p.values_unit for p in profiles]
+        y_units = [p.values_unit.to_string() for p in profiles]
         if len(set(y_units)) != 1:
             raise TypeError("All component profiles must have the same value units.")
 

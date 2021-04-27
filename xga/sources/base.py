@@ -1,7 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 17:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/04/2021, 08:33. Copyright (c) David J Turner
 
 import os
+import pickle
 import warnings
 from copy import deepcopy
 from itertools import product
@@ -686,6 +687,18 @@ class BaseSource:
 
         os.chdir(og_dir)
 
+        # Here we will load in existing xga profile objects
+        os.chdir(OUTPUT + "profiles/{}".format(self.name))
+        saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
+        for pf in saved_profs:
+            with open(pf, 'rb') as reado:
+                temp_prof = pickle.load(reado)
+                try:
+                    self.update_products(temp_prof)
+                except NotAssociatedError:
+                    pass
+        os.chdir(og_dir)
+
         # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
         #  those objects and add them to the storage structure
         if len(ann_spec_constituents) != 0:
@@ -814,17 +827,17 @@ class BaseSource:
                         for model in ann_results[set_id]:
                             rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model],
                                                       ann_obs_order[set_id][model])
-                            if model == "constant*tbabs*apec":
-                                temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
-                                self.update_products(temp_prof)
-
-                                # Normalisation profiles can be useful for many things, so we generate them too
-                                norm_prof = rel_ann_spec.generate_profile(model, 'norm', 'cm^-5')
-                                self.update_products(norm_prof)
-
-                                if 'Abundanc' in rel_ann_spec.get_results(0, 'constant*tbabs*apec'):
-                                    met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
-                                    self.update_products(met_prof)
+                            # if model == "constant*tbabs*apec":
+                            #     temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
+                            #     self.update_products(temp_prof)
+                            #
+                            #     # Normalisation profiles can be useful for many things, so we generate them too
+                            #     norm_prof = rel_ann_spec.generate_profile(model, 'norm', 'cm^-5')
+                            #     self.update_products(norm_prof)
+                            #
+                            #     if 'Abundanc' in rel_ann_spec.get_results(0, 'constant*tbabs*apec'):
+                            #         met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
+                            #         self.update_products(met_prof)
                     except (NoProductAvailableError, ValueError):
                         warnings.warn("A previous annular spectra profile fit for {src} was not successful, or no "
                                       "matching spectrum has been loaded, so it cannot be read "
