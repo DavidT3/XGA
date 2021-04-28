@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 10:48. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:22. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -510,6 +510,38 @@ class BaseSource:
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     # Saves the updated inventory file
                     inven.to_csv(OUTPUT + "{}/inventory.csv".format(po.obs_id), index=False)
+
+                elif isinstance(po, BaseProduct) and po.obs_id == 'combined':
+                    inven = pd.read_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), dtype=str)
+
+                    # Don't want to store a None value as a string for the info_key
+                    if extra_key is None:
+                        info_key = ''
+                    else:
+                        info_key = extra_key
+
+                    # We know that this particular product is a combination of multiple ObsIDs, and those ObsIDs
+                    #  are not stored explicitly within the product object. However we are currently within the
+                    #  source object that they were generated from, thus we do have that information available
+                    # Using the _instruments attribute also gives us access to inst information
+                    i_str = "/".join([i for o in self._instruments for i in self._instruments[o]])
+                    o_str = "/".join([o for o in self._instruments for i in self._instruments[o]])
+                    # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
+                    #  them into strings
+
+                    # TODO DOUBLE CHECK THIS WORKS AFTER I CHANGE WHERE COMBINED PRODUCTS ARE SAVED
+                    f_name = po.path.split(OUTPUT + "combined/")[-1]
+                    if isinstance(po, Image):
+                        s_name = ''
+                    else:
+                        s_name = po.src_name
+
+                    # Creates new pandas series to be appended to the inventory dataframe
+                    new_line = pd.Series([f_name, o_str, i_str, info_key, s_name],
+                                         ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name'], dtype=str)
+                    inven = inven.append(new_line, ignore_index=True)
+                    inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                    inven.to_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), index=False)
 
     def _existing_xga_products(self, read_fits: bool):
         """
