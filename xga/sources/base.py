@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:57. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -542,6 +542,44 @@ class BaseSource:
                     inven = inven.append(new_line, ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), index=False)
+
+                elif isinstance(po, BaseProfile1D) and po.obs_id != 'combined':
+                    inven = pd.read_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), dtype=str)
+
+                    # Don't want to store a None value as a string for the info_key
+                    if extra_key is None:
+                        info_key = ''
+                    else:
+                        info_key = extra_key
+
+                    f_name = po.save_path.split(OUTPUT + "profiles/{}/".format(self.name))[-1]
+                    i_str = po.instrument
+                    o_str = po.obs_id
+                    # Creates new pandas series to be appended to the inventory dataframe
+                    new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
+                                         ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+                    inven = inven.append(new_line, ignore_index=True)
+                    inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                    inven.to_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), index=False)
+
+                elif isinstance(po, BaseProfile1D) and po.obs_id == 'combined':
+                    inven = pd.read_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), dtype=str)
+
+                    # Don't want to store a None value as a string for the info_key
+                    if extra_key is None:
+                        info_key = ''
+                    else:
+                        info_key = extra_key
+
+                    f_name = po.save_path.split(OUTPUT + "profiles/{}/".format(self.name))[-1]
+                    i_str = "/".join([i for o in self._instruments for i in self._instruments[o]])
+                    o_str = "/".join([o for o in self._instruments for i in self._instruments[o]])
+                    # Creates new pandas series to be appended to the inventory dataframe
+                    new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
+                                         ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+                    inven = inven.append(new_line, ignore_index=True)
+                    inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                    inven.to_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), index=False)
 
     def _existing_xga_products(self, read_fits: bool):
         """
