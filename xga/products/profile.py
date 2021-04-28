@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 17:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:54. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -25,7 +25,7 @@ class SurfaceBrightness1D(BaseProfile1D):
     def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int,
                  min_snr: float, outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
                  background: Quantity = None, pixel_bins: np.ndarray = None, back_pixel_bin: np.ndarray = None,
-                 ann_areas: Quantity = None, deg_radii: Quantity = None):
+                 ann_areas: Quantity = None, deg_radii: Quantity = None, min_snr_succeeded: bool = True):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
@@ -47,6 +47,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
             units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
             values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool min_snr_succeeded: A boolean flag describing whether re-binning was successful or not.
         """
         super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err,
                          deg_radii=deg_radii)
@@ -81,11 +82,8 @@ class SurfaceBrightness1D(BaseProfile1D):
             raise UnitConversionError("outer_rad must be convertible to degrees.")
         self._outer_rad = outer_rad
 
-        # This is an attribute that doesn't matter enough to be passed in, but can be set externally if it is relevant
-        #  Describes whether minimum signal to noise re-binning was successful, we assume it is
-        # There may be a process that doesn't generate this flag that creates this profile, so that is another reason
-        #  it isn't passed in.
-        self._succeeded = True
+        # Describes whether minimum signal to noise re-binning was successful, we assume it is
+        self._succeeded = min_snr_succeeded
 
         # Storing the pixel bins used to create this particular profile, if passed, None if not.
         self._pix_bins = pixel_bins
