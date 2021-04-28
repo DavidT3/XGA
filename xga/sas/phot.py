@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/01/2021, 17:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 13:02. Copyright (c) David J Turner
 
 import os
 from random import randint
@@ -304,21 +304,26 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
             if not os.path.exists(OUTPUT + obs_id):
                 os.mkdir(OUTPUT + obs_id)
 
-        # The problem I have here is that merged images don't belong to a particular ObsID, so where do they
-        # go in the xga_output folder? I've arbitrarily decided to save it in the folder of the first ObsID
-        # associated with a given source.
-        final_dest_dir = OUTPUT + "{o}/".format(o=obs_ids_set[0])
+        # The files produced by this function will now be stored in the combined directory.
+        final_dest_dir = OUTPUT + "combined/"
         rand_ident = randint(0, 1e+8)
+        # Makes absolutely sure that the random integer hasn't already been used
+        while len([f for f in os.listdir(final_dest_dir) if str(rand_ident) in f.split(OUTPUT+"combined/")[-1]]) != 0:
+            rand_ident = randint(0, 1e+8)
+
         dest_dir = os.path.join(final_dest_dir, "temp_emosaic_{}".format(rand_ident))
         os.mkdir(dest_dir)
 
+        # The name of the file used to contain all the ObsIDs that went into the stacked image/expmap. However
+        #  this caused problems when too many ObsIDs were present and the filename was longer than allowed. So
+        #  now I use the random identity I generated, and store the ObsID/instrument information in the inventory
+        #  file
         if not psf_corr:
-            mosaic = "{os}_{l}-{u}keVmerged_{t}.fits".format(os="_".join(obs_ids_set), l=lo_en.value, u=hi_en.value,
-                                                             t=for_name)
+            mosaic = "{os}_{l}-{u}keVmerged_{t}.fits".format(os=rand_ident, l=lo_en.value, u=hi_en.value, t=for_name)
         else:
             mosaic = "{os}_{b}bin_{it}iter_{m}mod_{a}algo_{l}-{u}keVpsfcorr_merged_img." \
-                     "fits".format(os="_".join(obs_ids_set), l=lo_en.value, u=hi_en.value, b=psf_bins, it=psf_iter,
-                                   a=psf_algo, m=psf_model)
+                     "fits".format(os=rand_ident, l=lo_en.value, u=hi_en.value, b=psf_bins, it=psf_iter, a=psf_algo,
+                                   m=psf_model)
 
         sources_cmds.append(np.array([mosaic_cmd.format(ims=" ".join(paths), mim=mosaic, d=dest_dir)]))
         sources_paths.append(np.array([os.path.join(final_dest_dir, mosaic)]))
