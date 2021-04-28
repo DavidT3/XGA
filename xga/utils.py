@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 10:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:26. Copyright (c) David J Turner
 
 import json
 import os
@@ -362,7 +362,7 @@ else:
     # And create an inventory file for that directory
     if not os.path.exists(OUTPUT + "combined/inventory.csv"):
         with open(OUTPUT + "combined/inventory.csv", 'w') as inven:
-            inven.writelines(["file_name,obs_ids,insts,info_key,src_name"])
+            inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
 
     if "num_cores" in xga_conf["XGA_SETUP"]:
         # If the user has set a number of cores in the config file then we'll use that.

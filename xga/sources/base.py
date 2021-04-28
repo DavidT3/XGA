@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:26. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -76,7 +76,7 @@ class BaseSource:
         # And create an inventory file for that directory
         if not os.path.exists(OUTPUT + "profiles/{}/inventory.csv".format(self.name)):
             with open(OUTPUT + "profiles/{}/inventory.csv".format(self.name), 'w') as inven:
-                inven.writelines(["file_name,obs_ids,insts,info_key,src_name"])
+                inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
@@ -109,7 +109,7 @@ class BaseSource:
 
             if not os.path.exists(OUTPUT + '{}/inventory.csv'.format(o)):
                 with open(OUTPUT + '{}/inventory.csv'.format(o), 'w') as inven:
-                    inven.writelines(['file_name,obs_id,inst,info_key,src_name'])
+                    inven.writelines(['file_name,obs_id,inst,info_key,src_name,type'])
 
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
@@ -501,8 +501,8 @@ class BaseSource:
                         s_name = po.src_name
 
                     # Creates new pandas series to be appended to the inventory dataframe
-                    new_line = pd.Series([f_name, po.obs_id, po.instrument, info_key, s_name],
-                                         ['file_name', 'obs_id', 'inst', 'info_key', 'src_name'], dtype=str)
+                    new_line = pd.Series([f_name, po.obs_id, po.instrument, info_key, s_name, po.type],
+                                         ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
                     # Appends the series
                     inven = inven.append(new_line, ignore_index=True)
                     # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
@@ -537,8 +537,8 @@ class BaseSource:
                         s_name = po.src_name
 
                     # Creates new pandas series to be appended to the inventory dataframe
-                    new_line = pd.Series([f_name, o_str, i_str, info_key, s_name],
-                                         ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name'], dtype=str)
+                    new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, po.type],
+                                         ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
                     inven = inven.append(new_line, ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), index=False)
