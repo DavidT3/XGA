@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/04/2021, 15:53. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -206,6 +206,10 @@ class BaseSource:
         # This goes at the end of init to make sure everything necessary has been declared
         if os.path.exists(OUTPUT) and load_products:
             self._existing_xga_products(load_fits)
+
+        # Now going to save load_fits in an attribute, just because if the observation is cleaned we need to
+        #  run _existing_xga_products again
+        self._load_fits = load_fits
 
     @property
     def ra_dec(self) -> Quantity:
@@ -529,7 +533,6 @@ class BaseSource:
                     # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
                     #  them into strings
 
-                    # TODO DOUBLE CHECK THIS WORKS AFTER I CHANGE WHERE COMBINED PRODUCTS ARE SAVED
                     f_name = po.path.split(OUTPUT + "combined/")[-1]
                     if isinstance(po, Image):
                         s_name = ''
@@ -639,35 +642,6 @@ class BaseSource:
 
             return final_obj
 
-        def merged_file_check(file_path: str, obs_ids: Tuple, prod_type: str):
-            """
-            Checks that a passed file name is a merged image or exposure map, and matches the current source.
-
-            :param str file_path: The name of the file in consideration
-            :param Tuple obs_ids: The ObsIDs associated with this source.
-            :param str prod_type: img or expmap, what type of merged product are we looking for?
-            :return: A boolean flag as to whether the filename is a file that matches the source.
-            :rtype: Bool
-            """
-            # First filter to only look at merged files
-            if obs_str in file_path and "merged" in file_path and file_path[0] != "." and prod_type in file_path:
-                # Stripped back to only the ObsIDs, and in the original order
-                #  Got to strip away quite a few possible entries in the file name - all the PSF information for
-                #  instance.
-                split_out = [e for e in file_path.split("_") if "keV" not in e and ".fits" not in e and
-                             "bin" not in e and "mod" not in e and "algo" not in e and "merged" not in e
-                             and "iter" not in e]
-
-                # If the ObsID list from parsing the file name is exactly the same as the ObsID list associated
-                #  with this source, then we accept it. Otherwise it is rejected.
-                if split_out != obs_ids:
-                    right_merged = False
-                else:
-                    right_merged = True
-            else:
-                right_merged = False
-            return right_merged
-
         og_dir = os.getcwd()
         # This is used for spectra that should be part of an AnnularSpectra object
         ann_spec_constituents = {}
@@ -676,21 +650,20 @@ class BaseSource:
         for obs in self._obs:
             if os.path.exists(OUTPUT + obs):
                 os.chdir(OUTPUT + obs)
-                # I've put as many checks as possible in this to make sure it only finds genuine XGA files,
-                #  I'll probably put a few more checks later
+                cur_d = os.getcwd() + '/'
+                # Loads in the inventory file for this ObsID
+                inven = pd.read_csv("inventory.csv", dtype=str)
 
-                # Images read in, pretty simple process - the name of the current source doesn't matter because
-                #  standard images/exposure maps are for the WHOLE observation.
-                ims = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and f[0] != "." and
-                       "img" in f and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
-                for im in ims:
-                    self.update_products(parse_image_like(im, "image"))
-
-                # Exposure maps read in, same process as images
-                exs = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and f[0] != "." and
-                       "expmap" in f and obs in f and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
-                for ex in exs:
-                    self.update_products(parse_image_like(ex, "expmap"))
+                # Here we read in instruments and exposure maps which are relevant to this source
+                im_lines = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
+                # Instruments is a dictionary with ObsIDs on the top level and then valid instruments on
+                #  the lower level. As such we can be sure here we're only reading in instruments we decided
+                #  are valid
+                for i in self.instruments[obs]:
+                    # Fetches lines of the inventory which match the current ObsID and instrument
+                    rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
+                    for r_ind, r in rel_ims.iterrows():
+                        self.update_products(parse_image_like(cur_d+r['file_name'], r['type']))
 
                 # For spectra we search for products that have the name of this object in, as they are for
                 #  specific parts of the observation.
@@ -829,22 +802,31 @@ class BaseSource:
                         ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
                     self.update_products(ann_spec_obj)
 
-        # Merged products have all the ObsIDs that they are made up of in their name
-        obs_str = "_".join(self._obs)
-        # They are also always written to the xga_output folder with the name of the first ObsID that goes
-        # into them
-        if os.path.exists(OUTPUT + self._obs[0]):
-            # Follows basically the same process as reading in normal images and exposure maps
+        # Here we load in any combined images and exposure maps that may have been generated
+        os.chdir(OUTPUT + 'combined')
+        cur_d = os.getcwd() + '/'
+        # This creates a set of observation-instrument strings that describe the current combinations associated
+        #  with this source, for testing against to make sure we're loading in combined images/expmaps that
+        #  do belong with this source
+        src_oi_set = set([o+i for o in self._instruments for i in self._instruments[o]])
 
-            os.chdir(OUTPUT + self._obs[0])
-            # Search for files that match the pattern of a merged image/exposure map
-            merged_ims = [os.path.abspath(f) for f in os.listdir(".") if merged_file_check(f, self._obs, "img")]
-            for im in merged_ims:
-                self.update_products(parse_image_like(im, "image", merged=True))
+        # Loads in the inventory file for this ObsID
+        inven = pd.read_csv("inventory.csv", dtype=str)
+        rel_inven = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
+        for row_ind, row in rel_inven.iterrows():
+            o_split = row['obs_ids'].split('/')
+            i_split = row['insts'].split('/')
+            # Assemble a set of observations-instrument strings for the current row, to test against the
+            #  src_oi_set we assembled earlier
+            test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
+            # First we make sure the sets are the same length, if they're not then we know before starting that this
+            #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
+            #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they match
+            #  exactly and the product can be loaded
+            if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
+                self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], merged=True))
 
-            merged_exs = [os.path.abspath(f) for f in os.listdir(".") if merged_file_check(f, self._obs, "expmap")]
-            for ex in merged_exs:
-                self.update_products(parse_image_like(ex, "expmap", merged=True))
+        os.chdir(og_dir)
 
         # Now loading in previous fits
         if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
@@ -2347,6 +2329,7 @@ class BaseSource:
 
         if len(self._obs) == 0:
             raise NoValidObservationsError("No observations remain associated with {} after cleaning".format(self.name))
+        self._existing_xga_products(self._load_fits)
 
     @property
     def luminosity_distance(self) -> Quantity:
