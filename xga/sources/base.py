@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/04/2021, 15:53. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/04/2021, 15:59. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -208,8 +208,9 @@ class BaseSource:
             self._existing_xga_products(load_fits)
 
         # Now going to save load_fits in an attribute, just because if the observation is cleaned we need to
-        #  run _existing_xga_products again
+        #  run _existing_xga_products again, same for load_products
         self._load_fits = load_fits
+        self._load_products = load_products
 
     @property
     def ra_dec(self) -> Quantity:
@@ -2329,7 +2330,10 @@ class BaseSource:
 
         if len(self._obs) == 0:
             raise NoValidObservationsError("No observations remain associated with {} after cleaning".format(self.name))
-        self._existing_xga_products(self._load_fits)
+
+        # We attempt to load in matching XGA products if that was the behaviour set by load_products on init
+        if self._load_products:
+            self._existing_xga_products(self._load_fits)
 
     @property
     def luminosity_distance(self) -> Quantity:
