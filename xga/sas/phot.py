@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 13:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/04/2021, 15:50. Copyright (c) David J Turner
 
 import os
 from random import randint
@@ -192,7 +192,6 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
                 rmtree(dest_dir)
 
             os.makedirs(dest_dir)
-            # TODO Maybe support det coords
             cmds.append("cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; eexpmap eventset={e} "
                         "imageset={im} expimageset={eim} withdetcoords=no withvignetting=yes "
                         "attitudeset={att} pimin={l} pimax={u}; mv * ../; cd ..; "
