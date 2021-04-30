@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/04/2021, 12:45. Copyright (c) David J Turner
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -106,13 +106,23 @@ class BaseSample:
     @property
     def redshifts(self) -> ndarray:
         """
-        Property getter for the list of redshift positions of the sources in  this
+        Property getter for the list of redshifts of the sources in this
         sample (if available). If no redshifts were supplied, None will be returned.
 
         :return: List of redshifts.
         :rtype: ndarray
         """
         return np.array([s.redshift for s in self._sources.values()])
+
+    @property
+    def nHs(self) -> Quantity:
+        """
+        Property getter for the list of nH values of the sources in this sample.
+
+        :return: List of nH values.
+        :rtype: Quantity
+        """
+        return np.Quantity([s.nH for s in self._sources.values()])
 
     @property
     def cosmo(self):
