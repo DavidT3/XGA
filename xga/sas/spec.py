@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/05/2021, 11:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/05/2021, 11:50. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -209,6 +209,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     detmap_cmd = "evselect table={e} imageset={d} xcolumn=DETX ycolumn=DETY imagebinning=binSize ximagebinsize=100 " \
                  "yimagebinsize=100 {ex}"
 
+    # This command just makes a standard XCS image, but will be used to generate images to debug the drilling
+    #  out of regions, as the spectrum expression will be supplied so we can see exactly what data has been removed.
+    debug_im = "evselect table={e} imageset={i} xcolumn=X ycolumn=Y ximagebinsize=87 " \
+               "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize " \
+               "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 withyranges=yes {ex}"
+
     rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype=dataset detmaparray={ds} extendedsource={es}"
 
     # Don't need to run backscale separately, as this arfgen call will do it automatically
@@ -379,12 +385,27 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                  gr=group_spec, ex=extra_file_name)
             ccf = dest_dir + "ccf.cif"
 
+            # These file names are for the debug images of the source and background images, they will not be loaded
+            #  in as a XGA products, but exist purely to check by eye if necessary
+            dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_debug." \
+                  "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                gr=group_spec, ex=extra_file_name)
+            b_dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back_debug." \
+                    "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                  dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                  gr=group_spec, ex=extra_file_name)
+
             # Fills out the evselect command to make the main and background spectra
             s_cmd_str = spec_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, s=spec, u=spec_lim, ex=expr)
             sb_cmd_str = spec_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, s=b_spec, u=spec_lim, ex=b_expr)
 
             # Does the same thing for the evselect command to make the detmap
             d_cmd_str = detmap_cmd.format(e=evt_list.path, d=det_map, ex=d_expr)
+
+            # Populates the debug image commands
+            dim_cmd_str = debug_im.format(e=evt_list.path, ex=expr, i=dim)
+            b_dim_cmd_str = debug_im.format(e=evt_list.path, ex=b_expr, i=b_dim)
 
             # This chunk adds rmfgen commands depending on whether we're using a universal RMF or
             #  an individual one for each spectrum. Also adds arfgen commands on the end, as they depend on
@@ -404,12 +425,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             final_rmf_path = OUTPUT + obs_id + '/' + rmf
             if one_rmf and not os.path.exists(final_rmf_path):
-                cmd_str = ";".join([s_cmd_str, d_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
+                cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
+                                    rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map),
                                     sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src,
                                                                ds=det_map)])
             elif not one_rmf and not os.path.exists(final_rmf_path):
-                cmd_str = ";".join([s_cmd_str, d_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
+                cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
+                                    rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map)]) + ";"
                 cmd_str += ";".join([sb_cmd_str, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src, ds=det_map),
                                      arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src,
@@ -417,8 +440,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             else:
                 # This one just copies the existing universal rmf into the temporary generation folder
                 cmd_str = "cp {f_rmf} {d};".format(f_rmf=final_rmf_path, d=dest_dir)
-                cmd_str += ";".join([s_cmd_str, d_cmd_str, arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path,
-                                                                          es=ex_src, ds=det_map)]) + ";"
+                cmd_str += ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
+                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src,
+                                                    ds=det_map)]) + ";"
                 cmd_str += ";".join([sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path,
                                                                 es=ex_src, ds=det_map)])
 
