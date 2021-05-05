@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 16:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/05/2021, 09:52. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -204,6 +204,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                "spectrumset={s} energycolumn=PI spectralbinsize=5 withspecranges=yes specchannelmin=0 " \
                "specchannelmax={u} {ex}"
 
+    # The detmap in this context is just an image of the source distribution of observation, in detector coordinates,
+    #  and is used to weight the generation of the ARF curves.
+    detmap_cmd = "evselect table={e} imageset={d} xcolumn=DETX ycolumn=DETY imagebinning=binSize ximagebinsize=100 " \
+                 "yimagebinsize=100 {ex}"
+
     rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype=flat extendedsource={es}"
 
     # Don't need to run backscale separately, as this arfgen call will do it automatically
@@ -318,10 +323,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 spec_lim = 20479
                 expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0) && {s}'".format(s=reg)
                 b_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0) && {s}'".format(s=b_reg)
+                # This is an expression without region information to be used for making the detmaps
+                #  required for ARF generation
+                d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
+
             elif "mos" in inst:
                 spec_lim = 11999
                 expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0) && {s}'".format(s=reg)
                 b_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0) && {s}'".format(s=b_reg)
+                d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
             else:
                 raise ValueError("You somehow have an illegal value for the instrument name...")
 
@@ -356,6 +366,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             b_spec = b_spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                    dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                    gr=group_spec, ex=extra_file_name)
+            det_map = "{o}-{i}_detmap.fits"
+            det_map = det_map.format(o=obs_id, i=inst)
             arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.arf"
             arf = arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                              dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec,
@@ -369,6 +381,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Fills out the evselect command to make the main and background spectra
             s_cmd_str = spec_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, s=spec, u=spec_lim, ex=expr)
             sb_cmd_str = spec_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, s=b_spec, u=spec_lim, ex=b_expr)
+
+            # Does the same thing for the evselect command to make the detmap
+            d_cmd_str = detmap_cmd.format(e=evt_list.path, d=det_map, ex=d_expr)
 
             # This chunk adds rmfgen commands depending on whether we're using a universal RMF or
             #  an individual one for each spectrum. Also adds arfgen commands on the end, as they depend on
@@ -388,19 +403,19 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             final_rmf_path = OUTPUT + obs_id + '/' + rmf
             if one_rmf and not os.path.exists(final_rmf_path):
-                cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
+                cmd_str = ";".join([s_cmd_str, d_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src), sb_cmd_str,
                                     arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src)])
             elif not one_rmf and not os.path.exists(final_rmf_path):
-                cmd_str = ";".join([s_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
+                cmd_str = ";".join([s_cmd_str, d_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src)]) + ";"
                 cmd_str += ";".join([sb_cmd_str, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src),
                                      arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src)])
             else:
                 # This one just copies the existing universal rmf into the temporary generation folder
                 cmd_str = "cp {f_rmf} {d};".format(f_rmf=final_rmf_path, d=dest_dir)
-                cmd_str += ";".join([s_cmd_str, arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path,
-                                                               es=ex_src)]) + ";"
+                cmd_str += ";".join([s_cmd_str, d_cmd_str, arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path,
+                                                                          es=ex_src)]) + ";"
                 cmd_str += ";".join([sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path,
                                                                 es=ex_src)])
 
