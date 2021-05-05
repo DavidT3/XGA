@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/05/2021, 09:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/05/2021, 11:04. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -209,11 +209,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     detmap_cmd = "evselect table={e} imageset={d} xcolumn=DETX ycolumn=DETY imagebinning=binSize ximagebinsize=100 " \
                  "yimagebinsize=100 {ex}"
 
-    rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype=flat extendedsource={es}"
+    rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype=dataset detmaparray={ds} extendedsource={es}"
 
     # Don't need to run backscale separately, as this arfgen call will do it automatically
+    # TODO Experiment to see if I should change the badpixmaptype
     arf_cmd = "arfgen spectrumset='{s}' arfset={a} withrmfset=yes rmfset='{r}' badpixlocation={e} " \
-              "extendedsource={es} detmaptype=flat setbackscale=yes"
+              "extendedsource={es} detmaptype=dataset detmaparray={ds} setbackscale=yes badpixmaptype=flat"
 
     # If the user wants to group spectra, then we'll need this template command:
     grp_cmd = "specgroup spectrumset={s} overwrite=yes backgndset={b} arfset={a} rmfset={r} addfilenames=no"
@@ -403,21 +404,23 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             final_rmf_path = OUTPUT + obs_id + '/' + rmf
             if one_rmf and not os.path.exists(final_rmf_path):
-                cmd_str = ";".join([s_cmd_str, d_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
-                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src), sb_cmd_str,
-                                    arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src)])
+                cmd_str = ";".join([s_cmd_str, d_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
+                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map),
+                                    sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src,
+                                                               ds=det_map)])
             elif not one_rmf and not os.path.exists(final_rmf_path):
-                cmd_str = ";".join([s_cmd_str, d_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src),
-                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src)]) + ";"
-                cmd_str += ";".join([sb_cmd_str, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src),
-                                     arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src)])
+                cmd_str = ";".join([s_cmd_str, d_cmd_str, rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
+                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map)]) + ";"
+                cmd_str += ";".join([sb_cmd_str, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src, ds=det_map),
+                                     arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src,
+                                                    ds=det_map)])
             else:
                 # This one just copies the existing universal rmf into the temporary generation folder
                 cmd_str = "cp {f_rmf} {d};".format(f_rmf=final_rmf_path, d=dest_dir)
                 cmd_str += ";".join([s_cmd_str, d_cmd_str, arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path,
-                                                                          es=ex_src)]) + ";"
+                                                                          es=ex_src, ds=det_map)]) + ";"
                 cmd_str += ";".join([sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path,
-                                                                es=ex_src)])
+                                                                es=ex_src, ds=det_map)])
 
             # If the user wants to produce grouped spectra, then this if statement is triggered and adds a specgroup
             #  command at the end. The groupspec command will replace the ungrouped spectrum.
