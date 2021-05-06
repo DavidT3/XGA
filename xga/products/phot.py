@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/02/2021, 12:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/05/2021, 20:31. Copyright (c) David J Turner
 
 
 import warnings
@@ -23,6 +23,11 @@ from ..utils import xmm_sky, xmm_det, find_all_wcs
 
 
 class Image(BaseProduct):
+    """
+    This class stores image data from X-ray observations. It also allows easy, direct, access to that data, and
+    implements many helpful methods with extra functionality (including coordinate transforms, peak finders, and
+    a powerful view method).
+    """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, lo_en: Quantity, hi_en: Quantity):
         """
@@ -345,11 +350,9 @@ class Image(BaseProduct):
             # These go between degrees and pixels
             if input_unit == "deg" and out_name == "pix":
                 # The second argument all_world2pix defines the origin, for numpy coords it should be 0
-                out_coord = Quantity(self.radec_wcs.all_world2pix(coords, 0), output_unit).astype(int)
-
+                out_coord = Quantity(self.radec_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
             elif input_unit == "pix" and out_name == "deg":
                 out_coord = Quantity(self.radec_wcs.all_pix2world(coords, 0), output_unit)
-                # print(out_coord - Quantity(self.radec_wcs.wcs_pix2world(coords, 0), output_unit))
 
             # These go between degrees and XMM sky XY coordinates
             elif input_unit == "deg" and out_name == "xmm_sky":
@@ -361,7 +364,7 @@ class Image(BaseProduct):
 
             # These go between XMM sky XY and pixel coordinates
             elif input_unit == "xmm_sky" and out_name == "pix":
-                out_coord = Quantity(self.skyxy_wcs.all_world2pix(coords, 0), output_unit).astype(int)
+                out_coord = Quantity(self.skyxy_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
             elif input_unit == "pix" and out_name == "xmm_sky":
                 out_coord = Quantity(self.skyxy_wcs.all_pix2world(coords, 0), output_unit)
 
@@ -375,7 +378,7 @@ class Image(BaseProduct):
 
             # These go between XMM det XY and pixel coordinates
             elif input_unit == "xmm_det" and out_name == "pix":
-                out_coord = Quantity(self.detxy_wcs.all_world2pix(coords, 0), output_unit).astype(int)
+                out_coord = Quantity(self.detxy_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
             elif input_unit == "pix" and out_name == "xmm_det":
                 out_coord = Quantity(self.detxy_wcs.all_pix2world(coords, 0), output_unit)
 
@@ -390,7 +393,7 @@ class Image(BaseProduct):
 
             # if out_coord.shape ==
         elif input_unit == out_name and out_name == 'pix':
-            out_coord = coords.astype(int)
+            out_coord = coords.round(0).astype(int)
         else:
             out_coord = coords
 
