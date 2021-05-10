@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2021, 14:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2021, 16:10. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -414,10 +414,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             arf = arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                              dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec,
                              ex=extra_file_name)
-            b_arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.arf"
-            b_arf = b_arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                 dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                                 gr=group_spec, ex=extra_file_name)
+            # b_arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.arf"
+            # b_arf = b_arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+            #                      dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+            #                      gr=group_spec, ex=extra_file_name)
             ccf = dest_dir + "ccf.cif"
 
             # These file names are for the debug images of the source and background images, they will not be loaded
@@ -447,39 +447,39 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #  the rmf.
             if one_rmf:
                 rmf = "{o}_{i}_{n}_universal.rmf".format(o=obs_id, i=inst, n=source_name)
-                b_rmf = rmf
+                # b_rmf = rmf
             else:
                 rmf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.rmf"
                 rmf = rmf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                  dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                  gr=group_spec, ex=extra_file_name)
-                b_rmf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.rmf"
-                b_rmf = b_rmf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                                     gr=group_spec, ex=extra_file_name)
+                # b_rmf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.rmf"
+                # b_rmf = b_rmf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                #                      dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                #                      gr=group_spec, ex=extra_file_name)
 
             final_rmf_path = OUTPUT + obs_id + '/' + rmf
             if one_rmf and not os.path.exists(final_rmf_path):
                 cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
                                     rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map),
-                                    sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src,
-                                                               ds=det_map)])
+                                    sb_cmd_str])
+                #arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
             elif not one_rmf and not os.path.exists(final_rmf_path):
                 cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
                                     rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map)]) + ";"
-                cmd_str += ";".join([sb_cmd_str, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src, ds=det_map),
-                                     arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src,
-                                                    ds=det_map)])
+                cmd_str += ";".join([sb_cmd_str])
+                #, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src, ds=det_map)
+                # arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
             else:
                 # This one just copies the existing universal rmf into the temporary generation folder
                 cmd_str = "cp {f_rmf} {d};".format(f_rmf=final_rmf_path, d=dest_dir)
                 cmd_str += ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
                                      arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src,
                                                     ds=det_map)]) + ";"
-                cmd_str += ";".join([sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path,
-                                                                es=ex_src, ds=det_map)])
+                cmd_str += ";".join([sb_cmd_str])
+                #arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
 
             # If the user wants to produce grouped spectra, then this if statement is triggered and adds a specgroup
             #  command at the end. The groupspec command will replace the ungrouped spectrum.
@@ -504,8 +504,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
                                "arf_path": os.path.join(OUTPUT, obs_id, arf),
                                "b_spec_path": os.path.join(OUTPUT, obs_id, b_spec),
-                               "b_rmf_path": os.path.join(OUTPUT, obs_id, b_rmf),
-                               "b_arf_path": os.path.join(OUTPUT, obs_id, b_arf),
+                               "b_rmf_path": '',
+                               "b_arf_path": '',
                                "obs_id": obs_id, "instrument": inst, "grouped": group_spec, "min_counts": min_counts,
                                "min_sn": min_sn, "over_sample": over_sample, "central_coord": source.default_coord,
                                "from_region": from_region})

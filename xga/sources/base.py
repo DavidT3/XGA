@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2021, 14:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2021, 16:10. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -751,8 +751,7 @@ class BaseSource:
 
                     # If exactly one match has been found for all of the products, we define an XGA spectrum and
                     #  add it the source object.
-                    if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and \
-                            len(back_rmf) == 1:
+                    if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and len(back_rmf) == 1:
                         # Defining our XGA spectrum instance
                         obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
                                        grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf[0],
@@ -771,6 +770,26 @@ class BaseSource:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
                             self.update_products(obj)
+
+                    elif len(back_arf) == 0:
+                        # Defining our XGA spectrum instance
+                        obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
+                                       grouped, min_counts, min_sn, over_sample, "", "", "", region)
+
+                        if "ident" in sp.split('/')[-1]:
+                            set_id = int(sp.split('ident')[-1].split('_')[0])
+                            ann_id = int(sp.split('ident')[-1].split('_')[1])
+                            obj.annulus_ident = ann_id
+                            obj.set_ident = set_id
+                            if set_id not in ann_spec_constituents:
+                                ann_spec_constituents[set_id] = []
+                                ann_spec_usable[set_id] = True
+                            ann_spec_constituents[set_id].append(obj)
+                        else:
+                            # And adding it to the source storage structure, but only if its not a member
+                            #  of an AnnularSpectra
+                            self.update_products(obj)
+
                     else:
                         warnings.warn("{src} spectrum {sp} cannot be loaded in due to a mismatch in available"
                                       " ancillary files".format(src=self.name, sp=sp))
