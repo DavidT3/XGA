@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/05/2021, 11:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2021, 14:16. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -12,7 +12,7 @@ from astropy.units import Quantity
 
 from .misc import cifbuild
 from .. import OUTPUT, NUM_CORES
-from ..exceptions import SASInputInvalid
+from ..exceptions import SASInputInvalid, NotAssociatedError
 from ..samples.base import BaseSample
 from ..sas.run import sas_call
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -218,9 +218,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype=dataset detmaparray={ds} extendedsource={es}"
 
     # Don't need to run backscale separately, as this arfgen call will do it automatically
-    # TODO Experiment to see if I should change the badpixmaptype
     arf_cmd = "arfgen spectrumset='{s}' arfset={a} withrmfset=yes rmfset='{r}' badpixlocation={e} " \
-              "extendedsource={es} detmaptype=dataset detmaparray={ds} setbackscale=yes badpixmaptype=flat"
+              "extendedsource={es} detmaptype=dataset detmaparray={ds} setbackscale=yes badpixmaptype=dataset"
 
     # If the user wants to group spectra, then we'll need this template command:
     grp_cmd = "specgroup spectrumset={s} overwrite=yes backgndset={b} arfset={a} rmfset={r} addfilenames=no"
@@ -331,14 +330,50 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0) && {s}'".format(s=reg)
                 b_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0) && {s}'".format(s=b_reg)
                 # This is an expression without region information to be used for making the detmaps
-                #  required for ARF generation
-                d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
+                #  required for ARF generation, we start off assuming we'll use a MOS observation as the detmap
+                d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
+
+                # The detmap for the arfgen call should ideally not be from the same instrument as the observation,
+                #  so for PN we preferentially select MOS2 (as MOS1 was damaged). However if there isn't a MOS2
+                #  events list from the same observation then we select MOS1, and failing that we use PN.
+                try:
+                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos2')[0]
+                except NotAssociatedError:
+                    try:
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos1')[0]
+                    except NotAssociatedError:
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+                        # If all is lost and there are no MOS event lists then we must revert to the PN expression
+                        d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
 
             elif "mos" in inst:
                 spec_lim = 11999
                 expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0) && {s}'".format(s=reg)
                 b_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0) && {s}'".format(s=b_reg)
-                d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
+                # This is an expression without region information to be used for making the detmaps
+                #  required for ARF generation, we start off assuming we'll use the PN observation as the detmap
+                d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
+
+                # The detmap for the arfgen call should ideally not be from the same instrument as the observation,
+                #  so for MOS observations we preferentially select PN. However if there isn't a PN events list
+                #  from the same observation then for MOS2 we select MOS1, and for MOS1 we select MOS2 (as they
+                #  are rotated wrt one another it is still semi-valid), and failing that MOS2 will get MOS2 and MOS1
+                #  will get MOS1.
+                if inst[-1] == 1:
+                    cur = '1'
+                    opp = '2'
+                else:
+                    cur = '2'
+                    opp = '1'
+                try:
+                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+                except NotAssociatedError:
+                    # If we must use a MOS detmap then we have to use the MOS expression
+                    d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
+                    try:
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+opp)[0]
+                    except NotAssociatedError:
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+cur)[0]
             else:
                 raise ValueError("You somehow have an illegal value for the instrument name...")
 
@@ -373,8 +408,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             b_spec = b_spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                    dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                    gr=group_spec, ex=extra_file_name)
-            det_map = "{o}-{i}_detmap.fits"
-            det_map = det_map.format(o=obs_id, i=inst)
+            det_map = "{o}_{i}_detmap.fits"
+            det_map = det_map.format(o=detmap_evts.obs_id, i=detmap_evts.instrument)
             arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.arf"
             arf = arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                              dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec,
@@ -401,7 +436,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             sb_cmd_str = spec_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, s=b_spec, u=spec_lim, ex=b_expr)
 
             # Does the same thing for the evselect command to make the detmap
-            d_cmd_str = detmap_cmd.format(e=evt_list.path, d=det_map, ex=d_expr)
+            d_cmd_str = detmap_cmd.format(e=detmap_evts.path, d=det_map, ex=d_expr)
 
             # Populates the debug image commands
             dim_cmd_str = debug_im.format(e=evt_list.path, ex=expr, i=dim)
