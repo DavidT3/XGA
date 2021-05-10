@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 10:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2021, 14:43. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -65,10 +65,10 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = BaseProduct(p_path[0], "", "", out, err, cmd)
     elif (p_type == "spectrum" or p_type == "annular spectrum set components") and "NullSource" not in src:
         prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
-                        extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info['central_coord'],
-                        extra_info["inner_radius"], extra_info["outer_radius"], extra_info["obs_id"],
-                        extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"], extra_info["min_sn"],
-                        extra_info["over_sample"], out, err, cmd, extra_info["from_region"])
+                        extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
+                        extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"],
+                        extra_info["min_sn"], extra_info["over_sample"], out, err, cmd, extra_info["from_region"],
+                        extra_info["b_rmf_path"], extra_info["b_arf_path"])
     elif p_type == "psf" and "NullSource" not in src:
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                        extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],

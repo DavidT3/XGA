@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/04/2021, 15:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2021, 14:43. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -754,9 +754,9 @@ class BaseSource:
                     if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and \
                             len(back_rmf) == 1:
                         # Defining our XGA spectrum instance
-                        obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], central_coord,
-                                       r_inner, r_outer, obs_id, inst, grouped, min_counts, min_sn, over_sample, "",
-                                       "", "", region)
+                        obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
+                                       grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf[0],
+                                       back_arf[0])
 
                         if "ident" in sp.split('/')[-1]:
                             set_id = int(sp.split('ident')[-1].split('_')[0])
@@ -1427,11 +1427,13 @@ class BaseSource:
         if obs_id == "combined":
             obs_id = None
 
+        if central_coord is None:
+            central_coord = self._default_coord
+
         # Don't need to do a bunch of checks, because the method I call to make the
         #  mask does all the checks anyway
         src_reg, bck_reg = self.source_back_regions(reg_type, obs_id, central_coord)
-        if central_coord is None:
-            central_coord = self._default_coord
+
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:
@@ -1464,7 +1466,13 @@ class BaseSource:
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
         """
-
+        # for r in self._interloper_regions:
+        #     with np.errstate(divide='raise'):
+        #         # if r.width.value == 0.007473094249623517:
+        #         print(r)
+        #         print(r.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape))
+        #         print(r.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape).sum())
+        #         print('\n\n\n')
         masks = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
                  for reg in self._interloper_regions if reg is not None]
         interlopers = sum([m for m in masks if m is not None])
@@ -1578,7 +1586,6 @@ class BaseSource:
         if remove_interlopers:
             interloper_mask = self.get_interloper_mask(obs_id)
             custom_mask = custom_mask*interloper_mask
-
         return custom_mask
 
     def get_snr(self, outer_radius: Union[Quantity, str], central_coord: Quantity = None, lo_en: Quantity = None,
