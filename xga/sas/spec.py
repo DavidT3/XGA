@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2021, 16:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/05/2021, 11:56. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -215,11 +215,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize " \
                "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 withyranges=yes {ex}"
 
-    rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype=dataset detmaparray={ds} extendedsource={es}"
+    rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype={dt} detmaparray={ds} extendedsource={es}"
 
     # Don't need to run backscale separately, as this arfgen call will do it automatically
-    arf_cmd = "arfgen spectrumset='{s}' arfset={a} withrmfset=yes rmfset='{r}' badpixlocation={e} " \
-              "extendedsource={es} detmaptype=dataset detmaparray={ds} setbackscale=yes badpixmaptype=dataset"
+    arf_cmd = "arfgen spectrumset={s} arfset={a} withrmfset=yes rmfset={r} badpixlocation={e} " \
+              "extendedsource={es} detmaptype={dt} detmaparray={ds} setbackscale=no badpixmaptype={dt}"
+
+    bscal_cmd = "backscale spectrumset={s} badpixlocation={e}"
 
     # If the user wants to group spectra, then we'll need this template command:
     grp_cmd = "specgroup spectrumset={s} overwrite=yes backgndset={b} arfset={a} rmfset={r} addfilenames=no"
@@ -237,8 +239,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         #  so we check the source type
         if isinstance(source, (ExtendedSource, GalaxyCluster)):
             ex_src = "yes"
+            # Sets the detmap type, using an image of the source is appropriate for extended sources like clusters,
+            #  but not for point sources
+            dt = 'dataset'
         else:
             ex_src = "no"
+            dt = 'flat'
         cmds = []
         final_paths = []
         extra_info = []
@@ -408,8 +414,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             b_spec = b_spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                    dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                    gr=group_spec, ex=extra_file_name)
-            det_map = "{o}_{i}_detmap.fits"
-            det_map = det_map.format(o=detmap_evts.obs_id, i=detmap_evts.instrument)
+            # Arguably checking whether this is an extended source and adjusting this is irrelevant as the file
+            #  name won't be used anyway with detmaptype set to flat, but I'm doing it anyway
+            if ex_src:
+                det_map = "{o}_{i}_detmap.fits"
+                det_map = det_map.format(o=detmap_evts.obs_id, i=detmap_evts.instrument)
+            else:
+                det_map = ""
             arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.arf"
             arf = arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                              dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec,
@@ -461,15 +472,18 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             final_rmf_path = OUTPUT + obs_id + '/' + rmf
             if one_rmf and not os.path.exists(final_rmf_path):
                 cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
-                                    rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
-                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map),
-                                    sb_cmd_str])
+                                    rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map, dt=dt),
+                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map, dt=dt),
+                                    sb_cmd_str, bscal_cmd.format(s=spec, e=evt_list.path),
+                                    bscal_cmd.format(s=b_spec, e=evt_list.path)])
                 #arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
             elif not one_rmf and not os.path.exists(final_rmf_path):
                 cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
-                                    rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
-                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map)]) + ";"
-                cmd_str += ";".join([sb_cmd_str])
+                                    rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map, dt=dt),
+                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src,
+                                                   ds=det_map, dt=dt)]) + ";"
+                cmd_str += ";".join([sb_cmd_str, bscal_cmd.format(s=spec, e=evt_list.path),
+                                     bscal_cmd.format(s=b_spec, e=evt_list.path)])
                 #, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src, ds=det_map)
                 # arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
             else:
@@ -477,8 +491,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 cmd_str = "cp {f_rmf} {d};".format(f_rmf=final_rmf_path, d=dest_dir)
                 cmd_str += ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
                                      arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src,
-                                                    ds=det_map)]) + ";"
-                cmd_str += ";".join([sb_cmd_str])
+                                                    ds=det_map, dt=dt)]) + ";"
+                cmd_str += ";".join([sb_cmd_str, bscal_cmd.format(s=spec, e=evt_list.path),
+                                     bscal_cmd.format(s=b_spec, e=evt_list.path)])
                 #arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
 
             # If the user wants to produce grouped spectra, then this if statement is triggered and adds a specgroup
