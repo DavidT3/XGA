@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/05/2021, 11:56. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/05/2021, 14:20. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -233,7 +233,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     sources_paths = []
     sources_extras = []
     sources_types = []
-
     for s_ind, source in enumerate(sources):
         # rmfgen and arfgen both take arguments that describe if something is an extended source or not,
         #  so we check the source type
