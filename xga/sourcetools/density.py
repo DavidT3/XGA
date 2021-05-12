@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 15:18. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -196,18 +196,22 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
     :return: The requested surface brightness profile.
     :rtype: SurfaceBrightness1D
     """
-    if all([obs_id is None, inst is None]):
-        rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-        # Grabs the mask which will remove interloper sources
-        int_mask = src.get_interloper_mask()
-        comb = True
-    elif all([obs_id is not None, inst is not None]):
-        rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-        # Grabs the mask which will remove interloper sources
-        int_mask = src.get_interloper_mask(obs_id=obs_id)
-        comb = False
-    else:
-        raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
+    try:
+        if all([obs_id is None, inst is None]):
+            rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+            # Grabs the mask which will remove interloper sources
+            int_mask = src.get_interloper_mask()
+            comb = True
+        elif all([obs_id is not None, inst is not None]):
+            rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+            # Grabs the mask which will remove interloper sources
+            int_mask = src.get_interloper_mask(obs_id=obs_id)
+            comb = False
+        else:
+            raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
+    except NoProductAvailableError:
+        raise NoProductAvailableError("The RateMap required to measure the density profile has not been generated "
+                                      "yet, possibly because you haven't generated PSF corrected image yet.")
 
     if use_peak:
         centre = src.peak
