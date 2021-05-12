@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 15:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 15:50. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -221,7 +221,7 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
     rad = src.convert_radius(outer_radius, 'kpc')
 
     try:
-        sb_prof = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en, combined=comb,
+        sb_prof = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en,
                                                 pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
                                                 psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
                                                 psf_iter=psf_iter)
