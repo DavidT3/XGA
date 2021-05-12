@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/04/2021, 08:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 16:00. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -2030,8 +2030,10 @@ class BaseAggregateProfile1D:
             self._back_avail = False
 
         # Here we check that all energy bounds are the same
-        bounds = [p.energy_bounds for p in profiles]
-        if len(set(bounds)) != 1:
+        lo_bounds = [p.energy_bounds[0] for p in profiles]
+        hi_bounds = [p.energy_bounds[1] for p in profiles]
+
+        if len(set(lo_bounds)) != 1 or len(set(hi_bounds)) != 1:
             raise ValueError("All component profiles must have been generate from the same energy range,"
                              " otherwise they aren't directly comparable.")
 
@@ -2041,7 +2043,7 @@ class BaseAggregateProfile1D:
         # Not doing a check that all the prof types are the same, because that should be included in the
         #  type check on the first line of this init
         self._prof_type = profiles[0].type.split("_profile")[0]
-        self._energy_bounds = bounds[0]
+        self._energy_bounds = profiles[0].energy_bounds
 
         # We set the y-axis name attribute which is now expected by the plotting function, just grab it from the
         #  first component because we've already checked that they're all the same type
