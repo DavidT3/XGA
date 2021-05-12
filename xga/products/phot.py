@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/05/2021, 20:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 14:14. Copyright (c) David J Turner
 
 
 import warnings
@@ -386,6 +386,16 @@ class Image(BaseProduct):
             # outside the range covered by an image, but we can at least catch the error
             if out_name == "pix" and np.any(out_coord < 0) and self._prod_type != "psf":
                 raise ValueError("You've converted to pixel coordinates, and some elements are less than zero.")
+            # Have to compare to the [1] element of shape because numpy arrays are flipped and we want
+            #  to compare x to x
+            elif out_name == "pix" and np.any(out_coord[:, 0].value> self.shape[1]) and self._prod_type != "psf":
+                raise ValueError("You've converted to pixel coordinates, and some x coordinates are larger than the "
+                                 "image x-shape.")
+            # Have to compare to the [0] element of shape because numpy arrays are flipped and we want
+            #  to compare y to y
+            elif out_name == "pix" and np.any(out_coord[:, 1].value > self.shape[0]) and self._prod_type != "psf":
+                raise ValueError("You've converted to pixel coordinates, and some y coordinates are larger than the "
+                                 "image y-shape.")
 
             # If there was only pair passed in, we'll return a flat numpy array
             if out_coord.shape == (1, 2):

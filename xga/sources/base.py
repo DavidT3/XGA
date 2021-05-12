@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2021, 16:10. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 14:14. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -1117,7 +1117,6 @@ class BaseSource:
                 diff_sort = np.array([dist_from_source(r) for r in reg_dict[obs_id]]).argsort()
                 # Unfortunately due to a limitation of the regions module I think you need images
                 #  to do this contains match...
-                # TODO Come up with an alternative to this that can work without a WCS
                 within = np.array([reg.contains(SkyCoord(*self._ra_dec, unit='deg'), w)
                                    for reg in reg_dict[obs_id][diff_sort[0:5]]])
 
@@ -1485,15 +1484,28 @@ class BaseSource:
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
         """
-        # for r in self._interloper_regions:
-        #     with np.errstate(divide='raise'):
-        #         # if r.width.value == 0.007473094249623517:
-        #         print(r)
-        #         print(r.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape))
-        #         print(r.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape).sum())
-        #         print('\n\n\n')
-        masks = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                 for reg in self._interloper_regions if reg is not None]
+        masks = []
+        for r in self._interloper_regions:
+            if r is not None:
+                # The central coordinate of the current region
+                c = Quantity([r.center.ra.value, r.center.dec.value], 'deg')
+                try:
+                    # Checks if the central coordinate can be converted to pixels for the mask_image, if it fails then
+                    #  its likely off of the image, as a ValueError will be thrown if a pixel coordinate is less
+                    #  than zero, or greater than the size of the image in that axis
+                    cp = mask_image.coord_conv(c, 'pix')
+                    pr = r.to_pixel(mask_image.radec_wcs)
+
+                    # If the rotation angle is zero then the conversion to mask by the regions module will be upset,
+                    #  so I perturb the angle by 0.1 degrees
+                    if pr.angle.value == 0:
+                        pr.angle += Quantity(0.1, 'deg')
+                    masks.append(pr.to_mask().to_image(mask_image.shape))
+                except ValueError:
+                    pass
+
+        # masks = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+        #          for reg in self._interloper_regions if reg is not None]
         interlopers = sum([m for m in masks if m is not None])
 
         mask = np.ones(mask_image.shape)
