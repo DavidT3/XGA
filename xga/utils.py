@@ -1,9 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 11:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 15:14. Copyright (c) David J Turner
 
 import json
 import os
 from configparser import ConfigParser
+from subprocess import Popen, PIPE
 from typing import List, Tuple
 
 import pandas as pd
@@ -378,6 +379,28 @@ else:
     r500 = def_unit('r500', format={'latex': r"\mathrm{R_{500}}"})
     r2500 = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
     add_enabled_units([r200, r500, r2500, xmm_det, xmm_det])
+
+    # Here we check to see whether SAS is installed (along with all the necessary paths)
+    SAS_VERSION = None
+    if "SAS_DIR" not in os.environ:
+        warnings.warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such"
+                      " all functions in xga.sas will not work.")
+        SAS_VERSION = None
+        SAS_AVAIL = False
+    else:
+        # This way, the user can just import the SAS_VERSION from this utils code
+        sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+        SAS_VERSION = sas_out.decode("UTF-8").strip("]\n").split('-')[-1]
+        SAS_AVAIL = True
+
+    # This checks for the CCF path, which is required to use cifbuild, which is required to do basically
+    #  anything with SAS
+    if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
+        warnings.warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration "
+                      "files. As such functions in xga.sas will not work.")
+        SAS_AVAIL = False
+
+    XSPEC_VERSION = None
 
 
 
