@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 15:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 19:23. Copyright (c) David J Turner
 
 import json
 import os
@@ -408,7 +408,8 @@ else:
         warnings.warn("Unable to locate an XSPEC installation.")
     else:
         # The XSPEC into text includes the version, so I read that out and parse it
-        xspec_out, xspec_err = Popen("xspec; exit", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+        null_path = pkg_resources.resource_filename(__name__, "xspec_scripts/null_script.xcm")
+        xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE, shell=True).communicate()
         xspec_vline = [line for line in xspec_out.decode("UTF-8").split('\n') if 'XSPEC version' in line][0]
         XSPEC_VERSION = xspec_vline.split(': ')[-1]
 
