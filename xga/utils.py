@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 11:07. Copyright (c) David J Turner
 
 import json
 import os
@@ -34,7 +34,6 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_mos1_evts": "/this/is/required/{obs_id}/mos1_exp1_clean_evts.fits",
              "clean_mos2_evts": "/this/is/required/{obs_id}/mos2_exp1_clean_evts.fits",
              "attitude_file": "/this/is/required/{obs_id}/attitude.fits",
-             "odf_path": "/this/is/required/{obs_id}/odf/",
              "lo_en": ['0.50', '2.00'],
              "hi_en": ['2.00', '10.00'],
              "pn_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-pn_merged_img.fits",
@@ -296,8 +295,7 @@ else:
     xga_conf = ConfigParser()
     # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
     xga_conf.read(CONFIG_FILE)
-    keys_to_check = ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file",
-                     "odf_path"]
+    keys_to_check = ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file"]
     # Here I check that the installer has actually changed the three events file paths
     all_changed = all([xga_conf["XMM_FILES"][key] != XMM_FILES[key] for key in keys_to_check])
     if not all_changed:
