@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 11:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 20:46. Copyright (c) David J Turner
 
 import os
 from random import randint
@@ -10,6 +10,7 @@ from fitsio import read_header
 
 from .run import sas_call
 from .. import OUTPUT, NUM_CORES
+from ..exceptions import InvalidProductError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
@@ -46,12 +47,22 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
         extra_info = []
         for obs_id in source.obs_ids:
             # Fetch an events list for this ObsID, doesn't matter which
-            some_evt_list = source.get_products("events", obs_id=obs_id)[0]
-            # Reads in the header of the events list file
-            evt_head = read_header(some_evt_list.path)
-            # Then extracts the observation date, this is what we need to give cifbuild
-            obs_date = evt_head['DATE_OBS']
-            del evt_head
+            some_evt_lists = source.get_products("events", obs_id=obs_id)
+            obs_date = None
+            for evt in some_evt_lists:
+                # Reads in the header of the events list file
+                evt_head = read_header(evt.path)
+                # Then extracts the observation date, this is what we need to give cifbuild
+                if "DATE-OBS" in evt_head:
+                    obs_date = evt_head['DATE-OBS']
+                    del evt_head
+                    break
+                else:
+                    del evt_head
+
+            if obs_date is None:
+                raise InvalidProductError("All event lists for {} are missing the DATE-OBS header, this is required to"
+                                          " run the cifbuild function.".format(obs_id))
 
             if not os.path.exists(OUTPUT + obs_id):
                 os.mkdir(OUTPUT + obs_id)

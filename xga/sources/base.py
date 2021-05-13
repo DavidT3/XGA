@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 11:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 20:46. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -766,7 +766,7 @@ class BaseSource:
                             #  of an AnnularSpectra
                             self.update_products(obj)
 
-                    elif len(back_arf) == 0:
+                    elif len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 0:
                         # Defining our XGA spectrum instance
                         obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
                                        grouped, min_counts, min_sn, over_sample, "", "", "", region)
