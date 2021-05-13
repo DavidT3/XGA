@@ -1,10 +1,12 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2021, 13:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 10:55. Copyright (c) David J Turner
 
 import os
+from random import randint
 from typing import Union
 
 import numpy as np
+from fitsio import read_header
 
 from .run import sas_call
 from .. import OUTPUT, NUM_CORES
@@ -15,7 +17,7 @@ from ..sources.base import NullSource
 
 @sas_call
 def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int = NUM_CORES,
-             disable_progress: bool = False):
+                 disable_progress: bool = False):
     """
     A wrapper for the XMM cifbuild command, which will be run before many of the more complex
     SAS commands, to check that a CIF compatible with the local version of SAS is available.
@@ -30,7 +32,8 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
         sources = [sources]
 
     # This string contains the bash code to run cifbuild
-    cif_cmd = "cd {d}; export SAS_ODF={odf}; cifbuild calindexset=ccf.cif; unset SAS_ODF"
+    cif_cmd = "cd {d}; cifbuild calindexset=ccf.cif withobservationdate=yes " \
+              "observationdate={od} ; mv * ../; cd ..; rm -r {n}"
 
     sources_cmds = []
     sources_paths = []
@@ -41,17 +44,26 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
         final_paths = []
         extra_info = []
         for obs_id in source.obs_ids:
-            odf_path = source.get_odf_path(obs_id)
+            # Fetch an events list for this ObsID, doesn't matter which
+            some_evt_list = source.get_products("events", obs_id=obs_id)[0]
+            # Reads in the header of the events list file
+            evt_head = read_header(some_evt_list.path)
+            # Then extracts the observation date, this is what we need to give cifbuild
+            obs_date = evt_head['DATE_OBS']
+            del evt_head
 
             if not os.path.exists(OUTPUT + obs_id):
                 os.mkdir(OUTPUT + obs_id)
 
             dest_dir = "{out}{obs}/".format(out=OUTPUT, obs=obs_id)
-            if not os.path.exists(dest_dir):
-                os.makedirs(dest_dir)
+            temp_name = "tempdir_{}".format(randint(0, 1e+8))
+            temp_dir = dest_dir + temp_name + "/"
+
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir)
             final_path = dest_dir + "ccf.cif"
             if not os.path.exists(final_path):
-                cmds.append(cif_cmd.format(d=dest_dir, odf=odf_path))
+                cmds.append(cif_cmd.format(d=temp_dir, od=obs_date, n=temp_name))
                 final_paths.append(final_path)
                 extra_info.append({})  # This doesn't need any extra information
 
@@ -64,7 +76,3 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
     execute = True  # This should be executed immediately
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
-
-
-
-
