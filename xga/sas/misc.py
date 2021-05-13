@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 11:07. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 11:09. Copyright (c) David J Turner
 
 import os
 from random import randint
@@ -19,8 +19,9 @@ from ..sources.base import NullSource
 def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int = NUM_CORES,
              disable_progress: bool = False):
     """
-    A wrapper for the XMM cifbuild command, which will be run before many of the more complex
-    SAS commands, to check that a CIF compatible with the local version of SAS is available.
+    A wrapper for the XMM cifbuild command, which will be run before many of the more complex SAS commands, to
+    check that a CIF compatible with the local version of SAS is available. The observation date is taken from an
+    event list for a given ObsID, and the analysis date is set to the date which this function is run.
 
     :param BaseSource/NullSource/BaseSample sources: A single source object, or a sample of sources.
     :param int num_cores: The number of cores to use (if running locally), default is set to
