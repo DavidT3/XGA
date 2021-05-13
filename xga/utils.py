@@ -1,8 +1,9 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 15:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 15:29. Copyright (c) David J Turner
 
 import json
 import os
+import shutil
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
 from typing import List, Tuple
@@ -400,8 +401,16 @@ else:
                       "files. As such functions in xga.sas will not work.")
         SAS_AVAIL = False
 
+    # Equivelant for the XSPEC dependency
     XSPEC_VERSION = None
-
+    # Got to make sure we can access command line XSPEC.
+    if shutil.which("xspec") is None:
+        warnings.warn("Unable to locate an XSPEC installation.")
+    else:
+        # The XSPEC into text includes the version, so I read that out and parse it
+        xspec_out, xspec_err = Popen("xspec; exit", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+        xspec_vline = [line for line in xspec_out.decode("UTF-8").split('\n') if 'XSPEC version' in line][0]
+        XSPEC_VERSION = xspec_vline.split(': ')[-1]
 
 
 

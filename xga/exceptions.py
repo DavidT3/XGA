@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/01/2021, 17:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 15:29. Copyright (c) David J Turner
 
 
 class HeasoftError(Exception):
@@ -40,6 +40,26 @@ class SASNotFoundError(Exception):
             return '{0} '.format(self.message)
         else:
             return 'SASNotFoundError has been raised'
+
+
+class XSPECNotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if XSPEC can not be found on the system.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'XSPECNotFoundError has been raised'
 
 
 # I do not know if I will keep this as is or expand out into different errors
