@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/04/2021, 14:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/05/2021, 16:25. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -567,18 +567,23 @@ class ClusterSample(BaseSample):
                     raise ValueError("There are multiple matching hydrostatic mass profiles associated with {}, "
                                      "you will have to retrieve masses manually.")
                 else:
-                    cur_mass = mass_profs.mass(actual_rad)[0]
-                    if cur_mass[1] > cur_mass[0] or cur_mass[2] > cur_mass[0]:
+                    try:
+                        cur_mass = mass_profs.mass(actual_rad)[0]
+                        if cur_mass[1] > cur_mass[0] or cur_mass[2] > cur_mass[0]:
+                            ms.append([np.NaN, np.NaN, np.NaN])
+                            warn("{s}'s mass uncertainties are larger than the mass value.")
+                        elif cur_mass[0] < Quantity(1e+12, 'Msun'):
+                            ms.append([np.NaN, np.NaN, np.NaN])
+                            warn("{s}'s mass is less than 1e+12 solar masses")
+                        elif cur_mass[0] > Quantity(1e+16, 'Msun'):
+                            ms.append([np.NaN, np.NaN, np.NaN])
+                            warn("{s}'s mass is greater than 1e+16 solar masses")
+                        else:
+                            ms.append(cur_mass.value)
+                    except ValueError:
+                        warn("{s}'s mass is negative")
                         ms.append([np.NaN, np.NaN, np.NaN])
-                        warn("{s}'s mass uncertainties are larger than the mass value.")
-                    elif cur_mass[0] < Quantity(1e+12, 'Msun'):
-                        ms.append([np.NaN, np.NaN, np.NaN])
-                        warn("{s}'s mass is less than 1e+12 solar masses")
-                    elif cur_mass[0] > Quantity(1e+16, 'Msun'):
-                        ms.append([np.NaN, np.NaN, np.NaN])
-                        warn("{s}'s mass is greater than 1e+16 solar masses")
-                    else:
-                        ms.append(cur_mass.value)
+
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
                 ms.append([np.NaN, np.NaN, np.NaN])

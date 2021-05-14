@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/05/2021, 16:25. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -481,6 +481,9 @@ class GasDensity3D(BaseProfile1D):
         upp_mass = np.percentile(mass_dist, 50 + (conf_level/2)).value
         low_mass = np.percentile(mass_dist, 50 - (conf_level/2)).value
         gas_mass = Quantity([med_mass, med_mass-low_mass, upp_mass-med_mass], mass_dist.unit)
+
+        if gas_mass[0] < 0:
+            raise ValueError("A gas mass of less than zero has been measured, which is not physical.")
 
         # This method means that a change has happened to the model, so it should be re-saved
         self.save()
@@ -1227,6 +1230,9 @@ class HydrostaticMass(BaseProfile1D):
         mass_upper = np.percentile(mass_dist, upper, axis=0) - mass_med
 
         mass_res = Quantity(np.array([mass_med.value, mass_lower.value, mass_upper.value]), mass_dist.unit)
+
+        if mass_res[0] < 0:
+            raise ValueError("A mass of less than zero has been measured, which is not physical.")
 
         return mass_res, mass_dist
 
