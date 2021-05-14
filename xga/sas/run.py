@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 15:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/05/2021, 15:55. Copyright (c) David J Turner
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -31,8 +31,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     :rtype: Tuple[BaseProduct, str]
     """
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
-    out = out.decode("UTF-8")
-    err = err.decode("UTF-8")
+    out = out.decode("UTF-8", errors='ignore')
+    err = err.decode("UTF-8", errors='ignore')
 
     # The if statements also check that the source isn't a NullSource - if it is we don't want to define
     #  a product object because all NullSources are for is generating files in bulk.

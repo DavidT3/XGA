@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 20:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/05/2021, 15:55. Copyright (c) David J Turner
 
 import os
 from random import randint
@@ -71,10 +71,10 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
             temp_name = "tempdir_{}".format(randint(0, 1e+8))
             temp_dir = dest_dir + temp_name + "/"
 
-            if not os.path.exists(temp_dir):
-                os.makedirs(temp_dir)
             final_path = dest_dir + "ccf.cif"
             if not os.path.exists(final_path):
+                if not os.path.exists(temp_dir):
+                    os.makedirs(temp_dir)
                 cmds.append(cif_cmd.format(d=temp_dir, od=obs_date, n=temp_name))
                 final_paths.append(final_path)
                 extra_info.append({})  # This doesn't need any extra information
