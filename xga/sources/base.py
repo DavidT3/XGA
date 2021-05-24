@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 20:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 14:01. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -2340,6 +2340,7 @@ class BaseSource:
                 del self._regions[o]
                 del self._other_regions[o]
                 del self._alt_match_regions[o]
+                del self._interloper_masks[o]
                 if self._peaks is not None:
                     del self._peaks[o]
 
