@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/03/2021, 19:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:34. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -40,29 +40,28 @@ class PointSample(BaseSample):
         #  attributes can be cleaned up later
         final_names = []
         self._point_radii = []
-        dec_lb = tqdm(desc="Setting up Point Sources", total=len(self._accepted_inds), disable=no_prog_bar)
-        for ind, rd in enumerate(self.ra_decs):
-            r, d = rd
-            z = self.redshifts[ind]
-            n = self._names[ind]
-            if point_radius is not None:
-                pr = point_radius[self._accepted_inds[ind]]
-            else:
-                pr = None
+        with tqdm(desc="Setting up Point Sources", total=len(self._accepted_inds), disable=no_prog_bar) as dec_lb:
+            for ind, rd in enumerate(self.ra_decs):
+                r, d = rd
+                z = self.redshifts[ind]
+                n = self._names[ind]
+                if point_radius is not None:
+                    pr = point_radius[self._accepted_inds[ind]]
+                else:
+                    pr = None
 
-            # Observation cleaning goes on automatically in PointSource, so if a NoValidObservations error is
-            #  thrown I have to catch it and not add that source to this sample.
-            try:
-                self._sources[n] = PointSource(r, d, z, n, pr, use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
-                                               back_out_rad_factor, cosmology, True, load_fits, False)
-                pr = self._sources[n].point_radius
-                self._point_radii.append(pr.value)
-                final_names.append(n)
-            except NoValidObservationsError:
-                self._failed_sources[n] = "CleanedNoMatch"
+                # Observation cleaning goes on automatically in PointSource, so if a NoValidObservations error is
+                #  thrown I have to catch it and not add that source to this sample.
+                try:
+                    self._sources[n] = PointSource(r, d, z, n, pr, use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
+                                                   back_out_rad_factor, cosmology, True, load_fits, False)
+                    pr = self._sources[n].point_radius
+                    self._point_radii.append(pr.value)
+                    final_names.append(n)
+                except NoValidObservationsError:
+                    self._failed_sources[n] = "CleanedNoMatch"
 
-            dec_lb.update(1)
-        dec_lb.close()
+                dec_lb.update(1)
 
         self._names = final_names
 

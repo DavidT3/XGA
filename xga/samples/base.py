@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/04/2021, 12:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:34. Copyright (c) David J Turner
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -46,39 +46,38 @@ class BaseSample:
         if name is not None and len(set(name)) != len(name):
             raise ValueError("Names supplied to samples must be unique.")
 
-        dec_base = tqdm(desc="Declaring BaseSource Sample", total=len(ra), disable=no_prog_bar)
-        for ind, r in enumerate(ra):
-            d = dec[ind]
-            if name is not None:
-                n = name[ind]
-            else:
-                n = None
-
-            if redshift is not None:
-                z = redshift[ind]
-            else:
-                z = None
-
-            try:
-                temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits)
-                n = temp.name
-                self._sources[n] = temp
-                self._names.append(n)
-                self._accepted_inds.append(ind)
-            except (NoMatchFoundError, NoValidObservationsError):
-                if n is not None:
-                    # We don't be liking spaces in source names
-                    # n = n.replace(" ", "")
-                    pass
+        with tqdm(desc="Declaring BaseSource Sample", total=len(ra), disable=no_prog_bar) as dec_base:
+            for ind, r in enumerate(ra):
+                d = dec[ind]
+                if name is not None:
+                    n = name[ind]
                 else:
-                    ra_dec = Quantity(np.array([r, d]), 'deg')
-                    n = coord_to_name(ra_dec)
+                    n = None
 
-                warn("Source {n} does not appear to have any XMM data, and will not be included in the "
-                     "sample.".format(n=n))
-                self._failed_sources[n] = "NoMatch"
-            dec_base.update(1)
-        dec_base.close()
+                if redshift is not None:
+                    z = redshift[ind]
+                else:
+                    z = None
+
+                try:
+                    temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits)
+                    n = temp.name
+                    self._sources[n] = temp
+                    self._names.append(n)
+                    self._accepted_inds.append(ind)
+                except (NoMatchFoundError, NoValidObservationsError):
+                    if n is not None:
+                        # We don't be liking spaces in source names
+                        # n = n.replace(" ", "")
+                        pass
+                    else:
+                        ra_dec = Quantity(np.array([r, d]), 'deg')
+                        n = coord_to_name(ra_dec)
+
+                    warn("Source {n} does not appear to have any XMM data, and will not be included in the "
+                         "sample.".format(n=n))
+                    self._failed_sources[n] = "NoMatch"
+                dec_base.update(1)
 
     # These next few properties are all quantities passed in by the user on init, then used to
     #  declare source objects - as such they cannot ever be set by the user.

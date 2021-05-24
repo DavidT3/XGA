@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 19:23. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:34. Copyright (c) David J Turner
 
 import json
 import os
@@ -144,42 +144,41 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
     obs_census = [entry for entry in os.listdir(config["XMM_FILES"]["root_xmm_dir"]) if xmm_obs_id_test(entry)
                   and entry not in obs_lookup_obs]
     if len(obs_census) != 0:
-        census_progress = tqdm(desc="Assembling list of ObsID pointings", total=len(obs_census))
-        for obs in obs_census:
-            info = {'ra': None, 'dec': None, "the_rest": []}
-            for key in ["clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts"]:
-                evt_path = config["XMM_FILES"][key].format(obs_id=obs)
-                if os.path.exists(evt_path):
-                    evts_header = read_header(evt_path)
-                    try:
-                        # Reads out the filter header, if it is CalClosed then we can't use it
-                        filt = evts_header["FILTER"]
-                        submode = evts_header["SUBMODE"]
-                        info['ra'] = evts_header["RA_PNT"]
-                        info['dec'] = evts_header["DEC_PNT"]
-                    except KeyError:
-                        # It won't actually, but this will trigger the if statement that tells XGA not to use
-                        #  this particular obs/inst combo
-                        filt = "CalClosed"
+        with tqdm(desc="Assembling list of ObsIDs", total=len(obs_census)) as census_progress:
+            for obs in obs_census:
+                info = {'ra': None, 'dec': None, "the_rest": []}
+                for key in ["clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts"]:
+                    evt_path = config["XMM_FILES"][key].format(obs_id=obs)
+                    if os.path.exists(evt_path):
+                        evts_header = read_header(evt_path)
+                        try:
+                            # Reads out the filter header, if it is CalClosed then we can't use it
+                            filt = evts_header["FILTER"]
+                            submode = evts_header["SUBMODE"]
+                            info['ra'] = evts_header["RA_PNT"]
+                            info['dec'] = evts_header["DEC_PNT"]
+                        except KeyError:
+                            # It won't actually, but this will trigger the if statement that tells XGA not to use
+                            #  this particular obs/inst combo
+                            filt = "CalClosed"
 
-                    # TODO Decide if I want to disallow small window mode observations
-                    if filt != "CalClosed":
-                        info["the_rest"].append("T")
+                        # TODO Decide if I want to disallow small window mode observations
+                        if filt != "CalClosed":
+                            info["the_rest"].append("T")
+                        else:
+                            info["the_rest"].append("F")
                     else:
                         info["the_rest"].append("F")
+
+                use_insts = ",".join(info["the_rest"])
+                # Write the information to the line that will go in the census csv
+                if info["ra"] is not None and info["dec"] is not None:
+                    # Format to write to the census.csv that lives in the config directory.
+                    obs_lookup.append("{o},{r},{d},{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
                 else:
-                    info["the_rest"].append("F")
+                    obs_lookup.append("{o},,,{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
 
-            use_insts = ",".join(info["the_rest"])
-            # Write the information to the line that will go in the census csv
-            if info["ra"] is not None and info["dec"] is not None:
-                # Format to write to the census.csv that lives in the config directory.
-                obs_lookup.append("{o},{r},{d},{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
-            else:
-                obs_lookup.append("{o},,,{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
-
-            census_progress.update(1)
-        census_progress.close()
+                census_progress.update(1)
         with open(CENSUS_FILE, 'w') as census:
             census.writelines(obs_lookup)
 

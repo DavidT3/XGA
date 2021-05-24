@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/05/2021, 16:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:34. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -54,75 +54,74 @@ class ClusterSample(BaseSample):
         # We have this final names list in case so that we don't need to remove elements of self.names if one of the
         #  clusters doesn't pass the observation cleaning stage.
         final_names = []
-        dec_lb = tqdm(desc="Setting up Galaxy Clusters", total=len(self.names), disable=no_prog_bar)
-        for ind, r in enumerate(ra):
-            # Just splitting out relevant values for this particular cluster so the object declaration isn't
-            #  super ugly.
-            d = dec[ind]
-            z = redshift[ind]
-            # The replace is there because source declaration removes spaces from any passed names,
-            n = name[ind].replace(' ', '')
-            # Declaring the BaseSample higher up weeds out those objects that aren't in any XMM observations
-            #  So we want to check that the current object name is in the list of objects that have data
-            if n in self.names:
-                # I know this code is a bit ugly, but oh well
-                if r200 is not None:
-                    r2 = r200[ind]
-                else:
-                    r2 = None
-                if r500 is not None:
-                    r5 = r500[ind]
-                else:
-                    r5 = None
-                if r2500 is not None:
-                    r25 = r2500[ind]
-                else:
-                    r25 = None
-                if custom_region_radius is not None:
-                    cr = custom_region_radius[ind]
-                else:
-                    cr = None
+        with tqdm(desc="Setting up Galaxy Clusters", total=len(self.names), disable=no_prog_bar) as dec_lb:
+            for ind, r in enumerate(ra):
+                # Just splitting out relevant values for this particular cluster so the object declaration isn't
+                #  super ugly.
+                d = dec[ind]
+                z = redshift[ind]
+                # The replace is there because source declaration removes spaces from any passed names,
+                n = name[ind].replace(' ', '')
+                # Declaring the BaseSample higher up weeds out those objects that aren't in any XMM observations
+                #  So we want to check that the current object name is in the list of objects that have data
+                if n in self.names:
+                    # I know this code is a bit ugly, but oh well
+                    if r200 is not None:
+                        r2 = r200[ind]
+                    else:
+                        r2 = None
+                    if r500 is not None:
+                        r5 = r500[ind]
+                    else:
+                        r5 = None
+                    if r2500 is not None:
+                        r25 = r2500[ind]
+                    else:
+                        r25 = None
+                    if custom_region_radius is not None:
+                        cr = custom_region_radius[ind]
+                    else:
+                        cr = None
 
-                # Here we check the options that are allowed to be None
-                if richness is not None:
-                    lam = richness[ind]
-                    lam_err = richness_err[ind]
-                else:
-                    lam = None
-                    lam_err = None
+                    # Here we check the options that are allowed to be None
+                    if richness is not None:
+                        lam = richness[ind]
+                        lam_err = richness_err[ind]
+                    else:
+                        lam = None
+                        lam_err = None
 
-                if wl_mass is not None:
-                    wlm = wl_mass[ind]
-                    wlm_err = wl_mass_err[ind]
-                else:
-                    wlm = None
-                    wlm_err = None
+                    if wl_mass is not None:
+                        wlm = wl_mass[ind]
+                        wlm_err = wl_mass_err[ind]
+                    else:
+                        wlm = None
+                        wlm_err = None
 
-                # Will definitely load products (the True in this call), because I just made sure I generated a
-                #  bunch to make GalaxyCluster declaration quicker
-                try:
-                    self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr,
-                                                     use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
-                                                     back_out_rad_factor, cosmology, True, load_fits, clean_obs,
-                                                     clean_obs_reg, clean_obs_threshold, False)
-                    final_names.append(n)
-                except PeakConvergenceFailedError:
-                    warn("The peak finding algorithm has not converged for {}, using user "
-                         "supplied coordinates".format(n))
-                    self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, False,
-                                                     peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
-                                                     cosmology, True, load_fits, clean_obs, clean_obs_reg,
-                                                     clean_obs_threshold, False)
-                    final_names.append(n)
+                    # Will definitely load products (the True in this call), because I just made sure I generated a
+                    #  bunch to make GalaxyCluster declaration quicker
+                    try:
+                        self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr,
+                                                         use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
+                                                         back_out_rad_factor, cosmology, True, load_fits, clean_obs,
+                                                         clean_obs_reg, clean_obs_threshold, False)
+                        final_names.append(n)
+                    except PeakConvergenceFailedError:
+                        warn("The peak finding algorithm has not converged for {}, using user "
+                             "supplied coordinates".format(n))
+                        self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, False,
+                                                         peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
+                                                         cosmology, True, load_fits, clean_obs, clean_obs_reg,
+                                                         clean_obs_threshold, False)
+                        final_names.append(n)
 
-                except NoValidObservationsError:
-                    warn("After applying the criteria for the minimum amount of cluster required on an observation, "
-                         "{} cannot be declared as all potential observations were removed".format(n))
-                    # Note we don't append n to the final_names list here, as it is effectively being removed from the
-                    #  sample
-                    self._failed_sources[n] = "Failed ObsClean"
-            dec_lb.update(1)
-        dec_lb.close()
+                    except NoValidObservationsError:
+                        warn("After applying the criteria for the minimum amount of cluster required on an "
+                             "observation, {} cannot be declared as all potential observations were removed".format(n))
+                        # Note we don't append n to the final_names list here, as it is effectively being
+                        #  removed from the sample
+                        self._failed_sources[n] = "Failed ObsClean"
+                dec_lb.update(1)
 
         self._names = final_names
 
