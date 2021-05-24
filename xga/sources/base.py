@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 14:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 17:19. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -3177,6 +3177,24 @@ class BaseSource:
         elif self._wl_mass is not None and self._wl_mass_err is None:
             print("Weak Lensing Mass - {0}".format(self._wl_mass))
 
+        if 'get_temperature' in dir(self):
+            try:
+                tx = self.get_temperature('r500', 'constant*tbabs*apec').value.round(2)
+                print("R500 Tx - {}keV".format(tx[0]))
+                print("R500 Tx- - {}keV".format(tx[1]))
+                print("R500 Tx+ - {}keV".format(tx[2]))
+            except ModelNotAssociatedError:
+                pass
+
+            try:
+                lx = self.get_luminosities('r500', 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
+                                           hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
+                print("R500 0.5-2.0keV Lx - {}e+44 erg/s".format(lx[0]))
+                print("R500 0.5-2.0keV Lx- - {}e+44 erg/s".format(lx[1]))
+                print("R500 0.5-2.0keV Lx+ - {}e+44 erg/s".format(lx[2]))
+
+            except ModelNotAssociatedError:
+                pass
         print("-----------------------------------------------------\n")
 
     def __len__(self) -> int:
