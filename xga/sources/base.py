@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 17:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 15:06. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -3183,7 +3183,7 @@ class BaseSource:
                 print("R500 Tx - {}keV".format(tx[0]))
                 print("R500 Tx- - {}keV".format(tx[1]))
                 print("R500 Tx+ - {}keV".format(tx[2]))
-            except ModelNotAssociatedError:
+            except (ModelNotAssociatedError, NoProductAvailableError):
                 pass
 
             try:
@@ -3193,7 +3193,7 @@ class BaseSource:
                 print("R500 0.5-2.0keV Lx- - {}e+44 erg/s".format(lx[1]))
                 print("R500 0.5-2.0keV Lx+ - {}e+44 erg/s".format(lx[2]))
 
-            except ModelNotAssociatedError:
+            except (ModelNotAssociatedError, NoProductAvailableError):
                 pass
         print("-----------------------------------------------------\n")
 
