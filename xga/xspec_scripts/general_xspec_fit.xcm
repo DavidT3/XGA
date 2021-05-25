@@ -216,10 +216,17 @@ if {{$run_pre_check == True}} {{
     # This assembles a list of spec paths where each spec name is repeated N times (where N is the number of
     #  parameters in a model - tbabs*apec has 5 for instance), then we move onto the next spec_path
     set par_spec {{}}
+    set par_spec_chan {{}}
+
+    set sp_id 1
     foreach sp $spec_paths {{
+        set range [split [tcloutr noticed $sp_id] -]
+        set num_chan [expr [lindex $range 1] - [lindex $range 0]]
         for {{set i 1}} {{$i <= $num_uniq_par}} {{incr i 1}} {{
             lappend par_spec $sp
+            lappend par_spec_chan $num_chan
         }}
+        incr sp_id
     }}
 
     # Run the fits for all models
@@ -250,9 +257,11 @@ if {{$run_pre_check == True}} {{
 
             # Read out the equivelant spectrum path for this particular parameter
             set cur_sp [lindex $par_spec [expr $ipar-1]]
+            # And the number of noticed channels for this spectrum
+            set cur_chan [lindex $par_spec_chan [expr $ipar-1]]
 
             # If the parameter meets our quality cuts then the spectrum is added to the good_spec_paths list
-            if {{$par_val > $check_lo_lim($pname) && $par_val < $check_hi_lim($pname) && $lo_err < $check_err_lim($pname) && $hi_err < $check_err_lim($pname)}} {{
+            if {{$par_val > $check_lo_lim($pname) && $par_val < $check_hi_lim($pname) && $lo_err < $check_err_lim($pname) && $hi_err < $check_err_lim($pname) && $cur_chan > 10}} {{
                 lappend good_spec_paths $cur_sp
             }}
         }}
