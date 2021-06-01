@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 15:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 11:01. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1295,8 +1295,17 @@ class BaseProfile1D:
         model_obj = self.get_model_fit(model, 'mcmc')
 
         frac_conf_lev = [(50 - 34.1)/100, 0.5, (50 + 34.1)/100]
-        fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
-                            quantiles=frac_conf_lev, show_titles=True)
+
+        # If any of the median parameter values are above 1e+4 we get corner to format them in scientific
+        #  notation, to avoid super long numbers spilling over the edge of the corner plot. I will say that
+        #  scientific notation in titles in corner doesn't look that great either, but its better than the
+        #  alternative
+        if np.any(np.median(flat_chains, axis=0) > 1e+4):
+            fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
+                                quantiles=frac_conf_lev, show_titles=True, title_fmt=".2e")
+        else:
+            fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
+                                quantiles=frac_conf_lev, show_titles=True)
         t = self._y_axis_name
         plt.suptitle("{m} - {s} {t} Profile".format(m=model_obj.publication_name, s=self.src_name, t=t),
                      fontsize=14, y=1.02)
