@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 09:14. Copyright (c) David J Turner
 
 import os
 from random import randint
@@ -372,7 +372,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
         raise ValueError("While I appreciate your desire for fine binning, I think {0}x{0} bins would"
                          " probably take too long...".format(bins))
 
-    # Need a valid CIF for this task, so run cifbuild first.from
+    # Need a valid CIF for this task, so run cifbuild first
     cifbuild(sources, disable_progress=disable_progress)
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single

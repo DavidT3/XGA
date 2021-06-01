@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 10:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 09:14. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -469,7 +469,7 @@ class ClusterSample(BaseSample):
             doesn't already exist then one will be performed with default settings.
         :param Quantity/str prof_outer_rad: The outer radii of the density profiles, either a single radius name or a
             Quantity containing an outer radius for each cluster. For instance if you defined a ClusterSample called
-            srcs you could pas srcs.r500 here.
+            srcs you could pass srcs.r500 here.
         :param str method: The method used to generate the density profile. For a profile created by fitting a model
             to a surface brightness profile this should be the name of the model, for a profile from annular spectra
             this should be 'spec', and for a profile generated directly from the data of a surface brightness profile

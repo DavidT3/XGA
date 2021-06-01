@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 09:14. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -452,7 +452,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
 
             # Fit the user chosen model to sb_prof
             cur_model = model[src_ind]
-            sb_prof.fit(cur_model, fit_method, num_samples, num_steps, num_walkers, show_warn=show_warn, progress_bar=False)
+            sb_prof.fit(cur_model, fit_method, num_samples, num_steps, num_walkers, show_warn=show_warn,
+                        progress_bar=False)
 
             if isinstance(cur_model, str):
                 model_r = sb_prof.get_model_fit(cur_model, fit_method)
@@ -481,8 +482,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                 elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
                     pass
                 else:
-                    raise NotImplementedError("Haven't yet added support for surface brightness profiles in other units, "
-                                              "don't really know you even got here.")
+                    raise NotImplementedError("Haven't yet added support for surface brightness profiles in "
+                                              "other units, don't really know how you even got here.")
 
                 # We convert the volume element to cm^3 now, this is the unit we expect for the density conversion
                 transformed = transformed.to('ct/(s*cm^3)')
