@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 16:08. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -440,6 +440,16 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             warn("{s} doesn't have a matching projected temperature profile, skipping.")
             all_3d_temp_profs.append(None)
             continue
+
+        # We need to check if a matching 3D temperature profile has already been generated, as then we
+        #  just use that one rather than making another (which would be silly and also eat up more storage
+        #  because they are automatically saved to disk).
+        try:
+            existing_3d_temp_prof = src.get_3d_temp_profiles(set_id=proj_temp.set_ident)
+            all_3d_temp_profs.append(existing_3d_temp_prof)
+            continue
+        except NoProductAvailableError:
+            pass
 
         obs_id = 'combined'
         inst = 'combined'
