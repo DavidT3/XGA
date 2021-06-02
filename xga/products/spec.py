@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2021, 14:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/06/2021, 09:53. Copyright (c) David J Turner
 
 
 import os
@@ -13,6 +13,7 @@ from fitsio import hdu, FITS
 from matplotlib import legend_handler
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
+from mpl_toolkits.mplot3d import Axes3D
 
 from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError
@@ -1773,6 +1774,10 @@ class AnnularSpectra(BaseAggregateProduct):
         :param int elevation_angle: The elevation angle in the z plane, in degrees.
         :param int azimuthal_angle: The azimuth angle in the x,y plane, in degrees.
         """
+        # This is a complete bodge, but just putting it here stops my IDE (PyCharm), from removing the import when it
+        #  commits, because its trying to be clever. Its a behaviour I normally appreciate, but not here.
+        Axes3D
+
         # Setup the figure as we normally would
         fig = plt.figure(figsize=figsize)
         # This subplot with a 3D projection is what allows us to make a 3-axis plot
