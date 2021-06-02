@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 15:06. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/06/2021, 12:55. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -3180,18 +3180,15 @@ class BaseSource:
         if 'get_temperature' in dir(self):
             try:
                 tx = self.get_temperature('r500', 'constant*tbabs*apec').value.round(2)
-                print("R500 Tx - {}keV".format(tx[0]))
-                print("R500 Tx- - {}keV".format(tx[1]))
-                print("R500 Tx+ - {}keV".format(tx[2]))
+                # Just average the uncertainty for this
+                print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean()))
             except (ModelNotAssociatedError, NoProductAvailableError):
                 pass
 
             try:
                 lx = self.get_luminosities('r500', 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
                                            hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
-                print("R500 0.5-2.0keV Lx - {}e+44 erg/s".format(lx[0]))
-                print("R500 0.5-2.0keV Lx- - {}e+44 erg/s".format(lx[1]))
-                print("R500 0.5-2.0keV Lx+ - {}e+44 erg/s".format(lx[2]))
+                print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean()))
 
             except (ModelNotAssociatedError, NoProductAvailableError):
                 pass
