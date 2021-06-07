@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 09:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/06/2021, 13:27. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -397,7 +397,7 @@ class ClusterSample(BaseSample):
             # This just parses the input inner and outer radii into something predictable
             inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
         else:
-            raise NotImplementedError("Sorry region fitting is currently well supported")
+            raise NotImplementedError("Sorry region fitting is currently not supported")
 
         temps = []
         for src_ind, gcs in enumerate(self._sources.values()):
