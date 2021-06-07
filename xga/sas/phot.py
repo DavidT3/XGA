@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/04/2021, 15:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 09:14. Copyright (c) David J Turner
 
 import os
 from random import randint
@@ -372,7 +372,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
         raise ValueError("While I appreciate your desire for fine binning, I think {0}x{0} bins would"
                          " probably take too long...".format(bins))
 
-    # Need a valid CIF for this task, so run cifbuild first.from
+    # Need a valid CIF for this task, so run cifbuild first
     cifbuild(sources, disable_progress=disable_progress)
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
@@ -385,129 +385,128 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
     if isinstance(sources, NullSource):
         raise NotImplementedError("You cannot currently use PSFGen with a NullSource.")
 
-    psfgen_prep_progress = tqdm(desc='Preparing PSF generation commands', total=len(sources),
-                                disable=len(sources) == 0)
-    # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
-    # to this function
-    sources_cmds = []
-    sources_paths = []
-    sources_extras = []
-    sources_types = []
-    for source in sources:
-        cmds = []
-        final_paths = []
-        extra_info = []
-        # Check which event lists are associated with each individual source
-        for pack in source.get_products("events", just_obj=False):
-            obs_id = pack[0]
-            inst = pack[1]
+    with tqdm(desc='Preparing PSF generation commands', total=len(sources),
+              disable=len(sources) == 0) as psfgen_prep_progress:
+        # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
+        # to this function
+        sources_cmds = []
+        sources_paths = []
+        sources_extras = []
+        sources_types = []
+        for source in sources:
+            cmds = []
+            final_paths = []
+            extra_info = []
+            # Check which event lists are associated with each individual source
+            for pack in source.get_products("events", just_obj=False):
+                obs_id = pack[0]
+                inst = pack[1]
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+                if not os.path.exists(OUTPUT + obs_id):
+                    os.mkdir(OUTPUT + obs_id)
 
-            # This looks for any image for this ObsID, instrument combo - it does assume that whatever
-            #  it finds will be the same resolution as any images in other energy bands that XGA will
-            #  create in the future.
-            images = source.get_products("image", obs_id, inst, just_obj=True)
+                # This looks for any image for this ObsID, instrument combo - it does assume that whatever
+                #  it finds will be the same resolution as any images in other energy bands that XGA will
+                #  create in the future.
+                images = source.get_products("image", obs_id, inst, just_obj=True)
 
-            if len(images) == 0:
-                raise NoProductAvailableError("There is no image available for {o} {i}, please generate "
-                                              "images before PSFs".format(o=obs_id, i=inst))
+                if len(images) == 0:
+                    raise NoProductAvailableError("There is no image available for {o} {i}, please generate "
+                                                  "images before PSFs".format(o=obs_id, i=inst))
 
-            # Checking if the Image products are the same shape that XGA makes
-            res_match = [im for im in images if im.shape == (512, 512)]
-            if len(res_match) == 0:
-                raise NoProductAvailableError("There is an image associated with {o} {i}, but it doesn't"
-                                              " appear to be at the resolution XGA uses - this is not "
-                                              "supported yet.")
-            else:
-                image = res_match[0]
+                # Checking if the Image products are the same shape that XGA makes
+                res_match = [im for im in images if im.shape == (512, 512)]
+                if len(res_match) == 0:
+                    raise NoProductAvailableError("There is an image associated with {o} {i}, but it doesn't"
+                                                  " appear to be at the resolution XGA uses - this is not "
+                                                  "supported yet.")
+                else:
+                    image = res_match[0]
 
-            # Here we try and find if this PSF configuration has already been run and has been
-            #  associated with the source. If so then don't do it again.
-            psfs = source.get_products("psf", obs_id, inst, extra_key=psf_model + "_" + str(bins))
-            if len(psfs) != 0:
-                continue
+                # Here we try and find if this PSF configuration has already been run and has been
+                #  associated with the source. If so then don't do it again.
+                psfs = source.get_products("psf", obs_id, inst, extra_key=psf_model + "_" + str(bins))
+                if len(psfs) != 0:
+                    continue
 
-            # This part is where we decide on the RA DEC coordinates for the centres of each
-            #  PSF in our grid
-            # This function gives us x and y limits for where there is data in an image, they are used as start
-            #  and end coordinates for our bins so the PSFs are more focused on where there is actually data.
-            x_lims, y_lims = data_limits(image)
-            # Simple calculation to calculate step size in pixels, so how long each chunk will be in
-            #  x and y directions
-            x_step = (x_lims[1] - x_lims[0]) / bins
-            y_step = (y_lims[1] - y_lims[0]) / bins
+                # This part is where we decide on the RA DEC coordinates for the centres of each
+                #  PSF in our grid
+                # This function gives us x and y limits for where there is data in an image, they are used as start
+                #  and end coordinates for our bins so the PSFs are more focused on where there is actually data.
+                x_lims, y_lims = data_limits(image)
+                # Simple calculation to calculate step size in pixels, so how long each chunk will be in
+                #  x and y directions
+                x_step = (x_lims[1] - x_lims[0]) / bins
+                y_step = (y_lims[1] - y_lims[0]) / bins
 
-            # These are the x and y bin centre coordinates - when converted to RA and DEC this is where the
-            #  PSF is generated at.
-            x_cen_coords = np.arange(*x_lims, x_step) + (x_step / 2)
-            y_cen_coords = np.arange(*y_lims, y_step) + (y_step / 2)
+                # These are the x and y bin centre coordinates - when converted to RA and DEC this is where the
+                #  PSF is generated at.
+                x_cen_coords = np.arange(*x_lims, x_step) + (x_step / 2)
+                y_cen_coords = np.arange(*y_lims, y_step) + (y_step / 2)
 
-            # Get all combinations of the central coordinates using meshgrid, then turn them into
-            #  an N row, 2 column numpy array of pixel coordinates for easy conversion to RA-DEC.
-            pix_mesh = np.meshgrid(x_cen_coords, y_cen_coords)
-            pix_coords = Quantity(np.stack([pix_mesh[0].ravel(), pix_mesh[1].ravel()]).T, 'pix')
+                # Get all combinations of the central coordinates using meshgrid, then turn them into
+                #  an N row, 2 column numpy array of pixel coordinates for easy conversion to RA-DEC.
+                pix_mesh = np.meshgrid(x_cen_coords, y_cen_coords)
+                pix_coords = Quantity(np.stack([pix_mesh[0].ravel(), pix_mesh[1].ravel()]).T, 'pix')
 
-            # But I also want to know the boundaries of the bins so I can easily select which parts of
-            #  the image belong with each PSF in the grid
-            x_boundaries = np.linspace(*x_lims, bins+1)
-            y_boundaries = np.linspace(*y_lims, bins+1)
+                # But I also want to know the boundaries of the bins so I can easily select which parts of
+                #  the image belong with each PSF in the grid
+                x_boundaries = np.linspace(*x_lims, bins+1)
+                y_boundaries = np.linspace(*y_lims, bins+1)
 
-            # These two arrays give the x and y boundaries of the bins in the same order as the pix_coords array
-            x_bound_coords = np.tile(np.stack([x_boundaries[0: -1].ravel(), x_boundaries[1:].ravel()]).T,
-                                     (bins, 1))
-            x_bound_coords = x_bound_coords.round(0).astype(int)
+                # These two arrays give the x and y boundaries of the bins in the same order as the pix_coords array
+                x_bound_coords = np.tile(np.stack([x_boundaries[0: -1].ravel(), x_boundaries[1:].ravel()]).T,
+                                         (bins, 1))
+                x_bound_coords = x_bound_coords.round(0).astype(int)
 
-            y_bound_coords = np.repeat(np.stack([y_boundaries[0: -1].ravel(), y_boundaries[1:].ravel()]).T,
-                                       bins, 0)
-            y_bound_coords = y_bound_coords.round(0).astype(int)
+                y_bound_coords = np.repeat(np.stack([y_boundaries[0: -1].ravel(), y_boundaries[1:].ravel()]).T,
+                                           bins, 0)
+                y_bound_coords = y_bound_coords.round(0).astype(int)
 
-            ra_dec_coords = image.coord_conv(pix_coords, deg)
+                ra_dec_coords = image.coord_conv(pix_coords, deg)
 
-            dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source.name)
-            psf = "{o}_{i}_{b}bin_{m}mod_{ra}_{dec}_psf.fits"
+                dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source.name)
+                psf = "{o}_{i}_{b}bin_{m}mod_{ra}_{dec}_psf.fits"
 
-            # The change directory and SAS setup commands
-            init_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; ".format(d=dest_dir,
-                                                                                ccf=dest_dir + "ccf.cif")
+                # The change directory and SAS setup commands
+                init_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; ".format(d=dest_dir,
+                                                                                    ccf=dest_dir + "ccf.cif")
 
-            # If something got interrupted and the temp directory still exists, this will remove it
-            if os.path.exists(dest_dir):
-                rmtree(dest_dir)
+                # If something got interrupted and the temp directory still exists, this will remove it
+                if os.path.exists(dest_dir):
+                    rmtree(dest_dir)
 
-            os.makedirs(dest_dir)
+                os.makedirs(dest_dir)
 
-            psf_files = []
-            total_cmd = init_cmd
-            for pair_ind in range(ra_dec_coords.shape[0]):
-                # The coordinates at which this PSF will be generated
-                ra, dec = ra_dec_coords[pair_ind, :].value
+                psf_files = []
+                total_cmd = init_cmd
+                for pair_ind in range(ra_dec_coords.shape[0]):
+                    # The coordinates at which this PSF will be generated
+                    ra, dec = ra_dec_coords[pair_ind, :].value
 
-                psf_file = psf.format(o=obs_id, i=inst, b=bins, ra=ra, dec=dec, m=psf_model)
-                psf_files.append(os.path.join(OUTPUT, obs_id, psf_file))
-                # Going with xsize and ysize as 400 pixels, I think its enough and quite a bit faster than 1000
-                total_cmd += "psfgen image={i} coordtype=EQPOS level={m} energy=1000 xsize=400 ysize=400 x={ra} " \
-                             "y={dec} output={p}; ".format(i=image.path, m=psf_model, ra=ra, dec=dec, p=psf_file)
+                    psf_file = psf.format(o=obs_id, i=inst, b=bins, ra=ra, dec=dec, m=psf_model)
+                    psf_files.append(os.path.join(OUTPUT, obs_id, psf_file))
+                    # Going with xsize and ysize as 400 pixels, I think its enough and quite a bit faster than 1000
+                    total_cmd += "psfgen image={i} coordtype=EQPOS level={m} energy=1000 xsize=400 ysize=400 x={ra} " \
+                                 "y={dec} output={p}; ".format(i=image.path, m=psf_model, ra=ra, dec=dec, p=psf_file)
 
-            total_cmd += "mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
-            cmds.append(total_cmd)
-            # This is the products final resting place, if it exists at the end of this command
-            # In this case it just checks for the final PSF in the grid, all other files in the grid
-            # get stored in extra info.
-            final_paths.append(os.path.join(OUTPUT, obs_id, psf_file))
-            extra_info.append({"obs_id": obs_id, "instrument": inst, "model": psf_model, "chunks_per_side": bins,
-                               "files": psf_files, "x_bounds": x_bound_coords, "y_bounds": y_bound_coords})
+                total_cmd += "mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+                cmds.append(total_cmd)
+                # This is the products final resting place, if it exists at the end of this command
+                # In this case it just checks for the final PSF in the grid, all other files in the grid
+                # get stored in extra info.
+                final_paths.append(os.path.join(OUTPUT, obs_id, psf_file))
+                extra_info.append({"obs_id": obs_id, "instrument": inst, "model": psf_model, "chunks_per_side": bins,
+                                   "files": psf_files, "x_bounds": x_bound_coords, "y_bounds": y_bound_coords})
 
-        sources_cmds.append(np.array(cmds))
-        sources_paths.append(np.array(final_paths))
-        # This contains any other information that will be needed to instantiate the class
-        # once the SAS cmd has run
-        sources_extras.append(np.array(extra_info))
-        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="psf"))
+            sources_cmds.append(np.array(cmds))
+            sources_paths.append(np.array(final_paths))
+            # This contains any other information that will be needed to instantiate the class
+            # once the SAS cmd has run
+            sources_extras.append(np.array(extra_info))
+            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="psf"))
 
-        psfgen_prep_progress.update(1)
-    psfgen_prep_progress.close()
+            psfgen_prep_progress.update(1)
 
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.

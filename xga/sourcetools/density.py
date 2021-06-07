@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 09:14. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -196,18 +196,22 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
     :return: The requested surface brightness profile.
     :rtype: SurfaceBrightness1D
     """
-    if all([obs_id is None, inst is None]):
-        rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-        # Grabs the mask which will remove interloper sources
-        int_mask = src.get_interloper_mask()
-        comb = True
-    elif all([obs_id is not None, inst is not None]):
-        rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-        # Grabs the mask which will remove interloper sources
-        int_mask = src.get_interloper_mask(obs_id=obs_id)
-        comb = False
-    else:
-        raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
+    try:
+        if all([obs_id is None, inst is None]):
+            rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+            # Grabs the mask which will remove interloper sources
+            int_mask = src.get_interloper_mask()
+            comb = True
+        elif all([obs_id is not None, inst is not None]):
+            rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+            # Grabs the mask which will remove interloper sources
+            int_mask = src.get_interloper_mask(obs_id=obs_id)
+            comb = False
+        else:
+            raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
+    except NoProductAvailableError:
+        raise NoProductAvailableError("The RateMap required to measure the density profile has not been generated "
+                                      "yet, possibly because you haven't generated PSF corrected image yet.")
 
     if use_peak:
         centre = src.peak
@@ -217,7 +221,7 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
     rad = src.convert_radius(outer_radius, 'kpc')
 
     try:
-        sb_prof = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en, combined=comb,
+        sb_prof = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en,
                                                 pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
                                                 psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
                                                 psf_iter=psf_iter)
@@ -432,104 +436,103 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     # First we check the number of arguments passed for the model
     model = model_check(sources, model)
 
-    dens_prog = tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
-                     total=len(sources), position=0)
-
-    final_dens_profs = []
-    # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
-    e_to_p_ratio = NHC[abund_table]
-    for src_ind, src in enumerate(sources):
-        sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
-                          psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
-        if sb_prof is None:
-            final_dens_profs.append(None)
-            continue
-        else:
-            src.update_products(sb_prof)
-
-        # Fit the user chosen model to sb_prof
-        cur_model = model[src_ind]
-        sb_prof.fit(cur_model, fit_method, num_samples, num_steps, num_walkers, show_warn=show_warn, progress_bar=False)
-
-        if isinstance(cur_model, str):
-            model_r = sb_prof.get_model_fit(cur_model, fit_method)
-        else:
-            model_r = sb_prof.get_model_fit(cur_model.name, fit_method)
-
-        if model_r.success:
-            dens_rads = sb_prof.radii.copy()
-            dens_rads_errs = sb_prof.radii_err.copy()
-            dens_deg_rads = sb_prof.deg_radii.copy()
-            # Run the inverse abel transform for the model, to retrieve distributions for the value of the transformed
-            #  model at each r point. If the user hasn't set a method then we use the default method for the current
-            #  model, otherwise we pass the user's choice
-            if inv_abel_method is None:
-                transformed = model_r.inverse_abel(dens_rads, use_par_dist=True)
-            else:
-                transformed = model_r.inverse_abel(dens_rads, use_par_dist=True, method=inv_abel_method)
-
-            # Now need to make sure the units of the transformed model are what we need
-            if sb_prof.values_unit.is_equivalent('ct/(s*arcmin**2)'):
-                # If the SB profile is in count/s/arcmin^2 then the abel transform will have
-                #  units of ct/s/(arcmin^2 kpc), so I create a quantity which will convert the arcmin^2 to kpc^2
-                conv = Quantity(ang_to_rad(Quantity(1, 'arcmin'), src.redshift, src.cosmo).to("kpc").value,
-                                'kpc/arcmin')**2
-                transformed /= conv
-            elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
-                pass
-            else:
-                raise NotImplementedError("Haven't yet added support for surface brightness profiles in other units, "
-                                          "don't really know you even got here.")
-
-            # We convert the volume element to cm^3 now, this is the unit we expect for the density conversion
-            transformed = transformed.to('ct/(s*cm^3)')
-
-            # We multiply by the conversion factor that is unique to the cluster and calculated earlier to take
-            #  the transformed profile to a gas number density (n_gas as seen in Eckert et al. 2016, eq. 2).
-            num_dens_dist = np.sqrt(transformed * conv_factors[src_ind])*(1+e_to_p_ratio)
-
-            med_num_dens = np.percentile(num_dens_dist, 50, axis=1)
-            num_dens_err = np.std(num_dens_dist, axis=1)
-
-            # Setting up the instrument and ObsID to pass into the density profile definition
-            if obs_id[src_ind] is None:
-                cur_inst = "combined"
-                cur_obs = "combined"
-            else:
-                cur_inst = inst[src_ind]
-                cur_obs = obs_id[src_ind]
-
-            try:
-                # I now allow the user to decide if they want to generate number or mass density profiles using
-                #  this function, and here is where that distinction is made
-                if num_dens:
-                    dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
-                                             cur_inst, model_r.name, sb_prof, dens_rads_errs, num_dens_err,
-                                             deg_radii=dens_deg_rads)
-                else:
-                    # TODO Check the origin of the mean molecular weight, see if there are different values for
-                    #  different abundance tables
-                    # The mean molecular weight multiplied by the proton mass
-                    conv_mass = MEAN_MOL_WEIGHT*m_p
-                    dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
-                                             sb_prof.centre, src.name, cur_obs, cur_inst, model_r.name, sb_prof,
-                                             dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
-                                             deg_radii=dens_deg_rads)
-
-                src.update_products(dens_prof)
-                final_dens_profs.append(dens_prof)
-
-            # If, for some reason, there are some inf/NaN values in any of the quantities passed to the GasDensity3D
-            #  declaration, this is where an error will be thrown
-            except ValueError:
+    with tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
+              total=len(sources), position=0) as dens_prog:
+        final_dens_profs = []
+        # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
+        e_to_p_ratio = NHC[abund_table]
+        for src_ind, src in enumerate(sources):
+            sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                              psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
+            if sb_prof is None:
                 final_dens_profs.append(None)
-                warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
-                     " in it.".format(src.name))
-        else:
-            final_dens_profs.append(None)
+                continue
+            else:
+                src.update_products(sb_prof)
 
-        dens_prog.update(1)
-    dens_prog.close()
+            # Fit the user chosen model to sb_prof
+            cur_model = model[src_ind]
+            sb_prof.fit(cur_model, fit_method, num_samples, num_steps, num_walkers, show_warn=show_warn,
+                        progress_bar=False)
+
+            if isinstance(cur_model, str):
+                model_r = sb_prof.get_model_fit(cur_model, fit_method)
+            else:
+                model_r = sb_prof.get_model_fit(cur_model.name, fit_method)
+
+            if model_r.success:
+                dens_rads = sb_prof.radii.copy()
+                dens_rads_errs = sb_prof.radii_err.copy()
+                dens_deg_rads = sb_prof.deg_radii.copy()
+                # Run the inverse abel transform for the model, to retrieve distributions for the value of the transformed
+                #  model at each r point. If the user hasn't set a method then we use the default method for the current
+                #  model, otherwise we pass the user's choice
+                if inv_abel_method is None:
+                    transformed = model_r.inverse_abel(dens_rads, use_par_dist=True)
+                else:
+                    transformed = model_r.inverse_abel(dens_rads, use_par_dist=True, method=inv_abel_method)
+
+                # Now need to make sure the units of the transformed model are what we need
+                if sb_prof.values_unit.is_equivalent('ct/(s*arcmin**2)'):
+                    # If the SB profile is in count/s/arcmin^2 then the abel transform will have
+                    #  units of ct/s/(arcmin^2 kpc), so I create a quantity which will convert the arcmin^2 to kpc^2
+                    conv = Quantity(ang_to_rad(Quantity(1, 'arcmin'), src.redshift, src.cosmo).to("kpc").value,
+                                    'kpc/arcmin')**2
+                    transformed /= conv
+                elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
+                    pass
+                else:
+                    raise NotImplementedError("Haven't yet added support for surface brightness profiles in "
+                                              "other units, don't really know how you even got here.")
+
+                # We convert the volume element to cm^3 now, this is the unit we expect for the density conversion
+                transformed = transformed.to('ct/(s*cm^3)')
+
+                # We multiply by the conversion factor that is unique to the cluster and calculated earlier to take
+                #  the transformed profile to a gas number density (n_gas as seen in Eckert et al. 2016, eq. 2).
+                num_dens_dist = np.sqrt(transformed * conv_factors[src_ind])*(1+e_to_p_ratio)
+
+                med_num_dens = np.percentile(num_dens_dist, 50, axis=1)
+                num_dens_err = np.std(num_dens_dist, axis=1)
+
+                # Setting up the instrument and ObsID to pass into the density profile definition
+                if obs_id[src_ind] is None:
+                    cur_inst = "combined"
+                    cur_obs = "combined"
+                else:
+                    cur_inst = inst[src_ind]
+                    cur_obs = obs_id[src_ind]
+
+                try:
+                    # I now allow the user to decide if they want to generate number or mass density profiles using
+                    #  this function, and here is where that distinction is made
+                    if num_dens:
+                        dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
+                                                 cur_inst, model_r.name, sb_prof, dens_rads_errs, num_dens_err,
+                                                 deg_radii=dens_deg_rads)
+                    else:
+                        # TODO Check the origin of the mean molecular weight, see if there are different values for
+                        #  different abundance tables
+                        # The mean molecular weight multiplied by the proton mass
+                        conv_mass = MEAN_MOL_WEIGHT*m_p
+                        dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
+                                                 sb_prof.centre, src.name, cur_obs, cur_inst, model_r.name, sb_prof,
+                                                 dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
+                                                 deg_radii=dens_deg_rads)
+
+                    src.update_products(dens_prof)
+                    final_dens_profs.append(dens_prof)
+
+                # If, for some reason, there are some inf/NaN values in any of the quantities passed to the GasDensity3D
+                #  declaration, this is where an error will be thrown
+                except ValueError:
+                    final_dens_profs.append(None)
+                    warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
+                         " in it.".format(src.name))
+            else:
+                final_dens_profs.append(None)
+
+            dens_prog.update(1)
 
     return final_dens_profs
 

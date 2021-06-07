@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 13:55. Copyright (c) David J Turner
 
 from typing import List, Union
 
@@ -30,6 +30,12 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     A function that allows for the fitting of sets of annular spectra (generated from objects such as galaxy
     clusters) with an absorbed plasma emission model (tbabs*apec). This function fits the annuli completely
     independently of one another.
+
+    If the spectrum checking step of the XSPEC fit is enabled (using the boolean flag spectrum_checking), then
+    each individual spectrum available for a given source will be fitted, and if the measured temperature is less
+    than or equal to 0.01keV, or greater than 20keV, or the temperature uncertainty is greater than 15keV, then
+    that spectrum will be rejected and not included in the final fit. Spectrum checking also involves rejecting any
+    spectra with fewer than 10 noticed channels.
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the

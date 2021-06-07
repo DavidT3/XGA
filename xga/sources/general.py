@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/03/2021, 15:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 15:50. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Union
@@ -267,17 +267,16 @@ class ExtendedSource(BaseSource):
 
         return chosen
 
-    def get_1d_brightness_profile(self, outer_rad: Union[Quantity, str], obs_id: str = None, inst: str = None,
-                                  central_coord: Quantity = None, radii: Quantity = None, lo_en: Quantity = None,
-                                  hi_en: Quantity = None, combined: bool = True, pix_step: int = 1,
+    def get_1d_brightness_profile(self, outer_rad: Union[Quantity, str], obs_id: str = 'combined',
+                                  inst: str = 'combined', central_coord: Quantity = None, radii: Quantity = None,
+                                  lo_en: Quantity = None, hi_en: Quantity = None, pix_step: int = 1,
                                   min_snr: Union[float, int] = 0.0, psf_corr: bool = False, psf_model: str = "ELLBETA",
                                   psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15):
         """
         A specific get method for 1D brightness profiles. Should provide a relatively simple way of retrieving
         specific brightness profiles from XGA's storage system. Please note that there is not a separate get method
-        for brightness profiles made from combined data, instead this method has a combined parameter to set. This
-        method will provide profiles that partially match if there is not enough information to produce a unique
-        match.
+        for brightness profiles made from combined data, instead this method will search for combined profiles if
+        either obs_id or inst is set to 'combined'. - Retrieving combined profiles is the default behaviour.
 
         :param Quantity/str outer_rad: The outermost radius of the profile, either as a Quantity or a name (e.g. r500).
         :param str obs_id: The ObsID used to generate the profile in question, default is None. If this is set to
@@ -289,8 +288,6 @@ class ExtendedSource(BaseSource):
         :param Quantity radii: Specific radii to check for in the profiles.
         :param Quantity lo_en: The lower energy bound of the RateMap used to generate the profile.
         :param Quantity hi_en: The upper energy bound of the RateMap used to generate the profile.
-        :param bool combined: Whether this method should look for a profile generated using combined data, default is
-            True.
         :param int pix_step: The width of each annulus in pixels used to generate the profile.
         :param float min_snr: The minimum signal to noise imposed upon the profile.
         :param bool psf_corr: Is the brightness profile corrected for PSF effects?
@@ -308,8 +305,7 @@ class ExtendedSource(BaseSource):
         else:
             raise ValueError("Outer radius may only be a string or an astropy quantity")
 
-        # Yes there are three separate ways of triggering a search for combined profiles, I know its overkill
-        if obs_id == "combined" or inst == "combined" or combined:
+        if obs_id == "combined" or inst == "combined":
             interim_prods = self.get_combined_profiles("brightness", central_coord, radii, lo_en, hi_en)
         else:
             interim_prods = self.get_profiles("brightness", obs_id, inst, central_coord, radii, lo_en, hi_en)

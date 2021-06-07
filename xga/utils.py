@@ -1,9 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:26. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:34. Copyright (c) David J Turner
 
 import json
 import os
+import shutil
 from configparser import ConfigParser
+from subprocess import Popen, PIPE
 from typing import List, Tuple
 
 import pandas as pd
@@ -34,7 +36,6 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_mos1_evts": "/this/is/required/{obs_id}/mos1_exp1_clean_evts.fits",
              "clean_mos2_evts": "/this/is/required/{obs_id}/mos2_exp1_clean_evts.fits",
              "attitude_file": "/this/is/required/{obs_id}/attitude.fits",
-             "odf_path": "/this/is/required/{obs_id}/odf/",
              "lo_en": ['0.50', '2.00'],
              "hi_en": ['2.00', '10.00'],
              "pn_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-pn_merged_img.fits",
@@ -143,42 +144,41 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
     obs_census = [entry for entry in os.listdir(config["XMM_FILES"]["root_xmm_dir"]) if xmm_obs_id_test(entry)
                   and entry not in obs_lookup_obs]
     if len(obs_census) != 0:
-        census_progress = tqdm(desc="Assembling list of ObsID pointings", total=len(obs_census))
-        for obs in obs_census:
-            info = {'ra': None, 'dec': None, "the_rest": []}
-            for key in ["clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts"]:
-                evt_path = config["XMM_FILES"][key].format(obs_id=obs)
-                if os.path.exists(evt_path):
-                    evts_header = read_header(evt_path)
-                    try:
-                        # Reads out the filter header, if it is CalClosed then we can't use it
-                        filt = evts_header["FILTER"]
-                        submode = evts_header["SUBMODE"]
-                        info['ra'] = evts_header["RA_PNT"]
-                        info['dec'] = evts_header["DEC_PNT"]
-                    except KeyError:
-                        # It won't actually, but this will trigger the if statement that tells XGA not to use
-                        #  this particular obs/inst combo
-                        filt = "CalClosed"
+        with tqdm(desc="Assembling list of ObsIDs", total=len(obs_census)) as census_progress:
+            for obs in obs_census:
+                info = {'ra': None, 'dec': None, "the_rest": []}
+                for key in ["clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts"]:
+                    evt_path = config["XMM_FILES"][key].format(obs_id=obs)
+                    if os.path.exists(evt_path):
+                        evts_header = read_header(evt_path)
+                        try:
+                            # Reads out the filter header, if it is CalClosed then we can't use it
+                            filt = evts_header["FILTER"]
+                            submode = evts_header["SUBMODE"]
+                            info['ra'] = evts_header["RA_PNT"]
+                            info['dec'] = evts_header["DEC_PNT"]
+                        except KeyError:
+                            # It won't actually, but this will trigger the if statement that tells XGA not to use
+                            #  this particular obs/inst combo
+                            filt = "CalClosed"
 
-                    # TODO Decide if I want to disallow small window mode observations
-                    if filt != "CalClosed":
-                        info["the_rest"].append("T")
+                        # TODO Decide if I want to disallow small window mode observations
+                        if filt != "CalClosed":
+                            info["the_rest"].append("T")
+                        else:
+                            info["the_rest"].append("F")
                     else:
                         info["the_rest"].append("F")
+
+                use_insts = ",".join(info["the_rest"])
+                # Write the information to the line that will go in the census csv
+                if info["ra"] is not None and info["dec"] is not None:
+                    # Format to write to the census.csv that lives in the config directory.
+                    obs_lookup.append("{o},{r},{d},{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
                 else:
-                    info["the_rest"].append("F")
+                    obs_lookup.append("{o},,,{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
 
-            use_insts = ",".join(info["the_rest"])
-            # Write the information to the line that will go in the census csv
-            if info["ra"] is not None and info["dec"] is not None:
-                # Format to write to the census.csv that lives in the config directory.
-                obs_lookup.append("{o},{r},{d},{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
-            else:
-                obs_lookup.append("{o},,,{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
-
-            census_progress.update(1)
-        census_progress.close()
+                census_progress.update(1)
         with open(CENSUS_FILE, 'w') as census:
             census.writelines(obs_lookup)
 
@@ -296,8 +296,7 @@ else:
     xga_conf = ConfigParser()
     # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
     xga_conf.read(CONFIG_FILE)
-    keys_to_check = ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file",
-                     "odf_path"]
+    keys_to_check = ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file"]
     # Here I check that the installer has actually changed the three events file paths
     all_changed = all([xga_conf["XMM_FILES"][key] != XMM_FILES[key] for key in keys_to_check])
     if not all_changed:
@@ -381,6 +380,37 @@ else:
     r2500 = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
     add_enabled_units([r200, r500, r2500, xmm_det, xmm_det])
 
+    # Here we check to see whether SAS is installed (along with all the necessary paths)
+    SAS_VERSION = None
+    if "SAS_DIR" not in os.environ:
+        warnings.warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such"
+                      " all functions in xga.sas will not work.")
+        SAS_VERSION = None
+        SAS_AVAIL = False
+    else:
+        # This way, the user can just import the SAS_VERSION from this utils code
+        sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+        SAS_VERSION = sas_out.decode("UTF-8").strip("]\n").split('-')[-1]
+        SAS_AVAIL = True
+
+    # This checks for the CCF path, which is required to use cifbuild, which is required to do basically
+    #  anything with SAS
+    if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
+        warnings.warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration "
+                      "files. As such functions in xga.sas will not work.")
+        SAS_AVAIL = False
+
+    # Equivelant for the XSPEC dependency
+    XSPEC_VERSION = None
+    # Got to make sure we can access command line XSPEC.
+    if shutil.which("xspec") is None:
+        warnings.warn("Unable to locate an XSPEC installation.")
+    else:
+        # The XSPEC into text includes the version, so I read that out and parse it
+        null_path = pkg_resources.resource_filename(__name__, "xspec_scripts/null_script.xcm")
+        xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE, shell=True).communicate()
+        xspec_vline = [line for line in xspec_out.decode("UTF-8").split('\n') if 'XSPEC version' in line][0]
+        XSPEC_VERSION = xspec_vline.split(': ')[-1]
 
 
 

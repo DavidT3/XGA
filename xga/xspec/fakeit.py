@@ -1,7 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 11:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 16:41. Copyright (c) David J Turner
 
 import os
+from random import randint
 from typing import List, Union
 
 import astropy.units as u
@@ -158,11 +159,14 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         out_file = dest_dir + source.name + "_" + spec_objs[0].storage_key + "_" + model + "_conv_factors.csv"
         script_file = dest_dir + source.name + "_" + spec_objs[0].storage_key + "_" + model + "_conv_factors" + ".xcm"
 
+        # Random ident to make sure no temporary spec files clash
+        rid = randint(0, 1e+8)
+
         # Populates the fakeit conversion factor template script
         script = script.format(ab=abund_table, H0=source.cosmo.H0.value, q0=0., lamb0=source.cosmo.Ode0,
                                rmf=rmf_paths, arf=arf_paths, obs=obs, inst=inst, m=model, pn=par_names,
                                pv=par_values, lll=convert_low_lims, lul=convert_upp_lims,
-                               redshift=source.redshift, of=out_file)
+                               redshift=source.redshift, of=out_file, rid=rid)
 
         # Write out the filled-in template to its destination
         with open(script_file, 'w') as xcm:

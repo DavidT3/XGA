@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/04/2021, 15:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/06/2021, 12:55. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -121,7 +121,7 @@ class BaseSource:
         # nhlookup returns average and weighted average values, so just take the first
         self._nH = nh_lookup(self.ra_dec)[0]
         self._redshift = redshift
-        self._products, region_dict, self._att_files, self._odf_paths = self._initial_products()
+        self._products, region_dict, self._att_files= self._initial_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
@@ -246,7 +246,7 @@ class BaseSource:
 
         self._default_coord = new_coord
 
-    def _initial_products(self) -> Tuple[dict, dict, dict, dict]:
+    def _initial_products(self) -> Tuple[dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing XMM data products associated with this source.
 
@@ -268,7 +268,7 @@ class BaseSource:
                 dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key, "attitude_file", "odf_path"]
+            not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key, "attitude_file"]
             # Formats the generic paths given in the config file for this particular obs and energy range
             files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
                      for k, v in xga_conf["XMM_FILES"].items() if k not in not_these and inst in k}
@@ -304,8 +304,6 @@ class BaseSource:
         reg_dict = {}
         # Attitude files also get their own dictionary, they won't be read into memory by XGA
         att_dict = {}
-        # ODF paths also also get their own dict, they will just be used to point cifbuild to the right place
-        odf_dict = {}
         # Use itertools to create iterable and avoid messy nested for loop
         # product makes iterable of tuples, with all combinations of the events files and ObsIDs
         for oi in product(obs_dict, XMM_INST):
@@ -324,16 +322,13 @@ class BaseSource:
             # Attitude file is a special case of data product, only SAS should ever need it, so it doesn't
             # have a product object
             att_file = xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=obs_id)
-            # ODF path isn't a data product, but is necessary for cifbuild
-            odf_path = xga_conf["XMM_FILES"]["odf_path"].format(obs_id=obs_id)
 
-            if os.path.exists(evt_file) and os.path.exists(att_file) and os.path.exists(odf_path):
+            if os.path.exists(evt_file) and os.path.exists(att_file):
                 # An instrument subsection of an observation will ONLY be populated if the events file exists
                 # Otherwise nothing can be done with it.
                 obs_dict[obs_id][inst] = {"events": EventList(evt_file, obs_id=obs_id, instrument=inst,
                                                               stdout_str="", stderr_str="", gen_cmd="")}
                 att_dict[obs_id] = att_file
-                odf_dict[obs_id] = odf_path
                 # Dictionary updated with derived product names
                 map_ret = map(read_default_products, en_comb)
                 obs_dict[obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
@@ -348,7 +343,7 @@ class BaseSource:
         if len(obs_dict) == 0:
             raise NoValidObservationsError("{s} has {n} observations ({a}), none of which have the necessary"
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
-        return obs_dict, reg_dict, att_dict, odf_dict
+        return obs_dict, reg_dict, att_dict
 
     def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D,
                                               List[BaseProduct], List[BaseAggregateProduct], List[BaseProfile1D]]):
@@ -751,12 +746,11 @@ class BaseSource:
 
                     # If exactly one match has been found for all of the products, we define an XGA spectrum and
                     #  add it the source object.
-                    if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and \
-                            len(back_rmf) == 1:
+                    if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and len(back_rmf) == 1:
                         # Defining our XGA spectrum instance
-                        obj = Spectrum(sp, rmf[0], arf[0], back[0], back_rmf[0], back_arf[0], central_coord,
-                                       r_inner, r_outer, obs_id, inst, grouped, min_counts, min_sn, over_sample, "",
-                                       "", "", region)
+                        obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
+                                       grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf[0],
+                                       back_arf[0])
 
                         if "ident" in sp.split('/')[-1]:
                             set_id = int(sp.split('ident')[-1].split('_')[0])
@@ -771,6 +765,26 @@ class BaseSource:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
                             self.update_products(obj)
+
+                    elif len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 0:
+                        # Defining our XGA spectrum instance
+                        obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
+                                       grouped, min_counts, min_sn, over_sample, "", "", "", region)
+
+                        if "ident" in sp.split('/')[-1]:
+                            set_id = int(sp.split('ident')[-1].split('_')[0])
+                            ann_id = int(sp.split('ident')[-1].split('_')[1])
+                            obj.annulus_ident = ann_id
+                            obj.set_ident = set_id
+                            if set_id not in ann_spec_constituents:
+                                ann_spec_constituents[set_id] = []
+                                ann_spec_usable[set_id] = True
+                            ann_spec_constituents[set_id].append(obj)
+                        else:
+                            # And adding it to the source storage structure, but only if its not a member
+                            #  of an AnnularSpectra
+                            self.update_products(obj)
+
                     else:
                         warnings.warn("{src} spectrum {sp} cannot be loaded in due to a mismatch in available"
                                       " ancillary files".format(src=self.name, sp=sp))
@@ -1098,7 +1112,6 @@ class BaseSource:
                 diff_sort = np.array([dist_from_source(r) for r in reg_dict[obs_id]]).argsort()
                 # Unfortunately due to a limitation of the regions module I think you need images
                 #  to do this contains match...
-                # TODO Come up with an alternative to this that can work without a WCS
                 within = np.array([reg.contains(SkyCoord(*self._ra_dec, unit='deg'), w)
                                    for reg in reg_dict[obs_id][diff_sort[0:5]]])
 
@@ -1199,19 +1212,6 @@ class BaseSource:
             raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
         else:
             return self._att_files[obs_id]
-
-    def get_odf_path(self, obs_id: str) -> str:
-        """
-        Fetches the path to the odf directory for an XMM observation.
-
-        :param obs_id: The ObsID to fetch the ODF path for.
-        :return: The path to the ODF path.
-        :rtype: str
-        """
-        if obs_id not in self._products:
-            raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
-        else:
-            return self._odf_paths[obs_id]
 
     @property
     def obs_ids(self) -> List[str]:
@@ -1427,11 +1427,13 @@ class BaseSource:
         if obs_id == "combined":
             obs_id = None
 
+        if central_coord is None:
+            central_coord = self._default_coord
+
         # Don't need to do a bunch of checks, because the method I call to make the
         #  mask does all the checks anyway
         src_reg, bck_reg = self.source_back_regions(reg_type, obs_id, central_coord)
-        if central_coord is None:
-            central_coord = self._default_coord
+
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:
@@ -1464,9 +1466,28 @@ class BaseSource:
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
         """
+        masks = []
+        for r in self._interloper_regions:
+            if r is not None:
+                # The central coordinate of the current region
+                c = Quantity([r.center.ra.value, r.center.dec.value], 'deg')
+                try:
+                    # Checks if the central coordinate can be converted to pixels for the mask_image, if it fails then
+                    #  its likely off of the image, as a ValueError will be thrown if a pixel coordinate is less
+                    #  than zero, or greater than the size of the image in that axis
+                    cp = mask_image.coord_conv(c, 'pix')
+                    pr = r.to_pixel(mask_image.radec_wcs)
 
-        masks = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-                 for reg in self._interloper_regions if reg is not None]
+                    # If the rotation angle is zero then the conversion to mask by the regions module will be upset,
+                    #  so I perturb the angle by 0.1 degrees
+                    if pr.angle.value == 0:
+                        pr.angle += Quantity(0.1, 'deg')
+                    masks.append(pr.to_mask().to_image(mask_image.shape))
+                except ValueError:
+                    pass
+
+        # masks = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+        #          for reg in self._interloper_regions if reg is not None]
         interlopers = sum([m for m in masks if m is not None])
 
         mask = np.ones(mask_image.shape)
@@ -1578,7 +1599,6 @@ class BaseSource:
         if remove_interlopers:
             interloper_mask = self.get_interloper_mask(obs_id)
             custom_mask = custom_mask*interloper_mask
-
         return custom_mask
 
     def get_snr(self, outer_radius: Union[Quantity, str], central_coord: Quantity = None, lo_en: Quantity = None,
@@ -2320,6 +2340,7 @@ class BaseSource:
                 del self._regions[o]
                 del self._other_regions[o]
                 del self._alt_match_regions[o]
+                del self._interloper_masks[o]
                 if self._peaks is not None:
                     del self._peaks[o]
 
@@ -3156,6 +3177,21 @@ class BaseSource:
         elif self._wl_mass is not None and self._wl_mass_err is None:
             print("Weak Lensing Mass - {0}".format(self._wl_mass))
 
+        if 'get_temperature' in dir(self):
+            try:
+                tx = self.get_temperature('r500', 'constant*tbabs*apec').value.round(2)
+                # Just average the uncertainty for this
+                print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean()))
+            except (ModelNotAssociatedError, NoProductAvailableError):
+                pass
+
+            try:
+                lx = self.get_luminosities('r500', 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
+                                           hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
+                print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean()))
+
+            except (ModelNotAssociatedError, NoProductAvailableError):
+                pass
         print("-----------------------------------------------------\n")
 
     def __len__(self) -> int:
@@ -3224,7 +3260,6 @@ class NullSource:
 
         # The SAS generation routine might need this information
         self._att_files = {o: xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=o) for o in self._obs}
-        self._odf_paths = {o: xga_conf["XMM_FILES"]["odf_path"].format(obs_id=o) for o in self._obs}
 
         # Need the event list objects declared unfortunately
         self._products = {o: {} for o in self._obs}
@@ -3260,19 +3295,6 @@ class NullSource:
             raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
         else:
             return self._att_files[obs_id]
-
-    def get_odf_path(self, obs_id: str) -> str:
-        """
-        Fetches the path to the odf directory for an XMM observation.
-
-        :param obs_id: The ObsID to fetch the ODF path for.
-        :return: The path to the ODF path.
-        :rtype: str
-        """
-        if obs_id not in self._products:
-            raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
-        else:
-            return self._odf_paths[obs_id]
 
     @property
     def obs_ids(self) -> List[str]:

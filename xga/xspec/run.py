@@ -1,8 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2021, 11:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 15:29. Copyright (c) David J Turner
 
 import os
-import shutil
 import warnings
 from functools import wraps
 # from multiprocessing.dummy import Pool
@@ -15,15 +14,10 @@ import pandas as pd
 from fitsio import FITS
 from tqdm import tqdm
 
-from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError
+from .. import XSPEC_VERSION
+from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError, XSPECNotFoundError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
-
-# Got to make sure we can access command line XSPEC.
-# Currently raises an error, but perhaps later on I'll relax this to a warning.
-if shutil.which("xspec") is None:
-    # raise HeasoftError("Unable to locate an XSPEC installation.")
-    warnings.warn("Unable to locate an XSPEC installation.")
 
 
 def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: float) \
@@ -42,6 +36,9 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         describing if this fit can be used, list of any errors found, list of any warnings found.
     :rtype: Tuple[Union[FITS, str], str, bool, list, list]
     """
+    if XSPEC_VERSION is None:
+        raise XSPECNotFoundError("There is no XSPEC installation detectable on this machine.")
+
     # We assume the output will be usable to start with
     usable = True
 

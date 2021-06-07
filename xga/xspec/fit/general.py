@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 13:55. Copyright (c) David J Turner
 
 import warnings
 from typing import List, Union
@@ -35,7 +35,8 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     If the spectrum checking step of the XSPEC fit is enabled (using the boolean flag spectrum_checking), then
     each individual spectrum available for a given source will be fitted, and if the measured temperature is less
     than or equal to 0.01keV, or greater than 20keV, or the temperature uncertainty is greater than 15keV, then
-    that spectrum will be rejected and not included in the final fit.
+    that spectrum will be rejected and not included in the final fit. Spectrum checking also involves rejecting any
+    spectra with fewer than 10 noticed channels.
 
     :param List[BaseSource] sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the

@@ -135,7 +135,7 @@ for {{set i 0}} {{$i <= [llength $rmf_paths]-1}} {{incr i}} {{
     $cur_arf
     y
 
-    temp_fakeit_spec.fits
+    temp_fakeit_spec_{rid}.fits
     10000
 
     for {{set j 0}} {{$j <= [llength $lum_lim_pairs]-1}} {{incr j}} {{
@@ -175,7 +175,7 @@ for {{set i 0}} {{$i <= [llength $rmf_paths]-1}} {{incr i}} {{
     }}
 
     data none
-    rm temp_fakeit_spec.fits
+    rm temp_fakeit_spec_{rid}.fits
 }}
 
 set fileid [open {of} w]

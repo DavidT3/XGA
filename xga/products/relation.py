@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/03/2021, 19:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:44. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -480,11 +480,10 @@ class ScalingRelation:
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
-        # Plot the data with uncertainties, if any data is present in this scaling relation. If not then
-        #  even though this command is called no data will appear because the x_data and y_data variables
-        #  are empty quantities
-        ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
-                    fmt="x", color=data_colour, capsize=2, label=self._name + " Data")
+        # Plot the data with uncertainties, if any data is present in this scaling relation.
+        if len(self.x_data) != 0:
+            ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
+                        fmt="x", color=data_colour, capsize=2, label=self._name + " Data")
 
         # Need to randomly sample from the fitted model
         num_rand = 300

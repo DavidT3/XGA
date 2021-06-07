@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/05/2021, 11:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 09:33. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -12,7 +12,7 @@ from astropy.units import Quantity
 
 from .misc import cifbuild
 from .. import OUTPUT, NUM_CORES
-from ..exceptions import SASInputInvalid
+from ..exceptions import SASInputInvalid, NotAssociatedError
 from ..samples.base import BaseSample
 from ..sas.run import sas_call
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -215,12 +215,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize " \
                "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 withyranges=yes {ex}"
 
-    rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype=dataset detmaparray={ds} extendedsource={es}"
+    rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype={dt} detmaparray={ds} extendedsource={es}"
 
     # Don't need to run backscale separately, as this arfgen call will do it automatically
-    # TODO Experiment to see if I should change the badpixmaptype
-    arf_cmd = "arfgen spectrumset='{s}' arfset={a} withrmfset=yes rmfset='{r}' badpixlocation={e} " \
-              "extendedsource={es} detmaptype=dataset detmaparray={ds} setbackscale=yes badpixmaptype=flat"
+    arf_cmd = "arfgen spectrumset={s} arfset={a} withrmfset=yes rmfset={r} badpixlocation={e} " \
+              "extendedsource={es} detmaptype={dt} detmaparray={ds} setbackscale=no badpixmaptype={dt}"
+
+    bscal_cmd = "backscale spectrumset={s} badpixlocation={e}"
 
     # If the user wants to group spectra, then we'll need this template command:
     grp_cmd = "specgroup spectrumset={s} overwrite=yes backgndset={b} arfset={a} rmfset={r} addfilenames=no"
@@ -232,14 +233,17 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     sources_paths = []
     sources_extras = []
     sources_types = []
-
     for s_ind, source in enumerate(sources):
         # rmfgen and arfgen both take arguments that describe if something is an extended source or not,
         #  so we check the source type
         if isinstance(source, (ExtendedSource, GalaxyCluster)):
             ex_src = "yes"
+            # Sets the detmap type, using an image of the source is appropriate for extended sources like clusters,
+            #  but not for point sources
+            dt = 'dataset'
         else:
             ex_src = "no"
+            dt = 'flat'
         cmds = []
         final_paths = []
         extra_info = []
@@ -331,14 +335,50 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0) && {s}'".format(s=reg)
                 b_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0) && {s}'".format(s=b_reg)
                 # This is an expression without region information to be used for making the detmaps
-                #  required for ARF generation
-                d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
+                #  required for ARF generation, we start off assuming we'll use a MOS observation as the detmap
+                d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
+
+                # The detmap for the arfgen call should ideally not be from the same instrument as the observation,
+                #  so for PN we preferentially select MOS2 (as MOS1 was damaged). However if there isn't a MOS2
+                #  events list from the same observation then we select MOS1, and failing that we use PN.
+                try:
+                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos2')[0]
+                except NotAssociatedError:
+                    try:
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos1')[0]
+                    except NotAssociatedError:
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+                        # If all is lost and there are no MOS event lists then we must revert to the PN expression
+                        d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
 
             elif "mos" in inst:
                 spec_lim = 11999
                 expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0) && {s}'".format(s=reg)
                 b_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0) && {s}'".format(s=b_reg)
-                d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
+                # This is an expression without region information to be used for making the detmaps
+                #  required for ARF generation, we start off assuming we'll use the PN observation as the detmap
+                d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
+
+                # The detmap for the arfgen call should ideally not be from the same instrument as the observation,
+                #  so for MOS observations we preferentially select PN. However if there isn't a PN events list
+                #  from the same observation then for MOS2 we select MOS1, and for MOS1 we select MOS2 (as they
+                #  are rotated wrt one another it is still semi-valid), and failing that MOS2 will get MOS2 and MOS1
+                #  will get MOS1.
+                if inst[-1] == 1:
+                    cur = '1'
+                    opp = '2'
+                else:
+                    cur = '2'
+                    opp = '1'
+                try:
+                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+                except NotAssociatedError:
+                    # If we must use a MOS detmap then we have to use the MOS expression
+                    d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
+                    try:
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+opp)[0]
+                    except NotAssociatedError:
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+cur)[0]
             else:
                 raise ValueError("You somehow have an illegal value for the instrument name...")
 
@@ -373,16 +413,21 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             b_spec = b_spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                    dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                    gr=group_spec, ex=extra_file_name)
-            det_map = "{o}-{i}_detmap.fits"
-            det_map = det_map.format(o=obs_id, i=inst)
+            # Arguably checking whether this is an extended source and adjusting this is irrelevant as the file
+            #  name won't be used anyway with detmaptype set to flat, but I'm doing it anyway
+            if ex_src:
+                det_map = "{o}_{i}_detmap.fits"
+                det_map = det_map.format(o=detmap_evts.obs_id, i=detmap_evts.instrument)
+            else:
+                det_map = ""
             arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.arf"
             arf = arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                              dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec,
                              ex=extra_file_name)
-            b_arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.arf"
-            b_arf = b_arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                 dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                                 gr=group_spec, ex=extra_file_name)
+            # b_arf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.arf"
+            # b_arf = b_arf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+            #                      dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+            #                      gr=group_spec, ex=extra_file_name)
             ccf = dest_dir + "ccf.cif"
 
             # These file names are for the debug images of the source and background images, they will not be loaded
@@ -401,7 +446,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             sb_cmd_str = spec_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, s=b_spec, u=spec_lim, ex=b_expr)
 
             # Does the same thing for the evselect command to make the detmap
-            d_cmd_str = detmap_cmd.format(e=evt_list.path, d=det_map, ex=d_expr)
+            d_cmd_str = detmap_cmd.format(e=detmap_evts.path, d=det_map, ex=d_expr)
 
             # Populates the debug image commands
             dim_cmd_str = debug_im.format(e=evt_list.path, ex=expr, i=dim)
@@ -412,39 +457,43 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #  the rmf.
             if one_rmf:
                 rmf = "{o}_{i}_{n}_universal.rmf".format(o=obs_id, i=inst, n=source_name)
-                b_rmf = rmf
+                # b_rmf = rmf
             else:
                 rmf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.rmf"
                 rmf = rmf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                  dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                  gr=group_spec, ex=extra_file_name)
-                b_rmf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.rmf"
-                b_rmf = b_rmf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                                     gr=group_spec, ex=extra_file_name)
+                # b_rmf = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_back.rmf"
+                # b_rmf = b_rmf.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                #                      dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                #                      gr=group_spec, ex=extra_file_name)
 
             final_rmf_path = OUTPUT + obs_id + '/' + rmf
             if one_rmf and not os.path.exists(final_rmf_path):
                 cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
-                                    rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
-                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map),
-                                    sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src,
-                                                               ds=det_map)])
+                                    rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map, dt=dt),
+                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map, dt=dt),
+                                    sb_cmd_str, bscal_cmd.format(s=spec, e=evt_list.path),
+                                    bscal_cmd.format(s=b_spec, e=evt_list.path)])
+                #arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
             elif not one_rmf and not os.path.exists(final_rmf_path):
                 cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
-                                    rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map),
-                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map)]) + ";"
-                cmd_str += ";".join([sb_cmd_str, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src, ds=det_map),
-                                     arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src,
-                                                    ds=det_map)])
+                                    rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map, dt=dt),
+                                    arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src,
+                                                   ds=det_map, dt=dt)]) + ";"
+                cmd_str += ";".join([sb_cmd_str, bscal_cmd.format(s=spec, e=evt_list.path),
+                                     bscal_cmd.format(s=b_spec, e=evt_list.path)])
+                #, rmf_cmd.format(r=b_rmf, s=b_spec, es=ex_src, ds=det_map)
+                # arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
             else:
                 # This one just copies the existing universal rmf into the temporary generation folder
                 cmd_str = "cp {f_rmf} {d};".format(f_rmf=final_rmf_path, d=dest_dir)
                 cmd_str += ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
                                      arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src,
-                                                    ds=det_map)]) + ";"
-                cmd_str += ";".join([sb_cmd_str, arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path,
-                                                                es=ex_src, ds=det_map)])
+                                                    ds=det_map, dt=dt)]) + ";"
+                cmd_str += ";".join([sb_cmd_str, bscal_cmd.format(s=spec, e=evt_list.path),
+                                     bscal_cmd.format(s=b_spec, e=evt_list.path)])
+                #arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
 
             # If the user wants to produce grouped spectra, then this if statement is triggered and adds a specgroup
             #  command at the end. The groupspec command will replace the ungrouped spectrum.
@@ -469,8 +518,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
                                "arf_path": os.path.join(OUTPUT, obs_id, arf),
                                "b_spec_path": os.path.join(OUTPUT, obs_id, b_spec),
-                               "b_rmf_path": os.path.join(OUTPUT, obs_id, b_rmf),
-                               "b_arf_path": os.path.join(OUTPUT, obs_id, b_arf),
+                               "b_rmf_path": '',
+                               "b_arf_path": '',
                                "obs_id": obs_id, "instrument": inst, "grouped": group_spec, "min_counts": min_counts,
                                "min_sn": min_sn, "over_sample": over_sample, "central_coord": source.default_coord,
                                "from_region": from_region})
@@ -705,43 +754,46 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
                     if "universal" not in interim_extras[p_ind]['rmf_path']:
                         # Much the same process as with the spectrum name
                         split_r = copy(interim_extras[p_ind]['rmf_path']).split('/')
-                        split_br = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
+                        # split_br = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
                         new_rmf = split_r[-1].replace('.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".rmf"
-                        new_b_rmf = split_br[-1].replace('_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
-                                    + "_back.rmf"
+                        # new_b_rmf = split_br[-1].replace('_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                        #             + "_back.rmf"
 
                         # Replacing the names in the SAS commands
                         cur_cmd = cur_cmd.replace(split_r[-1], new_rmf)
-                        cur_cmd = cur_cmd.replace(split_br[-1], new_b_rmf)
+                        # cur_cmd = cur_cmd.replace(split_br[-1], new_b_rmf)
 
                         split_r[-1] = new_rmf
-                        split_br[-1] = new_b_rmf
+                        # split_br[-1] = new_b_rmf
 
                         # Adding the new RMF paths into the extra info dictionary
-                        interim_extras[p_ind].update({"rmf_path": "/".join(split_r), "b_rmf_path": "/".join(split_br)})
+                        # interim_extras[p_ind].update({"rmf_path": "/".join(split_r),
+                        # "b_rmf_path": "/".join(split_br)})
+                        interim_extras[p_ind].update({"rmf_path": "/".join(split_r)})
 
                     # Same process as RMFs but for the ARF, background ARF, and background spec
                     split_a = copy(interim_extras[p_ind]['arf_path']).split('/')
-                    split_ba = copy(interim_extras[p_ind]['b_arf_path']).split('/')
+                    # split_ba = copy(interim_extras[p_ind]['b_arf_path']).split('/')
                     split_bs = copy(interim_extras[p_ind]['b_spec_path']).split('/')
                     new_arf = split_a[-1].replace('.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".arf"
-                    new_b_arf = split_ba[-1].replace('_back.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
-                                + "_back.arf"
+                    # new_b_arf = split_ba[-1].replace('_back.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                    #             + "_back.arf"
                     new_b_spec = split_bs[-1].replace('_backspec.fits', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
                                 + "_backspec.fits"
 
                     # New names into the commands
                     cur_cmd = cur_cmd.replace(split_a[-1], new_arf)
-                    cur_cmd = cur_cmd.replace(split_ba[-1], new_b_arf)
+                    # cur_cmd = cur_cmd.replace(split_ba[-1], new_b_arf)
                     cur_cmd = cur_cmd.replace(split_bs[-1], new_b_spec)
 
                     split_a[-1] = new_arf
-                    split_ba[-1] = new_b_arf
+                    # split_ba[-1] = new_b_arf
                     split_bs[-1] = new_b_spec
 
                     # Update the extra info dictionary some more
-                    interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_arf_path": "/".join(split_ba),
-                                                  "b_spec_path": "/".join(split_bs)})
+                    # interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_arf_path": "/".join(split_ba),
+                    #                               "b_spec_path": "/".join(split_bs)})
+                    interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_spec_path": "/".join(split_bs)})
 
                     # Add the new paths and commands to their respective lists
                     new_paths.append("/".join(split_p))

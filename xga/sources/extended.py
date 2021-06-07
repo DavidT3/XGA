@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 15:50. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -768,8 +768,8 @@ class GalaxyCluster(ExtendedSource):
 
         # This fetches any profiles that might have already been generated to our required specifications
         try:
-            sb_profile = self.get_1d_brightness_profile(rad, combined=True, pix_step=pix_step, min_snr=min_snr,
-                                                        lo_en=lo_en, hi_en=hi_en)
+            sb_profile = self.get_1d_brightness_profile(rad, pix_step=pix_step, min_snr=min_snr, lo_en=lo_en,
+                                                        hi_en=hi_en)
             if isinstance(sb_profile, list):
                 raise ValueError("There are multiple matches for this brightness profile, and its the developers "
                                  "fault not yours.")
@@ -783,7 +783,7 @@ class GalaxyCluster(ExtendedSource):
             p_rt = psf_comb_rt[-1]
 
             try:
-                psf_sb_profile = self.get_1d_brightness_profile(rad, combined=True, pix_step=pix_step, min_snr=min_snr,
+                psf_sb_profile = self.get_1d_brightness_profile(rad, pix_step=pix_step, min_snr=min_snr,
                                                                 psf_corr=True, psf_model=p_rt.psf_model,
                                                                 psf_bins=p_rt.psf_bins, psf_algo=p_rt.psf_algorithm,
                                                                 psf_iter=p_rt.psf_iterations, lo_en=lo_en, hi_en=hi_en)

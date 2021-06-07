@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/04/2021, 08:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 11:01. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1295,8 +1295,17 @@ class BaseProfile1D:
         model_obj = self.get_model_fit(model, 'mcmc')
 
         frac_conf_lev = [(50 - 34.1)/100, 0.5, (50 + 34.1)/100]
-        fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
-                            quantiles=frac_conf_lev, show_titles=True)
+
+        # If any of the median parameter values are above 1e+4 we get corner to format them in scientific
+        #  notation, to avoid super long numbers spilling over the edge of the corner plot. I will say that
+        #  scientific notation in titles in corner doesn't look that great either, but its better than the
+        #  alternative
+        if np.any(np.median(flat_chains, axis=0) > 1e+4):
+            fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
+                                quantiles=frac_conf_lev, show_titles=True, title_fmt=".2e")
+        else:
+            fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
+                                quantiles=frac_conf_lev, show_titles=True)
         t = self._y_axis_name
         plt.suptitle("{m} - {s} {t} Profile".format(m=model_obj.publication_name, s=self.src_name, t=t),
                      fontsize=14, y=1.02)
@@ -1571,17 +1580,17 @@ class BaseProfile1D:
         y_axis_lims = main_ax.get_ylim()
 
         # This dynamically changes how tick labels are formatted depending on the values displayed
-        if max(x_axis_lims) < 1000 and not models:
+        if max(x_axis_lims) < 100 and not models:
             main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
             main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        elif max(x_axis_lims) < 1000 and models:
+        elif max(x_axis_lims) < 100 and models:
             res_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
             res_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
-        if max(y_axis_lims) < 1000 and min(y_axis_lims) > 0.1:
+        if max(y_axis_lims) < 100 and min(y_axis_lims) > 0.1:
             main_ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
             main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        elif max(y_axis_lims) < 1000 and min(y_axis_lims) <= 0.1:
+        elif max(y_axis_lims) < 100 and min(y_axis_lims) <= 0.1:
             main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         # And of course actually showing it
@@ -2030,8 +2039,10 @@ class BaseAggregateProfile1D:
             self._back_avail = False
 
         # Here we check that all energy bounds are the same
-        bounds = [p.energy_bounds for p in profiles]
-        if len(set(bounds)) != 1:
+        lo_bounds = [p.energy_bounds[0] for p in profiles]
+        hi_bounds = [p.energy_bounds[1] for p in profiles]
+
+        if len(set(lo_bounds)) != 1 or len(set(hi_bounds)) != 1:
             raise ValueError("All component profiles must have been generate from the same energy range,"
                              " otherwise they aren't directly comparable.")
 
@@ -2041,7 +2052,7 @@ class BaseAggregateProfile1D:
         # Not doing a check that all the prof types are the same, because that should be included in the
         #  type check on the first line of this init
         self._prof_type = profiles[0].type.split("_profile")[0]
-        self._energy_bounds = bounds[0]
+        self._energy_bounds = profiles[0].energy_bounds
 
         # We set the y-axis name attribute which is now expected by the plotting function, just grab it from the
         #  first component because we've already checked that they're all the same type

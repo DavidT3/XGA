@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2021, 17:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/05/2021, 16:25. Copyright (c) David J Turner
 
 from typing import Union, List
 from warnings import warn
@@ -205,6 +205,11 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                 except XGAFitError:
                     warn("A fit failure occurred in the hydrostatic mass profile definition.")
                     final_mass_profs.append(None)
+                except ValueError:
+                    warn("A mass of less than zero was measured by a hydrostatic mass profile, this is not physical"
+                         " and the profile is not valid.")
+                    final_mass_profs.append(None)
+
             # If the density generation failed we give a warning here
             elif str(src) in dens_prof_dict:
                 warn("The density profile for {} could not be generated".format(src.name))

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/04/2021, 14:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/06/2021, 13:27. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -54,75 +54,74 @@ class ClusterSample(BaseSample):
         # We have this final names list in case so that we don't need to remove elements of self.names if one of the
         #  clusters doesn't pass the observation cleaning stage.
         final_names = []
-        dec_lb = tqdm(desc="Setting up Galaxy Clusters", total=len(self.names), disable=no_prog_bar)
-        for ind, r in enumerate(ra):
-            # Just splitting out relevant values for this particular cluster so the object declaration isn't
-            #  super ugly.
-            d = dec[ind]
-            z = redshift[ind]
-            # The replace is there because source declaration removes spaces from any passed names,
-            n = name[ind].replace(' ', '')
-            # Declaring the BaseSample higher up weeds out those objects that aren't in any XMM observations
-            #  So we want to check that the current object name is in the list of objects that have data
-            if n in self.names:
-                # I know this code is a bit ugly, but oh well
-                if r200 is not None:
-                    r2 = r200[ind]
-                else:
-                    r2 = None
-                if r500 is not None:
-                    r5 = r500[ind]
-                else:
-                    r5 = None
-                if r2500 is not None:
-                    r25 = r2500[ind]
-                else:
-                    r25 = None
-                if custom_region_radius is not None:
-                    cr = custom_region_radius[ind]
-                else:
-                    cr = None
+        with tqdm(desc="Setting up Galaxy Clusters", total=len(self.names), disable=no_prog_bar) as dec_lb:
+            for ind, r in enumerate(ra):
+                # Just splitting out relevant values for this particular cluster so the object declaration isn't
+                #  super ugly.
+                d = dec[ind]
+                z = redshift[ind]
+                # The replace is there because source declaration removes spaces from any passed names,
+                n = name[ind].replace(' ', '')
+                # Declaring the BaseSample higher up weeds out those objects that aren't in any XMM observations
+                #  So we want to check that the current object name is in the list of objects that have data
+                if n in self.names:
+                    # I know this code is a bit ugly, but oh well
+                    if r200 is not None:
+                        r2 = r200[ind]
+                    else:
+                        r2 = None
+                    if r500 is not None:
+                        r5 = r500[ind]
+                    else:
+                        r5 = None
+                    if r2500 is not None:
+                        r25 = r2500[ind]
+                    else:
+                        r25 = None
+                    if custom_region_radius is not None:
+                        cr = custom_region_radius[ind]
+                    else:
+                        cr = None
 
-                # Here we check the options that are allowed to be None
-                if richness is not None:
-                    lam = richness[ind]
-                    lam_err = richness_err[ind]
-                else:
-                    lam = None
-                    lam_err = None
+                    # Here we check the options that are allowed to be None
+                    if richness is not None:
+                        lam = richness[ind]
+                        lam_err = richness_err[ind]
+                    else:
+                        lam = None
+                        lam_err = None
 
-                if wl_mass is not None:
-                    wlm = wl_mass[ind]
-                    wlm_err = wl_mass_err[ind]
-                else:
-                    wlm = None
-                    wlm_err = None
+                    if wl_mass is not None:
+                        wlm = wl_mass[ind]
+                        wlm_err = wl_mass_err[ind]
+                    else:
+                        wlm = None
+                        wlm_err = None
 
-                # Will definitely load products (the True in this call), because I just made sure I generated a
-                #  bunch to make GalaxyCluster declaration quicker
-                try:
-                    self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr,
-                                                     use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
-                                                     back_out_rad_factor, cosmology, True, load_fits, clean_obs,
-                                                     clean_obs_reg, clean_obs_threshold, False)
-                    final_names.append(n)
-                except PeakConvergenceFailedError:
-                    warn("The peak finding algorithm has not converged for {}, using user "
-                         "supplied coordinates".format(n))
-                    self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, False,
-                                                     peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
-                                                     cosmology, True, load_fits, clean_obs, clean_obs_reg,
-                                                     clean_obs_threshold, False)
-                    final_names.append(n)
+                    # Will definitely load products (the True in this call), because I just made sure I generated a
+                    #  bunch to make GalaxyCluster declaration quicker
+                    try:
+                        self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr,
+                                                         use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
+                                                         back_out_rad_factor, cosmology, True, load_fits, clean_obs,
+                                                         clean_obs_reg, clean_obs_threshold, False)
+                        final_names.append(n)
+                    except PeakConvergenceFailedError:
+                        warn("The peak finding algorithm has not converged for {}, using user "
+                             "supplied coordinates".format(n))
+                        self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, False,
+                                                         peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
+                                                         cosmology, True, load_fits, clean_obs, clean_obs_reg,
+                                                         clean_obs_threshold, False)
+                        final_names.append(n)
 
-                except NoValidObservationsError:
-                    warn("After applying the criteria for the minimum amount of cluster required on an observation, "
-                         "{} cannot be declared as all potential observations were removed".format(n))
-                    # Note we don't append n to the final_names list here, as it is effectively being removed from the
-                    #  sample
-                    self._failed_sources[n] = "Failed ObsClean"
-            dec_lb.update(1)
-        dec_lb.close()
+                    except NoValidObservationsError:
+                        warn("After applying the criteria for the minimum amount of cluster required on an "
+                             "observation, {} cannot be declared as all potential observations were removed".format(n))
+                        # Note we don't append n to the final_names list here, as it is effectively being
+                        #  removed from the sample
+                        self._failed_sources[n] = "Failed ObsClean"
+                dec_lb.update(1)
 
         self._names = final_names
 
@@ -316,7 +315,7 @@ class ClusterSample(BaseSample):
     def Lx(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-           over_sample: float = None):
+           over_sample: float = None, quality_checks: bool = True):
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
@@ -346,15 +345,18 @@ class ClusterSample(BaseSample):
         :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal to noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
+            to use should be performed.
         :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
         :rtype: Quantity
         """
-        return super().Lx(outer_radius, model, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn, over_sample)
+        return super().Lx(outer_radius, model, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn, over_sample,
+                          quality_checks)
 
     def Tx(self, outer_radius: Union[str, Quantity] = 'r500', model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
-           min_sn: float = None, over_sample: float = None):
+           min_sn: float = None, over_sample: float = None, quality_checks: bool = True):
         """
         A get method for temperatures measured for the constituent clusters of this sample. An error will be
         thrown if temperatures haven't been measured for the given region (the default is R_500) and model (default
@@ -362,7 +364,7 @@ class ClusterSample(BaseSample):
         temperature fits failed will return NaN temperatures, and with temperature greater than 25keV is considered
         failed, any temperature with a negative error value is considered failed, any temperature where the Tx-low
         err is less than zero isn't returned, and any temperature where one of the errors is more than three times
-        larger than the other is considered failed.
+        larger than the other is considered failed (if quality checks are on).
 
         :param str model: The name of the fitted model that you're requesting the results
             from (e.g. constant*tbabs*apec).
@@ -382,6 +384,8 @@ class ClusterSample(BaseSample):
         :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal to noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
+            to use should be performed.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
@@ -393,7 +397,7 @@ class ClusterSample(BaseSample):
             # This just parses the input inner and outer radii into something predictable
             inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
         else:
-            raise NotImplementedError("Sorry region fitting is currently well supported")
+            raise NotImplementedError("Sorry region fitting is currently not supported")
 
         temps = []
         for src_ind, gcs in enumerate(self._sources.values()):
@@ -404,23 +408,23 @@ class ClusterSample(BaseSample):
 
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
                 #  so its set to NaN
-                if gcs_temp[0] > 25:
+                if quality_checks and gcs_temp[0] > 25:
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("A temperature of {m}keV was measured for {s}, anything over 30keV considered a failed "
                          "fit by XGA".format(s=gcs.name, m=gcs_temp))
-                elif gcs_temp.min() < 0:
+                elif quality_checks and gcs_temp.min() < 0:
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("A negative value was detected in the temperature array for {s}, this is considered a failed "
                          "measurement".format(s=gcs.name))
-                elif (gcs_temp[0] - gcs_temp[1]) < 0:
+                elif quality_checks and ((gcs_temp[0] - gcs_temp[1]) < 0):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("The temperature value - the lower error goes below zero for {s}, this makes the temperature"
                          " hard to use for scaling relations as values are often logged.".format(s=gcs.name))
-                elif (gcs_temp[1] / gcs_temp[2]) > 3 or (gcs_temp[1] / gcs_temp[2]) < 0.33:
+                elif quality_checks and ((gcs_temp[1] / gcs_temp[2]) > 3 or (gcs_temp[1] / gcs_temp[2]) < 0.33):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("One of the temperature uncertainty values for {s} is more than three times larger than "
                          "the other, this means the fit quality is suspect.".format(s=gcs.name))
-                elif (gcs_temp[0] - gcs_temp[1:].mean()) < 0:
+                elif quality_checks and ((gcs_temp[0] - gcs_temp[1:].mean()) < 0):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("The temperature value - the average error goes below zero for {s}, this makes the "
                          "temperature hard to use for scaling relations as values are often logged".format(s=gcs.name))
@@ -445,7 +449,7 @@ class ClusterSample(BaseSample):
     def gas_mass(self, rad_name: str, dens_model: str, prof_outer_rad: Union[Quantity, str], method: str,
                  pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True,
                  psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-                 set_ids: List[int] = None) -> Quantity:
+                 set_ids: List[int] = None, quality_checks: bool = True) -> Quantity:
         """
         A convenient get method for gas masses measured for the constituent clusters of this sample, though the
         arguments that can  be passed to retrieve gas density profiles are limited to tone-down the complexity.
@@ -456,12 +460,16 @@ class ClusterSample(BaseSample):
         If the specified density model hasn't been fitted to the density profile, this method will run a fit using
         the default settings of the fit method of XGA profiles.
 
+        A gas mass will be set to NaN if either of the uncertainties are larger than the gas mass value, if
+        the gas mass value is less than 1e+9 solar masses, if the gas mass value is greater than 1e+16 solar
+        masses, if quality checks are on.
+
         :param str rad_name: The name of the radius (e.g. r500) to calculate the gas mass within.
         :param str dens_model: The model fit to the density profiles to be used to calculate gas mass. If a fit
             doesn't already exist then one will be performed with default settings.
         :param Quantity/str prof_outer_rad: The outer radii of the density profiles, either a single radius name or a
             Quantity containing an outer radius for each cluster. For instance if you defined a ClusterSample called
-            srcs you could pas srcs.r500 here.
+            srcs you could pass srcs.r500 here.
         :param str method: The method used to generate the density profile. For a profile created by fitting a model
             to a surface brightness profile this should be the name of the model, for a profile from annular spectra
             this should be 'spec', and for a profile generated directly from the data of a surface brightness profile
@@ -479,6 +487,8 @@ class ClusterSample(BaseSample):
             surface brightness.
         :param List[int] set_ids: A list of AnnularSpectra set IDs used to generate the density profiles, if you wish
             to use spectrum based density profiles here.
+        :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
+            to use should be performed.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the gas mass, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
@@ -508,9 +518,22 @@ class ClusterSample(BaseSample):
                         dens_profs.fit(dens_model)
 
                     try:
-                        gms.append(list(dens_profs.gas_mass(dens_model, gas_mass_rad)[0].value))
+                        cur_gmass = dens_profs.gas_mass(dens_model, gas_mass_rad)[0]
+                        if quality_checks and (cur_gmass[1] > cur_gmass[0] or cur_gmass[2] > cur_gmass[0]):
+                            gms.append([np.NaN, np.NaN, np.NaN])
+                        elif quality_checks and cur_gmass[0] < Quantity(1e+9, 'Msun'):
+                            gms.append([np.NaN, np.NaN, np.NaN])
+                            warn("{s}'s gas mass is less than 1e+12 solar masses")
+                        elif quality_checks and cur_gmass[0] > Quantity(1e+16, 'Msun'):
+                            gms.append([np.NaN, np.NaN, np.NaN])
+                            warn("{s}'s gas mass is greater than 1e+16 solar masses")
+                        else:
+                            gms.append(cur_gmass.value)
                     except ModelNotAssociatedError:
                         gms.append([np.NaN, np.NaN, np.NaN])
+                    except ValueError:
+                        gms.append([np.NaN, np.NaN, np.NaN])
+                        warn("{s}'s gas mass is negative")
 
                 else:
                     warn("Somehow there multiple matches for {s}'s density profile, this is the developer's "
@@ -532,7 +555,8 @@ class ClusterSample(BaseSample):
 
         return Quantity(gms, 'Msun')
 
-    def hydrostatic_mass(self, rad_name: str, temp_model_name: str = None, dens_model_name: str = None) -> Quantity:
+    def hydrostatic_mass(self, rad_name: str, temp_model_name: str = None, dens_model_name: str = None,
+                         quality_checks: bool = True) -> Quantity:
         """
         A simple method for fetching hydrostatic masses of this sample of clusters. This function is limited, and if
         you have generated multiple hydrostatic mass profiles you may have to use the get_hydrostatic_mass_profiles
@@ -543,14 +567,16 @@ class ClusterSample(BaseSample):
         with different models then you may use them.
 
         A mass will be set to NaN if either of the uncertainties are larger than the mass value, if the mass value
-        is less than 1e+12 solar masses, if the mass value is greater than 1e+16 solar masses, or if no hydrostatic
-        mass profile is available.
+        is less than 1e+12 solar masses, if the mass value is greater than 1e+16 solar masses (if quality checks
+        are on), or if no hydrostatic mass profile is available.
 
         :param str rad_name: The name of the radius (e.g. r500) to calculate the hydrostatic mass within.
         :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
             required hydrostatic mass profile, default is None.
         :param str dens_model_name: The name of the model used to fit the density profile used to generate the
             required hydrostatic mass profile, default is None.
+        :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
+            to use should be performed.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the hydrostatic mass, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
@@ -567,18 +593,23 @@ class ClusterSample(BaseSample):
                     raise ValueError("There are multiple matching hydrostatic mass profiles associated with {}, "
                                      "you will have to retrieve masses manually.")
                 else:
-                    cur_mass = mass_profs.mass(actual_rad)[0]
-                    if cur_mass[1] > cur_mass[0] or cur_mass[2] > cur_mass[0]:
+                    try:
+                        cur_mass = mass_profs.mass(actual_rad)[0]
+                        if quality_checks and (cur_mass[1] > cur_mass[0] or cur_mass[2] > cur_mass[0]):
+                            ms.append([np.NaN, np.NaN, np.NaN])
+                            warn("{s}'s mass uncertainties are larger than the mass value.")
+                        elif quality_checks and cur_mass[0] < Quantity(1e+12, 'Msun'):
+                            ms.append([np.NaN, np.NaN, np.NaN])
+                            warn("{s}'s mass is less than 1e+12 solar masses")
+                        elif quality_checks and cur_mass[0] > Quantity(1e+16, 'Msun'):
+                            ms.append([np.NaN, np.NaN, np.NaN])
+                            warn("{s}'s mass is greater than 1e+16 solar masses")
+                        else:
+                            ms.append(cur_mass.value)
+                    except ValueError:
+                        warn("{s}'s mass is negative")
                         ms.append([np.NaN, np.NaN, np.NaN])
-                        warn("{s}'s mass uncertainties are larger than the mass value.")
-                    elif cur_mass[0] < Quantity(1e+12, 'Msun'):
-                        ms.append([np.NaN, np.NaN, np.NaN])
-                        warn("{s}'s mass is less than 1e+12 solar masses")
-                    elif cur_mass[0] > Quantity(1e+16, 'Msun'):
-                        ms.append([np.NaN, np.NaN, np.NaN])
-                        warn("{s}'s mass is greater than 1e+16 solar masses")
-                    else:
-                        ms.append(cur_mass.value)
+
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
                 ms.append([np.NaN, np.NaN, np.NaN])

@@ -1,8 +1,6 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/04/2021, 10:54. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/05/2021, 15:55. Copyright (c) David J Turner
 
-import os
-import warnings
 from functools import wraps
 from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
@@ -10,20 +8,12 @@ from typing import Tuple
 
 from tqdm import tqdm
 
-from ..exceptions import SASGenerationError
+from .. import SAS_AVAIL, SAS_VERSION
+from ..exceptions import SASGenerationError, SASNotFoundError
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpectra
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
-
-if "SAS_DIR" not in os.environ:
-    # raise SASNotFoundError("SAS_DIR environment variable is not set, "
-    #                        "unable to verify SAS is present on system")
-    warnings.warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system")
-else:
-    # This way, the user can just import the SAS_VERSION from this utils code
-    sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
-    SAS_VERSION = sas_out.decode("UTF-8").strip("]\n").split('-')[-1]
 
 
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
@@ -41,8 +31,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     :rtype: Tuple[BaseProduct, str]
     """
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
-    out = out.decode("UTF-8")
-    err = err.decode("UTF-8")
+    out = out.decode("UTF-8", errors='ignore')
+    err = err.decode("UTF-8", errors='ignore')
 
     # The if statements also check that the source isn't a NullSource - if it is we don't want to define
     #  a product object because all NullSources are for is generating files in bulk.
@@ -65,10 +55,10 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = BaseProduct(p_path[0], "", "", out, err, cmd)
     elif (p_type == "spectrum" or p_type == "annular spectrum set components") and "NullSource" not in src:
         prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
-                        extra_info["b_rmf_path"], extra_info["b_arf_path"], extra_info['central_coord'],
-                        extra_info["inner_radius"], extra_info["outer_radius"], extra_info["obs_id"],
-                        extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"], extra_info["min_sn"],
-                        extra_info["over_sample"], out, err, cmd, extra_info["from_region"])
+                        extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
+                        extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"],
+                        extra_info["min_sn"], extra_info["over_sample"], out, err, cmd, extra_info["from_region"],
+                        extra_info["b_rmf_path"], extra_info["b_arf_path"])
     elif p_type == "psf" and "NullSource" not in src:
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                        extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
@@ -94,6 +84,11 @@ def sas_call(sas_func):
     with the Sun Grid Engine.
     :return:
     """
+    if not SAS_AVAIL and SAS_VERSION is None:
+        raise SASNotFoundError("No SAS installation has been found on this machine")
+    elif not SAS_AVAIL:
+        raise SASNotFoundError("A SAS installation (v{}) has been found, but the SAS_CCFPATH environment variable is"
+                               " not set.".format(SAS_VERSION))
 
     @wraps(sas_func)
     def wrapper(*args, **kwargs):
