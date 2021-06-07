@@ -39,9 +39,10 @@ Required Dependencies
 ---------------------
 
 XGA depends on two non-Python pieces of software:
-* XMM's Science Analysis System (SAS) - Version 17.0.0, but other versions should be largely compatible with the
-    software. SAS version 14.0.0 however, does not support features that PSF correction of images depends on.
-* HEASoft's XSPEC - Version 12.10.1 - I can't guarantee later versions will work.
+
+    * XMM's Science Analysis System (SAS) - Version 17.0.0, but other versions should be largely compatible with the
+        software. SAS version 14.0.0 however, does not support features that PSF correction of images depends on.
+    * HEASoft's XSPEC - Version 12.10.1 - I can't guarantee later versions will work.
 
 All required Python modules can be found in requirements.txt, and should be added to your system during the
 installation of XGA.
@@ -55,6 +56,7 @@ Optional Dependencies
 
 XGA can also make use of external software for some limited tasks, but they are not required to use
 the module as a whole:
+
     * The R interpreter.
     * Rpy2 - A Python module that provides an interface with the R language in Python.
     * LIRA - An R fitting package.
@@ -104,7 +106,7 @@ Blacklisting ObsIDs
 
 If you don't wish your analyses to include certain ObsIDs, then you can 'blacklist' them and remove them from all
 consideration, you simply need to add the ObsID to 'blacklist.csv', which is located in the same directory as the
-configuration file. If you need to know where this configuration file is located, import CONFIG_FIlE from xga.utils.
+configuration file. If you need to know where this configuration file is located, import CONFIG_FILE from xga.utils.
 
 It is possible that you might want to do this so that ObsIDs with significant problems (flaring, for instance), don't
 contribute to and spoil your current analysis.
