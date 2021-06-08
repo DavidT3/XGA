@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/06/2021, 12:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/06/2021, 16:42. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -121,7 +121,7 @@ class BaseSource:
         # nhlookup returns average and weighted average values, so just take the first
         self._nH = nh_lookup(self.ra_dec)[0]
         self._redshift = redshift
-        self._products, region_dict, self._att_files= self._initial_products()
+        self._products, region_dict, self._att_files = self._initial_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
@@ -2340,7 +2340,9 @@ class BaseSource:
                 del self._regions[o]
                 del self._other_regions[o]
                 del self._alt_match_regions[o]
-                del self._interloper_masks[o]
+                # These are made on demand, so need to check if its actually present first
+                if o in self._interloper_masks:
+                    del self._interloper_masks[o]
                 if self._peaks is not None:
                     del self._peaks[o]
 
