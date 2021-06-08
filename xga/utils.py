@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/06/2021, 17:27. Copyright (c) David J Turner
 
 import json
 import os
@@ -378,7 +378,12 @@ else:
     r200 = def_unit('r200', format={'latex': r"\mathrm{R_{200}}"})
     r500 = def_unit('r500', format={'latex': r"\mathrm{R_{500}}"})
     r2500 = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
-    add_enabled_units([r200, r500, r2500, xmm_det, xmm_det])
+
+    # This is a dumb and annoying work-around for a readthedocs problem where units were being added multiple times
+    try:
+        Quantity(1, 'r200')
+    except ValueError:
+        add_enabled_units([r200, r500, r2500, xmm_det, xmm_det])
 
     # Here we check to see whether SAS is installed (along with all the necessary paths)
     SAS_VERSION = None
