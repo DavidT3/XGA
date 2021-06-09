@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 13:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 13:39. Copyright (c) David J Turner
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -8,11 +8,15 @@ from typing import Tuple
 
 from tqdm import tqdm
 
+from .. import SAS_AVAIL, SAS_VERSION
 from ..exceptions import SASGenerationError, SASNotFoundError
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpectra
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
+
+global SAS_AVAIL
+global SAS_VERSION
 
 
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
@@ -86,8 +90,6 @@ def sas_call(sas_func):
 
     @wraps(sas_func)
     def wrapper(*args, **kwargs):
-        global SAS_AVAIL
-        global SAS_VERSION
         # This has to be here to let autodoc do its noble work without falling foul of these errors
         if not SAS_AVAIL and SAS_VERSION is None:
             raise SASNotFoundError("No SAS installation has been found on this machine")
@@ -252,6 +254,5 @@ def sas_call(sas_func):
             sources = sources[0]
         return sources
     return wrapper
-
 
 
