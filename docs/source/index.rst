@@ -17,6 +17,7 @@ Welcome to XMM: Generate and Analyse (XGA)'s documentation!
    Tutorials <tutorials.rst>
    Advanced Tutorials <advanced_tutorials.rst>
    Under the Hood <techniques.rst>
+   XGA's Parallelism <parallelism.rst>
    XGA Classes and Functions <xga.rst>
    Planned Features <future.rst>
    Getting Support <support.rst>
