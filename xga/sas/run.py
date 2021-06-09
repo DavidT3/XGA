@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:36. Copyright (c) David J Turner
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -76,7 +76,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     return prod, src
 
 
-def _sas_call(sas_func):
+def sas_call(sas_func):
     """
     This is used as a decorator for functions that produce SAS command strings. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
