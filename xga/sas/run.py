@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:44. Copyright (c) David J Turner
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -84,14 +84,16 @@ def sas_call(sas_func):
     with the Sun Grid Engine.
     :return:
     """
-    if not SAS_AVAIL and SAS_VERSION is None:
-        raise SASNotFoundError("No SAS installation has been found on this machine")
-    elif not SAS_AVAIL:
-        raise SASNotFoundError("A SAS installation (v{}) has been found, but the SAS_CCFPATH environment variable is"
-                               " not set.".format(SAS_VERSION))
 
     @wraps(sas_func)
     def wrapper(*args, **kwargs):
+        if not SAS_AVAIL and SAS_VERSION is None:
+            raise SASNotFoundError("No SAS installation has been found on this machine")
+        elif not SAS_AVAIL:
+            raise SASNotFoundError(
+                "A SAS installation (v{}) has been found, but the SAS_CCFPATH environment variable is"
+                " not set.".format(SAS_VERSION))
+
         # The first argument of all of these SAS functions will be the source object (or a list of),
         # so rather than return them from the sas function I'll just access them like this.
         if isinstance(args[0], (BaseSource, NullSource)):
