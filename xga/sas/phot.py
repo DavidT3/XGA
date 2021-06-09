@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 09:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:30. Copyright (c) David J Turner
 
 import os
 from random import randint
@@ -11,7 +11,7 @@ from astropy.units import Quantity, deg
 from tqdm import tqdm
 
 from .misc import cifbuild
-from .run import sas_call
+from .run import _sas_call
 from .. import OUTPUT, NUM_CORES
 from ..exceptions import SASInputInvalid, NoProductAvailableError
 from ..imagetools import data_limits
@@ -22,7 +22,7 @@ from ..utils import energy_to_channel
 
 
 # TODO Perhaps remove the option to add to the SAS expression
-@sas_call
+@_sas_call
 def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.5, 'keV'),
                    hi_en: Quantity = Quantity(2.0, 'keV'), add_expr: str = "", num_cores: int = NUM_CORES,
                    disable_progress: bool = False):
@@ -112,7 +112,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
-@sas_call
+@_sas_call
 def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.5, 'keV'),
             hi_en: Quantity = Quantity(2.0, 'keV'), num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
@@ -215,7 +215,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
-@sas_call
+@_sas_call
 def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quantity = Quantity(0.5, 'keV'),
             hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
             psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
@@ -342,7 +342,7 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
-@sas_call
+@_sas_call
 def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str = "ELLBETA",
            num_cores: int = NUM_CORES, disable_progress: bool = False):
     """

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 09:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:30. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -14,7 +14,7 @@ from .misc import cifbuild
 from .. import OUTPUT, NUM_CORES
 from ..exceptions import SASInputInvalid, NotAssociatedError
 from ..samples.base import BaseSample
-from ..sas.run import sas_call
+from ..sas.run import _sas_call
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
 from ..sources.base import NullSource
 from ..utils import RAD_LABELS
@@ -534,7 +534,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
-@sas_call
+@_sas_call
 def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                       min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
@@ -576,7 +576,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                       num_cores, disable_progress)
 
 
-@sas_call
+@_sas_call
 def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
                  group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                  one_rmf: bool = True, num_cores: int = NUM_CORES, force_regen: bool = False,

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/06/2021, 17:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:30. Copyright (c) David J Turner
 
 import json
 import os
@@ -389,8 +389,8 @@ else:
     # Here we check to see whether SAS is installed (along with all the necessary paths)
     SAS_VERSION = None
     if "SAS_DIR" not in os.environ:
-        warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such"
-                      " all functions in xga.sas will not work.")
+        warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
+             "all functions in xga.sas will not work.")
         SAS_VERSION = None
         SAS_AVAIL = False
     else:
@@ -402,8 +402,8 @@ else:
     # This checks for the CCF path, which is required to use cifbuild, which is required to do basically
     #  anything with SAS
     if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
-        warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration "
-                      "files. As such functions in xga.sas will not work.")
+        warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
+             "functions in xga.sas will not work.")
         SAS_AVAIL = False
 
     # Equivelant for the XSPEC dependency
