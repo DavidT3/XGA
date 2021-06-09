@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 13:39. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 16:34. Copyright (c) David J Turner
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -14,9 +14,6 @@ from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpe
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
-
-global SAS_AVAIL
-global SAS_VERSION
 
 
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
@@ -37,9 +34,10 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
 
-    # The if statements also check that the source isn't a NullSource - if it is we don't want to define
-    #  a product object because all NullSources are for is generating files in bulk.
-    if p_type == "image" and "NullSource" not in src:
+    # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
+    #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
+    #  pre-existing image
+    if p_type == "image":
         # Maybe let the user decide not to raise errors detected in stderr
         prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                      extra_info["lo_en"], extra_info["hi_en"])
@@ -49,7 +47,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
             prod.psf_model = extra_info["psf_model"]
             prod.psf_iterations = extra_info["psf_iter"]
             prod.psf_algorithm = extra_info["psf_algo"]
-    elif p_type == "expmap" and "NullSource" not in src:
+    elif p_type == "expmap":
         prod = ExpMap(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                       extra_info["lo_en"], extra_info["hi_en"])
     elif p_type == "ccf" and "NullSource" not in src:
@@ -87,16 +85,20 @@ def sas_call(sas_func):
     with the Sun Grid Engine.
     :return:
     """
+    # This is a horrible bodge to make Pycharm not remove SAS_AVAIL and SAS_VERSION from import when it cleans
+    #  up prior to committing.
+    new_sas_avail = SAS_AVAIL
+    new_sas_version = SAS_VERSION
 
     @wraps(sas_func)
     def wrapper(*args, **kwargs):
         # This has to be here to let autodoc do its noble work without falling foul of these errors
-        if not SAS_AVAIL and SAS_VERSION is None:
+        if not new_sas_avail and new_sas_version is None:
             raise SASNotFoundError("No SAS installation has been found on this machine")
-        elif not SAS_AVAIL:
+        elif not new_sas_avail:
             raise SASNotFoundError(
                 "A SAS installation (v{}) has been found, but the SAS_CCFPATH environment variable is"
-                " not set.".format(SAS_VERSION))
+                " not set.".format(new_sas_version))
 
         # The first argument of all of these SAS functions will be the source object (or a list of),
         # so rather than return them from the sas function I'll just access them like this.
