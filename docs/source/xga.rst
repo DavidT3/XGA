@@ -2,7 +2,7 @@ xga package
 ===========
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 5
 
    xga.sources
    xga.samples

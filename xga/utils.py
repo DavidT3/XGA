@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:48. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:57. Copyright (c) David J Turner
 
 import json
 import os
@@ -417,6 +417,7 @@ else:
         xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE, shell=True).communicate()
         xspec_vline = [line for line in xspec_out.decode("UTF-8").split('\n') if 'XSPEC version' in line][0]
         XSPEC_VERSION = xspec_vline.split(': ')[-1]
+
 
 
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:57. Copyright (c) David J Turner
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -87,6 +87,7 @@ def sas_call(sas_func):
 
     @wraps(sas_func)
     def wrapper(*args, **kwargs):
+        # This has to be here to let autodoc do its noble work without falling foul of these errors
         if not SAS_AVAIL and SAS_VERSION is None:
             raise SASNotFoundError("No SAS installation has been found on this machine")
         elif not SAS_AVAIL:
