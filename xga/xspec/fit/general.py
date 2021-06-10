@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 13:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/06/2021, 11:19. Copyright (c) David J Turner
 
 import warnings
 from typing import List, Union
@@ -27,8 +27,8 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
                      num_cores: int = NUM_CORES, spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr')):
     """
-    This is a convenience function for fitting an absorbed single temperature apec model to an object.
-    It would be possible to do the exact same fit using the custom_model function, but as it will
+    This is a convenience function for fitting an absorbed single temperature apec model(constant*tbabs*apec) to an
+    object. It would be possible to do the exact same fit using the custom_model function, but as it will
     be a very common fit a dedicated function is in order. If there are no existing spectra with the passed
     settings, then they will be generated automatically.
 
@@ -181,7 +181,8 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               timeout: Quantity = Quantity(1, 'hr')):
     """
     This is a convenience function for fitting a tbabs absorbed powerlaw (or zpowerlw if redshifted
-    is selected) to source spectra.
+    is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
+    normalisations (constant*tbabs*powerlaw, or constant*tbabs*zpowerlw).
 
     :param List[BaseSource] sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
