@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 11:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/06/2021, 10:30. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1097,10 +1097,14 @@ class BaseProfile1D:
         self.save()
         return model
 
-    def allowed_models(self):
+    def allowed_models(self, table_format: str = 'fancy_grid'):
         """
         This is a convenience function to tell the user what models can be used to fit a profile
         of the current type, what parameters are expected, and what the defaults are.
+
+        :param str table_format: The desired format of the allowed models table. This is passed to the
+            tabulate module (allowed formats can be found here - https://pypi.org/project/tabulate/), and
+            alters the way the printed table looks.
         """
         # Base profile don't have any type of model associated with them, so just making an empty list
         if self._prof_type == "base":
@@ -1144,7 +1148,7 @@ class BaseProfile1D:
             # Construct the table data and display it using tabulate module
             tab_dat = [[allowed[i], model_par_names[i], model_par_starts[i]] for i in range(0, len(allowed))]
             print(tabulate(tab_dat, ["MODEL NAME", "EXPECTED PARAMETERS", "DEFAULT START VALUES"],
-                           tablefmt="fancy_grid"))
+                           tablefmt=table_format))
 
     def get_model_fit(self, model: str, method: str) -> BaseModel1D:
         """
