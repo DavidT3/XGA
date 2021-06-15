@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 16:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 16:59. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -467,13 +467,20 @@ class GasDensity3D(BaseProfile1D):
         if str(model_obj) not in self._gas_masses:
             self._gas_masses[str(model_obj)] = {}
 
-        if outer_rad not in self._gas_masses[str(model_obj)]:
+        if outer_rad not in self._gas_masses[str(model_obj)] and outer_rad != 0:
             mass_dist = model_obj.volume_integral(outer_rad, use_par_dist=True)
             if self._sub_type == 'num_dens':
                 mass_dist *= (MEAN_MOL_WEIGHT*m_p)
 
             mass_dist = mass_dist.to('Msun')
             self._gas_masses[str(model_obj)][outer_rad] = mass_dist
+
+        # Obviously the mass contained within a zero radius bin is zero, but the integral can fall over sometimes when
+        #  this is requested so I put in this special case
+        elif outer_rad not in self._gas_masses[str(model_obj)] and outer_rad == 0:
+            mass_dist = Quantity(np.zeros(len(model_obj.par_dists[0])), 'Msun')
+            self._gas_masses[str(model_obj)][outer_rad] = mass_dist
+
         else:
             mass_dist = self._gas_masses[str(model_obj)][outer_rad]
 
