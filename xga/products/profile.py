@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 12:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 14:05. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -787,9 +787,9 @@ class APECNormalisation1D(BaseProfile1D):
             # Convert the realisations to the correct unit
             gas_dens_reals = gas_dens_reals.to("Msun/Mpc^3")
 
-        med_dens = np.percentile(gas_dens_reals, 50, axis=0)
+        med_dens = np.nanpercentile(gas_dens_reals, 50, axis=0)
         # Calculates the standard deviation of each data point, this is how we estimate the density errors
-        dens_sigma = np.std(gas_dens_reals, axis=0)*sigma
+        dens_sigma = np.nanstd(gas_dens_reals, axis=0)*sigma
 
         # Set up the actual profile object and return it
         dens_prof = GasDensity3D(self.radii, med_dens, self.centre, self.src_name, self.obs_id, self.instrument,
