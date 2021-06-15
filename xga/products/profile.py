@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 14:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 16:46. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -554,24 +554,33 @@ class GasDensity3D(BaseProfile1D):
         plt.tight_layout()
         plt.show()
 
-    def gas_mass_profile(self, model: str, radii: Quantity = None, fit_method: str = 'mcmc') -> GasMass1D:
+    def gas_mass_profile(self, model: str, radii: Quantity = None, deg_radii: Quantity = None,
+                         fit_method: str = 'mcmc') -> GasMass1D:
         """
         A method to calculate and return a gas mass profile.
 
         :param str model: The name of the model from which to derive the gas mass.
         :param Quantity radii: The radii at which to measure gas masses. The default is None, in which
             case the radii at which this density profile has data points will be used.
+        :param Quantity deg_radii: The equivelant radii to `radii` but in degrees, required for defining
+            a profile. The default is None, but if custom radii are passed then this variable must be passed too.
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
-        :param Quantity particle_mass: Only necessary for density profiles whose units are of number density
-            rather than mass density, the average mass of the particles in the cluster.
         :return: A cumulative gas mass distribution.
         :rtype: GasMass1D
         """
-        if radii is None:
+        if radii is None and self.radii[0] == 0:
+            radii = self.radii[1:]
+            deg_radii = self.deg_radii[1:]
+        elif radii is None:
             radii = self.radii
+            deg_radii = self.deg_radii
         elif radii is not None and not radii.unit.is_equivalent(self.radii_unit):
             raise UnitConversionError("The custom radii passed to this method cannot be converted to "
                                       "{}".format(self.radii_unit.to_string()))
+
+        if radii is not None and deg_radii is None:
+            raise ValueError('If a custom set of radii is passed then their equivalents in degrees must '
+                             'also be passed')
 
         mass_vals = []
         mass_errs = []
@@ -583,7 +592,7 @@ class GasDensity3D(BaseProfile1D):
         mass_vals = Quantity(mass_vals, 'Msun')
         mass_errs = Quantity(mass_errs, 'Msun')
         gm_prof = GasMass1D(radii, mass_vals, self.centre, self.src_name, self.obs_id, self.instrument,
-                            self._gen_method, self._gen_prof, values_err=mass_errs, deg_radii=self.deg_radii)
+                            self._gen_method, self._gen_prof, values_err=mass_errs, deg_radii=deg_radii)
 
         return gm_prof
 
