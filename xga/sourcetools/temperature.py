@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 16:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 10:11. Copyright (c) David J Turner
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -368,7 +368,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         the spectra (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
         generating for multiple sources then you can also pass a Quantity with one entry per source.
-    :param str annulus_method:
+    :param str annulus_method: The method by which the annuli are designated, this can be 'min_snr' (which will use
+        the min_snr_proj_temp_prof function), or 'growth' (which will use the grow_ann_proj_temp_prof function).
     :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
         and avoid PSF effects.
