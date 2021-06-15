@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/06/2021, 13:27. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 17:46. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -446,7 +446,7 @@ class ClusterSample(BaseSample):
 
         return temps
 
-    def gas_mass(self, rad_name: str, dens_model: str, prof_outer_rad: Union[Quantity, str], method: str,
+    def gas_mass(self, rad_name: str, dens_model: str, method: str, prof_outer_rad: Union[Quantity, str] = None,
                  pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True,
                  psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
                  set_ids: List[int] = None, quality_checks: bool = True) -> Quantity:
@@ -467,13 +467,13 @@ class ClusterSample(BaseSample):
         :param str rad_name: The name of the radius (e.g. r500) to calculate the gas mass within.
         :param str dens_model: The model fit to the density profiles to be used to calculate gas mass. If a fit
             doesn't already exist then one will be performed with default settings.
-        :param Quantity/str prof_outer_rad: The outer radii of the density profiles, either a single radius name or a
-            Quantity containing an outer radius for each cluster. For instance if you defined a ClusterSample called
-            srcs you could pass srcs.r500 here.
         :param str method: The method used to generate the density profile. For a profile created by fitting a model
             to a surface brightness profile this should be the name of the model, for a profile from annular spectra
             this should be 'spec', and for a profile generated directly from the data of a surface brightness profile
             this should be 'onion'.
+        :param Quantity/str prof_outer_rad: The outer radii of the density profiles, either a single radius name or a
+            Quantity containing an outer radius for each cluster. For instance if you defined a ClusterSample called
+            srcs you could pass srcs.r500 here.
         :param int pix_step: The width of each annulus in pixels used to generate the profile, for profiles based on
             surface brightness.
         :param float min_snr: The minimum signal to noise imposed upon the profile, for profiles based on
@@ -497,7 +497,10 @@ class ClusterSample(BaseSample):
         from ..sas.spec import region_setup
 
         gms = []
-        out_rad_vals = region_setup(self, prof_outer_rad, Quantity(0, 'deg'), True, '')[2]
+        if prof_outer_rad is not None:
+            out_rad_vals = region_setup(self, prof_outer_rad, Quantity(0, 'deg'), True, '')[2]
+        else:
+            out_rad_vals = None
 
         if set_ids is not None and len(set_ids) != len(self):
             raise ValueError("If you wish to use density profiles generated from spectra you must supply a list of "
@@ -509,10 +512,17 @@ class ClusterSample(BaseSample):
         for gcs_ind, gcs in enumerate(self._sources.values()):
             gas_mass_rad = gcs.get_radius(rad_name, 'kpc')
             try:
-                dens_profs = gcs.get_density_profiles(out_rad_vals[gcs_ind], method, None, None, radii=None,
-                                                      pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
-                                                      psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
-                                                      psf_iter=psf_iter, set_id=set_ids[gcs_ind])
+                if prof_outer_rad is not None:
+                    dens_profs = gcs.get_density_profiles(out_rad_vals[gcs_ind], method, None, None, radii=None,
+                                                          pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
+                                                          psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
+                                                          psf_iter=psf_iter, set_id=set_ids[gcs_ind])
+                else:
+                    dens_profs = gcs.get_density_profiles(out_rad_vals, method, None, None, radii=None,
+                                                          pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
+                                                          psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
+                                                          psf_iter=psf_iter, set_id=set_ids[gcs_ind])
+
                 if isinstance(dens_profs, GasDensity3D):
                     if dens_model not in dens_profs.good_model_fits:
                         dens_profs.fit(dens_model)
