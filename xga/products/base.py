@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2021, 09:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2021, 09:13. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -339,7 +339,7 @@ class BaseAggregateProduct:
     def src_name(self) -> str:
         """
         Method to return the name of the object a product is associated with. The product becomes
-        aware of this once it is added to a source object.
+        aware of this once it is added to a source object. This is overridden in the AnnularSpectra class.
 
         :return: The name of the source object this product is associated with.
         :rtype: str
@@ -351,7 +351,7 @@ class BaseAggregateProduct:
     def src_name(self, name: str):
         """
         Property setter for the src_name attribute of a product, should only really be called by a source object,
-        not by a user.
+        not by a user. This is overridden in the AnnularSpectra class.
 
         :param str name: The name of the source object associated with this product.
         """
