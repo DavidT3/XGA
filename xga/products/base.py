@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/06/2021, 10:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2021, 09:12. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -356,6 +356,8 @@ class BaseAggregateProduct:
         :param str name: The name of the source object associated with this product.
         """
         self._src_name = name
+        for p in self._component_products.values():
+            p.src_name = name
 
     @property
     def obs_id(self) -> str:
