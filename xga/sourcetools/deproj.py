@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/02/2021, 17:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2021, 14:57. Copyright (c) David J Turner
 
 from typing import Union
 
@@ -73,6 +73,20 @@ def shell_volume(inn_radius: Quantity, out_radius: Quantity) -> Union[Quantity, 
     return outer_vol - inner_vol
 
 
+# def temp_onion(proj_prof: ProjectedGasTemperature1D) -> GasTemperature3D:
+#     """
+#     This function will generate deprojected, three-dimensional, gas temperature profile from a projected profile using
+#     the 'onion peeling' deprojection method. The function is an implementation of a fairly old technique, though it
+#     has been used recently in https://doi.org/10.1051/0004-6361/201731748. For a more in depth discussion of this
+#     technique and its uses I would currently recommend https://doi.org/10.1051/0004-6361:20020905.
+#
+#     :param ProjectedGasTemperature1D proj_prof: A projected cluster temperature profile, which the
+#         user wants to use to infer the 3D temperature profile.
+#     :return: The deprojected temperature profile.
+#     :rtype: GasTemperature3D
+#     """
+#
+#     pass
 
 
 
