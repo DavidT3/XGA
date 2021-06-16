@@ -16,3 +16,5 @@ Planned XGA Features
 * **Creating a Docker image for users to download** - Creating a Docker environment with SAS and HEASoft already installed, for ease of use.
 
 * **Method for finding poorly removed point sources** - An attempt to mitigate occasional mistakes by source finders that produce regions that don't necessarily remove the entire point source.
+
+* **Overdensity radius measurement** - Using HydrostaticMass profiles to measure the overdensity radius of a cluster.
