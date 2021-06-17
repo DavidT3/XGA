@@ -5,9 +5,6 @@
 
 Welcome to XMM: Generate and Analyse (XGA)'s documentation!
 ===========================================================
-   XGA is still in a relatively early stage of development, so there may be silly bugs, or incongruities present
-   in the module!
-
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
