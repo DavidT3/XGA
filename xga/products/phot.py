@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 14:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2021, 11:46. Copyright (c) David J Turner
 
 
 import warnings
@@ -859,7 +859,7 @@ class RateMap(Image):
         # Calling this ensures the image object is read into memory
         if self._data is None:
             self._construct_on_demand()
-        return self._data
+        return self._data.copy()
 
     def get_rate(self, at_coord: Quantity) -> float:
         """
