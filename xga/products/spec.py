@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/06/2021, 09:53. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2021, 09:12. Copyright (c) David J Turner
 
 
 import os
@@ -1003,6 +1003,31 @@ class AnnularSpectra(BaseAggregateProduct):
         # Observation order for an annulus describes, for results with multiple entries like normalisation can if
         #  it is not linked across multiple spectra during fitting, what order the fit results are in.
         self._obs_order = {ai: {} for ai in range(self._num_ann)}
+
+    # The src_name setter and getter have been overridden because there is an easier way of setting
+    #  the source name for all spectra
+    @property
+    def src_name(self) -> str:
+        """
+        Method to return the name of the object a product is associated with. The product becomes
+        aware of this once it is added to a source object.
+
+        :return: The name of the source object this product is associated with.
+        :rtype: str
+        """
+        return self._src_name
+
+    @src_name.setter
+    def src_name(self, name: str):
+        """
+        Property setter for the src_name attribute of a product, should only really be called by a source object,
+        not by a user.
+
+        :param str name: The name of the source object associated with this product.
+        """
+        self._src_name = name
+        for p in self.all_spectra:
+            p.src_name = name
 
     @property
     def central_coord(self) -> Quantity:

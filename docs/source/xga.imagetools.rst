@@ -1,14 +1,6 @@
 imagetools
 ==========
 
-imagetools.deproj module
-------------------------
-
-.. automodule:: xga.imagetools.deproj
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 imagetools.misc module
 ----------------------
 

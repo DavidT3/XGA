@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 14:04. Copyright (c) David J Turner
 
 import json
 import os
@@ -7,6 +7,7 @@ import shutil
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
 from typing import List, Tuple
+from warnings import warn
 
 import pandas as pd
 import pkg_resources
@@ -378,13 +379,18 @@ else:
     r200 = def_unit('r200', format={'latex': r"\mathrm{R_{200}}"})
     r500 = def_unit('r500', format={'latex': r"\mathrm{R_{500}}"})
     r2500 = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
-    add_enabled_units([r200, r500, r2500, xmm_det, xmm_det])
+
+    # This is a dumb and annoying work-around for a readthedocs problem where units were being added multiple times
+    try:
+        Quantity(1, 'r200')
+    except ValueError:
+        add_enabled_units([r200, r500, r2500, xmm_det, xmm_det])
 
     # Here we check to see whether SAS is installed (along with all the necessary paths)
     SAS_VERSION = None
     if "SAS_DIR" not in os.environ:
-        warnings.warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such"
-                      " all functions in xga.sas will not work.")
+        warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
+             "all functions in xga.sas will not work.")
         SAS_VERSION = None
         SAS_AVAIL = False
     else:
@@ -396,21 +402,27 @@ else:
     # This checks for the CCF path, which is required to use cifbuild, which is required to do basically
     #  anything with SAS
     if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
-        warnings.warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration "
-                      "files. As such functions in xga.sas will not work.")
+        warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
+             "functions in xga.sas will not work.")
         SAS_AVAIL = False
 
     # Equivelant for the XSPEC dependency
     XSPEC_VERSION = None
     # Got to make sure we can access command line XSPEC.
     if shutil.which("xspec") is None:
-        warnings.warn("Unable to locate an XSPEC installation.")
+        warn("Unable to locate an XSPEC installation.")
     else:
-        # The XSPEC into text includes the version, so I read that out and parse it
-        null_path = pkg_resources.resource_filename(__name__, "xspec_scripts/null_script.xcm")
-        xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE, shell=True).communicate()
-        xspec_vline = [line for line in xspec_out.decode("UTF-8").split('\n') if 'XSPEC version' in line][0]
-        XSPEC_VERSION = xspec_vline.split(': ')[-1]
+        try:
+            # The XSPEC into text includes the version, so I read that out and parse it
+            null_path = pkg_resources.resource_filename(__name__, "xspec_scripts/null_script.xcm")
+            xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE,
+                                         shell=True).communicate()
+            xspec_vline = [line for line in xspec_out.decode("UTF-8").split('\n') if 'XSPEC version' in line][0]
+            XSPEC_VERSION = xspec_vline.split(': ')[-1]
+        # I know broad exceptions are a sin, but if anything goes wrong here then XGA needs to assume that XSPEC
+        #  is messed up in some way
+        except:
+            XSPEC_VERSION = None
 
 
 

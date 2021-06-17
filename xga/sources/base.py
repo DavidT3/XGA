@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/06/2021, 12:55. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 16:34. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -121,7 +121,7 @@ class BaseSource:
         # nhlookup returns average and weighted average values, so just take the first
         self._nH = nh_lookup(self.ra_dec)[0]
         self._redshift = redshift
-        self._products, region_dict, self._att_files= self._initial_products()
+        self._products, region_dict, self._att_files = self._initial_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
@@ -2340,7 +2340,9 @@ class BaseSource:
                 del self._regions[o]
                 del self._other_regions[o]
                 del self._alt_match_regions[o]
-                del self._interloper_masks[o]
+                # These are made on demand, so need to check if its actually present first
+                if o in self._interloper_masks:
+                    del self._interloper_masks[o]
                 if self._peaks is not None:
                     del self._peaks[o]
 
@@ -3392,14 +3394,46 @@ class NullSource:
 
     def update_products(self, prod_obj: BaseProduct):
         """
-        This method will not actually store new products in this NullSource. It exists only because my SAS wrappers
-        will expect it to, and as such it doesn't do anything at all. This is because NullSource source could have
-        tens of thousands of products associated with them, and are only used to bulk generate basic products
-        (images, expmaps etc), I don't want the memory overhead of storing them.
+        This method will ONLY store images and exposure maps. Ideally I wouldn't store them as product objects
+        at all, but unfortunately exposure maps require an image to be generated. Unlike all other source classes,
+        ratemaps will not be generated when matching images and exposure maps are added.
 
         :param BaseProduct prod_obj: The new product object to be added to the source object.
         """
-        pass
+        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct)) and prod_obj is not None:
+            raise TypeError("Only product objects can be assigned to sources.")
+        elif prod_obj.type != 'image' and prod_obj.type != 'expmap':
+            raise TypeError("Only images and exposure maps can be stored in a NullSource, {} objects "
+                            "cannot".format(prod_obj.type))
+
+        if prod_obj is not None:
+            en_bnds = prod_obj.energy_bounds
+            extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+            # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
+            #  this variable with just the energy key
+            en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+
+            # Secondary checking step now I've added PSF correction
+            if type(prod_obj) == Image and prod_obj.psf_corrected:
+                extra_key += "_" + prod_obj.psf_model + "_" + str(prod_obj.psf_bins) + "_" + prod_obj.psf_algorithm + \
+                             str(prod_obj.psf_iterations)
+
+            # All information about where to place it in our storage hierarchy can be pulled from the product
+            # object itself
+            obs_id = prod_obj.obs_id
+            inst = prod_obj.instrument
+            p_type = prod_obj.type
+
+            # Double check that something is trying to add products from another source to the current one.
+            if obs_id != "combined" and obs_id not in self._products:
+                raise NotAssociatedError("{o} is not associated with this null source.".format(o=obs_id))
+            elif inst != "combined" and inst not in self._products[obs_id]:
+                raise NotAssociatedError(
+                    "{i} is not associated with XMM observation {o}".format(i=inst, o=obs_id))
+
+            if extra_key not in self._products[obs_id][inst]:
+                self._products[obs_id][inst][extra_key] = {}
+            self._products[obs_id][inst][extra_key][p_type] = prod_obj
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:

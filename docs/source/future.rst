@@ -11,3 +11,10 @@ Planned XGA Features
 
 * **Ability to save ScalingRelation objects** - The ability to save ScalingRelation objects to disk in some way, so that code to generate them doesn't need to be run multiple times.
 
+* **Support for other X-ray telescopes** - Support for generation and analysis of data products from other telescopes (I guess than XGA will come to mean 'X-ray: Generate and Analyse', rather than 'XMM: Generate and Analyse').
+
+* **Creating a Docker image for users to download** - Creating a Docker environment with SAS and HEASoft already installed, for ease of use.
+
+* **Method for finding poorly removed point sources** - An attempt to mitigate occasional mistakes by source finders that produce regions that don't necessarily remove the entire point source.
+
+* **Overdensity radius measurement** - Using HydrostaticMass profiles to measure the overdensity radius of a cluster.

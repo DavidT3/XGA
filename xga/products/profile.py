@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 12:24. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 16:59. Copyright (c) David J Turner
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -467,13 +467,20 @@ class GasDensity3D(BaseProfile1D):
         if str(model_obj) not in self._gas_masses:
             self._gas_masses[str(model_obj)] = {}
 
-        if outer_rad not in self._gas_masses[str(model_obj)]:
+        if outer_rad not in self._gas_masses[str(model_obj)] and outer_rad != 0:
             mass_dist = model_obj.volume_integral(outer_rad, use_par_dist=True)
             if self._sub_type == 'num_dens':
                 mass_dist *= (MEAN_MOL_WEIGHT*m_p)
 
             mass_dist = mass_dist.to('Msun')
             self._gas_masses[str(model_obj)][outer_rad] = mass_dist
+
+        # Obviously the mass contained within a zero radius bin is zero, but the integral can fall over sometimes when
+        #  this is requested so I put in this special case
+        elif outer_rad not in self._gas_masses[str(model_obj)] and outer_rad == 0:
+            mass_dist = Quantity(np.zeros(len(model_obj.par_dists[0])), 'Msun')
+            self._gas_masses[str(model_obj)][outer_rad] = mass_dist
+
         else:
             mass_dist = self._gas_masses[str(model_obj)][outer_rad]
 
@@ -554,24 +561,33 @@ class GasDensity3D(BaseProfile1D):
         plt.tight_layout()
         plt.show()
 
-    def gas_mass_profile(self, model: str, radii: Quantity = None, fit_method: str = 'mcmc') -> GasMass1D:
+    def gas_mass_profile(self, model: str, radii: Quantity = None, deg_radii: Quantity = None,
+                         fit_method: str = 'mcmc') -> GasMass1D:
         """
         A method to calculate and return a gas mass profile.
 
         :param str model: The name of the model from which to derive the gas mass.
         :param Quantity radii: The radii at which to measure gas masses. The default is None, in which
             case the radii at which this density profile has data points will be used.
+        :param Quantity deg_radii: The equivelant radii to `radii` but in degrees, required for defining
+            a profile. The default is None, but if custom radii are passed then this variable must be passed too.
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
-        :param Quantity particle_mass: Only necessary for density profiles whose units are of number density
-            rather than mass density, the average mass of the particles in the cluster.
         :return: A cumulative gas mass distribution.
         :rtype: GasMass1D
         """
-        if radii is None:
+        if radii is None and self.radii[0] == 0:
+            radii = self.radii[1:]
+            deg_radii = self.deg_radii[1:]
+        elif radii is None:
             radii = self.radii
+            deg_radii = self.deg_radii
         elif radii is not None and not radii.unit.is_equivalent(self.radii_unit):
             raise UnitConversionError("The custom radii passed to this method cannot be converted to "
                                       "{}".format(self.radii_unit.to_string()))
+
+        if radii is not None and deg_radii is None:
+            raise ValueError('If a custom set of radii is passed then their equivalents in degrees must '
+                             'also be passed')
 
         mass_vals = []
         mass_errs = []
@@ -583,7 +599,7 @@ class GasDensity3D(BaseProfile1D):
         mass_vals = Quantity(mass_vals, 'Msun')
         mass_errs = Quantity(mass_errs, 'Msun')
         gm_prof = GasMass1D(radii, mass_vals, self.centre, self.src_name, self.obs_id, self.instrument,
-                            self._gen_method, self._gen_prof, values_err=mass_errs, deg_radii=self.deg_radii)
+                            self._gen_method, self._gen_prof, values_err=mass_errs, deg_radii=deg_radii)
 
         return gm_prof
 
@@ -787,9 +803,9 @@ class APECNormalisation1D(BaseProfile1D):
             # Convert the realisations to the correct unit
             gas_dens_reals = gas_dens_reals.to("Msun/Mpc^3")
 
-        med_dens = np.percentile(gas_dens_reals, 50, axis=0)
+        med_dens = np.nanpercentile(gas_dens_reals, 50, axis=0)
         # Calculates the standard deviation of each data point, this is how we estimate the density errors
-        dens_sigma = np.std(gas_dens_reals, axis=0)*sigma
+        dens_sigma = np.nanstd(gas_dens_reals, axis=0)*sigma
 
         # Set up the actual profile object and return it
         dens_prof = GasDensity3D(self.radii, med_dens, self.centre, self.src_name, self.obs_id, self.instrument,

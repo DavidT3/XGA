@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/06/2021, 09:14. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 10:11. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -561,7 +561,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
         generating for multiple sources then you can also pass a Quantity with one entry per source.
     :param bool num_dens: If True then a number density profile will be generated, otherwise a mass density profile
         will be generated.
-    :param str annulus_method:
+    :param str annulus_method: The method by which the annuli are designated, this can be 'min_snr' (which will use
+        the min_snr_proj_temp_prof function), or 'growth' (which will use the grow_ann_proj_temp_prof function).
     :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
         and avoid PSF effects.

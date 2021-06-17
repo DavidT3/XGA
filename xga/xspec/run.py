@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 15:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 16:34. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -122,8 +122,7 @@ def xspec_call(xspec_func):
     """
     This is used as a decorator for functions that produce XSPEC scripts. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
-    executing the XSPEC commands will change. This supports both simple multi-threading and submission
-    with the Sun Grid Engine.
+    executing the XSPEC commands will change. This supports multi-threading.
     :return:
     """
 

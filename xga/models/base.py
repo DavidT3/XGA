@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/03/2021, 14:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/06/2021, 14:29. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -429,13 +429,16 @@ class BaseModel1D(metaclass=ABCMeta):
 
         return integral_res
 
-    def allowed_prior_types(self):
+    def allowed_prior_types(self, table_format: str = 'fancy_grid'):
         """
         Simple method to display the allowed prior types and their expected formats.
+        :param str table_format: The desired format of the allowed models table. This is passed to the
+            tabulate module (allowed formats can be found here - https://pypi.org/project/tabulate/), and
+            alters the way the printed table looks.
         """
         table_data = [[self._prior_types[i], self._prior_type_format[i]] for i in range(0, len(self._prior_types))]
         headers = ["PRIOR TYPE", "EXPECTED PRIOR FORMAT"]
-        print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+        print(tabulate(table_data, headers=headers, tablefmt=table_format))
 
     @staticmethod
     def compare_units(check_pars: List[Quantity], good_pars: List[Quantity]) -> List[Quantity]:
@@ -475,9 +478,12 @@ class BaseModel1D(metaclass=ABCMeta):
 
         return conv_check_pars
 
-    def info(self):
+    def info(self, table_format: str = 'fancy_grid'):
         """
         A method that gives some information about this particular model.
+        :param str table_format: The desired format of the allowed models table. This is passed to the
+            tabulate module (allowed formats can be found here - https://pypi.org/project/tabulate/), and
+            alters the way the printed table looks.
         """
         headers = [self.publication_name, '']
         # ugly_pars = ", ".join([p.name for p in list(inspect.signature(self.model).parameters.values())[1:]])
@@ -500,7 +506,44 @@ class BaseModel1D(metaclass=ABCMeta):
         data = [['DESCRIBES', self.describes], ['UNIT', self._y_unit.to_string()], ['PARAMETERS', ugly_pars],
                 ['PARAMETER UNITS', par_units], ["AUTHOR", self._info['author']], ["YEAR", self._info['year']],
                 ["PAPER", self._info['reference']], ['INFO', self._info['general']]]
-        print(tabulate(data, headers=headers, tablefmt='fancy_grid'))
+        print(tabulate(data, headers=headers, tablefmt=table_format))
+
+    def predicted_dist_view(self, radius: Quantity, bins: Union[str, int] = 'auto', colour: str = "lightslategrey",
+                            figsize: tuple = (6, 5)):
+        """
+        A simple view method, to visualise the predicted value distribution at a particular radius. Only usable if
+        this model has had parameter distributions assigned to it.
+
+        :param Quantity radius: The radius at which you wish to evaluate this model and view the
+            predicted distribution.
+        :param Union[str, int] bins: Equivelant to the plt.hist bins argument, set either the number of bins
+            or the algorithm to decide on the number of bins.
+        :param str colour: Set the colour of the histogram.
+        :param tuple figsize: The desired dimensions of the figure.
+        """
+        # Check if there are parameter distributions associated with this model
+        if len(self._par_dists[0] != 0):
+            # Set up the figure
+            fig = plt.figure(figsize=figsize)
+            ax = plt.gca()
+
+            ax.hist(self(radius, True).value, bins=bins, color=colour)
+            # Add predicted value as a solid red line
+            ax.axvline(self(radius).value, color='red')
+
+            cur_unit = self.y_unit
+            if cur_unit == Unit(''):
+                par_unit_name = ""
+            else:
+                par_unit_name = r" $\left[" + cur_unit.to_string("latex").strip("$") + r"\right]$"
+
+            ax.set_xlabel(self.describes + ' {}'.format(par_unit_name))
+
+            # And show the plot
+            plt.tight_layout()
+            plt.show()
+        else:
+            warn("You have not added parameter distributions to this model")
 
     def par_dist_view(self, bins: Union[str, int] = 'auto', colour: str = "lightslategrey"):
         """
