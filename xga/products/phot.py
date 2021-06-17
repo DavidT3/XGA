@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2021, 11:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2021, 13:05. Copyright (c) David J Turner
 
 
 import warnings
@@ -915,7 +915,8 @@ class RateMap(Image):
         return peak_conv, edge_flag
 
     def clustering_peak(self, mask: np.ndarray, out_unit: UnitBase = deg, top_frac: float = 0.05,
-                        max_dist: float = 5) -> Tuple[Quantity, bool, np.ndarray, List[np.ndarray]]:
+                        max_dist: float = 5, clean_point_clusters: bool = False) \
+            -> Tuple[Quantity, bool, np.ndarray, List[np.ndarray]]:
         """
         An experimental peak finding function that cuts out the top 5% (by default) of array elements
         (by value), and runs a hierarchical clustering algorithm on their positions. The motivation
@@ -930,6 +931,9 @@ class RateMap(Image):
         :param float top_frac: The fraction of the elements (ordered in descending value) that should be used
             to generate clusters, and thus be considered for the cluster centre.
         :param float max_dist: The maximum distance criterion for the hierarchical clustering algorithm, in pixels.
+        :param bool clean_point_clusters: If this is set to true then the point clusters which are not believed
+            to host the peak pixel will be cleaned, meaning that if they have less than 4 pixels associated with
+            them then they will be removed.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
             the user's mask), in units of out_unit, as specified by the user. Finally, the coordinates of the points
             in the chosen cluster are returned, as is a list of all the coordinates of all the other clusters.
@@ -996,6 +1000,14 @@ class RateMap(Image):
 
         # Find if the peak coordinates sit near an edge/chip gap
         edge_flag = self.near_edge(peak_pix)
+
+        if clean_point_clusters:
+            cleaned_clusters = []
+            for pcl in other_coord_pairs:
+                if len(pcl) > 4:
+                    cleaned_clusters.append(pcl)
+
+            other_coord_pairs = cleaned_clusters
 
         return peak_conv, edge_flag, chosen_coord_pairs, other_coord_pairs
 
