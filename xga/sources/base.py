@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 16:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2021, 10:51. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -764,7 +764,10 @@ class BaseSource:
                         else:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
-                            self.update_products(obj)
+                            try:
+                                self.update_products(obj)
+                            except NotAssociatedError:
+                                pass
 
                     elif len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 0:
                         # Defining our XGA spectrum instance
@@ -783,8 +786,10 @@ class BaseSource:
                         else:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
-                            self.update_products(obj)
-
+                            try:
+                                self.update_products(obj)
+                            except NotAssociatedError:
+                                pass
                     else:
                         warnings.warn("{src} spectrum {sp} cannot be loaded in due to a mismatch in available"
                                       " ancillary files".format(src=self.name, sp=sp))
