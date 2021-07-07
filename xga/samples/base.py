@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2021, 10:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2021, 17:50. Copyright (c) David J Turner
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -231,7 +231,7 @@ class BaseSample:
                                               min_counts, min_sn, over_sample)
                 frac_err = lx_val[1:] / lx_val[0]
                 # We check that no error is larger than the measured value, if quality checks are on
-                if quality_checks and len(frac_err[frac_err > 1]) != 0:
+                if quality_checks and len(frac_err[frac_err >= 1]) != 0:
                     raise ValueError("{s} luminosity measurement's uncertainty greater than value.".format(s=src.name))
                 else:
                     lums.append(lx_val)

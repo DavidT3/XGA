@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 17:46. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2021, 17:50. Copyright (c) David J Turner
 
 from typing import Union, List
 
@@ -416,7 +416,7 @@ class ClusterSample(BaseSample):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("A negative value was detected in the temperature array for {s}, this is considered a failed "
                          "measurement".format(s=gcs.name))
-                elif quality_checks and ((gcs_temp[0] - gcs_temp[1]) < 0):
+                elif quality_checks and ((gcs_temp[0] - gcs_temp[1]) <= 0):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("The temperature value - the lower error goes below zero for {s}, this makes the temperature"
                          " hard to use for scaling relations as values are often logged.".format(s=gcs.name))
