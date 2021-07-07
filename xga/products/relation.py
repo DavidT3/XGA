@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2021, 11:19. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -676,7 +676,7 @@ class AggregateScalingRelation:
         return self._y_unit
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
-             colour_list: list = None, grid_on: bool = False, conf_level: int = 90):
+             colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -689,6 +689,8 @@ class AggregateScalingRelation:
         :param list colour_list: A list of matplotlib colours to use as a custom colour cycle.
         :param bool grid_on: If True then a grid will be included on the plot. Default is True.
         :param int conf_level: The confidence level to use when plotting the model.
+        :param bool show_data: Controls whether data points are shown on the view, as it can quickly become
+            confusing with multiple relations on one axis.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
@@ -751,9 +753,9 @@ class AggregateScalingRelation:
         for rel in self._relations:
             # This is a horrifying bodge, but I do just want the colour out and I can't be bothered to figure out
             #  how to use the colour cycle object properly
-            if len(rel.x_data.value[:, 0]) == 0:
-                d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
-                                    yerr=rel.y_data.value[:, 1], fmt="x", capsize=2, label='')
+            if len(rel.x_data.value[:, 0]) == 0 or not show_data:
+                # Sets up a null errorbar instance for the colour basically
+                d_out = ax.errorbar(None, None, xerr=None, yerr=None, fmt="x", capsize=2, label='')
             else:
                 d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
                                     yerr=rel.y_data.value[:, 1], fmt="x", capsize=2, label=rel.name + " Data")
