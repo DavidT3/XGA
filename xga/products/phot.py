@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 23:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 23:30. Copyright (c) David J Turner
 
 
 import os
@@ -14,6 +14,7 @@ from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle
+from regions import read_ds9, PixelRegion
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
@@ -139,6 +140,49 @@ class Image(BaseProduct):
         if self._wcs_radec is None:
             raise FailedProductError("SAS has generated this image without a WCS capable of "
                                      "going from pixels to RA-DEC.")
+
+    def _process_regfile(self, path: str) -> List[PixelRegion]:
+        """
+        This internal function just takes the path to a region file and processes it into a form that
+        this object requires for viewing.
+
+        :param str path: The path to the region file to be processed
+        :return: A list of pixel regions.
+        :rtype: List[PixelRegion]
+        """
+        ds9_regs = read_ds9(path)
+        final_regs = []
+        for reg in ds9_regs:
+            if isinstance(reg, PixelRegion):
+                final_regs.append(reg)
+            else:
+                final_regs.append(reg.to_pixel(self._wcs_radec))
+
+        return final_regs
+
+    @property
+    def regions(self) -> List[PixelRegion]:
+        """
+        Property getter for regions associated with this image.
+
+        :return: Returns a list of regions, if they have been associated with this object.
+        :rtype: List[PixelRegion]
+        """
+        return self._regions
+
+    @regions.setter
+    def regions(self, new_path: str):
+        """
+        A setter for regions associated with this object, a region file path is passed, then that file
+        is processed into the required format.
+
+        :param str new_path: A new region file path.
+        """
+        if os.path.exists(new_path):
+            self._reg_file_path = new_path
+            self._regions = self._process_regfile(new_path)
+        else:
+            warnings.warn("That region file path does not exist")
 
     @property
     def shape(self) -> Tuple[int, int]:
