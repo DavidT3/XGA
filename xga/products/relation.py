@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 12:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 12:18. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -747,11 +747,22 @@ class AggregateScalingRelation:
         """
         return self._y_unit
 
-    def view_corner(self, figsize=(10, 10)):
-        #
+    def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None):
+        """
+        A corner plot viewing method that will combine chains from all the relations that make up this
+        aggregate scaling relation and display them using getdist.
+
+        :param tuple figsize: The size of the figure.
+        :param List[str] cust_par_names: A list of custom parameter names.
+        """
+        # First off checking that every relation has chains, otherwise we can't do this
         not_chains = [r.chains is None for r in self._relations]
+        # Which parameter names are the same, they should all be the same
         par_names = list(set([",".join(r.par_names) for r in self._relations]))
+        # Checking which relations also have a scatter chain
         not_scatter_chains = [r.scatter_chain is None for r in self._relations]
+
+        # Stopping this method if anything is amiss
         if any(not_chains):
             raise ValueError('Not all scaling relations have parameter chains, cannot view aggregate corner plot.')
         elif len(par_names) != 1:
@@ -763,13 +774,21 @@ class AggregateScalingRelation:
         par_names = [n.replace('$', '') for n in self._relations[0].par_names]
         # Setup the getdist sample objects
         if not any(not_scatter_chains):
+            # For if there ARE scatter chains
             par_names += [r'\sigma']
+            if cust_par_names is not None and len(cust_par_names) == len(par_names):
+                par_names = cust_par_names
+
             for rel in self._relations:
                 all_ch = np.hstack([rel.chains, rel.scatter_chain[..., None]])
                 samp_obj = MCSamples(samples=all_ch, label=rel.name, names=par_names, labels=par_names)
                 samples.append(samp_obj)
         else:
+            if cust_par_names is not None and len(cust_par_names) == len(par_names):
+                par_names = cust_par_names
+
             for rel in self._relations:
+                # For if there aren't scatter chains
                 samp_obj = MCSamples(samples=rel.chains, label=rel.name, names=par_names, labels=par_names)
                 samples.append(samp_obj)
 
