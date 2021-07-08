@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 23:37. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/07/2021, 00:13. Copyright (c) David J Turner
 
 
 import os
@@ -584,7 +584,7 @@ class Image(BaseProduct):
                  chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, zoom_in: bool = False,
                  manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
                  radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
-                 stretch: BaseStretch = LogStretch(), mask_edges: bool = True) -> Axes:
+                 stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False) -> Axes:
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
@@ -615,6 +615,8 @@ class Image(BaseProduct):
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
+        :param bool view_regions: If regions have been associated with this object (either on init or using
+            the 'regions' property setter, should they be displayed. Default is False.
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
         """
@@ -662,7 +664,9 @@ class Image(BaseProduct):
         norm = ImageNormalize(data=plot_data, interval=MinMaxInterval(), stretch=stretch)
         # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
 
+        # If we want to plot point clusters on the image, then we go here
         if chosen_points is not None:
+            # Add the point cluster points
             ax.plot(chosen_points[:, 0], chosen_points[:, 1], '+', color='black', label="Chosen Point Cluster")
             ax.legend(loc="best")
 
@@ -670,11 +674,13 @@ class Image(BaseProduct):
             for cl in other_points:
                 ax.plot(cl[:, 0], cl[:, 1], 'D')
 
+        # If we want a cross hair, then we put one on here
         if cross_hair is not None:
             pix_coord = self.coord_conv(cross_hair, pix).value
             ax.axvline(pix_coord[0], color="white", linewidth=0.8)
             ax.axhline(pix_coord[1], color="white", linewidth=0.8)
 
+            # Drawing annular radii on the image, if they are enabled and passed
             for ann_rad in radial_bins_pix:
                 artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1.5)
                 ax.add_artist(artist)
@@ -687,8 +693,19 @@ class Image(BaseProduct):
                 ax.add_artist(inn_artist)
                 ax.add_artist(out_artist)
 
+        # Adds the actual image to the axis.
         ax.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
 
+        # If the user wants regions on the image, this is where they get added
+        if view_regions:
+            # We can just loop through the _regions attribute because its default is an empty
+            #  list, so no need to check
+            for reg in self._regions:
+                reg_art = reg.as_artist()
+                reg_art.set_linewidth(1.2)
+                ax.add_artist(reg_art)
+
+        # This sets the limits of the figure depending on the options that have been passed in
         if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is None:
             # I don't like doing local imports, but this is the easiest way
             from xga.imagetools import data_limits
@@ -709,7 +726,7 @@ class Image(BaseProduct):
              other_points: List[np.ndarray] = None, figsize: Tuple = (10, 8), zoom_in: bool = False,
              manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
              radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
-             stretch: BaseStretch = LogStretch(), mask_edges: bool = True):
+             stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
@@ -740,6 +757,8 @@ class Image(BaseProduct):
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
+        :param bool view_regions: If regions have been associated with this object (either on init or using
+            the 'regions' property setter, should they be displayed. Default is False.
         """
 
         # Create figure object
@@ -749,7 +768,7 @@ class Image(BaseProduct):
         ax = plt.gca()
 
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
-                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges)
+                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions)
         plt.colorbar(ax.images[0])
         plt.tight_layout()
         # Display the image
