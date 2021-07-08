@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2021, 11:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 09:53. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -425,7 +425,7 @@ class ScalingRelation:
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
              data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90,
-             custom_x_label: str = None, custom_y_label: str = None):
+             custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -443,6 +443,8 @@ class ScalingRelation:
             of this plot, including the unit string.
         :param str custom_y_label: Passing a string to this variable will override the y axis label
             of this plot, including the unit string.
+        :param float fontsize: The fontsize for axis labels.
+        :param float legend_fontsize: The fontsize for text in the legend.
         """
         # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
@@ -535,14 +537,14 @@ class ScalingRelation:
         # The scaling relation object knows what its x and y axes are called, though the user may pass
         #  their own if they wish
         if custom_x_label is None:
-            plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=12)
+            plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=fontsize)
         else:
-            plt.xlabel(custom_x_label, fontsize=12)
+            plt.xlabel(custom_x_label, fontsize=fontsize)
 
         if custom_y_label is None:
-            plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=12)
+            plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=fontsize)
         else:
-            plt.ylabel(custom_y_label, fontsize=12)
+            plt.ylabel(custom_y_label, fontsize=fontsize)
 
         # The user can also pass a plot title, but if they don't then I construct one automatically
         if plot_title is None and self._fit_method != 'unknown':
@@ -585,7 +587,7 @@ class ScalingRelation:
         ax.tick_params(length=7)
         ax.tick_params(which='minor', length=3)
 
-        plt.legend(loc="best")
+        plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
         plt.show()
 
@@ -676,7 +678,8 @@ class AggregateScalingRelation:
         return self._y_unit
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
-             colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True):
+             colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
+             fontsize: float = 15, legend_fontsize: float = 13):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -691,6 +694,8 @@ class AggregateScalingRelation:
         :param int conf_level: The confidence level to use when plotting the model.
         :param bool show_data: Controls whether data points are shown on the view, as it can quickly become
             confusing with multiple relations on one axis.
+        :param float fontsize: The fontsize for axis labels.
+        :param float legend_fontsize: The fontsize for text in the legend.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
@@ -754,7 +759,7 @@ class AggregateScalingRelation:
             # This is a horrifying bodge, but I do just want the colour out and I can't be bothered to figure out
             #  how to use the colour cycle object properly
             if len(rel.x_data.value[:, 0]) == 0 or not show_data:
-                # Sets up a null errorbar instance for the colour basically
+                # Sets up a null error bar instance for the colour basically
                 d_out = ax.errorbar(None, None, xerr=None, yerr=None, fmt="x", capsize=2, label='')
             else:
                 d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
@@ -789,7 +794,7 @@ class AggregateScalingRelation:
             if rel.author != 'XGA':
                 relation_label = " ".join([rel.author, rel.year])
             else:
-                relation_label = rel.name + ' ' + ' Scaling Relation'
+                relation_label = rel.name + ' Scaling Relation'
             plt.plot(model_x * rel.x_norm.value, rel.model_func(model_x, *model_pars[0, :]) * rel.y_norm.value,
                      color=d_colour, label=relation_label)
 
@@ -812,8 +817,8 @@ class AggregateScalingRelation:
             y_unit = ''
 
         # The scaling relation object knows what its x and y axes are called
-        plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=12)
-        plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=12)
+        plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=fontsize)
+        plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=fontsize)
 
         # The user can also pass a plot title, but if they don't then I construct one automatically
         if plot_title is None:
@@ -854,7 +859,7 @@ class AggregateScalingRelation:
         ax.tick_params(length=7)
         ax.tick_params(which='minor', length=3)
 
-        plt.legend(loc="best")
+        plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
         plt.show()
 
