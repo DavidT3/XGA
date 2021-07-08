@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 09:53. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 11:16. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -34,7 +34,8 @@ class ScalingRelation:
                  x_name: str, y_name: str, fit_method: str = 'unknown', x_data: Quantity = None,
                  y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None, x_lims: Quantity = None,
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
-                 relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = ''):
+                 relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = '',
+                 scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -72,6 +73,9 @@ class ScalingRelation:
         :param str relation_author: The author who deserves credit for this relation.
         :param str relation_year: The year this relation was produced, default is the current year.
         :param str relation_doi: The DOI of the original paper this relation appeared in.
+        :param np.ndarray scatter_par: A parameter describing the intrinsic scatter of y|x. Optional as many fits don't
+            include this.
+        :param np.ndarray scatter_chain: A corresponding MCMC chain for the scatter parameter. Optional.
         """
         # These will always be passed in, and are assumed to be in the order required by the model_func that is also
         #  passed in by the user.
@@ -171,6 +175,13 @@ class ScalingRelation:
 
         # Just grabbing the parameter names from the model function to plot on the y-axis
         self._par_names = list(inspect.signature(self._model_func).parameters)[1:]
+
+        self._scatter = scatter_par
+
+        if chains is not None and scatter_chain is not None and len(scatter_chain) != chains.shape[0]:
+            raise ValueError("There must be the same number of steps in any scatter and parameter chains passed "
+                             "to this relation.")
+        self._scatter_chain = scatter_chain
 
     @property
     def pars(self) -> np.ndarray:
@@ -352,6 +363,27 @@ class ScalingRelation:
         """
         return self._doi
 
+    @property
+    def scatter_par(self) -> np.ndarray:
+        """
+        A getter for the scatter information.
+
+        :return: The scatter parameter and its uncertainty. If no scatter information was passed on definition
+            then this will return None.
+        :rtype: np.ndarray
+        """
+        return self._scatter
+
+    @property
+    def scatter_chain(self) -> np.ndarray:
+        """
+        A getter for the scatter information chain.
+
+        :return: The scatter chain. If no scatter information was passed on definition then this will return None.
+        :rtype: np.ndarray
+        """
+        return self._scatter_chain
+
     def view_chains(self, figsize: tuple = None):
         """
         Simple view method to quickly look at the MCMC chains for a scaling relation fit.
@@ -361,10 +393,14 @@ class ScalingRelation:
         if self._chains is None:
             raise ValueError('No chains are available for this scaling relation')
 
+        num_ch = len(self._fit_pars)
+        if self._scatter_chain is not None:
+            num_ch += 1
+
         if figsize is None:
-            fig, axes = plt.subplots(nrows=len(self._fit_pars), figsize=(12, 2 * len(self._fit_pars)), sharex='col')
+            fig, axes = plt.subplots(nrows=num_ch, figsize=(12, 2 * num_ch), sharex='col')
         else:
-            fig, axes = plt.subplots(len(self._fit_pars), figsize=figsize, sharex='col')
+            fig, axes = plt.subplots(num_ch, figsize=figsize, sharex='col')
 
         # Now we iterate through the parameters and plot their chains
         for i in range(len(self._fit_pars)):
@@ -372,6 +408,13 @@ class ScalingRelation:
             ax.plot(self._chains[:, i], "k", alpha=0.5)
             ax.set_xlim(0, self._chains.shape[0])
             ax.set_ylabel(self._par_names[i])
+            ax.yaxis.set_label_coords(-0.1, 0.5)
+
+        if num_ch > len(self._fit_pars):
+            ax = axes[-1]
+            ax.plot(self._scatter_chain, "k", alpha=0.5)
+            ax.set_xlim(0, len(self._scatter_chain))
+            ax.set_ylabel(r'$\sigma$')
             ax.yaxis.set_label_coords(-0.1, 0.5)
 
         axes[-1].set_xlabel("Step Number")
@@ -388,8 +431,14 @@ class ScalingRelation:
             raise ValueError('No chains are available for this scaling relation')
 
         frac_conf_lev = [(50 - (conf_level / 2)) / 100, 0.5, (50 + (conf_level / 2)) / 100]
-        fig = corner.corner(self._chains, labels=self._par_names, figsize=figsize, quantiles=frac_conf_lev,
-                            show_titles=True)
+        if self._scatter_chain is None:
+            fig = corner.corner(self._chains, labels=self._par_names, figsize=figsize, quantiles=frac_conf_lev,
+                                show_titles=True)
+        else:
+            all_ch = np.hstack([self._chains, self._scatter_chain[..., None]])
+            fig = corner.corner(all_ch, labels=self._par_names+[r'$\sigma$'], figsize=figsize, quantiles=frac_conf_lev,
+                                show_titles=True)
+
         plt.suptitle("{n} Scaling Relation - {c}% Confidence".format(n=self._name, c=conf_level), fontsize=14, y=1.02)
         plt.show()
 

@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2021, 16:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 11:16. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1419,6 +1419,8 @@ class BaseProfile1D:
         #  if the user didn't set it initially then self.x_norm will also be 1
         if isinstance(x_norm, bool) and x_norm:
             x_norm = self.x_norm
+            if self.x_norm == Quantity(1, ''):
+                warn("No normalisation value is stored for the x-axis")
         elif isinstance(x_norm, Quantity):
             x_norm = x_norm
         elif isinstance(x_norm, bool) and not x_norm:
@@ -1427,6 +1429,8 @@ class BaseProfile1D:
 
         if isinstance(y_norm, bool) and y_norm:
             y_norm = self.y_norm
+            if self.y_norm == Quantity(1, ''):
+                warn("No normalisation value is stored for the y-axis")
         elif isinstance(y_norm, Quantity):
             y_norm = y_norm
         elif isinstance(y_norm, bool) and not y_norm:
@@ -1942,8 +1946,6 @@ class BaseProfile1D:
         :return: An astropy quantity containing the normalisation value.
         :rtype: Quantity
         """
-        if self._x_norm == Quantity(1, ''):
-            warn("No normalisation value has been set for the x-axis")
         return self._x_norm
 
     @x_norm.setter
@@ -1964,8 +1966,6 @@ class BaseProfile1D:
         :return: An astropy quantity containing the normalisation value.
         :rtype: Quantity
         """
-        if self._y_norm == Quantity(1, ''):
-            warn("No normalisation value has been set for the y-axis")
         return self._y_norm
 
     @y_norm.setter

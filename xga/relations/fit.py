@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/01/2021, 19:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 11:16. Copyright (c) David J Turner
 import inspect
 from types import FunctionType
 from typing import Tuple
@@ -332,7 +332,10 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     beta_par_val = np.mean(beta_par_chain)
     beta_par_err = np.std(beta_par_chain)
 
-    # TODO I should include the intrinsic scatter parameter that Paul uses in his fits, but don't know how currently
+    # Read out the intrinsic scatter chain and convert to a numpy array
+    sigma_par_chain = np.array(chains.rx2['sigma.YIZ.0'])
+    sigma_par_val = np.mean(sigma_par_chain)
+    sigma_par_err = np.std(sigma_par_chain)
 
     fit_par = np.array([beta_par_val, alpha_par_val])
     fit_par_err = np.array([beta_par_err, alpha_par_err])
@@ -342,16 +345,14 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm = _fit_initialise(y_values, y_errs, x_values,
                                                                                      x_errs, y_norm, x_norm)
 
-    # TODO LIRA DOESN'T ACTUALLY SEEM TO REMOVE ANY STEPS AS BURN IN, FIGURE OUT HOW TO DO THAT AFTER ALL THE
-    #  DIFFERENT SAMPLERS HAVE BEEN COMBINED
-
     # I'm re-formatting the chains into a shape that the ScalingRelation class will understand.
     xga_chains = np.concatenate([beta_par_chain.reshape(len(beta_par_chain), 1),
                                  alpha_par_chain.reshape(len(alpha_par_chain), 1)], axis=1)
 
     sr = ScalingRelation(fit_par, fit_par_err, power_law, x_norm, y_norm, x_name, y_name, 'LIRA', x_fit_data * x_norm,
                          y_fit_data * y_norm, x_fit_errs * x_norm, y_fit_errs * y_norm, chains=xga_chains,
-                         x_lims=x_lims)
+                         x_lims=x_lims, scatter_par=np.array([sigma_par_val, sigma_par_err]),
+                         scatter_chain=sigma_par_chain)
 
     return sr
 
