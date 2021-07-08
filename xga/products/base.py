@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2021, 09:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 11:16. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1371,7 +1371,8 @@ class BaseProfile1D:
 
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
-             normalise_x: bool = False, normalise_y: bool = False, x_label: str = None, y_label: str = None):
+             x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
+             y_label: str = None):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1391,10 +1392,14 @@ class BaseProfile1D:
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
             the dictionary key they are stored under is what they will be labelled.
             e.g. ({'r500': Quantity(), 'r200': Quantity()}
-        :param bool normalise_x: Should the x-axis be normalised with the x_norm value passed on the definition of
-            the profile object.
-        :param bool normalise_y: Should the y-axis be normalised with the x_norm value passed on the definition of
-            the profile object.
+        :param bool x_norm: Controls whether the x-axis of the profile is normalised by another value, the default is
+            False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
+            internal normalisation value (which can be set with the x_norm property), and if a quantity is passed it
+            will attempt to normalise using that.
+        :param bool y_norm: Controls whether the y-axis of the profile is normalised by another value, the default is
+            False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
+            internal normalisation value (which can be set with the y_norm property), and if a quantity is passed it
+            will attempt to normalise using that.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
         """
@@ -1412,14 +1417,23 @@ class BaseProfile1D:
 
         # If the user wants the x-axis to be normalised then we grab the value from the profile (though of course
         #  if the user didn't set it initially then self.x_norm will also be 1
-        if normalise_x:
+        if isinstance(x_norm, bool) and x_norm:
             x_norm = self.x_norm
-        else:
+            if self.x_norm == Quantity(1, ''):
+                warn("No normalisation value is stored for the x-axis")
+        elif isinstance(x_norm, Quantity):
+            x_norm = x_norm
+        elif isinstance(x_norm, bool) and not x_norm:
             # Otherwise we set x_norm to a harmless values with no units and unity value
             x_norm = Quantity(1, '')
-        if normalise_y:
+
+        if isinstance(y_norm, bool) and y_norm:
             y_norm = self.y_norm
-        else:
+            if self.y_norm == Quantity(1, ''):
+                warn("No normalisation value is stored for the y-axis")
+        elif isinstance(y_norm, Quantity):
+            y_norm = y_norm
+        elif isinstance(y_norm, bool) and not y_norm:
             y_norm = Quantity(1, '')
 
         # Setting up figure for the plot
@@ -1515,6 +1529,12 @@ class BaseProfile1D:
         x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
         y_unit = r"$\left[" + plot_y_vals.unit.to_string("latex").strip("$") + r"\right]$"
 
+        # If the quantity being plotted is unitless then we don't want there to be empty brackets
+        if x_unit == r"$\left[\mathrm{}\right]$":
+            x_unit = ""
+        if y_unit == r"$\left[\mathrm{}\right]$":
+            y_unit = ""
+
         if x_label is None:
             # Setting the main plot's x label
             main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
@@ -1586,7 +1606,7 @@ class BaseProfile1D:
         y_axis_lims = main_ax.get_ylim()
 
         # This dynamically changes how tick labels are formatted depending on the values displayed
-        if max(x_axis_lims) < 100 and not models:
+        if max(x_axis_lims) < 100 and not models and min(x_axis_lims) > 0.1:
             main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
             main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
         elif max(x_axis_lims) < 100 and models:

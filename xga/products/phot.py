@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2021, 13:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2021, 15:03. Copyright (c) David J Turner
 
 
 import warnings
@@ -1097,18 +1097,24 @@ class RateMap(Image):
         :return: A boolean flag as to whether the coordinates are near an edge.
         :rtype: bool
         """
-        # Convert to pixel coordinates
-        pix_coord = self.coord_conv(coord, pix).value
+        # The try except is to catch instances where the pix coord conversion fails because its off an image,
+        #  in which case we classify it as near an edge
+        try:
+            # Convert to pixel coordinates
+            pix_coord = self.coord_conv(coord, pix).value
 
-        # Checks the edge mask within a 5 by 5 array centered on the peak coord, if there are no edges then
-        #  all elements will be 1 and it will sum to 25.
-        edge_sum = self.edge_mask[pix_coord[1] - 2:pix_coord[1] + 3,
-                                  pix_coord[0] - 2:pix_coord[0] + 3].sum()
-        # If it sums to less then we know that there is an edge near the peak.
-        if edge_sum != 25:
+            # Checks the edge mask within a 5 by 5 array centered on the peak coord, if there are no edges then
+            #  all elements will be 1 and it will sum to 25.
+            edge_sum = self.edge_mask[pix_coord[1] - 2:pix_coord[1] + 3,
+                                      pix_coord[0] - 2:pix_coord[0] + 3].sum()
+            # If it sums to less then we know that there is an edge near the peak.
+            if edge_sum != 25:
+                edge_flag = True
+            else:
+                edge_flag = False
+
+        except ValueError:
             edge_flag = True
-        else:
-            edge_flag = False
 
         return edge_flag
 

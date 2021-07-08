@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:44. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 12:52. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -11,6 +11,7 @@ import numpy as np
 import scipy.odr as odr
 from astropy.units import Quantity, Unit, UnitConversionError
 from cycler import cycler
+from getdist import plots, MCSamples
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
@@ -34,7 +35,8 @@ class ScalingRelation:
                  x_name: str, y_name: str, fit_method: str = 'unknown', x_data: Quantity = None,
                  y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None, x_lims: Quantity = None,
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
-                 relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = ''):
+                 relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = '',
+                 scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -72,6 +74,9 @@ class ScalingRelation:
         :param str relation_author: The author who deserves credit for this relation.
         :param str relation_year: The year this relation was produced, default is the current year.
         :param str relation_doi: The DOI of the original paper this relation appeared in.
+        :param np.ndarray scatter_par: A parameter describing the intrinsic scatter of y|x. Optional as many fits don't
+            include this.
+        :param np.ndarray scatter_chain: A corresponding MCMC chain for the scatter parameter. Optional.
         """
         # These will always be passed in, and are assumed to be in the order required by the model_func that is also
         #  passed in by the user.
@@ -171,6 +176,13 @@ class ScalingRelation:
 
         # Just grabbing the parameter names from the model function to plot on the y-axis
         self._par_names = list(inspect.signature(self._model_func).parameters)[1:]
+
+        self._scatter = scatter_par
+
+        if chains is not None and scatter_chain is not None and len(scatter_chain) != chains.shape[0]:
+            raise ValueError("There must be the same number of steps in any scatter and parameter chains passed "
+                             "to this relation.")
+        self._scatter_chain = scatter_chain
 
     @property
     def pars(self) -> np.ndarray:
@@ -352,6 +364,47 @@ class ScalingRelation:
         """
         return self._doi
 
+    @property
+    def scatter_par(self) -> np.ndarray:
+        """
+        A getter for the scatter information.
+
+        :return: The scatter parameter and its uncertainty. If no scatter information was passed on definition
+            then this will return None.
+        :rtype: np.ndarray
+        """
+        return self._scatter
+
+    @property
+    def scatter_chain(self) -> np.ndarray:
+        """
+        A getter for the scatter information chain.
+
+        :return: The scatter chain. If no scatter information was passed on definition then this will return None.
+        :rtype: np.ndarray
+        """
+        return self._scatter_chain
+
+    @property
+    def chains(self) -> np.ndarray:
+        """
+        Property getter for the parameter chains.
+
+        :return: The MCMC chains of the fit for this scaling relation, if they were passed. Otherwise None.
+        :rtype: np.ndarray
+        """
+        return self._chains
+
+    @property
+    def par_names(self) -> List:
+        """
+        Getter for the parameter names.
+
+        :return: The names of the model parameters.
+        :rtype: List
+        """
+        return self._par_names
+
     def view_chains(self, figsize: tuple = None):
         """
         Simple view method to quickly look at the MCMC chains for a scaling relation fit.
@@ -361,10 +414,14 @@ class ScalingRelation:
         if self._chains is None:
             raise ValueError('No chains are available for this scaling relation')
 
+        num_ch = len(self._fit_pars)
+        if self._scatter_chain is not None:
+            num_ch += 1
+
         if figsize is None:
-            fig, axes = plt.subplots(nrows=len(self._fit_pars), figsize=(12, 2 * len(self._fit_pars)), sharex='col')
+            fig, axes = plt.subplots(nrows=num_ch, figsize=(12, 2 * num_ch), sharex='col')
         else:
-            fig, axes = plt.subplots(len(self._fit_pars), figsize=figsize, sharex='col')
+            fig, axes = plt.subplots(num_ch, figsize=figsize, sharex='col')
 
         # Now we iterate through the parameters and plot their chains
         for i in range(len(self._fit_pars)):
@@ -372,6 +429,13 @@ class ScalingRelation:
             ax.plot(self._chains[:, i], "k", alpha=0.5)
             ax.set_xlim(0, self._chains.shape[0])
             ax.set_ylabel(self._par_names[i])
+            ax.yaxis.set_label_coords(-0.1, 0.5)
+
+        if num_ch > len(self._fit_pars):
+            ax = axes[-1]
+            ax.plot(self._scatter_chain, "k", alpha=0.5)
+            ax.set_xlim(0, len(self._scatter_chain))
+            ax.set_ylabel(r'$\sigma$')
             ax.yaxis.set_label_coords(-0.1, 0.5)
 
         axes[-1].set_xlabel("Step Number")
@@ -388,8 +452,14 @@ class ScalingRelation:
             raise ValueError('No chains are available for this scaling relation')
 
         frac_conf_lev = [(50 - (conf_level / 2)) / 100, 0.5, (50 + (conf_level / 2)) / 100]
-        fig = corner.corner(self._chains, labels=self._par_names, figsize=figsize, quantiles=frac_conf_lev,
-                            show_titles=True)
+        if self._scatter_chain is None:
+            fig = corner.corner(self._chains, labels=self._par_names, figsize=figsize, quantiles=frac_conf_lev,
+                                show_titles=True)
+        else:
+            all_ch = np.hstack([self._chains, self._scatter_chain[..., None]])
+            fig = corner.corner(all_ch, labels=self._par_names+[r'$\sigma$'], figsize=figsize, quantiles=frac_conf_lev,
+                                show_titles=True)
+
         plt.suptitle("{n} Scaling Relation - {c}% Confidence".format(n=self._name, c=conf_level), fontsize=14, y=1.02)
         plt.show()
 
@@ -425,7 +495,7 @@ class ScalingRelation:
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
              data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90,
-             custom_x_label: str = None, custom_y_label: str = None):
+             custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -443,6 +513,8 @@ class ScalingRelation:
             of this plot, including the unit string.
         :param str custom_y_label: Passing a string to this variable will override the y axis label
             of this plot, including the unit string.
+        :param float fontsize: The fontsize for axis labels.
+        :param float legend_fontsize: The fontsize for text in the legend.
         """
         # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
@@ -535,14 +607,14 @@ class ScalingRelation:
         # The scaling relation object knows what its x and y axes are called, though the user may pass
         #  their own if they wish
         if custom_x_label is None:
-            plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=12)
+            plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=fontsize)
         else:
-            plt.xlabel(custom_x_label, fontsize=12)
+            plt.xlabel(custom_x_label, fontsize=fontsize)
 
         if custom_y_label is None:
-            plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=12)
+            plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=fontsize)
         else:
-            plt.ylabel(custom_y_label, fontsize=12)
+            plt.ylabel(custom_y_label, fontsize=fontsize)
 
         # The user can also pass a plot title, but if they don't then I construct one automatically
         if plot_title is None and self._fit_method != 'unknown':
@@ -585,7 +657,7 @@ class ScalingRelation:
         ax.tick_params(length=7)
         ax.tick_params(which='minor', length=3)
 
-        plt.legend(loc="best")
+        plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
         plt.show()
 
@@ -675,8 +747,68 @@ class AggregateScalingRelation:
         """
         return self._y_unit
 
+    def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
+                    contour_colours: List[str] = None):
+        """
+        A corner plot viewing method that will combine chains from all the relations that make up this
+        aggregate scaling relation and display them using getdist.
+
+        :param tuple figsize: The size of the figure.
+        :param List[str] cust_par_names: A list of custom parameter names.
+        :param List[str] contour_colours: Custom colours for the contours, there should be one colour
+            per scaling relation.
+        """
+        # First off checking that every relation has chains, otherwise we can't do this
+        not_chains = [r.chains is None for r in self._relations]
+        # Which parameter names are the same, they should all be the same
+        par_names = list(set([",".join(r.par_names) for r in self._relations]))
+        # Checking which relations also have a scatter chain
+        not_scatter_chains = [r.scatter_chain is None for r in self._relations]
+
+        # Stopping this method if anything is amiss
+        if any(not_chains):
+            raise ValueError('Not all scaling relations have parameter chains, cannot view aggregate corner plot.')
+        elif len(par_names) != 1:
+            raise ValueError('Not all scaling relations have the same model parameter names, cannot view aggregate'
+                             ' corner plot.')
+        elif len(contour_colours) != len(self._relations):
+            raise ValueError("If you pass a list of contour colours, there must be one entry per scaling relation.")
+
+        samples = []
+        # Need to remove $ from the labels because getdist adds them itself
+        par_names = [n.replace('$', '') for n in self._relations[0].par_names]
+        # Setup the getdist sample objects
+        if not any(not_scatter_chains):
+            # For if there ARE scatter chains
+            par_names += [r'\sigma']
+            if cust_par_names is not None and len(cust_par_names) == len(par_names):
+                par_names = cust_par_names
+
+            for rel in self._relations:
+                all_ch = np.hstack([rel.chains, rel.scatter_chain[..., None]])
+                samp_obj = MCSamples(samples=all_ch, label=rel.name, names=par_names, labels=par_names)
+                samples.append(samp_obj)
+        else:
+            if cust_par_names is not None and len(cust_par_names) == len(par_names):
+                par_names = cust_par_names
+
+            for rel in self._relations:
+                # For if there aren't scatter chains
+                samp_obj = MCSamples(samples=rel.chains, label=rel.name, names=par_names, labels=par_names)
+                samples.append(samp_obj)
+
+        # And generate the triangle plot
+        g = plots.get_subplot_plotter(width_inch=figsize[0])
+
+        if contour_colours is not None:
+            g.triangle_plot(samples, filled=True, contour_colors=contour_colours)
+        else:
+            g.triangle_plot(samples, filled=True)
+        plt.show()
+
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
-             colour_list: list = None, grid_on: bool = False, conf_level: int = 90):
+             colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
+             fontsize: float = 15, legend_fontsize: float = 13):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -689,6 +821,10 @@ class AggregateScalingRelation:
         :param list colour_list: A list of matplotlib colours to use as a custom colour cycle.
         :param bool grid_on: If True then a grid will be included on the plot. Default is True.
         :param int conf_level: The confidence level to use when plotting the model.
+        :param bool show_data: Controls whether data points are shown on the view, as it can quickly become
+            confusing with multiple relations on one axis.
+        :param float fontsize: The fontsize for axis labels.
+        :param float legend_fontsize: The fontsize for text in the legend.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
@@ -751,9 +887,9 @@ class AggregateScalingRelation:
         for rel in self._relations:
             # This is a horrifying bodge, but I do just want the colour out and I can't be bothered to figure out
             #  how to use the colour cycle object properly
-            if len(rel.x_data.value[:, 0]) == 0:
-                d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
-                                    yerr=rel.y_data.value[:, 1], fmt="x", capsize=2, label='')
+            if len(rel.x_data.value[:, 0]) == 0 or not show_data:
+                # Sets up a null error bar instance for the colour basically
+                d_out = ax.errorbar(None, None, xerr=None, yerr=None, fmt="x", capsize=2, label='')
             else:
                 d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
                                     yerr=rel.y_data.value[:, 1], fmt="x", capsize=2, label=rel.name + " Data")
@@ -787,7 +923,7 @@ class AggregateScalingRelation:
             if rel.author != 'XGA':
                 relation_label = " ".join([rel.author, rel.year])
             else:
-                relation_label = rel.name + ' ' + ' Scaling Relation'
+                relation_label = rel.name + ' Scaling Relation'
             plt.plot(model_x * rel.x_norm.value, rel.model_func(model_x, *model_pars[0, :]) * rel.y_norm.value,
                      color=d_colour, label=relation_label)
 
@@ -810,8 +946,8 @@ class AggregateScalingRelation:
             y_unit = ''
 
         # The scaling relation object knows what its x and y axes are called
-        plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=12)
-        plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=12)
+        plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=fontsize)
+        plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=fontsize)
 
         # The user can also pass a plot title, but if they don't then I construct one automatically
         if plot_title is None:
@@ -852,7 +988,7 @@ class AggregateScalingRelation:
         ax.tick_params(length=7)
         ax.tick_params(which='minor', length=3)
 
-        plt.legend(loc="best")
+        plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
         plt.show()
 
