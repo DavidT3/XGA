@@ -1,7 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2021, 15:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 23:11. Copyright (c) David J Turner
 
 
+import os
 import warnings
 from typing import Tuple, List, Union
 
@@ -29,7 +30,7 @@ class Image(BaseProduct):
     a powerful view method).
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity):
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, reg_file_path: str = ''):
         """
         The initialisation method for the Image class.
 
@@ -39,6 +40,7 @@ class Image(BaseProduct):
         :param str gen_cmd: The command used to generate the product.
         :param Quantity lo_en: The lower energy bound used to generate this product.
         :param Quantity hi_en: The upper energy bound used to generate this product.
+        :param str reg_file_path: Path to a region file for this image.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._shape = None
@@ -58,6 +60,18 @@ class Image(BaseProduct):
         self._psf_num_bins = None
         self._psf_num_iterations = None
         self._psf_model = None
+
+        # This checks whether a region file has been passed, and if it has then processes it
+        if reg_file_path != '' and os.path.exists(reg_file_path):
+            self._regions = self._process_regfile(reg_file_path)
+            self._reg_file_path = reg_file_path
+        elif reg_file_path != '' and not os.path.exists(reg_file_path):
+            warnings.warn("That region file path does not exist")
+            self._regions = []
+            self._reg_file_path = reg_file_path
+        else:
+            self._regions = []
+            self._reg_file_path = ''
 
     def _read_on_demand(self):
         """
