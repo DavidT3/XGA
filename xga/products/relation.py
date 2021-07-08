@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 12:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 12:52. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -747,13 +747,16 @@ class AggregateScalingRelation:
         """
         return self._y_unit
 
-    def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None):
+    def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
+                    contour_colours: List[str] = None):
         """
         A corner plot viewing method that will combine chains from all the relations that make up this
         aggregate scaling relation and display them using getdist.
 
         :param tuple figsize: The size of the figure.
         :param List[str] cust_par_names: A list of custom parameter names.
+        :param List[str] contour_colours: Custom colours for the contours, there should be one colour
+            per scaling relation.
         """
         # First off checking that every relation has chains, otherwise we can't do this
         not_chains = [r.chains is None for r in self._relations]
@@ -768,6 +771,8 @@ class AggregateScalingRelation:
         elif len(par_names) != 1:
             raise ValueError('Not all scaling relations have the same model parameter names, cannot view aggregate'
                              ' corner plot.')
+        elif len(contour_colours) != len(self._relations):
+            raise ValueError("If you pass a list of contour colours, there must be one entry per scaling relation.")
 
         samples = []
         # Need to remove $ from the labels because getdist adds them itself
@@ -794,7 +799,11 @@ class AggregateScalingRelation:
 
         # And generate the triangle plot
         g = plots.get_subplot_plotter(width_inch=figsize[0])
-        g.triangle_plot(samples, filled=True)
+
+        if contour_colours is not None:
+            g.triangle_plot(samples, filled=True, contour_colors=contour_colours)
+        else:
+            g.triangle_plot(samples, filled=True)
         plt.show()
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
