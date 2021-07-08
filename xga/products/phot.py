@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 23:30. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 23:32. Copyright (c) David J Turner
 
 
 import os
@@ -643,8 +643,14 @@ class Image(BaseProduct):
         else:
             ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
 
-        title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident, l=self._energy_bounds[0].to("keV").value,
-                                                  u=self._energy_bounds[1].to("keV").value, t=self.type)
+        if self.src_name is not None:
+            title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident,
+                                                      l=self._energy_bounds[0].to("keV").value,
+                                                      u=self._energy_bounds[1].to("keV").value, t=self.type)
+        else:
+            title = "{i} {l}-{u}keV {t}".format(i=ident, l=self._energy_bounds[0].to("keV").value,
+                                                u=self._energy_bounds[1].to("keV").value, t=self.type)
+
         # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
         if self.psf_corrected:
             title += ' - PSF Corrected'
