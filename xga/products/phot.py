@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/07/2021, 09:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/07/2021, 09:36. Copyright (c) David J Turner
 
 
 import os
@@ -584,7 +584,8 @@ class Image(BaseProduct):
                  chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, zoom_in: bool = False,
                  manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
                  radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
-                 stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False) -> Axes:
+                 stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
+                 ch_thickness: float = 0.8) -> Axes:
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
@@ -618,6 +619,8 @@ class Image(BaseProduct):
             to remove artificially bright pixels, default is True.
         :param bool view_regions: If regions have been associated with this object (either on init or using
             the 'regions' property setter, should they be displayed. Default is False.
+        :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
+            certain circumstances. Default is 0.8.
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
         """
@@ -677,17 +680,13 @@ class Image(BaseProduct):
 
         # If we want a cross hair, then we put one on here
         if cross_hair is not None:
-            # Just define this variable in-case I want to change it later, or let the user alter the crosshair line
-            #  thickness
-            ch_lw = 0.8
-
             # For the case of a single coordinate
             if cross_hair.shape == (2,):
                 # Converts from whatever input coordinate to pixels
                 pix_coord = self.coord_conv(cross_hair, pix).value
                 # Drawing the horizontal and vertical lines
-                ax.axvline(pix_coord[0], color="white", linewidth=ch_lw)
-                ax.axhline(pix_coord[1], color="white", linewidth=ch_lw)
+                ax.axvline(pix_coord[0], color="white", linewidth=ch_thickness)
+                ax.axhline(pix_coord[1], color="white", linewidth=ch_thickness)
 
                 # Drawing annular radii on the image, if they are enabled and passed. Only works with a
                 #  single coordinate, otherwise we wouldn't know which to centre on
@@ -710,12 +709,12 @@ class Image(BaseProduct):
                 pix_coord = self.coord_conv(cross_hair, pix).value
 
                 # This draws the first crosshair
-                ax.axvline(pix_coord[0, 0], color="white", linewidth=ch_lw)
-                ax.axhline(pix_coord[0, 1], color="white", linewidth=ch_lw)
+                ax.axvline(pix_coord[0, 0], color="white", linewidth=ch_thickness)
+                ax.axhline(pix_coord[0, 1], color="white", linewidth=ch_thickness)
 
                 # And this the second
-                ax.axvline(pix_coord[1, 0], color="white", linewidth=ch_lw, linestyle='dashed')
-                ax.axhline(pix_coord[1, 1], color="white", linewidth=ch_lw, linestyle='dashed')
+                ax.axvline(pix_coord[1, 0], color="white", linewidth=ch_thickness, linestyle='dashed')
+                ax.axhline(pix_coord[1, 1], color="white", linewidth=ch_thickness, linestyle='dashed')
 
             else:
                 # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
@@ -758,7 +757,8 @@ class Image(BaseProduct):
              other_points: List[np.ndarray] = None, figsize: Tuple = (10, 8), zoom_in: bool = False,
              manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
              radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
-             stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False):
+             stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
+             ch_thickness: float = 0.8):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
@@ -792,6 +792,8 @@ class Image(BaseProduct):
             to remove artificially bright pixels, default is True.
         :param bool view_regions: If regions have been associated with this object (either on init or using
             the 'regions' property setter, should they be displayed. Default is False.
+        :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
+            certain circumstances. Default is 0.8.
         """
 
         # Create figure object
@@ -801,7 +803,8 @@ class Image(BaseProduct):
         ax = plt.gca()
 
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
-                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions)
+                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
+                           ch_thickness)
         plt.colorbar(ax.images[0])
         plt.tight_layout()
         # Display the image
