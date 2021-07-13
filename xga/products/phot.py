@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/07/2021, 00:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/07/2021, 08:52. Copyright (c) David J Turner
 
 
 import os
@@ -701,8 +701,10 @@ class Image(BaseProduct):
             # We can just loop through the _regions attribute because its default is an empty
             #  list, so no need to check
             for reg in self._regions:
+                # Use the regions module conversion method to go to a matplotlib artist
                 reg_art = reg.as_artist()
-                reg_art.set_linewidth(1.2)
+                # Set line thickness and add to the axes
+                reg_art.set_linewidth(1.4)
                 ax.add_artist(reg_art)
 
         # This sets the limits of the figure depending on the options that have been passed in
