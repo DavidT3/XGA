@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 12:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 12:12. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -1503,7 +1503,7 @@ class BaseSource:
 
                     # If the rotation angle is zero then the conversion to mask by the regions module will be upset,
                     #  so I perturb the angle by 0.1 degrees
-                    if pr.angle.value == 0:
+                    if isinstance(pr, EllipsePixelRegion) and pr.angle.value == 0:
                         pr.angle += Quantity(0.1, 'deg')
                     masks.append(pr.to_mask().to_image(mask_image.shape))
                 except ValueError:
