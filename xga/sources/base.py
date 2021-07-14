@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 12:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 13:28. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -1127,6 +1127,17 @@ class BaseSource:
             # Here we add the custom sources to the source list, we know they are sky regions as we have
             #  already enforced it
             reg_dict[obs_id] = np.append(reg_dict[obs_id], custom_regs)
+
+            # I'm going to ensure that all regions are elliptical, I don't want to hunt through every place in XGA
+            #  where I made that assumption
+            for reg_ind, reg in enumerate(reg_dict[obs_id]):
+                if isinstance(reg, CircleSkyRegion):
+                    # Multiply radii by two because the ellipse based sources want HEIGHT and WIDTH, not RADIUS
+                    # Give small angle (though won't make a difference as circular) to avoid problems with angle=0
+                    #  that I've noticed previously
+                    new_reg = EllipseSkyRegion(reg.center, reg.radius*2, reg.radius*2, Quantity(3, 'deg'))
+                    new_reg.visual['color'] = reg.visual['color']
+                    reg_dict[obs_id][reg_ind] = new_reg
 
             # Hopefully this bodge doesn't have any unforeseen consequences
             if reg_dict[obs_id][0] is not None:
