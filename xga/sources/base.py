@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 11:48. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 12:09. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -1077,6 +1077,13 @@ class BaseSource:
             dec = reg.center.dec.value
             return np.sqrt(abs(ra - self._ra_dec[0]) ** 2 + abs(dec - self._ra_dec[1]) ** 2)
 
+        # Read in the custom region file that every XGA has associated with it. Sources within will be added to the
+        #  source list for every ObsID?
+        custom_regs = read_ds9(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name))
+        for reg in custom_regs:
+            if not isinstance(reg, SkyRegion):
+                raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
+
         reg_dict = {}
         match_dict = {}
         # As we only allow one set of regions per observation, we shall assume that we can use the
@@ -1116,6 +1123,10 @@ class BaseSource:
             else:
                 # So there is an entry in this for EVERY ObsID
                 reg_dict[obs_id] = np.array([None])
+
+            # Here we add the custom sources to the source list, we know they are sky regions as we have
+            #  already enforced it
+            reg_dict[obs_id] = np.append(reg_dict[obs_id], custom_regs)
 
             # Hopefully this bodge doesn't have any unforeseen consequences
             if reg_dict[obs_id][0] is not None:
