@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/07/2021, 09:36. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 11:47. Copyright (c) David J Turner
 
 
 import os
@@ -178,9 +178,11 @@ class Image(BaseProduct):
 
         :param str new_path: A new region file path.
         """
-        if os.path.exists(new_path):
+        if new_path != '' and os.path.exists(new_path):
             self._reg_file_path = new_path
             self._regions = self._process_regfile(new_path)
+        elif new_path == '':
+            pass
         else:
             warnings.warn("That region file path does not exist")
 
