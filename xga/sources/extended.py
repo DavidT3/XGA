@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 15:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 20:42. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -199,7 +199,7 @@ class GalaxyCluster(ExtendedSource):
                     centre = Quantity([src_reg_obj.center.ra.value, src_reg_obj.center.dec.value], 'deg')
 
                     # At first I set the checking radius to the semimajor axis
-                    rad = Quantity(src_reg_obj.width.value/2, 'deg')
+                    rad = Quantity(src_reg_obj.width.to('deg').value/2, 'deg')
                     # And use my handy method to find which regions intersect with a circle with the semimajor length
                     #  as radius, centred on the centre of the current chosen region
                     within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
@@ -208,7 +208,7 @@ class GalaxyCluster(ExtendedSource):
 
                     # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
                     #  then it would intersect with the ellipse of the current chosen region.
-                    rad = Quantity(src_reg_obj.height.value/2, 'deg')
+                    rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
                     within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
                     within_height = [reg for reg in within_height if reg.visual['color'] == 'green']
 

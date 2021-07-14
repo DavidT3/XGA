@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 13:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 20:42. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -83,7 +83,7 @@ class BaseSource:
             os.makedirs(OUTPUT + "regions/{}".format(self.name))
             # And a start to the custom file itself, with red (pnt src) as the default colour
             with open(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name), 'w') as reggo:
-                reggo.write("global color=red\n")
+                reggo.write("global color=white\n")
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
@@ -1772,8 +1772,9 @@ class BaseSource:
         # This is horrible I know, but it basically generates points on the boundary of each interloper, and then
         #  calculates their distance from the central coordinate. So you end up with an Nx30 (because 30 is
         #  how many points I generate) and N is the number of potential interlopers
-        int_dists = np.array([np.sqrt(np.sum((perimeter_points(r.center.ra.value, r.center.dec.value, r.width.value/2,
-                                                               r.height.value/2, r.angle.to('rad').value)
+        int_dists = np.array([np.sqrt(np.sum((perimeter_points(r.center.ra.value, r.center.dec.value,
+                                                               r.width.to('deg').value/2,
+                                                               r.height.to('deg').value/2, r.angle.to('rad').value)
                                               - deg_central_coord.value) ** 2, axis=1))
                               for r in interloper_regions])
 
@@ -1810,9 +1811,9 @@ class BaseSource:
         conv_cen = im.coord_conv(cen, output_unit)
         # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
         #  from degrees to XMM sky coordinates using the factor we calculated in the main function
-        w = reg.width.value / 2 / sky_to_deg
+        w = reg.width.to('deg').value / 2 / sky_to_deg
         # We do the same for the height
-        h = reg.height.value / 2 / sky_to_deg
+        h = reg.height.to('deg').value / 2 / sky_to_deg
         if w == h:
             shape_str = "(({t}) IN circle({cx},{cy},{r}))"
             shape_str = shape_str.format(t=c_str, cx=conv_cen[0].value, cy=conv_cen[1].value, r=h)
