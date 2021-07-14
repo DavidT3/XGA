@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2021, 10:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 11:48. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -77,6 +77,13 @@ class BaseSource:
         if not os.path.exists(OUTPUT + "profiles/{}/inventory.csv".format(self.name)):
             with open(OUTPUT + "profiles/{}/inventory.csv".format(self.name), 'w') as inven:
                 inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
+
+        # We now create a directory for custom region files for the source to be stored in
+        if not os.path.exists(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name)):
+            os.makedirs(OUTPUT + "regions/{}".format(self.name))
+            # And a start to the custom file itself, with red (pnt src) as the default colour
+            with open(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name), 'w') as reggo:
+                reggo.write("global color=red\n")
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
