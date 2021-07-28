@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/07/2021, 17:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/07/2021, 22:08. Copyright (c) David J Turner
 
 
 from typing import Tuple, List, Union
@@ -200,17 +200,23 @@ def data_limits(im_prod: Union[Image, RateMap, ExpMap, np.ndarray]) -> Tuple[Lis
     return [x_min, x_max], [y_min, y_max]
 
 
-def edge_finder(data: Union[RateMap, ExpMap, np.ndarray], keep_corners: bool = True) -> np.ndarray:
+def edge_finder(data: Union[RateMap, ExpMap, np.ndarray], keep_corners: bool = True,
+                border: bool = False) -> np.ndarray:
     """
     A simple edge finding algorithm designed to locate 'edges' in binary data, or in special cases produce a detector
     map of an instrument using an exposure map. The algorithm takes the difference of one column from the next, over
     the entire array, then does the same with rows. Different difference values indicate where edges are in the array,
     and when added together all edges should be located.
 
+    Depending on how the 'border' option is set, the returned array will either represent the exact edge, or
+    a boundary that is 1 pixel outside the actual edge.
+
     :param RateMap/ExpMap/ndarray data: The 2D array or exposure map to run edge detection on. If an array is
         passed it must only consist of 0s and 1s.
     :param bool keep_corners: Should corner information be kept in the output array. If True then 2s in the
         output will indicate vertices.
+    :param bool border: If True, then the returned array will represent a border running around the boundary of the
+        true edge, rather than the outer boundary of the edge itself.
     :return: An array of 0s and 1s. 1s indicate a detected edge.
     :rtype: np.ndarray
     """
@@ -232,24 +238,40 @@ def edge_finder(data: Union[RateMap, ExpMap, np.ndarray], keep_corners: bool = T
     # Do the diff from top to bottom of the image, the append option adds a line of zeros at the end
     #  otherwise the resulting array would only be N-1 elements 'high'.
     hori_edges = np.diff(dat_map, axis=0, append=0)
-    # A 1 in this array means you're going from no chip to on chip, which means the coordinate where 1
-    # is recorded is offset by 1 from the actual edge of the chip elements of this array.
-    need_corr_y, need_corr_x = np.where(hori_edges == 1)
-    # So that's why we add one to those y coordinates (as this is the vertical pass of np.diff
-    new_y = need_corr_y + 1
-    # Then make sure chip edge = 1, and everything else = 0
-    hori_edges[need_corr_y, need_corr_x] = 0
-    hori_edges[new_y, need_corr_x] = 1
-    # -1 in this means going from chip to not-chip
-    hori_edges[hori_edges == -1] = 1
+
+    if not border:
+        # A 1 in this array means you're going from no chip to on chip, which means the coordinate where 1
+        # is recorded is offset by 1 from the actual edge of the chip elements of this array.
+        need_corr_y, need_corr_x = np.where(hori_edges == 1)
+        # So that's why we add one to those y coordinates (as this is the vertical pass of np.diff
+        new_y = need_corr_y + 1
+        # Then make sure chip edge = 1, and everything else = 0
+        hori_edges[need_corr_y, need_corr_x] = 0
+        hori_edges[new_y, need_corr_x] = 1
+        # -1 in this means going from chip to not-chip
+        hori_edges[hori_edges == -1] = 1
+    else:
+        need_corr_y, need_corr_x = np.where(hori_edges == -1)
+        # So that's why we add one to those y coordinates (as this is the vertical pass of np.diff
+        new_y = need_corr_y + 1
+        # Then make sure chip edge = 1, and everything else = 0
+        hori_edges[need_corr_y, need_corr_x] = 0
+        hori_edges[new_y, need_corr_x] = 1
 
     # The same process is repeated here, but in the x direction, so you're finding vertical edges
     vert_edges = np.diff(dat_map, axis=1, append=0)
-    need_corr_y, need_corr_x = np.where(vert_edges == 1)
-    new_x = need_corr_x + 1
-    vert_edges[need_corr_y, need_corr_x] = 0
-    vert_edges[need_corr_y, new_x] = 1
-    vert_edges[vert_edges == -1] = 1
+
+    if not border:
+        need_corr_y, need_corr_x = np.where(vert_edges == 1)
+        new_x = need_corr_x + 1
+        vert_edges[need_corr_y, need_corr_x] = 0
+        vert_edges[need_corr_y, new_x] = 1
+        vert_edges[vert_edges == -1] = 1
+    else:
+        need_corr_y, need_corr_x = np.where(vert_edges == -1)
+        new_x = need_corr_x + 1
+        vert_edges[need_corr_y, need_corr_x] = 0
+        vert_edges[need_corr_y, new_x] = 1
 
     # Both passes are combined into one, with possible values of 0 (no edge), 1 (edge detected in one pass),
     #  and 2 (edge detected in both pass).
