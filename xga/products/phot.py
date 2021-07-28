@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/07/2021, 12:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/07/2021, 17:02. Copyright (c) David J Turner
 
 
 import os
@@ -899,6 +899,9 @@ class RateMap(Image):
         the ratemap array is only created if the user actually asks for it. Otherwise a lot of time is wasted
         reading in files for individual images and exposure maps that are rarely used.
         """
+        # This helps avoid a circular import issue
+        from ..imagetools.misc import edge_finder
+
         # Divide image by exposure map to get rate map data.
         # Numpy divide lets me specify where we wish to divide, so we don't get any NaN results and divide by
         #  zero warnings
@@ -912,36 +915,10 @@ class RateMap(Image):
         #  The exposure map values calculated on the edge of a CCD can be much smaller than it should be,
         #  which in turn can boost the rate map value there - hence useful to know which elements of an array
         #  are on an edge.
-        det_map = self.expmap.data.copy()
-        # Turn the exposure map into something simpler, either on a detector or not
-        det_map[det_map != 0] = 1
+        comb = edge_finder(self.expmap, keep_corners=True)
 
-        # Do the diff from top to bottom of the image, the append option adds a line of zeros at the end
-        #  otherwise the resulting array would only be N-1 elements 'high'.
-        hori_edges = np.diff(det_map, axis=0, append=0)
-        # A 1 in this array means you're going from no chip to on chip, which means the coordinate where 1
-        # is recorded is offset by 1 from the actual edge of the chip elements of this array.
-        need_corr_y, need_corr_x = np.where(hori_edges == 1)
-        # So that's why we add one to those y coordinates (as this is the vertical pass of np.diff
-        new_y = need_corr_y + 1
-        # Then make sure chip edge = 1, and everything else = 0
-        hori_edges[need_corr_y, need_corr_x] = 0
-        hori_edges[new_y, need_corr_x] = 1
-        # -1 in this means going from chip to not-chip
-        hori_edges[hori_edges == -1] = 1
-
-        # The same process is repeated here, but in the x direction, so you're finding vertical edges
-        vert_edges = np.diff(det_map, axis=1, append=0)
-        need_corr_y, need_corr_x = np.where(vert_edges == 1)
-        new_x = need_corr_x + 1
-        vert_edges[need_corr_y, need_corr_x] = 0
-        vert_edges[need_corr_y, new_x] = 1
-        vert_edges[vert_edges == -1] = 1
-
-        # Both passes are combined into one, with possible values of 0 (no edge), 1 (edge detected in one pass),
-        #  and 2 (edge detected in both pass). Then configure the array to act as a mask that removes the
-        #  edge pixels
-        comb = hori_edges + vert_edges
+        # Possible values of 0 (no edge), 1 (edge detected in one pass), and 2 (edge detected in both pass). Then
+        # configure the array to act as a mask that removes the edge pixels
         comb[comb == 0] = -1
         comb[comb != -1] = False
         comb[comb == -1] = 1
@@ -951,7 +928,9 @@ class RateMap(Image):
 
         # TODO Add another attribute that describes how many sensors a particular pixel falls on for combined
         #  ratemaps
-        self._on_sensor_mask = det_map
+        det_map = self.expmap.data.copy()
+        self._on_sensor_mask = det_map[det_map != 0] = 1
+
         # And another mask for whether on or off the sensor, very simple for individual ObsID-Instrument combos
         # if self._obs_id != "combined":
         #     self._on_sensor_mask = det_map
