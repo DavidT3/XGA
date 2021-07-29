@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 12:52. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/07/2021, 13:02. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -558,7 +558,7 @@ class ScalingRelation:
                         fmt="x", color=data_colour, capsize=2, label=self._name + " Data")
 
         # Need to randomly sample from the fitted model
-        num_rand = 300
+        num_rand = 10000
         model_pars = np.repeat(self._fit_pars[..., None], num_rand, axis=1).T
         model_par_errs = np.repeat(self._fit_par_errs[..., None], num_rand, axis=1).T
 
@@ -897,7 +897,7 @@ class AggregateScalingRelation:
             d_colour = d_out[0].get_color()
 
             # Need to randomly sample from the fitted model
-            num_rand = 300
+            num_rand = 10000
             model_pars = np.repeat(rel.pars[:, 0, None], num_rand, axis=1).T
             model_par_errs = np.repeat(rel.pars[:, 1, None], num_rand, axis=1).T
 

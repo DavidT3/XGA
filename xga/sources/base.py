@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2021, 10:51. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 20:42. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -77,6 +77,13 @@ class BaseSource:
         if not os.path.exists(OUTPUT + "profiles/{}/inventory.csv".format(self.name)):
             with open(OUTPUT + "profiles/{}/inventory.csv".format(self.name), 'w') as inven:
                 inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
+
+        # We now create a directory for custom region files for the source to be stored in
+        if not os.path.exists(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name)):
+            os.makedirs(OUTPUT + "regions/{}".format(self.name))
+            # And a start to the custom file itself, with red (pnt src) as the default colour
+            with open(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name), 'w') as reggo:
+                reggo.write("global color=white\n")
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
@@ -1070,6 +1077,13 @@ class BaseSource:
             dec = reg.center.dec.value
             return np.sqrt(abs(ra - self._ra_dec[0]) ** 2 + abs(dec - self._ra_dec[1]) ** 2)
 
+        # Read in the custom region file that every XGA has associated with it. Sources within will be added to the
+        #  source list for every ObsID?
+        custom_regs = read_ds9(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name))
+        for reg in custom_regs:
+            if not isinstance(reg, SkyRegion):
+                raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
+
         reg_dict = {}
         match_dict = {}
         # As we only allow one set of regions per observation, we shall assume that we can use the
@@ -1109,6 +1123,21 @@ class BaseSource:
             else:
                 # So there is an entry in this for EVERY ObsID
                 reg_dict[obs_id] = np.array([None])
+
+            # Here we add the custom sources to the source list, we know they are sky regions as we have
+            #  already enforced it
+            reg_dict[obs_id] = np.append(reg_dict[obs_id], custom_regs)
+
+            # I'm going to ensure that all regions are elliptical, I don't want to hunt through every place in XGA
+            #  where I made that assumption
+            for reg_ind, reg in enumerate(reg_dict[obs_id]):
+                if isinstance(reg, CircleSkyRegion):
+                    # Multiply radii by two because the ellipse based sources want HEIGHT and WIDTH, not RADIUS
+                    # Give small angle (though won't make a difference as circular) to avoid problems with angle=0
+                    #  that I've noticed previously
+                    new_reg = EllipseSkyRegion(reg.center, reg.radius*2, reg.radius*2, Quantity(3, 'deg'))
+                    new_reg.visual['color'] = reg.visual['color']
+                    reg_dict[obs_id][reg_ind] = new_reg
 
             # Hopefully this bodge doesn't have any unforeseen consequences
             if reg_dict[obs_id][0] is not None:
@@ -1485,7 +1514,7 @@ class BaseSource:
 
                     # If the rotation angle is zero then the conversion to mask by the regions module will be upset,
                     #  so I perturb the angle by 0.1 degrees
-                    if pr.angle.value == 0:
+                    if isinstance(pr, EllipsePixelRegion) and pr.angle.value == 0:
                         pr.angle += Quantity(0.1, 'deg')
                     masks.append(pr.to_mask().to_image(mask_image.shape))
                 except ValueError:
@@ -1743,8 +1772,9 @@ class BaseSource:
         # This is horrible I know, but it basically generates points on the boundary of each interloper, and then
         #  calculates their distance from the central coordinate. So you end up with an Nx30 (because 30 is
         #  how many points I generate) and N is the number of potential interlopers
-        int_dists = np.array([np.sqrt(np.sum((perimeter_points(r.center.ra.value, r.center.dec.value, r.width.value/2,
-                                                               r.height.value/2, r.angle.to('rad').value)
+        int_dists = np.array([np.sqrt(np.sum((perimeter_points(r.center.ra.value, r.center.dec.value,
+                                                               r.width.to('deg').value/2,
+                                                               r.height.to('deg').value/2, r.angle.to('rad').value)
                                               - deg_central_coord.value) ** 2, axis=1))
                               for r in interloper_regions])
 
@@ -1781,9 +1811,9 @@ class BaseSource:
         conv_cen = im.coord_conv(cen, output_unit)
         # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
         #  from degrees to XMM sky coordinates using the factor we calculated in the main function
-        w = reg.width.value / 2 / sky_to_deg
+        w = reg.width.to('deg').value / 2 / sky_to_deg
         # We do the same for the height
-        h = reg.height.value / 2 / sky_to_deg
+        h = reg.height.to('deg').value / 2 / sky_to_deg
         if w == h:
             shape_str = "(({t}) IN circle({cx},{cy},{r}))"
             shape_str = shape_str.format(t=c_str, cx=conv_cen[0].value, cy=conv_cen[1].value, r=h)

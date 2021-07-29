@@ -1,7 +1,8 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2021, 15:03. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/07/2021, 17:02. Copyright (c) David J Turner
 
 
+import os
 import warnings
 from typing import Tuple, List, Union
 
@@ -13,6 +14,7 @@ from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle
+from regions import read_ds9, PixelRegion
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
@@ -29,7 +31,7 @@ class Image(BaseProduct):
     a powerful view method).
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity):
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, reg_file_path: str = ''):
         """
         The initialisation method for the Image class.
 
@@ -39,6 +41,7 @@ class Image(BaseProduct):
         :param str gen_cmd: The command used to generate the product.
         :param Quantity lo_en: The lower energy bound used to generate this product.
         :param Quantity hi_en: The upper energy bound used to generate this product.
+        :param str reg_file_path: Path to a region file for this image.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._shape = None
@@ -58,6 +61,18 @@ class Image(BaseProduct):
         self._psf_num_bins = None
         self._psf_num_iterations = None
         self._psf_model = None
+
+        # This checks whether a region file has been passed, and if it has then processes it
+        if reg_file_path != '' and os.path.exists(reg_file_path):
+            self._regions = self._process_regfile(reg_file_path)
+            self._reg_file_path = reg_file_path
+        elif reg_file_path != '' and not os.path.exists(reg_file_path):
+            warnings.warn("That region file path does not exist")
+            self._regions = []
+            self._reg_file_path = reg_file_path
+        else:
+            self._regions = []
+            self._reg_file_path = ''
 
     def _read_on_demand(self):
         """
@@ -125,6 +140,51 @@ class Image(BaseProduct):
         if self._wcs_radec is None:
             raise FailedProductError("SAS has generated this image without a WCS capable of "
                                      "going from pixels to RA-DEC.")
+
+    def _process_regfile(self, path: str) -> List[PixelRegion]:
+        """
+        This internal function just takes the path to a region file and processes it into a form that
+        this object requires for viewing.
+
+        :param str path: The path to the region file to be processed
+        :return: A list of pixel regions.
+        :rtype: List[PixelRegion]
+        """
+        ds9_regs = read_ds9(path)
+        final_regs = []
+        for reg in ds9_regs:
+            if isinstance(reg, PixelRegion):
+                final_regs.append(reg)
+            else:
+                final_regs.append(reg.to_pixel(self._wcs_radec))
+
+        return final_regs
+
+    @property
+    def regions(self) -> List[PixelRegion]:
+        """
+        Property getter for regions associated with this image.
+
+        :return: Returns a list of regions, if they have been associated with this object.
+        :rtype: List[PixelRegion]
+        """
+        return self._regions
+
+    @regions.setter
+    def regions(self, new_path: str):
+        """
+        A setter for regions associated with this object, a region file path is passed, then that file
+        is processed into the required format.
+
+        :param str new_path: A new region file path.
+        """
+        if new_path != '' and os.path.exists(new_path):
+            self._reg_file_path = new_path
+            self._regions = self._process_regfile(new_path)
+        elif new_path == '':
+            pass
+        else:
+            warnings.warn("That region file path does not exist")
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -526,14 +586,16 @@ class Image(BaseProduct):
                  chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, zoom_in: bool = False,
                  manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
                  radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
-                 stretch: BaseStretch = LogStretch(), mask_edges: bool = True) -> Axes:
+                 stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
+                 ch_thickness: float = 0.8) -> Axes:
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
 
         :param Axes ax: The matplotlib axes on which to show the image.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
-            the coordinates.
+            the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
+            passing two, each row of a quantity is considered to be a separate coordinate pair.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
             data if they so choose.
         :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
@@ -550,13 +612,17 @@ class Image(BaseProduct):
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified.
+            only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
         :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
             the background value for a given profile, will only be triggered if a cross_hair coordinate is
-            also specified.
+            also specified and contains only one coordinate.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
+        :param bool view_regions: If regions have been associated with this object (either on init or using
+            the 'regions' property setter, should they be displayed. Default is False.
+        :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
+            certain circumstances. Default is 0.8.
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
         """
@@ -585,8 +651,14 @@ class Image(BaseProduct):
         else:
             ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
 
-        title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident, l=self._energy_bounds[0].to("keV").value,
-                                                  u=self._energy_bounds[1].to("keV").value, t=self.type)
+        if self.src_name is not None:
+            title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident,
+                                                      l=self._energy_bounds[0].to("keV").value,
+                                                      u=self._energy_bounds[1].to("keV").value, t=self.type)
+        else:
+            title = "{i} {l}-{u}keV {t}".format(i=ident, l=self._energy_bounds[0].to("keV").value,
+                                                u=self._energy_bounds[1].to("keV").value, t=self.type)
+
         # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
         if self.psf_corrected:
             title += ' - PSF Corrected'
@@ -598,7 +670,9 @@ class Image(BaseProduct):
         norm = ImageNormalize(data=plot_data, interval=MinMaxInterval(), stretch=stretch)
         # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
 
+        # If we want to plot point clusters on the image, then we go here
         if chosen_points is not None:
+            # Add the point cluster points
             ax.plot(chosen_points[:, 0], chosen_points[:, 1], '+', color='black', label="Chosen Point Cluster")
             ax.legend(loc="best")
 
@@ -606,25 +680,65 @@ class Image(BaseProduct):
             for cl in other_points:
                 ax.plot(cl[:, 0], cl[:, 1], 'D')
 
+        # If we want a cross hair, then we put one on here
         if cross_hair is not None:
-            pix_coord = self.coord_conv(cross_hair, pix).value
-            ax.axvline(pix_coord[0], color="white", linewidth=0.8)
-            ax.axhline(pix_coord[1], color="white", linewidth=0.8)
+            # For the case of a single coordinate
+            if cross_hair.shape == (2,):
+                # Converts from whatever input coordinate to pixels
+                pix_coord = self.coord_conv(cross_hair, pix).value
+                # Drawing the horizontal and vertical lines
+                ax.axvline(pix_coord[0], color="white", linewidth=ch_thickness)
+                ax.axhline(pix_coord[1], color="white", linewidth=ch_thickness)
 
-            for ann_rad in radial_bins_pix:
-                artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1.5)
-                ax.add_artist(artist)
+                # Drawing annular radii on the image, if they are enabled and passed. Only works with a
+                #  single coordinate, otherwise we wouldn't know which to centre on
+                for ann_rad in radial_bins_pix:
+                    artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1.5)
+                    ax.add_artist(artist)
 
-            if back_bin_pix is not None:
-                inn_artist = Circle(pix_coord, back_bin_pix[0], fill=False, ec='white', linewidth=1.6,
-                                    linestyle='dashed')
-                out_artist = Circle(pix_coord, back_bin_pix[1], fill=False, ec='white', linewidth=1.6,
-                                    linestyle='dashed')
-                ax.add_artist(inn_artist)
-                ax.add_artist(out_artist)
+                # This draws the background region on as well, if present
+                if back_bin_pix is not None:
+                    inn_artist = Circle(pix_coord, back_bin_pix[0], fill=False, ec='white', linewidth=1.6,
+                                        linestyle='dashed')
+                    out_artist = Circle(pix_coord, back_bin_pix[1], fill=False, ec='white', linewidth=1.6,
+                                        linestyle='dashed')
+                    ax.add_artist(inn_artist)
+                    ax.add_artist(out_artist)
 
+            # For the case of two coordinate pairs
+            elif cross_hair.shape == (2, 2):
+                # Converts from whatever input coordinate to pixels
+                pix_coord = self.coord_conv(cross_hair, pix).value
+
+                # This draws the first crosshair
+                ax.axvline(pix_coord[0, 0], color="white", linewidth=ch_thickness)
+                ax.axhline(pix_coord[0, 1], color="white", linewidth=ch_thickness)
+
+                # And this the second
+                ax.axvline(pix_coord[1, 0], color="white", linewidth=ch_thickness, linestyle='dashed')
+                ax.axhline(pix_coord[1, 1], color="white", linewidth=ch_thickness, linestyle='dashed')
+
+            else:
+                # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
+                #  it isn't essential so I'll just display a warning
+                warnings.warn("You have passed a cross_hair quantity that has more than two coordinate "
+                              "pairs in it, or is otherwise the wrong shape.")
+
+        # Adds the actual image to the axis.
         ax.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
 
+        # If the user wants regions on the image, this is where they get added
+        if view_regions:
+            # We can just loop through the _regions attribute because its default is an empty
+            #  list, so no need to check
+            for reg in self._regions:
+                # Use the regions module conversion method to go to a matplotlib artist
+                reg_art = reg.as_artist()
+                # Set line thickness and add to the axes
+                reg_art.set_linewidth(1.4)
+                ax.add_artist(reg_art)
+
+        # This sets the limits of the figure depending on the options that have been passed in
         if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is None:
             # I don't like doing local imports, but this is the easiest way
             from xga.imagetools import data_limits
@@ -645,13 +759,15 @@ class Image(BaseProduct):
              other_points: List[np.ndarray] = None, figsize: Tuple = (10, 8), zoom_in: bool = False,
              manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
              radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
-             stretch: BaseStretch = LogStretch(), mask_edges: bool = True):
+             stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
+             ch_thickness: float = 0.8):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
 
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
-            the coordinates.
+            the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
+            passing two, each row of a quantity is considered to be a separate coordinate pair.
         :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
             data if they so choose.
         :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
@@ -669,13 +785,17 @@ class Image(BaseProduct):
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified.
+            only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
         :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
             the background value for a given profile, will only be triggered if a cross_hair coordinate is
-            also specified.
+            also specified and contains only one coordinate.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
+        :param bool view_regions: If regions have been associated with this object (either on init or using
+            the 'regions' property setter, should they be displayed. Default is False.
+        :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
+            certain circumstances. Default is 0.8.
         """
 
         # Create figure object
@@ -685,7 +805,8 @@ class Image(BaseProduct):
         ax = plt.gca()
 
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
-                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges)
+                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
+                           ch_thickness)
         plt.colorbar(ax.images[0])
         plt.tight_layout()
         # Display the image
@@ -723,7 +844,15 @@ class RateMap(Image):
     A very powerful class which allows interactions with 'RateMaps', though these are not directly generated by
     SAS, they are images divided by matching exposure maps, to provide a count rate image.
     """
-    def __init__(self, xga_image: Image, xga_expmap: ExpMap):
+    def __init__(self, xga_image: Image, xga_expmap: ExpMap, reg_file_path: str = ''):
+        """
+        This initialises a RateMap instance, where a count-rate image is divided by an exposure map, to create a map
+        of X-ray counts.
+
+        :param Image xga_image: The image component of the RateMap.
+        :param ExpMap xga_expmap: The exposure map component of the RateMap.
+        :param str reg_file_path:
+        """
         if type(xga_image) != Image or type(xga_expmap) != ExpMap:
             raise TypeError("xga_image must be an XGA Image object, and xga_expmap must be an "
                             "XGA ExpMap object.")
@@ -761,12 +890,18 @@ class RateMap(Image):
         self._edge_mask = None
         self._on_sensor_mask = None
 
+        # Don't have to do any checks, they'll be done for me in the image object.
+        self._im_obj.regions = reg_file_path
+
     def _construct_on_demand(self):
         """
         This method is complimentary to the _read_on_demand method of the base Image class, and ensures that
         the ratemap array is only created if the user actually asks for it. Otherwise a lot of time is wasted
         reading in files for individual images and exposure maps that are rarely used.
         """
+        # This helps avoid a circular import issue
+        from ..imagetools.misc import edge_finder
+
         # Divide image by exposure map to get rate map data.
         # Numpy divide lets me specify where we wish to divide, so we don't get any NaN results and divide by
         #  zero warnings
@@ -780,36 +915,10 @@ class RateMap(Image):
         #  The exposure map values calculated on the edge of a CCD can be much smaller than it should be,
         #  which in turn can boost the rate map value there - hence useful to know which elements of an array
         #  are on an edge.
-        det_map = self.expmap.data.copy()
-        # Turn the exposure map into something simpler, either on a detector or not
-        det_map[det_map != 0] = 1
+        comb = edge_finder(self.expmap, keep_corners=True)
 
-        # Do the diff from top to bottom of the image, the append option adds a line of zeros at the end
-        #  otherwise the resulting array would only be N-1 elements 'high'.
-        hori_edges = np.diff(det_map, axis=0, append=0)
-        # A 1 in this array means you're going from no chip to on chip, which means the coordinate where 1
-        # is recorded is offset by 1 from the actual edge of the chip elements of this array.
-        need_corr_y, need_corr_x = np.where(hori_edges == 1)
-        # So that's why we add one to those y coordinates (as this is the vertical pass of np.diff
-        new_y = need_corr_y + 1
-        # Then make sure chip edge = 1, and everything else = 0
-        hori_edges[need_corr_y, need_corr_x] = 0
-        hori_edges[new_y, need_corr_x] = 1
-        # -1 in this means going from chip to not-chip
-        hori_edges[hori_edges == -1] = 1
-
-        # The same process is repeated here, but in the x direction, so you're finding vertical edges
-        vert_edges = np.diff(det_map, axis=1, append=0)
-        need_corr_y, need_corr_x = np.where(vert_edges == 1)
-        new_x = need_corr_x + 1
-        vert_edges[need_corr_y, need_corr_x] = 0
-        vert_edges[need_corr_y, new_x] = 1
-        vert_edges[vert_edges == -1] = 1
-
-        # Both passes are combined into one, with possible values of 0 (no edge), 1 (edge detected in one pass),
-        #  and 2 (edge detected in both pass). Then configure the array to act as a mask that removes the
-        #  edge pixels
-        comb = hori_edges + vert_edges
+        # Possible values of 0 (no edge), 1 (edge detected in one pass), and 2 (edge detected in both pass). Then
+        # configure the array to act as a mask that removes the edge pixels
         comb[comb == 0] = -1
         comb[comb != -1] = False
         comb[comb == -1] = 1
@@ -819,7 +928,9 @@ class RateMap(Image):
 
         # TODO Add another attribute that describes how many sensors a particular pixel falls on for combined
         #  ratemaps
-        self._on_sensor_mask = det_map
+        det_map = self.expmap.data.copy()
+        self._on_sensor_mask = det_map[det_map != 0] = 1
+
         # And another mask for whether on or off the sensor, very simple for individual ObsID-Instrument combos
         # if self._obs_id != "combined":
         #     self._on_sensor_mask = det_map
@@ -907,7 +1018,7 @@ class RateMap(Image):
         if out_unit != pix:
             peak_conv = self.coord_conv(peak_pix, out_unit)
         else:
-            peak_conv = peak_pix
+            peak_conv = peak_pix.astype(int)
 
         # Find if the peak coordinates sit near an edge/chip gap
         edge_flag = self.near_edge(peak_pix)
