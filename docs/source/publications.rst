@@ -1,5 +1,5 @@
-Publications that have made use of XGA
-======================================
+XGA Publications
+================
 
 .. csv-table:: Publication Information
    :file: publications.csv
