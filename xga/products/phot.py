@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/07/2021, 11:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/07/2021, 13:43. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -581,6 +581,59 @@ class Image(BaseProduct):
             raise NotPSFCorrectedError("You are trying to set the PSF model for an Image that hasn't "
                                        "been PSF corrected.")
 
+    def get_count(self, at_coord: Quantity) -> float:
+        """
+        A simple method that converts the given coordinates to pixels, then finds the number of counts
+        at those coordinates.
+
+        :param Quantity at_coord: Coordinate at which to find the number of counts.
+        :return: The counts at the supplied coordinates.
+        :rtype: Quantity
+        """
+        pix_coord = self.coord_conv(at_coord, pix).value
+        cts = self.data[pix_coord[1], pix_coord[0]]
+        return Quantity(cts, "ct")
+
+    def simple_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg) -> Tuple[Quantity, bool]:
+        """
+        Simplest possible way to find the position of the peak of X-ray emission in an Image. This method
+        takes a mask in the form of a numpy array, which allows the user to mask out parts of the ratemap
+        that shouldn't be searched (outside of a certain region, or within point sources for instance).
+
+        Results from this can be less valid than the RateMap implementation (especially if the object you care
+        about is off-axis), as that takes into account vignetting corrected exposure times.
+
+        :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
+            aren't to be searched, and 1 for those that are.
+        :param UnitBase/str out_unit: The desired output unit of the peak coordinates, the default is degrees.
+        :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
+            the user's mask), in units of out_unit, as specified by the user. A null value is also returned in
+            place of the boolean flag describing whether the coordinates are near an edge or not that RateMap returns.
+        :rtype: Tuple[Quantity, None]
+        """
+        # The code is essentially identical to that in simple_peak in RateMap, but I'm tired and can't be bothered
+        #  to do this properly so I'll just copy it over
+        if mask.shape != self.data.shape:
+            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
+                             "({1}).".format(mask.shape, self.data.shape))
+
+        # Creates the data array that we'll be searching. Takes into account the passed mask
+        masked_data = self.data * mask
+
+        # Uses argmax to find the flattened coordinate of the max value, then unravel_index to convert
+        #  it back to a 2D coordinate
+        max_coords = np.unravel_index(np.argmax(masked_data == masked_data.max()), masked_data.shape)
+        # Defines an astropy pix quantity of the peak coordinates
+        peak_pix = Quantity([max_coords[1], max_coords[0]], pix)
+        # Don't bother converting if the desired output coordinates are already pix, but otherwise use this
+        #  objects coord_conv function to move to desired coordinate units.
+        if out_unit != pix:
+            peak_conv = self.coord_conv(peak_pix, out_unit)
+        else:
+            peak_conv = peak_pix.astype(int)
+
+        return peak_conv, None
+
     def get_view(self, ax: Axes, cross_hair: Quantity = None, mask: np.ndarray = None,
                  chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, zoom_in: bool = False,
                  manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
@@ -837,6 +890,12 @@ class ExpMap(Image):
         exp = self.data[pix_coord[1], pix_coord[0]]
         return Quantity(exp, "s")
 
+    def get_count(self, *args, **kwargs):
+        """
+        Inherited method from Image superclass, disabled as does not make sense in an exposure map.
+        """
+        pass
+
 
 class RateMap(Image):
     """
@@ -984,7 +1043,33 @@ class RateMap(Image):
         rate = self.data[pix_coord[1], pix_coord[0]]
         return Quantity(rate, "ct/s^-1")
 
-    def simple_peak(self, mask: np.ndarray, out_unit: UnitBase = deg) -> Tuple[Quantity, bool]:
+    def get_count(self, at_coord: Quantity) -> float:
+        """
+        A simple method that converts the given coordinates to pixels, then finds the number of counts
+        at those coordinates.
+
+        :param Quantity at_coord: Coordinate at which to find the number of counts.
+        :return: The counts at the supplied coordinates.
+        :rtype: Quantity
+        """
+        pix_coord = self.coord_conv(at_coord, pix).value
+        cts = self.image.data[pix_coord[1], pix_coord[0]]
+        return Quantity(cts, "ct")
+
+    def get_exp(self, at_coord: Quantity) -> float:
+        """
+        A simple method that converts the given coordinates to pixels, then finds the exposure time
+        at those coordinates.
+
+        :param Quantity at_coord: A pair of coordinates to find the exposure time for.
+        :return: The exposure time at the supplied coordinates.
+        :rtype: Quantity
+        """
+        pix_coord = self.coord_conv(at_coord, pix).value
+        exp = self.expmap.data[pix_coord[1], pix_coord[0]]
+        return Quantity(exp, "s")
+
+    def simple_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg) -> Tuple[Quantity, bool]:
         """
         Simplest possible way to find the position of the peak of X-ray emission in a ratemap. This method
         takes a mask in the form of a numpy array, which allows the user to mask out parts of the ratemap
@@ -992,7 +1077,7 @@ class RateMap(Image):
 
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
             aren't to be searched, and 1 for those that are.
-        :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
+        :param UnitBase/str out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
             the user's mask), in units of out_unit, as specified by the user. Also returned is a boolean flag
             that tells the caller if the peak is near a chip edge.
@@ -1024,7 +1109,7 @@ class RateMap(Image):
 
         return peak_conv, edge_flag
 
-    def clustering_peak(self, mask: np.ndarray, out_unit: UnitBase = deg, top_frac: float = 0.05,
+    def clustering_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg, top_frac: float = 0.05,
                         max_dist: float = 5, clean_point_clusters: bool = False) \
             -> Tuple[Quantity, bool, np.ndarray, List[np.ndarray]]:
         """
@@ -1037,7 +1122,7 @@ class RateMap(Image):
 
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
             aren't to be searched, and 1 for those that are.
-        :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
+        :param UnitBase/str out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :param float top_frac: The fraction of the elements (ordered in descending value) that should be used
             to generate clusters, and thus be considered for the cluster centre.
         :param float max_dist: The maximum distance criterion for the hierarchical clustering algorithm, in pixels.
