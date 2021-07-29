@@ -9,7 +9,7 @@ XGA Publications
      - Year
      - DOI
      - NASA/ADS
-   * - 'D. J. Turner <https://orcid.org/0000-0001-9658-1396>'_
+   * - `D. J. Turner <https://orcid.org/0000-0001-9658-1396>`_
      - In Prep
      -
      -
