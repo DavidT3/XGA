@@ -1,17 +1,60 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/07/2021, 10:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/07/2021, 17:16. Copyright (c) David J Turner
 
 from warnings import warn
 
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
 from tqdm import tqdm
 
-from ..imagetools.misc import edge_finder
+from ..imagetools.misc import edge_finder, data_limits
 from ..products import RateMap
 
 CONT_BIN_METRICS = ['counts', 'snr']
 MAX_VAL_UNITS = ['ct', '']
+
+
+def _fill_reg_mask(outline_mask: np.ndarray) -> np.ndarray:
+    """
+
+
+    :param np.ndarray outline_mask:
+    :return:
+    :rtype: np.ndarray
+    """
+
+    raise NotImplementedError("This idea is still under development")
+
+    all_x = np.arange(0, outline_mask.shape[1])
+    x_lims, y_lims = data_limits(outline_mask)
+
+    plt.figure(figsize=(10, 10))
+    plt.imshow(outline_mask, origin='lower', cmap='gray')
+    plt.xlim(x_lims)
+    plt.ylim(y_lims)
+    plt.show()
+
+    filled_mask = np.zeros(outline_mask.shape)
+    for y in range(y_lims[0], y_lims[1]+1):
+        x_bnds = np.where(outline_mask[y, :] == 1)[0]
+
+        if len(x_bnds) == 0:
+            continue
+        elif len(x_bnds) == 1:
+            filled_line = x_bnds[0]
+        else:
+            filled_line = np.where((all_x >= x_bnds.min()) & (all_x <= x_bnds.max()))
+
+        filled_mask[y, filled_line] = 1
+
+    plt.figure(figsize=(10, 10))
+    plt.imshow(filled_mask, origin='lower', cmap='gray')
+    plt.xlim(x_lims)
+    plt.ylim(y_lims)
+    plt.show()
+    import sys
+    sys.exit()
 
 
 def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.ndarray = None,
@@ -183,11 +226,42 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
                     # Then we update the total number of counts
                     tot_cnts += cnts
 
-                # We've broken out of the inner while loop, for one reason or another, and now can consider
-                #  that last contour bin to be finished, so we store it in the all_masks list
-                all_masks.append(cur_mask)
-                # And variable indicating whether we reached the maximum value is also stored
-                reached_max.append(max_val_reached)
+                # We have to do a check here that the mask doesn't just have one point (can happen in
+                #  un-smoothed ratemaps), and stop it from being the brightest pixel for another mask
+                if cur_mask.sum() != 1:
+                    # And variable indicating whether we reached the maximum value is also stored
+                    reached_max.append(max_val_reached)
+
+                    # Here I try and do something a little clever, but only really applicable to when this is applied
+                    #  to un-smoothed images. If there are single pixels of the current region mask that are zero
+                    #  valued and completely surrounded by ones, then this will fill them in
+                    # First find the limits in x and y where there is mask data (to save checking the whole array)
+                    x_lims, y_lims = data_limits(cur_mask)
+
+                    # Then make array representations of the y and x coordinates of the mask array
+                    row_inds, col_inds = np.indices(cur_mask.shape)
+                    # Find points in the mask that are within the approximate x and y lims, and have a value of zero.
+                    yp, xp = np.where((row_inds < y_lims[1]) & (row_inds > y_lims[0]) & (col_inds < x_lims[1]) &
+                                      (col_inds > x_lims[0]) & (cur_mask == 0))
+
+                    # Convert the results of np.where back into the coordinate system of the mask, we now have a list
+                    #  of coordinates to check further (split into separate x (cp) and y (rp) arrays
+                    rp, cp = row_inds[yp, xp], col_inds[yp, xp]
+
+                    # Then we go looking for which of those zero valued points is surrounded by values of one, in
+                    #  the mask. Should be relatively easy to see whats happening here
+                    dots = np.where((cur_mask[rp+1, cp] == 1) & (cur_mask[rp-1, cp] == 1) & (cur_mask[rp, cp+1] == 1)
+                                    & (cur_mask[rp, cp-1] == 1))
+
+                    # Then those points in the mask we've identified are set to one
+                    cur_mask[rp[dots], cp[dots]] = 1
+
+                    # We've broken out of the inner while loop, for one reason or another, and now can consider
+                    #  that last contour bin to be finished, so we store it in the all_masks list
+                    all_masks.append(cur_mask)
+
+                else:
+                    pass
 
                 # Here we invert the mask so it can be added to the no_go array. Elements that are 1 (indicating
                 #  that they are a part of the current contour bin) are switched to zero so that future contour bins
