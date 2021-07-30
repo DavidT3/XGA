@@ -1,7 +1,6 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/07/2021, 15:59. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/07/2021, 10:29. Copyright (c) David J Turner
 
-from typing import Union
 from warnings import warn
 
 import numpy as np
@@ -9,13 +8,13 @@ from astropy.units import Quantity, UnitConversionError
 from tqdm import tqdm
 
 from ..imagetools.misc import edge_finder
-from ..products import Image, RateMap
+from ..products import RateMap
 
 CONT_BIN_METRICS = ['counts', 'snr']
 MAX_VAL_UNITS = ['ct', '']
 
 
-def contour_bin_masks(prod: Union[Image, RateMap], src_mask: np.ndarray = None, bck_mask: np.ndarray = None,
+def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.ndarray = None,
                       start_pos: Quantity = None, max_masks: int = 20, metric: str = 'counts',
                       max_val: Quantity = Quantity(1000, 'ct')) -> np.ndarray:
     """
@@ -30,7 +29,10 @@ def contour_bin_masks(prod: Union[Image, RateMap], src_mask: np.ndarray = None, 
       * 'counts' - Stop adding to bin when total background subtracted counts are over max_val
       * 'snr' - Stop adding to bin when signal to noise is over max_val.
 
-    :param Image/RateMap prod: The image or ratemap to apply the contour binning process to.
+    This function cannot be used on Images as they lack the exposure map information necessary to define the area of
+    the the regions.
+
+    :param RateMap prod: The ratemap to apply the contour binning process to.
     :param np.ndarray src_mask: A mask that removes emission from regions not associated with the source you're
         analysing, including removing interloper sources. Default is None, in which case no mask will be applied.
     :param np.ndarray bck_mask: A mask defining the background region. Default is None in which case no background
@@ -58,19 +60,40 @@ def contour_bin_masks(prod: Union[Image, RateMap], src_mask: np.ndarray = None, 
 
     # We use type here rather than isinstance because ExpMaps are also a subclass of Image, so would get through
     #  that check
-    if type(prod) != Image and type(prod) != RateMap:
-        raise TypeError("Only XGA Image and RateMap products can be binned with this function.")
+    if type(prod) != RateMap:
+        raise TypeError("Only XGA RateMap products can be binned with this function.")
 
     # I do warn the user in this case, because it seems like a strange choice
     if src_mask is None and bck_mask is None:
         warn("You have not passed a src or bck mask, the whole image will be binned and no background subtraction "
              "will be applied")
 
-    # If the mask parameters are None, we assemble an array of ones, to allow all pixels to be considered
+    # If the src mask parameter is None, we assemble an array of ones, to allow all pixels to be considered
     if src_mask is None:
         src_mask = np.full(prod.shape, 1)
-    if bck_mask is None:
-        bck_mask = np.full(prod.shape, 1)
+
+    # If the background mask is None then the user doesn't wish to take background into
+    #  account, otherwise we measure a background level and create a background map
+    if bck_mask is not None:
+        # I don't know if this is the correct way to go about this, it'll be split off into its own entry in
+        #  imagetools anyway I think, but this will do for now
+        im_bck_dat = prod.image.data.copy() * bck_mask
+        ex_bck_dat = prod.expmap.data.copy() * bck_mask
+
+        # bck_rt = Quantity(im_bck_dat.sum()/ex_bck_dat.sum(), 'ct/s')
+        #
+        # print(bck_rt)
+        # area = Quantity((bck_mask*prod.sensor_mask).sum(), 'pix^2')
+        # bck_rt_per_pix = bck_rt / area
+        #
+        # print(bck_rt_per_pix)
+
+        # Not sure about this at all, but it'll do for now
+        bck_rt_per_pix = im_bck_dat.sum() / ex_bck_dat.sum()
+        # A map of the background COUNTS at each pixel
+        bck_cnt_map = Quantity(prod.expmap.data.copy() * bck_rt_per_pix, 'ct')
+    else:
+        bck_cnt_map = Quantity(np.zeros(prod.shape), 'ct')
 
     # If the user hasn't supplied us with somewhere to start, we just select the brightest pixel
     #  remaining after masking, just using the Image or RateMap simple peak method
@@ -99,11 +122,7 @@ def contour_bin_masks(prod: Union[Image, RateMap], src_mask: np.ndarray = None, 
     # The various product type and metric combinations
     # There are many while loops in this process and they make me sad, but we don't know a priori how
     #  many bins there will be when we're done
-    if type(prod) == Image and metric == 'counts':
-        raise NotImplementedError("The method for images has not been implemented yet")
-    elif type(prod) == Image and metric == 'snr':
-        raise NotImplementedError("The method for images has not been implemented yet")
-    elif type(prod) == RateMap and metric == 'counts':
+    if metric == 'counts':
 
         # Here we create a total mask where all previously claimed parts of the image are marked
         #  off. As bins are laid down this will be slowly blocked off, but it starts as all ones
@@ -116,8 +135,16 @@ def contour_bin_masks(prod: Union[Image, RateMap], src_mask: np.ndarray = None, 
                 # We already know where we're starting, so that is the first point included in the mask
                 cur_mask[cur_bin_sp[0], cur_bin_sp[1]] = 1
 
-                # For this count based metric, this is were the total counts is totted up
-                tot_cnts = prod.get_count(Quantity([cur_bin_sp[1], cur_bin_sp[0]], 'pix'))
+                # Fetch the counts in the start pixel
+                start_cnt = prod.get_count(Quantity([cur_bin_sp[1], cur_bin_sp[0]], 'pix'))
+                # Fetch the background counts in the start pixel
+                start_bck_cnt = bck_cnt_map[cur_bin_sp[0], cur_bin_sp[1]]
+                start_bck_cnt = Quantity(20, 'ct')
+
+                # For this count based metric, this is were the total counts is totted up. We make sure that it can't
+                #  go below zero
+                tot_cnts = Quantity([start_cnt-start_bck_cnt, Quantity(0, 'ct')]).max()
+
                 # Did this go all the way through the loop to the max val?
                 max_val_reached = True
 
@@ -140,15 +167,21 @@ def contour_bin_masks(prod: Union[Image, RateMap], src_mask: np.ndarray = None, 
                         break
 
                     # Now we know there is still data to add to the bin, we can find the point with the
-                    #  maximum value at least in the parts of the image/ratemap we're allowed to look in
+                    #  maximum value at least in the parts of the image/ratemap we're allowed to look in. The
+                    #  background isn't taken into account here because my current implementation calculates a
+                    #  single background countrate, its only relevant when finding the absolute counts in a pixel
                     cur_bin_sp = np.unravel_index(np.argmax(allowed_data), prod_dat.shape)
                     # That position in the current contour bin mask is then set to 1, to indicate its a part
                     #  of this contour bin now
                     cur_mask[cur_bin_sp[0], cur_bin_sp[1]] = 1
 
+                    cur_cnt = prod.get_count(Quantity([cur_bin_sp[1], cur_bin_sp[0]], 'pix'))
+                    cur_bck_cnt = bck_cnt_map[cur_bin_sp[0], cur_bin_sp[1]]
+                    # We make sure that it can't go below zero
+                    cnts = Quantity([cur_cnt-cur_bck_cnt, Quantity(0, 'ct')]).max()
+
                     # Then we update the total number of counts
-                    cts = prod.get_count(Quantity([cur_bin_sp[1], cur_bin_sp[0]], 'pix'))
-                    tot_cnts += cts
+                    tot_cnts += cnts
 
                 # We've broken out of the inner while loop, for one reason or another, and now can consider
                 #  that last contour bin to be finished, so we store it in the all_masks list
@@ -172,6 +205,9 @@ def contour_bin_masks(prod: Union[Image, RateMap], src_mask: np.ndarray = None, 
                 cur_bin_sp = new_peak[[1, 0]]
 
                 open_ended.update(1)
+
+    elif metric == 'snr':
+        raise NotImplementedError("The signal to noise approach has not been implemented yet")
 
     # This makes the list of arrays into a 3D array to be returned
     all_masks = np.dstack(all_masks)
