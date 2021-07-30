@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/07/2021, 13:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/07/2021, 09:32. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -984,20 +984,11 @@ class RateMap(Image):
         # Store that edge mask as an attribute.
         self._edge_mask = comb
 
-        # TODO Add another attribute that describes how many sensors a particular pixel falls on for combined
-        #  ratemaps
+        # This sets every element of the exposure map that isn't zero to one, that way it becomes a simple
+        #  mask as to whether you are on or off the sensor
         det_map = self.expmap.data.copy()
-        self._on_sensor_mask = det_map[det_map != 0] = 1
-
-        # And another mask for whether on or off the sensor, very simple for individual ObsID-Instrument combos
-        # if self._obs_id != "combined":
-        #     self._on_sensor_mask = det_map
-        # # MUCH more complicated for combined ratemaps however, as what is on one detector might not be on another
-        # else:
-        #     for entry in self.header:
-        #         if "EMSCF" in entry:
-        #             print(self.header[entry])
-        #
+        det_map[det_map != 0] = 1
+        self._on_sensor_mask = det_map
 
         # Re-setting some paths to make more sense
         self._path = self._im_path
