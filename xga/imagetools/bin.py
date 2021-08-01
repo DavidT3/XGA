@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/07/2021, 17:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/08/2021, 20:22. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -260,6 +260,9 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
                     #  that last contour bin to be finished, so we store it in the all_masks list
                     all_masks.append(cur_mask)
 
+                    # I only update the progress bar if we accept the current region
+                    open_ended.update(1)
+
                 else:
                     pass
 
@@ -277,8 +280,6 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
                 # Now this particular bin is finished, we find the pixel at which we shall start the next one
                 new_peak = prod.simple_peak(no_go*src_mask, 'pix')[0].value
                 cur_bin_sp = new_peak[[1, 0]]
-
-                open_ended.update(1)
 
     elif metric == 'snr':
         raise NotImplementedError("The signal to noise approach has not been implemented yet")
