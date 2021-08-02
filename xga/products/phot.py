@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 12:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 13:15. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -83,9 +83,10 @@ class Image(BaseProduct):
         self._smoothed = smoothed
         # If the user says at this point that the image has been smoothed, then we try and parse the smoothing info
         if smoothed:
-            self._smoothed_info = self.parse_smoothing(smoothed_info)
+            self._smoothed_method, self._smoothed_info = self.parse_smoothing(smoothed_info)
         else:
             self._smoothed_info = None
+            self._smoothed_method = None
 
     def _read_on_demand(self):
         """
@@ -173,24 +174,40 @@ class Image(BaseProduct):
 
         return final_regs
 
-    def parse_smoothing(self, info: Union[dict, Kernel]) -> dict:
+    @staticmethod
+    def parse_smoothing(info: Union[dict, Kernel]) -> Tuple[str, dict]:
         """
+        Parses smoothing information that has been passed into the Image object, either on init or afterwards. If an
+        Astropy kernel is provided then the name, and kernel parameter, will be extracted. If a dictionary is provided
+        then it must have a) 'method' key with the name of the smoothing method, and b) a 'pars' key with another
+        dictionary of all the parameters involved in smoothing;
+        e.g. {'method': 'Gaussian2DKernel', 'pars': {'amplitude': 0.63, 'x_mean': 0.0, 'y_mean': 0.0, 'x_stddev': 0.5,
+                                                     'y_stddev': 0.5, 'theta': 0.0}}
 
-        :param dict/Kernel info:
-        :return:
-        :rtype: dict
+        :param dict/Kernel info: The information dictionary or astropy kernel used for the smoothing.
+        :return: The name of the kernel/method and parameter information
+        :rtype: Tuple[str, dict]
         """
 
         if not isinstance(info, (Kernel, dict)):
             raise TypeError("You may only pass smoothing information in the form of an Astropy Kernel or "
                             "a dictionary")
-        elif isinstance(info, dict):
-            raise NotImplementedError("Haven't yet decided on the information I shall require here")
+        elif isinstance(info, dict) and ("method" not in info.keys() or "pars" not in info.keys()):
+            raise KeyError("If an info dictionary is passed, it must contain a 'method' key (whose value is the name"
+                           " of the smoothing method), and a 'pars' key (a dictionary of the parameters involved in "
+                           "the smoothing).")
 
         if isinstance(info, Kernel):
-            print(info)
-            import sys
-            sys.exit()
+            # Not super happy with this, but the Astropy kernel.model.name attribute I would have preferred to
+            #  use doesn't appear to be set for model objects upon which Kernels are based
+            method_name = str(info).split(".")[-1].split(" object")[0]
+            method_pars = dict(zip(info.model.param_names, info.model.parameters.copy()))
+
+        else:
+            method_name = info['method']
+            method_pars = info['pars']
+
+        return method_name, method_pars
 
     @property
     def smoothing_info(self) -> dict:
@@ -211,8 +228,18 @@ class Image(BaseProduct):
 
         :param dict/Kernel new_info: The new smoothing information to be added to the product.
         """
-        self._smoothed_info = self.parse_smoothing(new_info)
+        self._smoothed_method, self._smoothed_info = self.parse_smoothing(new_info)
         self._smoothed = True
+
+    @property
+    def smoothed_method(self) -> str:
+        """
+        The name of the smoothing method (or kernel) that has been applied.
+
+        :return: Name of method/kernel, default is None if no smoothing has been applied.
+        :rtype: str
+        """
+        return self._smoothed_method
 
     @property
     def smoothed(self) -> bool:
@@ -246,8 +273,10 @@ class Image(BaseProduct):
 
         # And now smoothing information
         if self.smoothed:
-            warnings.warn("THIS DOESN'T YET ADD SMOOTHING INFORMATION")
-            key += 1
+            # Grab the smoothing parameter's names and values, then smoosh them into a string
+            sp = "_".join([str(k)+str(v) for k, v in self._smoothed_info.items()])
+            # Then add the parameters and method name to the storage key
+            key += "_sm{sm}_sp{sp}".format(sm=self._smoothed_method, sp=sp)
 
         return key
 
