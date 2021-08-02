@@ -1,11 +1,12 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 16:01. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 17:28. Copyright (c) David J Turner
 
 import os
 import warnings
 from typing import Tuple, List, Union
 
 import numpy as np
+import pandas as pd
 from astropy import wcs
 from astropy.convolution import Kernel
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError, Unit
@@ -378,6 +379,28 @@ class Image(BaseProduct):
             ret_dict = {o: [i[1] for i in self._comb_oi_pairs if i[0] == o] for o in self.obs_ids}
 
         return ret_dict
+
+    @property
+    def inventory_entry(self) -> pd.Series:
+        """
+        This allows an Image product to generate its own entry for the XGA file generation inventory.
+
+        :return: The new line entry for the inventory.
+        :rtype: pd.Series
+        """
+        # The filename, devoid of the rest of the path
+        f_name = self.path.split('/')[-1]
+
+        if self._comb_oi_pairs is None:
+            new_line = pd.Series([f_name, self.obs_id, self.instrument, self.storage_key, "", self.type],
+                                 ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
+        else:
+            o_str = "/".join(e[0] for e in self._comb_oi_pairs)
+            i_str = "/".join(e[1] for e in self._comb_oi_pairs)
+            new_line = pd.Series([f_name, o_str, i_str, self.storage_key, "", self.type],
+                                 ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+
+        return new_line
 
     @property
     def regions(self) -> List[PixelRegion]:
