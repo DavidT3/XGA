@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/07/2021, 09:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 12:05. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -7,6 +7,7 @@ from typing import Tuple, List, Union
 
 import numpy as np
 from astropy import wcs
+from astropy.convolution import Kernel
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError, Unit
 from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize, BaseStretch
 from fitsio import read, read_header, FITSHDR
@@ -29,8 +30,9 @@ class Image(BaseProduct):
     implements many helpful methods with extra functionality (including coordinate transforms, peak finders, and
     a powerful view method).
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, reg_file_path: str = ''):
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 lo_en: Quantity, hi_en: Quantity, reg_file_path: str = '', smoothed: bool = False,
+                 smoothed_info: Union[dict, Kernel] = None):
         """
         The initialisation method for the Image class.
 
@@ -41,6 +43,11 @@ class Image(BaseProduct):
         :param Quantity lo_en: The lower energy bound used to generate this product.
         :param Quantity hi_en: The upper energy bound used to generate this product.
         :param str reg_file_path: Path to a region file for this image.
+        :param bool smoothed: Has this image been smoothed, default is False. This information can also be
+            set after the instantiation of an image.
+        :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
+            kernel used or a dictionary of information (required structure detailed in
+            parse_smoothing). Default is None
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._shape = None
@@ -72,6 +79,13 @@ class Image(BaseProduct):
         else:
             self._regions = []
             self._reg_file_path = ''
+
+        self._smoothed = smoothed
+        # If the user says at this point that the image has been smoothed, then we try and parse the smoothing info
+        if smoothed:
+            self._smoothed_info = self.parse_smoothing(smoothed_info)
+        else:
+            self._smoothed_info = None
 
     def _read_on_demand(self):
         """
@@ -158,6 +172,84 @@ class Image(BaseProduct):
                 final_regs.append(reg.to_pixel(self._wcs_radec))
 
         return final_regs
+
+    def parse_smoothing(self, info: Union[dict, Kernel]) -> dict:
+        """
+
+        :param dict/Kernel info:
+        :return:
+        :rtype: dict
+        """
+
+        if not isinstance(info, (Kernel, dict)):
+            raise TypeError("You may only pass smoothing information in the form of an Astropy Kernel or "
+                            "a dictionary")
+        elif isinstance(info, dict):
+            raise NotImplementedError("Haven't yet decided on the information I shall require here")
+
+        if isinstance(info, Kernel):
+            print(info)
+            import sys
+            sys.exit()
+
+    @property
+    def smoothing_info(self) -> dict:
+        """
+        If the image has been smoothed, then this property getter will return information on the smoothing done.
+
+        :return: A dictionary of information on the smoothing applied (if any). Default is None if no
+            smoothing applied.
+        :rtype: dict
+        """
+        return self._smoothed_info
+
+    @smoothing_info.setter
+    def smoothing_info(self, new_info: Union[dict, Kernel]):
+        """
+        If the Image was not declared smoothed on initialisation, smoothing information can be added with this
+        property setter. It will be parsed and the smoothed property will be set to True.
+
+        :param dict/Kernel new_info: The new smoothing information to be added to the product.
+        """
+        self._smoothed_info = self.parse_smoothing(new_info)
+        self._smoothed = True
+
+    @property
+    def smoothed(self) -> bool:
+        """
+        Property describing whether an image product has been smoothed or not.
+
+        :return: Has the product been smoothed.
+        :rtype: bool
+        """
+        return self._smoothed
+
+    @property
+    def storage_key(self) -> str:
+        """
+        The key under which this object should be stored in a source's product structure. Contains information
+        about various aspects of the Image/RateMap/ExpMap.
+
+        :return: The storage key.
+        :rtype: str
+        """
+        # As for some reason I've allowed certain important info about these products to be updated after init,
+        #  this getter actually generates the storage key on demand, rather than returning a stored value
+
+        # Start with the simple stuff - these products are energy bound, so that info will be in ALL keys
+        key = "bound_{l}-{u}".format(l=float(self._energy_bounds[0].value), u=float(self._energy_bounds[1].value))
+
+        # Then add PSF correction information
+        if self._psf_corrected:
+            key += "_" + self.psf_model + "_" + str(self.psf_bins) + "_" + self.psf_algorithm + \
+                         str(self.psf_iterations)
+
+        # And now smoothing information
+        if self.smoothed:
+            warnings.warn("THIS DOESN'T YET ADD SMOOTHING INFORMATION")
+            key += 1
+
+        return key
 
     @property
     def regions(self) -> List[PixelRegion]:
@@ -895,6 +987,27 @@ class ExpMap(Image):
         Inherited method from Image superclass, disabled as does not make sense in an exposure map.
         """
         pass
+
+    @property
+    def smoothing_info(self) -> None:
+        """
+        As exposure maps cannot be smoothed, this property overrides the Image smoothing_info getter, and
+        returns None.
+
+        :return: None, as exposure maps cannot be smoothed.
+        :rtype: None
+        """
+        return None
+
+    @smoothing_info.setter
+    def smoothing_info(self, new_info):
+        """
+        As exposure maps cannot be smoothed, this property overrides the Image smoothing_info setter, and will
+        raise a TypeError if you try to pass any smoothing information to this object.
+
+        :param new_info: The new smoothing information to be added to the product.
+        """
+        raise TypeError("ExpMap products cannot be smoothed, and as such cannot have smoothing info added.")
 
 
 class RateMap(Image):
