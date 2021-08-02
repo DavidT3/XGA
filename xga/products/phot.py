@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 13:18. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 15:43. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -23,6 +23,8 @@ from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedEr
 from ..sourcetools import ang_to_rad
 from ..utils import xmm_sky, xmm_det, find_all_wcs
 
+EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
+
 
 class Image(BaseProduct):
     """
@@ -32,7 +34,7 @@ class Image(BaseProduct):
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  lo_en: Quantity, hi_en: Quantity, reg_file_path: str = '', smoothed: bool = False,
-                 smoothed_info: Union[dict, Kernel] = None):
+                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None):
         """
         The initialisation method for the Image class.
 
@@ -48,6 +50,9 @@ class Image(BaseProduct):
         :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
             kernel used or a dictionary of information (required structure detailed in
             parse_smoothing). Default is None
+        :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
+            is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+            ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._shape = None
@@ -87,6 +92,46 @@ class Image(BaseProduct):
         else:
             self._smoothed_info = None
             self._smoothed_method = None
+
+        # I want combined images to be aware of the ObsIDs and Instruments that have gone into them
+        if obs_id == 'combined' or instrument == 'combined':
+            if "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
+                # We search for the instrument names of the various components
+                ind_inst_hdrs = [h for h in self.header if 'EMSCI' in h]
+                # Then use the length of the list to find out how many components there are
+                num_ims = len(ind_inst_hdrs)
+                # If this image is the combined product of only one ObsID's instruments, then there will be no EMSCA
+                #  headers detailing the different ObsIDs, so we just use the ObsID header
+                if len([h for h in self.header if 'EMSCA' in h]) == 0:
+                    oi_pairs = [[self.header["OBS_ID"], EMOSAIC_INST[self.header["EMSCI"+str(ind).zfill(3)]]] for
+                                ind in range(1, num_ims+1)]
+                else:
+                    oi_pairs = [[self.header["EMSCA" + str(ind).zfill(3)],
+                                 EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]]
+                                for ind in range(1, num_ims + 1)]
+
+                # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
+                self._comb_oi_pairs = oi_pairs
+
+            # In the case of the combined image not being made by emosaic, we need to take the info from
+            #  the obs_inst_combs parameter
+            elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is not None:
+                # We check to make sure that each entry in obs_inst_combs is a two element list
+                if any([len(e) != 2 for e in obs_inst_combs]):
+                    raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
+                # And if it passes that we check that the instrument values are one of the allowed list
+                elif any([e[1] not in EMOSAIC_INST.values() for e in obs_inst_combs]):
+                    raise ValueError("Instruments are currently only allowed to be 'pn', 'mos1', or 'mos2'.")
+
+                self._comb_oi_pairs = obs_inst_combs
+
+            # And if the user hasn't passed the obs_inst_combs list then we kick off
+            elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is None:
+                raise ValueError("If a combined image has not been made with emosaic, you have to "
+                                 " pass ObsID and Instrument combinations using obs_inst_combs")
+
+        else:
+            self._comb_oi_pairs = None
 
     def _read_on_demand(self):
         """
@@ -202,7 +247,6 @@ class Image(BaseProduct):
             #  use doesn't appear to be set for model objects upon which Kernels are based
             method_name = str(info).split(".")[-1].split(" object")[0]
             method_pars = dict(zip(info.model.param_names, info.model.parameters.copy()))
-
         else:
             method_name = info['method']
             method_pars = info['pars']
