@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 13:15. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 13:18. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -835,6 +835,10 @@ class Image(BaseProduct):
         # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
         if self.psf_corrected:
             title += ' - PSF Corrected'
+
+        # And smoothed as well
+        if self.smoothed:
+            title += ' - Smoothed'
 
         ax.set_title(title)
 
