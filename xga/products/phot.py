@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 15:43. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 16:01. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -323,6 +323,61 @@ class Image(BaseProduct):
             key += "_sm{sm}_sp{sp}".format(sm=self._smoothed_method, sp=sp)
 
         return key
+
+    @property
+    def obs_inst_combos(self) -> list:
+        """
+        This property getter will provide ObsID-Instrument information on the constituent images that make up
+        this total image (if it is combined), otherwise it will just provide the single ObsID-Instrument combo.
+
+        :return: A list of lists of ObsID-Instrument combinations, or a list containing one ObsID and one instrument.
+        :rtype: list
+        """
+        if self._comb_oi_pairs is not None:
+            return self._comb_oi_pairs
+        else:
+            return [self.obs_id, self.instrument]
+
+    @property
+    def obs_ids(self) -> list:
+        """
+        Property getter for the ObsIDs that are involved in this image, if combined. Otherwise will return a list
+        with one element, the single relevant ObsID.
+
+        :return: List of ObsIDs involved in this image.
+        :rtype: list
+        """
+        if self._comb_oi_pairs is None:
+            ret_list = [self.obs_id]
+        else:
+            # This is a really ugly way of doing what a set and a list() operator could do, but I wanted to make
+            #  absolutely sure that the order was preserved
+            ret_list = []
+            for o in self._comb_oi_pairs:
+                if o[0] not in ret_list:
+                    ret_list.append(o[0])
+
+        return ret_list
+
+    @property
+    def instruments(self) -> dict:
+        """
+        Equivelant to the BaseSource instruments property, this will return a dictionary of ObsIDs with lists of
+        instruments that are associated with them in a combined image. If the image is not combined then an equivelant
+        dictionary with one key (the ObsID), with the associated value being a list with one entry (the instrument).
+
+        :return: A dictionary of ObsIDs and their associated instruments
+        :rtype: dict
+        """
+        # If this attribute is None then this product isn't combined, so we do the fallback for a single
+        #  ObsID-Instrument combination
+        if self._comb_oi_pairs is None:
+            ret_dict = {self.obs_id: [self.instrument]}
+        # Otherwise we construct the promised dictionary
+        else:
+            ret_dict = {o: [i[1] for i in self._comb_oi_pairs if i[0] == o] for o in self.obs_ids}
+
+        return ret_dict
 
     @property
     def regions(self) -> List[PixelRegion]:
