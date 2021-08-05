@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 18:08. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/08/2021, 17:09. Copyright (c) David J Turner
 
 import os
 from random import randint
@@ -27,7 +27,8 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray
         parameter for extra options.
     :param Kernel kernel: The kernel with which to smooth the input data. Should be an instance of an Astropy Kernel.
     :param np.ndarray mask: A mask to apply to the data while smoothing (removing point source interlopers for
-        instance). The default is None, which means no mask is applied.
+        instance). The default is None, which means no mask is applied. This function expects a mask with 1s where
+        the data you wish to keep is, and 0s where the data you wish to remove is - the style of mask produced by XGA.
     :param bool fft: Should a fast fourier transform method be used for convolution, default is False.
     :param bool norm_kernel: Whether to normalize the kernel to have a sum of one.
     :param bool sm_im: If a RateMap is passed, should the image component be smoothed rather than the actual
@@ -45,6 +46,13 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray
     if len(kernel.shape) != 2:
         raise ValueError("The smoothing kernel needs to be two-dimensional for application to Image/RateMap data - "
                          "Gaussian2DKernel for instance.")
+
+    # While we ask for masks in the style XGA produces (0s where you don't want data, 1s where you do), unfortunately
+    #  the smoothing functions seem to want the opposite, so I'll quickly invert the mask here
+    if mask is not None:
+        mask[mask == 0] = -1
+        mask[mask == 1] = 0
+        mask[mask == -1] = 1
 
     # Read in the inventory of products relevant to the input image/ratemap
     inven = pd.read_csv(OUTPUT + "{}/inventory.csv".format(prod.obs_id), dtype=str)
