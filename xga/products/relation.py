@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2021, 14:45. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2021, 14:47. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -748,7 +748,7 @@ class AggregateScalingRelation:
         return self._y_unit
 
     def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
-                    contour_colours: List[str] = None):
+                    contour_colours: List[str] = None, save_path: str = None):
         """
         A corner plot viewing method that will combine chains from all the relations that make up this
         aggregate scaling relation and display them using getdist.
@@ -757,6 +757,8 @@ class AggregateScalingRelation:
         :param List[str] cust_par_names: A list of custom parameter names.
         :param List[str] contour_colours: Custom colours for the contours, there should be one colour
             per scaling relation.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
         """
         # First off checking that every relation has chains, otherwise we can't do this
         not_chains = [r.chains is None for r in self._relations]
@@ -807,6 +809,11 @@ class AggregateScalingRelation:
             g.triangle_plot(samples, filled=True, contour_colors=contour_colours)
         else:
             g.triangle_plot(samples, filled=True)
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
         plt.show()
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
@@ -996,7 +1003,7 @@ class AggregateScalingRelation:
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
 
-        # If the user passed a save_path value, then we assume they do want to save the figure
+        # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
             plt.savefig(save_path)
 
