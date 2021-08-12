@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/07/2021, 13:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2021, 14:45. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -774,22 +774,25 @@ class AggregateScalingRelation:
         elif len(contour_colours) != len(self._relations):
             raise ValueError("If you pass a list of contour colours, there must be one entry per scaling relation.")
 
+        # The number of non-scatter parameters in the scaling relation models
+        num_pars = len(self._relations[0].par_names)
+
         samples = []
         # Need to remove $ from the labels because getdist adds them itself
         par_names = [n.replace('$', '') for n in self._relations[0].par_names]
         # Setup the getdist sample objects
         if not any(not_scatter_chains):
             # For if there ARE scatter chains
-            par_names += [r'\sigma']
-            if cust_par_names is not None and len(cust_par_names) == len(par_names):
+            if cust_par_names is not None and len(cust_par_names) == num_pars:
                 par_names = cust_par_names
 
+            par_names += [r'\sigma']
             for rel in self._relations:
                 all_ch = np.hstack([rel.chains, rel.scatter_chain[..., None]])
                 samp_obj = MCSamples(samples=all_ch, label=rel.name, names=par_names, labels=par_names)
                 samples.append(samp_obj)
         else:
-            if cust_par_names is not None and len(cust_par_names) == len(par_names):
+            if cust_par_names is not None and len(cust_par_names) == num_pars:
                 par_names = cust_par_names
 
             for rel in self._relations:
@@ -808,7 +811,7 @@ class AggregateScalingRelation:
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
              colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
-             fontsize: float = 15, legend_fontsize: float = 13):
+             fontsize: float = 15, legend_fontsize: float = 13, save_path: str = None):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -825,6 +828,8 @@ class AggregateScalingRelation:
             confusing with multiple relations on one axis.
         :param float fontsize: The fontsize for axis labels.
         :param float legend_fontsize: The fontsize for text in the legend.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
@@ -990,6 +995,11 @@ class AggregateScalingRelation:
 
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
+
+        # If the user passed a save_path value, then we assume they do want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
         plt.show()
 
     def __len__(self) -> int:
