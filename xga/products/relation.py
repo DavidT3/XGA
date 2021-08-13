@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/08/2021, 11:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/08/2021, 12:17. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -567,7 +567,7 @@ class ScalingRelation:
         # Plot the data with uncertainties, if any data is present in this scaling relation.
         if len(self.x_data) != 0:
             ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
-                        fmt="x", color=data_colour, capsize=2, label=self._name + " Data")
+                        fmt="x", color=data_colour, capsize=2)
 
         # Need to randomly sample from the fitted model
         num_rand = 10000
@@ -944,7 +944,7 @@ class AggregateScalingRelation:
                 d_out = ax.errorbar(None, None, xerr=None, yerr=None, fmt="x", capsize=2, label='')
             else:
                 d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
-                                    yerr=rel.y_data.value[:, 1], fmt="x", capsize=2, label=rel.name + " Data")
+                                    yerr=rel.y_data.value[:, 1], fmt="x", capsize=2)
 
             d_colour = d_out[0].get_color()
 
