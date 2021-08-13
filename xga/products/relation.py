@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/08/2021, 14:47. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/08/2021, 11:28. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
@@ -495,7 +495,9 @@ class ScalingRelation:
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
              data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90,
-             custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13):
+             custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
+             x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
+             save_path: str = None):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -515,6 +517,16 @@ class ScalingRelation:
             of this plot, including the unit string.
         :param float fontsize: The fontsize for axis labels.
         :param float legend_fontsize: The fontsize for text in the legend.
+        :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param list y_ticks: Customise which major y-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
         """
         # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
@@ -657,8 +669,27 @@ class ScalingRelation:
         ax.tick_params(length=7)
         ax.tick_params(which='minor', length=3)
 
+        # Here we check whether the user has manually set any of the ticks to be displayed (major or minor, either axis)
+        if x_ticks is not None:
+            ax.set_xticks(x_ticks)
+            ax.set_xticklabels(x_ticks)
+        if x_minor_ticks is not None:
+            ax.set_xticks(x_minor_ticks, minor=True)
+            ax.set_xticklabels(x_minor_ticks, minor=True)
+        if y_ticks is not None:
+            ax.set_yticks(y_ticks)
+            ax.set_yticklabels(y_ticks)
+        if y_minor_ticks is not None:
+            ax.set_xticks(y_minor_ticks, minor=True)
+            ax.set_xticklabels(y_minor_ticks, minor=True)
+
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
         plt.show()
 
     def __add__(self, other):
@@ -818,7 +849,8 @@ class AggregateScalingRelation:
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
              colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
-             fontsize: float = 15, legend_fontsize: float = 13, save_path: str = None):
+             fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
+             y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -835,6 +867,14 @@ class AggregateScalingRelation:
             confusing with multiple relations on one axis.
         :param float fontsize: The fontsize for axis labels.
         :param float legend_fontsize: The fontsize for text in the legend.
+        :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param list y_ticks: Customise which major y-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
         """
@@ -999,6 +1039,20 @@ class AggregateScalingRelation:
         # I change the lengths of the tick lines, to make it look nicer (imo)
         ax.tick_params(length=7)
         ax.tick_params(which='minor', length=3)
+
+        # Here we check whether the user has manually set any of the ticks to be displayed (major or minor, either axis)
+        if x_ticks is not None:
+            ax.set_xticks(x_ticks)
+            ax.set_xticklabels(x_ticks)
+        if x_minor_ticks is not None:
+            ax.set_xticks(x_minor_ticks, minor=True)
+            ax.set_xticklabels(x_minor_ticks, minor=True)
+        if y_ticks is not None:
+            ax.set_yticks(y_ticks)
+            ax.set_yticklabels(y_ticks)
+        if y_minor_ticks is not None:
+            ax.set_xticks(y_minor_ticks, minor=True)
+            ax.set_xticklabels(y_minor_ticks, minor=True)
 
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
