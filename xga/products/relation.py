@@ -1,12 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/08/2021, 12:17. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/08/2021, 16:20. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
 from typing import List
 from warnings import warn
 
-import corner
 import numpy as np
 import scipy.odr as odr
 from astropy.units import Quantity, Unit, UnitConversionError
@@ -441,26 +440,49 @@ class ScalingRelation:
         axes[-1].set_xlabel("Step Number")
         plt.show()
 
-    def view_corner(self, figsize: tuple = (10, 10), conf_level: int = 90):
+    def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
+                    colour: str = 'tab:gray', save_path: str = None):
         """
         A convenient view method to examine the corner plot of the parameter posterior distributions.
 
-        :param Tuple figsize: The desired figure size.
-        :param int conf_level: The confidence level to use when indicating confidence limits on the distributions.
+        :param tuple figsize: The size of the figure.
+        :param List[str] cust_par_names: A list of custom parameter names. If the names include LaTeX code do not
+            include $$ math environment symbols - you may also need to pass a string literal (e.g. r"\sigma"). Do
+            not include an entry for a scatter parameter.
+        :param List[str] colour: Colour for the contours, the default is tab:gray.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
         """
+
+        # Checks whether custom parameter names were passed, and if they were it checks whether there are the right
+        #  number
+        if cust_par_names is not None and len(cust_par_names) == len(self._par_names):
+            par_names = cust_par_names
+        elif cust_par_names is not None and len(cust_par_names) != len(self._par_names):
+            raise ValueError("cust_par_names must have one entry per parameter of the scaling relation model.")
+        else:
+            par_names = self._par_names
+
         if self._chains is None:
             raise ValueError('No chains are available for this scaling relation')
 
-        frac_conf_lev = [(50 - (conf_level / 2)) / 100, 0.5, (50 + (conf_level / 2)) / 100]
         if self._scatter_chain is None:
-            fig = corner.corner(self._chains, labels=self._par_names, figsize=figsize, quantiles=frac_conf_lev,
-                                show_titles=True)
+            samp_obj = MCSamples(samples=self._chains, label=self.name, names=par_names, labels=par_names)
         else:
+            par_names += [r'\sigma']
             all_ch = np.hstack([self._chains, self._scatter_chain[..., None]])
-            fig = corner.corner(all_ch, labels=self._par_names+[r'$\sigma$'], figsize=figsize, quantiles=frac_conf_lev,
-                                show_titles=True)
+            samp_obj = MCSamples(samples=all_ch, label=self.name, names=par_names, labels=par_names)
 
-        plt.suptitle("{n} Scaling Relation - {c}% Confidence".format(n=self._name, c=conf_level), fontsize=14, y=1.02)
+        g = plots.get_subplot_plotter(width_inch=figsize[0])
+        if colour is not None:
+            g.triangle_plot(samp_obj, filled=True, contour_colors=[colour])
+        else:
+            g.triangle_plot(samp_obj, filled=True)
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
         plt.show()
 
     def predict(self, x_values: Quantity) -> Quantity:
@@ -785,7 +807,9 @@ class AggregateScalingRelation:
         aggregate scaling relation and display them using getdist.
 
         :param tuple figsize: The size of the figure.
-        :param List[str] cust_par_names: A list of custom parameter names.
+        :param List[str] cust_par_names: A list of custom parameter names. If the names include LaTeX code do not
+            include $$ math environment symbols - you may also need to pass a string literal (e.g. r"\sigma"). Do
+            not include an entry for a scatter parameter.
         :param List[str] contour_colours: Custom colours for the contours, there should be one colour
             per scaling relation.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
