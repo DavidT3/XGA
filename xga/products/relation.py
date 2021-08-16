@@ -1,12 +1,11 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/07/2021, 13:02. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/08/2021, 16:20. Copyright (c) David J Turner
 
 import inspect
 from datetime import date
 from typing import List
 from warnings import warn
 
-import corner
 import numpy as np
 import scipy.odr as odr
 from astropy.units import Quantity, Unit, UnitConversionError
@@ -441,26 +440,49 @@ class ScalingRelation:
         axes[-1].set_xlabel("Step Number")
         plt.show()
 
-    def view_corner(self, figsize: tuple = (10, 10), conf_level: int = 90):
+    def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
+                    colour: str = 'tab:gray', save_path: str = None):
         """
         A convenient view method to examine the corner plot of the parameter posterior distributions.
 
-        :param Tuple figsize: The desired figure size.
-        :param int conf_level: The confidence level to use when indicating confidence limits on the distributions.
+        :param tuple figsize: The size of the figure.
+        :param List[str] cust_par_names: A list of custom parameter names. If the names include LaTeX code do not
+            include $$ math environment symbols - you may also need to pass a string literal (e.g. r"\sigma"). Do
+            not include an entry for a scatter parameter.
+        :param List[str] colour: Colour for the contours, the default is tab:gray.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
         """
+
+        # Checks whether custom parameter names were passed, and if they were it checks whether there are the right
+        #  number
+        if cust_par_names is not None and len(cust_par_names) == len(self._par_names):
+            par_names = cust_par_names
+        elif cust_par_names is not None and len(cust_par_names) != len(self._par_names):
+            raise ValueError("cust_par_names must have one entry per parameter of the scaling relation model.")
+        else:
+            par_names = self._par_names
+
         if self._chains is None:
             raise ValueError('No chains are available for this scaling relation')
 
-        frac_conf_lev = [(50 - (conf_level / 2)) / 100, 0.5, (50 + (conf_level / 2)) / 100]
         if self._scatter_chain is None:
-            fig = corner.corner(self._chains, labels=self._par_names, figsize=figsize, quantiles=frac_conf_lev,
-                                show_titles=True)
+            samp_obj = MCSamples(samples=self._chains, label=self.name, names=par_names, labels=par_names)
         else:
+            par_names += [r'\sigma']
             all_ch = np.hstack([self._chains, self._scatter_chain[..., None]])
-            fig = corner.corner(all_ch, labels=self._par_names+[r'$\sigma$'], figsize=figsize, quantiles=frac_conf_lev,
-                                show_titles=True)
+            samp_obj = MCSamples(samples=all_ch, label=self.name, names=par_names, labels=par_names)
 
-        plt.suptitle("{n} Scaling Relation - {c}% Confidence".format(n=self._name, c=conf_level), fontsize=14, y=1.02)
+        g = plots.get_subplot_plotter(width_inch=figsize[0])
+        if colour is not None:
+            g.triangle_plot(samp_obj, filled=True, contour_colors=[colour])
+        else:
+            g.triangle_plot(samp_obj, filled=True)
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
         plt.show()
 
     def predict(self, x_values: Quantity) -> Quantity:
@@ -495,7 +517,9 @@ class ScalingRelation:
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
              data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90,
-             custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13):
+             custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
+             x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
+             save_path: str = None):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -515,6 +539,16 @@ class ScalingRelation:
             of this plot, including the unit string.
         :param float fontsize: The fontsize for axis labels.
         :param float legend_fontsize: The fontsize for text in the legend.
+        :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param list y_ticks: Customise which major y-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
         """
         # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
@@ -555,7 +589,7 @@ class ScalingRelation:
         # Plot the data with uncertainties, if any data is present in this scaling relation.
         if len(self.x_data) != 0:
             ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
-                        fmt="x", color=data_colour, capsize=2, label=self._name + " Data")
+                        fmt="x", color=data_colour, capsize=2)
 
         # Need to randomly sample from the fitted model
         num_rand = 10000
@@ -657,8 +691,27 @@ class ScalingRelation:
         ax.tick_params(length=7)
         ax.tick_params(which='minor', length=3)
 
+        # Here we check whether the user has manually set any of the ticks to be displayed (major or minor, either axis)
+        if x_ticks is not None:
+            ax.set_xticks(x_ticks)
+            ax.set_xticklabels(x_ticks)
+        if x_minor_ticks is not None:
+            ax.set_xticks(x_minor_ticks, minor=True)
+            ax.set_xticklabels(x_minor_ticks, minor=True)
+        if y_ticks is not None:
+            ax.set_yticks(y_ticks)
+            ax.set_yticklabels(y_ticks)
+        if y_minor_ticks is not None:
+            ax.set_xticks(y_minor_ticks, minor=True)
+            ax.set_xticklabels(y_minor_ticks, minor=True)
+
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
         plt.show()
 
     def __add__(self, other):
@@ -748,15 +801,19 @@ class AggregateScalingRelation:
         return self._y_unit
 
     def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
-                    contour_colours: List[str] = None):
+                    contour_colours: List[str] = None, save_path: str = None):
         """
         A corner plot viewing method that will combine chains from all the relations that make up this
         aggregate scaling relation and display them using getdist.
 
         :param tuple figsize: The size of the figure.
-        :param List[str] cust_par_names: A list of custom parameter names.
+        :param List[str] cust_par_names: A list of custom parameter names. If the names include LaTeX code do not
+            include $$ math environment symbols - you may also need to pass a string literal (e.g. r"\sigma"). Do
+            not include an entry for a scatter parameter.
         :param List[str] contour_colours: Custom colours for the contours, there should be one colour
             per scaling relation.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
         """
         # First off checking that every relation has chains, otherwise we can't do this
         not_chains = [r.chains is None for r in self._relations]
@@ -774,22 +831,25 @@ class AggregateScalingRelation:
         elif len(contour_colours) != len(self._relations):
             raise ValueError("If you pass a list of contour colours, there must be one entry per scaling relation.")
 
+        # The number of non-scatter parameters in the scaling relation models
+        num_pars = len(self._relations[0].par_names)
+
         samples = []
         # Need to remove $ from the labels because getdist adds them itself
         par_names = [n.replace('$', '') for n in self._relations[0].par_names]
         # Setup the getdist sample objects
         if not any(not_scatter_chains):
             # For if there ARE scatter chains
-            par_names += [r'\sigma']
-            if cust_par_names is not None and len(cust_par_names) == len(par_names):
+            if cust_par_names is not None and len(cust_par_names) == num_pars:
                 par_names = cust_par_names
 
+            par_names += [r'\sigma']
             for rel in self._relations:
                 all_ch = np.hstack([rel.chains, rel.scatter_chain[..., None]])
                 samp_obj = MCSamples(samples=all_ch, label=rel.name, names=par_names, labels=par_names)
                 samples.append(samp_obj)
         else:
-            if cust_par_names is not None and len(cust_par_names) == len(par_names):
+            if cust_par_names is not None and len(cust_par_names) == num_pars:
                 par_names = cust_par_names
 
             for rel in self._relations:
@@ -804,11 +864,17 @@ class AggregateScalingRelation:
             g.triangle_plot(samples, filled=True, contour_colors=contour_colours)
         else:
             g.triangle_plot(samples, filled=True)
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
         plt.show()
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
              colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
-             fontsize: float = 15, legend_fontsize: float = 13):
+             fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
+             y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -825,6 +891,16 @@ class AggregateScalingRelation:
             confusing with multiple relations on one axis.
         :param float fontsize: The fontsize for axis labels.
         :param float legend_fontsize: The fontsize for text in the legend.
+        :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param list y_ticks: Customise which major y-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
@@ -892,7 +968,7 @@ class AggregateScalingRelation:
                 d_out = ax.errorbar(None, None, xerr=None, yerr=None, fmt="x", capsize=2, label='')
             else:
                 d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
-                                    yerr=rel.y_data.value[:, 1], fmt="x", capsize=2, label=rel.name + " Data")
+                                    yerr=rel.y_data.value[:, 1], fmt="x", capsize=2)
 
             d_colour = d_out[0].get_color()
 
@@ -988,8 +1064,27 @@ class AggregateScalingRelation:
         ax.tick_params(length=7)
         ax.tick_params(which='minor', length=3)
 
+        # Here we check whether the user has manually set any of the ticks to be displayed (major or minor, either axis)
+        if x_ticks is not None:
+            ax.set_xticks(x_ticks)
+            ax.set_xticklabels(x_ticks)
+        if x_minor_ticks is not None:
+            ax.set_xticks(x_minor_ticks, minor=True)
+            ax.set_xticklabels(x_minor_ticks, minor=True)
+        if y_ticks is not None:
+            ax.set_yticks(y_ticks)
+            ax.set_yticklabels(y_ticks)
+        if y_minor_ticks is not None:
+            ax.set_xticks(y_minor_ticks, minor=True)
+            ax.set_xticklabels(y_minor_ticks, minor=True)
+
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
         plt.show()
 
     def __len__(self) -> int:
