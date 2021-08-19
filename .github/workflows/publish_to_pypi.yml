@@ -1,0 +1,33 @@
+name: Publish XGA to PyPI (tagged commits) or TestPyPI
+
+on: push
+
+jobs:
+  build-n-publish:
+    name: Build and publish XGA
+    runs-on: ubuntu-18.04
+    
+    steps:
+    - uses: actions/checkout@master
+    - name: Setup the Python install
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+        
+    - name: Install pypa/build
+      run: >-
+        python -m
+        pip install
+        build
+        --user
+    
+    - name: Build a binary wheel and source tarball
+      run: >-
+        python -m
+        build
+        --sdist
+        --wheel
+        --outdir dist/
+        .
+    
+    
