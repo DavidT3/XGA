@@ -1,4 +1,4 @@
-name: Publish XGA to PyPI (tagged commits) or TestPyPI
+name: Publish XGA to test PyPI, triggered on creation of tags
 
 on: push
 
@@ -31,6 +31,7 @@ jobs:
         .
         
     - name: Publish to TestPyPI
+      if: startsWith(github.ref, 'refs/tags')
       uses: pypa/gh-action-pypi-publish@master
       with:
         password: ${{ secrets.TEST_PYPI_API_TOKEN }}
