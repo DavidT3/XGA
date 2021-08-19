@@ -29,5 +29,11 @@ jobs:
         --wheel
         --outdir dist/
         .
+        
+    - name: Publish to TestPyPI
+      uses: pypa/gh-action-pypi-publish@master
+      with:
+        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        repository_url: https://test.pypi.org/legacy
     
     
