@@ -10,3 +10,7 @@ This very short guide is for my own benefit, so I'll remember how I set all of t
 5) STOP - Now check that the install from ```pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple xga``` (I have had issues with fitsio and regions v0.4 on PIP, on Apollo, but conda install works).
 6) Now do a release on the GitHub website - this should trigger the build and publishing to the real PyPI index.
 
+## Notes to self
+* Seems like sometimes I need to make sure to push tags from all branches from PyCharm
+* It will show up as a release but it doesn't seem to trigger the PyPI release action
+* To delete a remote tag (as I have had to a LOT while figuring this all out), use git push --delete origin {tag_name}
