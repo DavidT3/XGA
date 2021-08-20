@@ -8,8 +8,10 @@
 # The overall name of the action
 name: Publish XGA to real PyPI, triggered on creation of release
 
-# This action triggers when there is a release to the repo
-on: release
+# This action triggers when there is a release to the repo, but only when the release is published
+on: 
+  release:
+      types: [published]
 
 # Now the actual jobs we want the action to do are setup
 jobs:
