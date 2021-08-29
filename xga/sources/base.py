@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 20:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 12:05. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -376,12 +376,10 @@ class BaseSource:
 
         for po in prod_obj:
             if po is not None:
-                en_bnds = po.energy_bounds
-                if en_bnds[0] is not None and en_bnds[1] is not None and not hasattr(po, 'storage_key'):
-                    extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
-                    # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
-                    #  this variable with just the energy key
-                    en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+                if isinstance(po, Image):
+                    extra_key = po.storage_key
+                    en_key = "bound_{l}-{u}".format(l=float(po.energy_bounds[0].value),
+                                                    u=float(po.energy_bounds[1].value))
                 elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D):
                     extra_key = po.storage_key
                 elif type(po) == PSFGrid:
@@ -390,11 +388,6 @@ class BaseSource:
                     extra_key = po.model + "_" + str(po.num_bins)
                 else:
                     extra_key = None
-
-                # Secondary checking step now I've added PSF correction
-                if type(po) == Image and po.psf_corrected:
-                    extra_key += "_" + po.psf_model + "_" + str(po.psf_bins) + "_" + po.psf_algorithm + \
-                                 str(po.psf_iterations)
 
                 # All information about where to place it in our storage hierarchy can be pulled from the product
                 # object itself

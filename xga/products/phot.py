@@ -1,13 +1,14 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/07/2021, 17:02. Copyright (c) David J Turner
-
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 17:28. Copyright (c) David J Turner
 
 import os
 import warnings
 from typing import Tuple, List, Union
 
 import numpy as np
+import pandas as pd
 from astropy import wcs
+from astropy.convolution import Kernel
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError, Unit
 from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize, BaseStretch
 from fitsio import read, read_header, FITSHDR
@@ -23,6 +24,8 @@ from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedEr
 from ..sourcetools import ang_to_rad
 from ..utils import xmm_sky, xmm_det, find_all_wcs
 
+EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
+
 
 class Image(BaseProduct):
     """
@@ -30,8 +33,9 @@ class Image(BaseProduct):
     implements many helpful methods with extra functionality (including coordinate transforms, peak finders, and
     a powerful view method).
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, reg_file_path: str = ''):
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 lo_en: Quantity, hi_en: Quantity, reg_file_path: str = '', smoothed: bool = False,
+                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None):
         """
         The initialisation method for the Image class.
 
@@ -42,6 +46,14 @@ class Image(BaseProduct):
         :param Quantity lo_en: The lower energy bound used to generate this product.
         :param Quantity hi_en: The upper energy bound used to generate this product.
         :param str reg_file_path: Path to a region file for this image.
+        :param bool smoothed: Has this image been smoothed, default is False. This information can also be
+            set after the instantiation of an image.
+        :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
+            kernel used or a dictionary of information (required structure detailed in
+            parse_smoothing). Default is None
+        :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
+            is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+            ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._shape = None
@@ -73,6 +85,54 @@ class Image(BaseProduct):
         else:
             self._regions = []
             self._reg_file_path = ''
+
+        self._smoothed = smoothed
+        # If the user says at this point that the image has been smoothed, then we try and parse the smoothing info
+        if smoothed:
+            self._smoothed_method, self._smoothed_info = self.parse_smoothing(smoothed_info)
+        else:
+            self._smoothed_info = None
+            self._smoothed_method = None
+
+        # I want combined images to be aware of the ObsIDs and Instruments that have gone into them
+        if obs_id == 'combined' or instrument == 'combined':
+            if "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
+                # We search for the instrument names of the various components
+                ind_inst_hdrs = [h for h in self.header if 'EMSCI' in h]
+                # Then use the length of the list to find out how many components there are
+                num_ims = len(ind_inst_hdrs)
+                # If this image is the combined product of only one ObsID's instruments, then there will be no EMSCA
+                #  headers detailing the different ObsIDs, so we just use the ObsID header
+                if len([h for h in self.header if 'EMSCA' in h]) == 0:
+                    oi_pairs = [[self.header["OBS_ID"], EMOSAIC_INST[self.header["EMSCI"+str(ind).zfill(3)]]] for
+                                ind in range(1, num_ims+1)]
+                else:
+                    oi_pairs = [[self.header["EMSCA" + str(ind).zfill(3)],
+                                 EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]]
+                                for ind in range(1, num_ims + 1)]
+
+                # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
+                self._comb_oi_pairs = oi_pairs
+
+            # In the case of the combined image not being made by emosaic, we need to take the info from
+            #  the obs_inst_combs parameter
+            elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is not None:
+                # We check to make sure that each entry in obs_inst_combs is a two element list
+                if any([len(e) != 2 for e in obs_inst_combs]):
+                    raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
+                # And if it passes that we check that the instrument values are one of the allowed list
+                elif any([e[1] not in EMOSAIC_INST.values() for e in obs_inst_combs]):
+                    raise ValueError("Instruments are currently only allowed to be 'pn', 'mos1', or 'mos2'.")
+
+                self._comb_oi_pairs = obs_inst_combs
+
+            # And if the user hasn't passed the obs_inst_combs list then we kick off
+            elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is None:
+                raise ValueError("If a combined image has not been made with emosaic, you have to "
+                                 " pass ObsID and Instrument combinations using obs_inst_combs")
+
+        else:
+            self._comb_oi_pairs = None
 
     def _read_on_demand(self):
         """
@@ -159,6 +219,188 @@ class Image(BaseProduct):
                 final_regs.append(reg.to_pixel(self._wcs_radec))
 
         return final_regs
+
+    @staticmethod
+    def parse_smoothing(info: Union[dict, Kernel]) -> Tuple[str, dict]:
+        """
+        Parses smoothing information that has been passed into the Image object, either on init or afterwards. If an
+        Astropy kernel is provided then the name, and kernel parameter, will be extracted. If a dictionary is provided
+        then it must have a) 'method' key with the name of the smoothing method, and b) a 'pars' key with another
+        dictionary of all the parameters involved in smoothing;
+        e.g. {'method': 'Gaussian2DKernel', 'pars': {'amplitude': 0.63, 'x_mean': 0.0, 'y_mean': 0.0, 'x_stddev': 0.5,
+                                                     'y_stddev': 0.5, 'theta': 0.0}}
+
+        :param dict/Kernel info: The information dictionary or astropy kernel used for the smoothing.
+        :return: The name of the kernel/method and parameter information
+        :rtype: Tuple[str, dict]
+        """
+
+        if not isinstance(info, (Kernel, dict)):
+            raise TypeError("You may only pass smoothing information in the form of an Astropy Kernel or "
+                            "a dictionary")
+        elif isinstance(info, dict) and ("method" not in info.keys() or "pars" not in info.keys()):
+            raise KeyError("If an info dictionary is passed, it must contain a 'method' key (whose value is the name"
+                           " of the smoothing method), and a 'pars' key (a dictionary of the parameters involved in "
+                           "the smoothing).")
+
+        if isinstance(info, Kernel):
+            # Not super happy with this, but the Astropy kernel.model.name attribute I would have preferred to
+            #  use doesn't appear to be set for model objects upon which Kernels are based
+            method_name = str(info).split(".")[-1].split(" object")[0]
+            method_pars = dict(zip(info.model.param_names, info.model.parameters.copy()))
+        else:
+            method_name = info['method']
+            method_pars = info['pars']
+
+        return method_name, method_pars
+
+    @property
+    def smoothing_info(self) -> dict:
+        """
+        If the image has been smoothed, then this property getter will return information on the smoothing done.
+
+        :return: A dictionary of information on the smoothing applied (if any). Default is None if no
+            smoothing applied.
+        :rtype: dict
+        """
+        return self._smoothed_info
+
+    @smoothing_info.setter
+    def smoothing_info(self, new_info: Union[dict, Kernel]):
+        """
+        If the Image was not declared smoothed on initialisation, smoothing information can be added with this
+        property setter. It will be parsed and the smoothed property will be set to True.
+
+        :param dict/Kernel new_info: The new smoothing information to be added to the product.
+        """
+        self._smoothed_method, self._smoothed_info = self.parse_smoothing(new_info)
+        self._smoothed = True
+
+    @property
+    def smoothed_method(self) -> str:
+        """
+        The name of the smoothing method (or kernel) that has been applied.
+
+        :return: Name of method/kernel, default is None if no smoothing has been applied.
+        :rtype: str
+        """
+        return self._smoothed_method
+
+    @property
+    def smoothed(self) -> bool:
+        """
+        Property describing whether an image product has been smoothed or not.
+
+        :return: Has the product been smoothed.
+        :rtype: bool
+        """
+        return self._smoothed
+
+    @property
+    def storage_key(self) -> str:
+        """
+        The key under which this object should be stored in a source's product structure. Contains information
+        about various aspects of the Image/RateMap/ExpMap.
+
+        :return: The storage key.
+        :rtype: str
+        """
+        # As for some reason I've allowed certain important info about these products to be updated after init,
+        #  this getter actually generates the storage key on demand, rather than returning a stored value
+
+        # Start with the simple stuff - these products are energy bound, so that info will be in ALL keys
+        key = "bound_{l}-{u}".format(l=float(self._energy_bounds[0].value), u=float(self._energy_bounds[1].value))
+
+        # Then add PSF correction information
+        if self._psf_corrected:
+            key += "_" + self.psf_model + "_" + str(self.psf_bins) + "_" + self.psf_algorithm + \
+                         str(self.psf_iterations)
+
+        # And now smoothing information
+        if self.smoothed:
+            # Grab the smoothing parameter's names and values, then smoosh them into a string
+            sp = "_".join([str(k)+str(v) for k, v in self._smoothed_info.items()])
+            # Then add the parameters and method name to the storage key
+            key += "_sm{sm}_sp{sp}".format(sm=self._smoothed_method, sp=sp)
+
+        return key
+
+    @property
+    def obs_inst_combos(self) -> list:
+        """
+        This property getter will provide ObsID-Instrument information on the constituent images that make up
+        this total image (if it is combined), otherwise it will just provide the single ObsID-Instrument combo.
+
+        :return: A list of lists of ObsID-Instrument combinations, or a list containing one ObsID and one instrument.
+        :rtype: list
+        """
+        if self._comb_oi_pairs is not None:
+            return self._comb_oi_pairs
+        else:
+            return [self.obs_id, self.instrument]
+
+    @property
+    def obs_ids(self) -> list:
+        """
+        Property getter for the ObsIDs that are involved in this image, if combined. Otherwise will return a list
+        with one element, the single relevant ObsID.
+
+        :return: List of ObsIDs involved in this image.
+        :rtype: list
+        """
+        if self._comb_oi_pairs is None:
+            ret_list = [self.obs_id]
+        else:
+            # This is a really ugly way of doing what a set and a list() operator could do, but I wanted to make
+            #  absolutely sure that the order was preserved
+            ret_list = []
+            for o in self._comb_oi_pairs:
+                if o[0] not in ret_list:
+                    ret_list.append(o[0])
+
+        return ret_list
+
+    @property
+    def instruments(self) -> dict:
+        """
+        Equivelant to the BaseSource instruments property, this will return a dictionary of ObsIDs with lists of
+        instruments that are associated with them in a combined image. If the image is not combined then an equivelant
+        dictionary with one key (the ObsID), with the associated value being a list with one entry (the instrument).
+
+        :return: A dictionary of ObsIDs and their associated instruments
+        :rtype: dict
+        """
+        # If this attribute is None then this product isn't combined, so we do the fallback for a single
+        #  ObsID-Instrument combination
+        if self._comb_oi_pairs is None:
+            ret_dict = {self.obs_id: [self.instrument]}
+        # Otherwise we construct the promised dictionary
+        else:
+            ret_dict = {o: [i[1] for i in self._comb_oi_pairs if i[0] == o] for o in self.obs_ids}
+
+        return ret_dict
+
+    @property
+    def inventory_entry(self) -> pd.Series:
+        """
+        This allows an Image product to generate its own entry for the XGA file generation inventory.
+
+        :return: The new line entry for the inventory.
+        :rtype: pd.Series
+        """
+        # The filename, devoid of the rest of the path
+        f_name = self.path.split('/')[-1]
+
+        if self._comb_oi_pairs is None:
+            new_line = pd.Series([f_name, self.obs_id, self.instrument, self.storage_key, "", self.type],
+                                 ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
+        else:
+            o_str = "/".join(e[0] for e in self._comb_oi_pairs)
+            i_str = "/".join(e[1] for e in self._comb_oi_pairs)
+            new_line = pd.Series([f_name, o_str, i_str, self.storage_key, "", self.type],
+                                 ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+
+        return new_line
 
     @property
     def regions(self) -> List[PixelRegion]:
@@ -582,6 +824,59 @@ class Image(BaseProduct):
             raise NotPSFCorrectedError("You are trying to set the PSF model for an Image that hasn't "
                                        "been PSF corrected.")
 
+    def get_count(self, at_coord: Quantity) -> float:
+        """
+        A simple method that converts the given coordinates to pixels, then finds the number of counts
+        at those coordinates.
+
+        :param Quantity at_coord: Coordinate at which to find the number of counts.
+        :return: The counts at the supplied coordinates.
+        :rtype: Quantity
+        """
+        pix_coord = self.coord_conv(at_coord, pix).value
+        cts = self.data[pix_coord[1], pix_coord[0]]
+        return Quantity(cts, "ct")
+
+    def simple_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg) -> Tuple[Quantity, bool]:
+        """
+        Simplest possible way to find the position of the peak of X-ray emission in an Image. This method
+        takes a mask in the form of a numpy array, which allows the user to mask out parts of the ratemap
+        that shouldn't be searched (outside of a certain region, or within point sources for instance).
+
+        Results from this can be less valid than the RateMap implementation (especially if the object you care
+        about is off-axis), as that takes into account vignetting corrected exposure times.
+
+        :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
+            aren't to be searched, and 1 for those that are.
+        :param UnitBase/str out_unit: The desired output unit of the peak coordinates, the default is degrees.
+        :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
+            the user's mask), in units of out_unit, as specified by the user. A null value is also returned in
+            place of the boolean flag describing whether the coordinates are near an edge or not that RateMap returns.
+        :rtype: Tuple[Quantity, None]
+        """
+        # The code is essentially identical to that in simple_peak in RateMap, but I'm tired and can't be bothered
+        #  to do this properly so I'll just copy it over
+        if mask.shape != self.data.shape:
+            raise ValueError("The shape of the mask array ({0}) must be the same as that of the data array "
+                             "({1}).".format(mask.shape, self.data.shape))
+
+        # Creates the data array that we'll be searching. Takes into account the passed mask
+        masked_data = self.data * mask
+
+        # Uses argmax to find the flattened coordinate of the max value, then unravel_index to convert
+        #  it back to a 2D coordinate
+        max_coords = np.unravel_index(np.argmax(masked_data == masked_data.max()), masked_data.shape)
+        # Defines an astropy pix quantity of the peak coordinates
+        peak_pix = Quantity([max_coords[1], max_coords[0]], pix)
+        # Don't bother converting if the desired output coordinates are already pix, but otherwise use this
+        #  objects coord_conv function to move to desired coordinate units.
+        if out_unit != pix:
+            peak_conv = self.coord_conv(peak_pix, out_unit)
+        else:
+            peak_conv = peak_pix.astype(int)
+
+        return peak_conv, None
+
     def get_view(self, ax: Axes, cross_hair: Quantity = None, mask: np.ndarray = None,
                  chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, zoom_in: bool = False,
                  manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
@@ -662,6 +957,10 @@ class Image(BaseProduct):
         # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
         if self.psf_corrected:
             title += ' - PSF Corrected'
+
+        # And smoothed as well
+        if self.smoothed:
+            title += ' - Smoothed'
 
         ax.set_title(title)
 
@@ -838,6 +1137,33 @@ class ExpMap(Image):
         exp = self.data[pix_coord[1], pix_coord[0]]
         return Quantity(exp, "s")
 
+    def get_count(self, *args, **kwargs):
+        """
+        Inherited method from Image superclass, disabled as does not make sense in an exposure map.
+        """
+        pass
+
+    @property
+    def smoothing_info(self) -> None:
+        """
+        As exposure maps cannot be smoothed, this property overrides the Image smoothing_info getter, and
+        returns None.
+
+        :return: None, as exposure maps cannot be smoothed.
+        :rtype: None
+        """
+        return None
+
+    @smoothing_info.setter
+    def smoothing_info(self, new_info):
+        """
+        As exposure maps cannot be smoothed, this property overrides the Image smoothing_info setter, and will
+        raise a TypeError if you try to pass any smoothing information to this object.
+
+        :param new_info: The new smoothing information to be added to the product.
+        """
+        raise TypeError("ExpMap products cannot be smoothed, and as such cannot have smoothing info added.")
+
 
 class RateMap(Image):
     """
@@ -926,20 +1252,11 @@ class RateMap(Image):
         # Store that edge mask as an attribute.
         self._edge_mask = comb
 
-        # TODO Add another attribute that describes how many sensors a particular pixel falls on for combined
-        #  ratemaps
+        # This sets every element of the exposure map that isn't zero to one, that way it becomes a simple
+        #  mask as to whether you are on or off the sensor
         det_map = self.expmap.data.copy()
-        self._on_sensor_mask = det_map[det_map != 0] = 1
-
-        # And another mask for whether on or off the sensor, very simple for individual ObsID-Instrument combos
-        # if self._obs_id != "combined":
-        #     self._on_sensor_mask = det_map
-        # # MUCH more complicated for combined ratemaps however, as what is on one detector might not be on another
-        # else:
-        #     for entry in self.header:
-        #         if "EMSCF" in entry:
-        #             print(self.header[entry])
-        #
+        det_map[det_map != 0] = 1
+        self._on_sensor_mask = det_map
 
         # Re-setting some paths to make more sense
         self._path = self._im_path
@@ -985,7 +1302,33 @@ class RateMap(Image):
         rate = self.data[pix_coord[1], pix_coord[0]]
         return Quantity(rate, "ct/s^-1")
 
-    def simple_peak(self, mask: np.ndarray, out_unit: UnitBase = deg) -> Tuple[Quantity, bool]:
+    def get_count(self, at_coord: Quantity) -> float:
+        """
+        A simple method that converts the given coordinates to pixels, then finds the number of counts
+        at those coordinates.
+
+        :param Quantity at_coord: Coordinate at which to find the number of counts.
+        :return: The counts at the supplied coordinates.
+        :rtype: Quantity
+        """
+        pix_coord = self.coord_conv(at_coord, pix).value
+        cts = self.image.data[pix_coord[1], pix_coord[0]]
+        return Quantity(cts, "ct")
+
+    def get_exp(self, at_coord: Quantity) -> float:
+        """
+        A simple method that converts the given coordinates to pixels, then finds the exposure time
+        at those coordinates.
+
+        :param Quantity at_coord: A pair of coordinates to find the exposure time for.
+        :return: The exposure time at the supplied coordinates.
+        :rtype: Quantity
+        """
+        pix_coord = self.coord_conv(at_coord, pix).value
+        exp = self.expmap.data[pix_coord[1], pix_coord[0]]
+        return Quantity(exp, "s")
+
+    def simple_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg) -> Tuple[Quantity, bool]:
         """
         Simplest possible way to find the position of the peak of X-ray emission in a ratemap. This method
         takes a mask in the form of a numpy array, which allows the user to mask out parts of the ratemap
@@ -993,7 +1336,7 @@ class RateMap(Image):
 
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
             aren't to be searched, and 1 for those that are.
-        :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
+        :param UnitBase/str out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
             the user's mask), in units of out_unit, as specified by the user. Also returned is a boolean flag
             that tells the caller if the peak is near a chip edge.
@@ -1025,7 +1368,7 @@ class RateMap(Image):
 
         return peak_conv, edge_flag
 
-    def clustering_peak(self, mask: np.ndarray, out_unit: UnitBase = deg, top_frac: float = 0.05,
+    def clustering_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg, top_frac: float = 0.05,
                         max_dist: float = 5, clean_point_clusters: bool = False) \
             -> Tuple[Quantity, bool, np.ndarray, List[np.ndarray]]:
         """
@@ -1038,7 +1381,7 @@ class RateMap(Image):
 
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
             aren't to be searched, and 1 for those that are.
-        :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
+        :param UnitBase/str out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :param float top_frac: The fraction of the elements (ordered in descending value) that should be used
             to generate clusters, and thus be considered for the cluster centre.
         :param float max_dist: The maximum distance criterion for the hierarchical clustering algorithm, in pixels.
