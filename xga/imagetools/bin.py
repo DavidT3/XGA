@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/08/2021, 20:22. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/08/2021, 09:32. Copyright (c) David J Turner
 
 from warnings import warn
 
@@ -91,6 +91,8 @@ def contour_bin_masks(prod: RateMap, src_mask: np.ndarray = None, bck_mask: np.n
         the number of regions that have been generated.
     :rtype: np.ndarray
     """
+    raise NotImplementedError("This function is not fully implemented yet!")
+
     # First checks to make sure no illegal values have been passed for the metric, and that the max value is in the
     #  right units for the chosen metric.
     if metric not in CONT_BIN_METRICS:

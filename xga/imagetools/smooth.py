@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/08/2021, 17:09. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/08/2021, 09:32. Copyright (c) David J Turner
 
 import os
 from random import randint
@@ -37,7 +37,7 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray
     :return: An XGA product with the smoothed Image or RateMap.
     :rtype: Image/RateMap
     """
-
+    raise NotImplementedError("This function is not fully implemented yet!")
     # First off we check the type of the product that has been passed in for smoothing
     if not isinstance(prod, Image) or type(prod) == ExpMap:
         raise TypeError("This function can only smooth data if input in the form of an XGA Image/RateMap.")
