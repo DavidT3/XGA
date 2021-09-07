@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 10:11. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/09/2021, 12:00. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -442,6 +442,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
         e_to_p_ratio = NHC[abund_table]
         for src_ind, src in enumerate(sources):
+
             sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                               psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
             if sb_prof is None:
