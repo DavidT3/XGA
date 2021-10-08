@@ -9,7 +9,7 @@ your work to this page.
    :widths: 20 15 20 15 30
    :header-rows: 1
 
-   * - Author
+   * - Lead Author
      - Year
      - DOI
      - NASA/ADS
@@ -20,7 +20,12 @@ your work to this page.
      -
      - XGA Software Paper
    * - `D. J. Turner <https://orcid.org/0000-0001-9658-1396>`_
-     - In Prep
+     - 2021
      -
-     -
+     - `ePrint <https://ui.adsabs.harvard.edu/abs/2021arXiv210911807T/abstract>`_
      - eFEDS-XCS Cluster Comparison
+   * - `D. S. Pillay <https://orcid.org/0000-0002-1602-4168>`_
+     - 2021
+     -
+     -
+     - ACTCL J0019.6+0336 Follow-up
