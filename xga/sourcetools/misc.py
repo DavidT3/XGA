@@ -1,6 +1,6 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/03/2021, 17:24. Copyright (c) David J Turner
-
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/10/2021, 18:23. Copyright (c) David J Turner
+import warnings
 from copy import deepcopy
 from subprocess import Popen, PIPE
 from typing import Union, List
@@ -49,11 +49,20 @@ def nh_lookup(coord_pair: Quantity) -> ndarray:
     try:
         average_nh = float(average_nh)
         weighed_av_nh = float(weighed_av_nh)
+        nh_vals = Quantity(array([average_nh, weighed_av_nh]) / 10 ** 22, "10^22 cm^-2")
     except ValueError:
-        raise HeasoftError("HEASOFT nH command scraped output cannot be converted to float")
-
+        if any(["nH is from the closest pixel to the input position" in line for line in lines]):
+            dist = [e for e in lines[12].split(' ') if e != ''][2]
+            warnings.warn("nH is from the closest pixel to the input position, that is {d} "
+                          "degrees away. Both returned nH values will be the same.".format(d=dist))
+            try:
+                nh_val = float([e for e in lines[12].split(' ') if e != ''][3])
+                nh_vals = Quantity(array([nh_val, nh_val]) / 10 ** 22, "10^22 cm^-2")
+            except ValueError:
+                raise HeasoftError("HEASOFT nH command scraped output cannot be converted to float")
+        else:
+            raise HeasoftError("HEASOFT nH command scraped output cannot be converted to float")
     # Returns both the average and weighted average nH values, as output by HEASOFT nH tool.
-    nh_vals = Quantity(array([average_nh, weighed_av_nh]) / 10**22, "10^22 cm^-2")
     return nh_vals
 
 
