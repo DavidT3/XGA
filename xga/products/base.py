@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/07/2021, 11:16. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/08/2021, 09:32. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -1372,7 +1372,7 @@ class BaseProfile1D:
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
              x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-             y_label: str = None):
+             y_label: str = None, save_path: str = None):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1402,6 +1402,8 @@ class BaseProfile1D:
             will attempt to normalise using that.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
         """
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
@@ -1618,6 +1620,10 @@ class BaseProfile1D:
             main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
         elif max(y_axis_lims) < 100 and min(y_axis_lims) <= 0.1:
             main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
 
         # And of course actually showing it
         plt.show()
@@ -2191,7 +2197,7 @@ class BaseAggregateProfile1D:
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
              ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
              just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, normalise_x: bool = False,
-             normalise_y: bool = False, x_label: str = None, y_label: str = None):
+             normalise_y: bool = False, x_label: str = None, y_label: str = None, save_path: str = None):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -2219,6 +2225,8 @@ class BaseAggregateProfile1D:
             definition of the constituent profile objects.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -2417,6 +2425,11 @@ class BaseAggregateProfile1D:
             main_ax.axvline(d_rad, linestyle='dashed', color='black')
             main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
                              color='black', fontsize=14, xycoords=('data', 'axes fraction'))
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
         # And of course actually showing it
         plt.show()
 
