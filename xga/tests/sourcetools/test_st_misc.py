@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/10/2021, 17:42. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/10/2021, 09:51. Copyright (c) David J Turner
 
 import pytest
 from astropy.cosmology import Planck15
