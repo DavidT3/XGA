@@ -2,3 +2,4 @@
 /docs/source/notebooks/advanced_tutorials/random_brightness_profile.xga
 .coverage
 .pytest_cache
+xga_output
