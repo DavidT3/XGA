@@ -5,10 +5,9 @@ import pytest
 from astropy.cosmology import Planck15
 from astropy.units import Quantity
 
-from ...sourcetools.misc import nh_lookup, rad_to_ang, ang_to_rad, name_to_coord, coord_to_name
+from xga.sourcetools.misc import nh_lookup, rad_to_ang, ang_to_rad, name_to_coord, coord_to_name
+from .. import A907_LOC
 
-# Any useful constants
-A907_LOC = Quantity([149.59209, -11.05972], 'deg')
 
 
 @pytest.mark.heasoft
