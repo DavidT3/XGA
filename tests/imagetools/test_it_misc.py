@@ -1,26 +1,29 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/10/2021, 09:51. Copyright (c) David J Turner
-
+import numpy as np
 import pytest
 from astropy.cosmology import Planck15
 from astropy.units import Quantity
+from numpy import zeros
+from numpy.random import choice
 
 from xga.products.phot import Image
-from xga.imagetools.misc import pix_deg_scale, sky_deg_scale, pix_rad_to_physical
-from .. import A907_LOC, A907_PN_INFO
+from xga.imagetools.misc import pix_deg_scale, sky_deg_scale, pix_rad_to_physical, physical_rad_to_pix, \
+    data_limits, edge_finder
+from .. import A907_LOC, A907_IM_PN_INFO, A907_EX_PN_INFO
 
 OFF_PIX = Quantity([20, 20], 'pix')
 
 
 @pytest.mark.simple
 @pytest.mark.data
-@pytest.mark.parametrize("test_coord, test_wcs, test_offset, expected", [(A907_LOC, Image(*A907_PN_INFO).radec_wcs,
+@pytest.mark.parametrize("test_coord, test_wcs, test_offset, expected", [(A907_LOC, Image(*A907_IM_PN_INFO).radec_wcs,
                                                                           Quantity(1, 'arcmin'),
                                                                           Quantity(0.0012083328398207695, 'deg/pix')),
-                                                                         (A907_LOC, Image(*A907_PN_INFO).radec_wcs,
+                                                                         (A907_LOC, Image(*A907_IM_PN_INFO).radec_wcs,
                                                                           Quantity(0.001, 'arcmin'),
                                                                           Quantity(0.0012083330447300933, 'deg/pix')),
-                                                                         (OFF_PIX, Image(*A907_PN_INFO).radec_wcs,
+                                                                         (OFF_PIX, Image(*A907_IM_PN_INFO).radec_wcs,
                                                                           Quantity(1, 'arcmin'),
                                                                           Quantity(0.0012082903638784826, 'deg/pix'))
                                                                          ])
@@ -34,13 +37,13 @@ def test_pix_deg_scale(test_coord, test_wcs, test_offset, expected):
 
 @pytest.mark.simple
 @pytest.mark.data
-@pytest.mark.parametrize("test_im, test_coord, test_offset, expected", [(Image(*A907_PN_INFO), A907_LOC,
+@pytest.mark.parametrize("test_im, test_coord, test_offset, expected", [(Image(*A907_IM_PN_INFO), A907_LOC,
                                                                          Quantity(1, 'arcmin'),
                                                                          1.388888321633066e-05),
-                                                                        (Image(*A907_PN_INFO), A907_LOC,
+                                                                        (Image(*A907_IM_PN_INFO), A907_LOC,
                                                                          Quantity(0.001, 'arcmin'),
                                                                          1.3888885571577373e-05),
-                                                                        (Image(*A907_PN_INFO), OFF_PIX,
+                                                                        (Image(*A907_IM_PN_INFO), OFF_PIX,
                                                                          Quantity(1, 'arcmin'),
                                                                          1.3888394987109003e-05)])
 def test_sky_deg_scale(test_im, test_coord, test_offset, expected):
@@ -54,10 +57,116 @@ def test_sky_deg_scale(test_im, test_coord, test_offset, expected):
 
 @pytest.mark.simple
 @pytest.mark.data
-@pytest.mark.parametrize("test_im, test_rad, out_unit, expected", [(Image(*A907_PN_INFO), Quantity(100, 'pix'), 'deg', 1)])
+@pytest.mark.parametrize("test_im, test_rad, out_unit, expected", [(Image(*A907_IM_PN_INFO), Quantity(103, 'pix'), 'deg',
+                                                                    Quantity(0.12445828250153926, 'deg')),
+                                                                   (Image(*A907_IM_PN_INFO), Quantity(103, 'pix'), 'kpc',
+                                                                    Quantity(1275.5389422602298, 'kpc'))])
 def test_pix_rad_to_physical(test_im, test_rad, out_unit, expected):
+    """
+    Testing conversion of radius in pixels to physical units (both proper and angular).
+    """
     ret_val = pix_rad_to_physical(test_im, test_rad, out_unit, A907_LOC, 0.16, Planck15)
-    print(ret_val)
     assert ret_val == expected
+
+
+# TODO: Figure out why the output has .000000000000000000001 (or something like that) added to it
+@pytest.mark.simple
+@pytest.mark.data
+@pytest.mark.xfail
+@pytest.mark.parametrize("test_im, test_rad, expected", [(Image(*A907_IM_PN_INFO), Quantity(0.12445828250153926, 'deg'),
+                                                          Quantity(103, 'pix')),
+                                                         (Image(*A907_IM_PN_INFO), Quantity(1275.5389422602298, 'kpc'),
+                                                          Quantity(103, 'pix'))])
+def test_physical_rad_to_pix(test_im, test_rad, expected):
+    """
+    Testing conversion of radius in physical units to a radius in pixels.
+    """
+    ret_val = physical_rad_to_pix(test_im, test_rad, A907_LOC, 0.16, Planck15)
+    assert ret_val == expected
+
+
+@pytest.mark.simple
+def test_data_lims_zeros():
+    """
+    Testing that this function fails properly in the absence of any data in an array.
+    """
+    test_arr = zeros((512, 512))
+    with pytest.raises(ValueError):
+        data_limits(test_arr)
+
+
+@pytest.mark.simple
+def test_data_lims_array():
+    """
+    Testing that a numpy array with some data in it returns the correct limits.
+    """
+    test_arr = zeros((512, 512))
+    test_arr[34, 67] = 2
+    test_arr[500, 400] = 1
+    test_arr[4, 200] = 3
+
+    assert data_limits(test_arr) == ([66, 401], [3, 501])
+
+
+@pytest.mark.simple
+@pytest.mark.data
+def test_data_lims_array():
+    """
+    Testing that an image input results in the correct limits.
+    """
+    test_im = Image(*A907_IM_PN_INFO)
+    assert data_limits(test_im) == ([25, 436], [67, 482])
+
+
+# TODO Maybe re-write this so it generates a random rectangle for testing
+@pytest.mark.simple
+def test_edge_finder_array():
+    """
+    Tests that the edge finder works for a simple square in an array.
+    """
+    test_arr = zeros((100, 100))
+    test_arr[30:60, 35:65] = 1
+    test_arr[30:60, 35:95] = 1
+    edgy = edge_finder(test_arr)
+
+    expected = zeros((100, 100))
+    expected[30, 35:95] = 1
+    expected[59, 35:95] = 1
+
+    to_add = zeros((100, 100))
+    to_add[30:60, 35] = 1
+    to_add[30:60, 95] = 1
+    expected += to_add
+
+    assert (edgy - expected).sum() == 0
+
+
+# @pytest.mark.simple
+# def test_edge_finder_array_border():
+#     """
+#     Tests that the edge finder works for a simple square in an array, when the border requirement is added.
+#     """
+#     test_arr = zeros((100, 100))
+#     test_arr[30:60, 35:65] = 1
+#     test_arr[30:60, 35:95] = 1
+#     edgy = edge_finder(test_arr, border=True)
+#     print((edgy - edge_finder(test_arr, border=False)).sum())
+#
+#     expected = zeros((100, 100))
+#     expected[30, 35:95] = 1
+#     expected[59, 35:95] = 1
+#
+#     to_add = zeros((100, 100))
+#     to_add[30:60, 35] = 1
+#     to_add[30:60, 94] = 1
+#     expected += to_add
+#
+#     # assert (edgy - expected).sum() == 0
+#     assert False
+
+
+
+
+
 
 
