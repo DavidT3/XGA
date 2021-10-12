@@ -184,13 +184,15 @@ def data_limits(im_prod: Union[Image, RateMap, ExpMap, np.ndarray]) -> Tuple[Lis
         the y lower and upper bounding coordinates.
     :rtype: Tuple[List[int, int], List[int, int]]
     """
-    if isinstance(im_prod, Image):
+    if isinstance(im_prod, Image) and im_prod.data.sum().value != 0:
         # For the XGA Image products
         # This just finds out where the zeros in the data are
         locations = np.where(im_prod.data != 0)
-    else:
+    elif isinstance(im_prod, np.ndarray) and im_prod.sum() != 0:
         # For numpy arrays
         locations = np.where(im_prod != 0)
+    else:
+        raise ValueError("Supplied data only contains zeros, data limits cannot be found in this case.")
 
     # Finds the maximum and minimum locations of zeros in both x and y spaces - these are the boundary coordinates
     # Adds and subtracts 1 to give a very small border.
