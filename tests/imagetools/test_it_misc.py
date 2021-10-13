@@ -5,7 +5,7 @@ import pytest
 from astropy.cosmology import Planck15
 from astropy.units import Quantity
 from numpy import zeros
-from numpy.random import choice
+from numpy.testing import assert_array_equal
 
 from xga.products.phot import Image
 from xga.imagetools.misc import pix_deg_scale, sky_deg_scale, pix_rad_to_physical, physical_rad_to_pix, \
@@ -120,49 +120,44 @@ def test_data_lims_array():
 
 # TODO Maybe re-write this so it generates a random rectangle for testing
 @pytest.mark.simple
-def test_edge_finder_array():
+@pytest.mark.parametrize("border, keep_corners", [(False, False), (False, True), (True, True), (True, False)])
+def test_edge_finder_array(border, keep_corners):
     """
-    Tests that the edge finder works for a simple square in an array.
+    Tests that the edge finder works for a simple square in an array. Uses a function from the numpy
+    testing framework to check whether the two arrays are the same. Checks for different combinations
     """
+
+    # Sets up an array of zeros and ones, where the ones are in a solid rectangle shape
     test_arr = zeros((100, 100))
     test_arr[30:60, 35:65] = 1
     test_arr[30:60, 35:95] = 1
-    edgy = edge_finder(test_arr)
+    # Runs the edge finding function with the passed parameters
+    edgy = edge_finder(test_arr, keep_corners=keep_corners, border=border)
 
+    # This is what we construct the expected array in
     expected = zeros((100, 100))
-    expected[30, 35:95] = 1
-    expected[59, 35:95] = 1
+    if not border:
+        expected[30, 35:95] = 1
+        expected[59, 35:95] = 1
+        expected[30:60, 35] = 1
+        expected[30:60, 94] = 1
+    else:
+        # The current behaviour of when a border is generated means that there will be no corners
+        #  (see issue #623), though I may change this in the future
+        expected[29, 35:95] = 1
+        expected[60, 35:95] = 1
+        expected[30:60, 34] = 1
+        expected[30:60, 95] = 1
 
-    to_add = zeros((100, 100))
-    to_add[30:60, 35] = 1
-    to_add[30:60, 95] = 1
-    expected += to_add
+    if keep_corners and not border:
+        expected[30, 35] += 1
+        expected[59, 35] += 1
+        expected[30, 94] += 1
+        expected[59, 94] += 1
 
-    assert (edgy - expected).sum() == 0
+    # Use this numpy function to check whether the arrays are equal
+    assert_array_equal(edgy, expected)
 
-
-# @pytest.mark.simple
-# def test_edge_finder_array_border():
-#     """
-#     Tests that the edge finder works for a simple square in an array, when the border requirement is added.
-#     """
-#     test_arr = zeros((100, 100))
-#     test_arr[30:60, 35:65] = 1
-#     test_arr[30:60, 35:95] = 1
-#     edgy = edge_finder(test_arr, border=True)
-#     print((edgy - edge_finder(test_arr, border=False)).sum())
-#
-#     expected = zeros((100, 100))
-#     expected[30, 35:95] = 1
-#     expected[59, 35:95] = 1
-#
-#     to_add = zeros((100, 100))
-#     to_add[30:60, 35] = 1
-#     to_add[30:60, 94] = 1
-#     expected += to_add
-#
-#     # assert (edgy - expected).sum() == 0
-#     assert False
 
 
 
