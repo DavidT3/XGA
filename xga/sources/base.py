@@ -935,7 +935,7 @@ class BaseSource:
                     else:
                         # Push global fit results, luminosities etc. into the corresponding source object.
                         self.add_fit_data(model, global_results, chosen_lums, sp_key)
-                except (OSError, NoProductAvailableError, IndexError):
+                except (OSError, NoProductAvailableError, IndexError, NotAssociatedError):
                     chosen_lums = {}
                     warnings.warn("{src} fit {f} could not be loaded in as there are no matching spectra "
                                   "available".format(src=self.name, f=fit_name))

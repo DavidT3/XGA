@@ -1,2 +1,5 @@
 /docs/source/notebooks/tutorials/whole_sample.csv
 /docs/source/notebooks/advanced_tutorials/random_brightness_profile.xga
+.coverage
+.pytest_cache
+xga_output

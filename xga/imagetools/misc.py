@@ -5,7 +5,7 @@
 from typing import Tuple, List, Union
 
 import numpy as np
-from astropy.units import Quantity, pix, deg, UnitConversionError, UnitBase
+from astropy.units import Quantity, pix, deg, UnitConversionError, UnitBase, Unit
 from astropy.wcs import WCS
 
 from ..products import Image, RateMap, ExpMap
@@ -93,7 +93,7 @@ def sky_deg_scale(im_prod: Union[Image, RateMap, ExpMap], coord: Quantity,
     return Quantity(scale, deg/xmm_sky)
 
 
-def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantity, out_unit: UnitBase,
+def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantity, out_unit: Union[UnitBase, str],
                         coord: Quantity, z: Union[float, int] = None, cosmo=None) -> Quantity:
     """
     Pure convenience function to convert a list of pixel radii to whatever unit we might want at the end. Used
@@ -102,7 +102,7 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantit
 
     :param Image/RateMap/ExpMap im_prod: The image/ratemap product for which the conversion is taking place.
     :param Quantity pix_rad: The array of pixel radii to convert to out_unit.
-    :param UnitBase out_unit: The desired output unit for the radii.
+    :param UnitBase/str out_unit: The desired output unit for the radii, either an astropy unit object or a name string.
     :param Quantity coord: The position of the object being analysed.
     :param float/int z: The redshift of the object (only required for proper distance units like kpc).
     :param cosmo: The chosen cosmology for the analysis (only required for proper distance units like kpc).
@@ -111,6 +111,10 @@ def pix_rad_to_physical(im_prod: Union[Image, RateMap, ExpMap], pix_rad: Quantit
     """
     if pix_rad.unit != pix:
         raise UnitConversionError("pix_rads must be in units of pixels")
+
+    # See what type of unit input was given
+    if isinstance(out_unit, str):
+        out_unit = Unit(out_unit)
 
     deg_rads = Quantity(pix_deg_scale(coord, im_prod.radec_wcs).value * pix_rad.value, 'deg')
 
@@ -180,13 +184,15 @@ def data_limits(im_prod: Union[Image, RateMap, ExpMap, np.ndarray]) -> Tuple[Lis
         the y lower and upper bounding coordinates.
     :rtype: Tuple[List[int, int], List[int, int]]
     """
-    if isinstance(im_prod, Image):
+    if isinstance(im_prod, Image) and im_prod.data.sum() != 0:
         # For the XGA Image products
         # This just finds out where the zeros in the data are
         locations = np.where(im_prod.data != 0)
-    else:
+    elif isinstance(im_prod, np.ndarray) and im_prod.sum() != 0:
         # For numpy arrays
         locations = np.where(im_prod != 0)
+    else:
+        raise ValueError("Supplied data only contains zeros, data limits cannot be found in this case.")
 
     # Finds the maximum and minimum locations of zeros in both x and y spaces - these are the boundary coordinates
     # Adds and subtracts 1 to give a very small border.
