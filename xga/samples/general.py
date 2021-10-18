@@ -12,13 +12,22 @@ from ..sources.general import PointSource
 
 
 class PointSample(BaseSample):
+    """
+    The sample class for general point sources, without the extra information required to analyse more specific
+    X-ray point sources.
+    """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
-                 point_radius: Quantity = Quantity(30, 'arcsec'), use_peak=False, peak_lo_en=Quantity(0.5, "keV"),
-                 peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05, back_out_rad_factor=1.5,
-                 cosmology=Planck15, load_fits=False, no_prog_bar: bool = False, psf_corr: bool = False):
+                 point_radius: Quantity = Quantity(30, 'arcsec'), use_peak: bool = False,
+                 peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
+                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
+                 cosmology=Planck15, load_fits: bool = False, no_prog_bar: bool = False, psf_corr: bool = False):
 
-        # People might pass a single value for point_radius, in which case things will break
-        if point_radius.isscalar:
+        # Strongly enforce that its a quantity, this also means that it should be guaranteed that all radii have
+        #  a single unit
+        if not isinstance(point_radius, Quantity):
+            raise TypeError("Please pass a quantity object for point_radius, rather than an array or list.")
+        # People might pass a single value for point_radius, in which case we turn it into a non-scalar quantity
+        elif point_radius.isscalar:
             point_radius = Quantity([point_radius.value]*len(ra), point_radius.unit)
 
         # I don't like having this here, but it does avoid a circular import problem
