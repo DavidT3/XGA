@@ -12,14 +12,26 @@ from ..sources.general import PointSource
 
 
 class PointSample(BaseSample):
+    """
+    The sample class for general point sources, without the extra information required to analyse more specific
+    X-ray point sources.
+    """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
-                 point_radius: Quantity = Quantity(30, 'arcsec'), use_peak=False, peak_lo_en=Quantity(0.5, "keV"),
-                 peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05, back_out_rad_factor=1.5,
-                 cosmology=Planck15, load_fits=False, no_prog_bar: bool = False, psf_corr: bool = False):
+                 point_radius: Quantity = Quantity(30, 'arcsec'), use_peak: bool = False,
+                 peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
+                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
+                 cosmology=Planck15, load_fits: bool = False, no_prog_bar: bool = False, psf_corr: bool = False):
 
-        # People might pass a single value for point_radius, in which case things will break
-        if point_radius.isscalar:
+        # Strongly enforce that its a quantity, this also means that it should be guaranteed that all radii have
+        #  a single unit
+        if not isinstance(point_radius, Quantity):
+            raise TypeError("Please pass a quantity object for point_radius, rather than an array or list.")
+        # People might pass a single value for point_radius, in which case we turn it into a non-scalar quantity
+        elif point_radius.isscalar:
             point_radius = Quantity([point_radius.value]*len(ra), point_radius.unit)
+        elif not point_radius.isscalar and len(point_radius) != len(ra):
+            raise ValueError("If you pass a set of radii (rather than a single radius) to point_radius then there"
+                             " must be one entry per object passed to this sample object.")
 
         # I don't like having this here, but it does avoid a circular import problem
         from xga.sas import evselect_image, eexpmap, emosaic
@@ -41,33 +53,31 @@ class PointSample(BaseSample):
         final_names = []
         self._point_radii = []
         with tqdm(desc="Setting up Point Sources", total=len(self._accepted_inds), disable=no_prog_bar) as dec_lb:
-            for ind, rd in enumerate(self.ra_decs):
-                r, d = rd
-                z = self.redshifts[ind]
-                n = self._names[ind]
-                if point_radius is not None:
-                    pr = point_radius[self._accepted_inds[ind]]
+            for ind in range(len(self._accepted_inds)):
+                r, d = ra[self._accepted_inds[ind]], dec[self._accepted_inds[ind]]
+                if redshift is None:
+                    z = None
                 else:
-                    pr = None
+                    z = redshift[self._accepted_inds[ind]]
+                n = self._names[ind]
+                pr = point_radius[self._accepted_inds[ind]]
 
                 # Observation cleaning goes on automatically in PointSource, so if a NoValidObservations error is
                 #  thrown I have to catch it and not add that source to this sample.
                 try:
-                    self._sources[n] = PointSource(r, d, z, n, pr, use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
-                                                   back_out_rad_factor, cosmology, True, load_fits, False)
-                    pr = self._sources[n].point_radius
+                    self._sources[n] = PointSource(r, d, z, n, pr, use_peak, peak_lo_en, peak_hi_en,
+                                                   back_inn_rad_factor, back_out_rad_factor, cosmology, True,
+                                                   load_fits, False)
                     self._point_radii.append(pr.value)
+                    # I know this will write to this over and over, but it seems a bit silly to check whether this has
+                    #  been set yet when all radii should be forced to be the same unit
+                    self._pr_unit = pr.unit
                     final_names.append(n)
                 except NoValidObservationsError:
                     self._failed_sources[n] = "CleanedNoMatch"
 
                 dec_lb.update(1)
-
         self._names = final_names
-
-        # I'm not worried about pr never having existed - declaration of a sample will fail
-        #  if not data is passed.
-        self._pr_unit = pr.unit
 
         # I've cleaned the observations, and its possible some of the data has been thrown away,
         #  so I should regenerate the mosaic images/expmaps

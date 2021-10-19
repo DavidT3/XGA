@@ -10,7 +10,8 @@ from astropy.units import Quantity
 from numpy import ndarray
 from tqdm import tqdm
 
-from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
+    NoValidObservationsError
 from ..exceptions import NoValidObservationsError
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
@@ -78,6 +79,12 @@ class BaseSample:
                          "sample.".format(n=n))
                     self._failed_sources[n] = "NoMatch"
                 dec_base.update(1)
+
+        # It is possible (especially if someone is using the Sample classes as a way to check whether things have
+        #  XMM data) that no sources will have been declared by this point, in which case it should fail now
+        if len(self._sources) == 0:
+            raise NoValidObservationsError("No sources have been declared, likely meaning that none of the sample have"
+                                           " valid XMM data.")
 
     # These next few properties are all quantities passed in by the user on init, then used to
     #  declare source objects - as such they cannot ever be set by the user.

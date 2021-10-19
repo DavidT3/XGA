@@ -1307,10 +1307,10 @@ class BaseSource:
                         results_dict[obs] = None
                     elif len(interim_reg) == 1:
                         results_dict[obs] = interim_reg[0]
-                    # Matching to multiple extended sources would be very problematic, so throw an error
+                    # Matching to multiple sources would be very problematic, so throw an error
                     elif len(interim_reg) > 1:
-                        raise MultipleMatchError("More than one match to an extended is found in the region file"
-                                                 "for observation {}".format(obs))
+                        raise MultipleMatchError("More than one match for {n} is found in the region file " 
+                                                 "for observation {o}".format(o=obs, n=self.name))
 
                 # Alt match is used for when there is a secondary match to a point source
                 alt_match_reg = [entry for entry in self._initial_regions[obs][self._initial_region_matches[obs]]
