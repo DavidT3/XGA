@@ -36,9 +36,9 @@ if not os.path.exists(config_path):
     xga_path = '/'.join(current_path.split('/')[:-2])
 
     # The test data includes a mostly complete config file, and census
-    test_cfg_path = os.path.join(xga_path, 'test_data', 'xga.cfg')
-    test_census_path = os.path.join(xga_path, 'test_data', 'census.csv')
-    test_data_path = os.path.join(xga_path, 'test_data')
+    test_cfg_path = os.path.join(xga_path, 'tests', 'test_data', 'xga.cfg')
+    test_census_path = os.path.join(xga_path, 'tests', 'test_data', 'census.csv')
+    test_data_path = os.path.join(xga_path, 'tests', 'test_data')
 
     # Copy the config and census over to the place they should be on whatever system is building this
     shutil.copy(test_cfg_path, config_file_path)
@@ -59,7 +59,7 @@ if not os.path.exists(config_path):
 # -- Project information -----------------------------------------------------
 
 project = 'XMM: Generate and Analyse (XGA)'
-copyright = '2020, David J Turner'
+copyright = '2021, David J Turner'
 author = 'David J Turner'
 
 # The full version, including alpha/beta/rc tags
