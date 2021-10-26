@@ -1,4 +1,4 @@
-<img src="https://github.com/DavidT3/XGA/blob/master/xga/files/long_xga_logo.png" width="300">
+<img src="https://raw.githubusercontent.com/DavidT3/XGA/master/xga/files/long_xga_logo.png" width="300">
 
 [![Documentation Status](https://readthedocs.org/projects/xga/badge/?version=latest)](https://xga.readthedocs.io/en/latest/?badge=latest)
 
