@@ -3,7 +3,7 @@
 </p>
 
 [![Documentation Status](https://readthedocs.org/projects/xga/badge/?version=latest)](https://xga.readthedocs.io/en/latest/?badge=latest)
-[![Coverage Percentage](https://raw.githubusercontent.com/DavidT3/XGA/feat/coverageBadgeBodge/tests/coverage_badge.svg)](https://raw.githubusercontent.com/DavidT3/XGA/coverageBadgeBodge/tests/coverage_badge.svg)
+[![Coverage Percentage](https://raw.githubusercontent.com/DavidT3/XGA/master/tests/coverage_badge.svg)](https://raw.githubusercontent.com/DavidT3/XGA/master/tests/coverage_badge.svg)
 
 # What is XMM: Generate and Analyse (XGA)?
 
