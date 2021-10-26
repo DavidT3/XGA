@@ -1,6 +1,9 @@
-<img src="https://github.com/DavidT3/XGA/blob/master/xga/files/long_xga_logo.png" width="300">
+<p align="center">
+    <img src="https://raw.githubusercontent.com/DavidT3/XGA/master/xga/files/long_xga_logo.png" width="500">
+</p>
 
 [![Documentation Status](https://readthedocs.org/projects/xga/badge/?version=latest)](https://xga.readthedocs.io/en/latest/?badge=latest)
+[![Coverage Percentage](https://raw.githubusercontent.com/DavidT3/XGA/master/tests/coverage_badge.svg)](https://raw.githubusercontent.com/DavidT3/XGA/master/tests/coverage_badge.svg)
 
 # What is XMM: Generate and Analyse (XGA)?
 
