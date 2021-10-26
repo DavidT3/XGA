@@ -1055,7 +1055,10 @@ class BaseSource:
         associated with this source. Also computes simple matches to find regions likely
         to be related to the source.
 
-        :return: Tuple[dict, dict]
+        :return: Two dictionaries, the first contains the regions for each of the ObsIDs and the second contains
+            the regions that have been very simply matched to the source. These should be ordered from closest to
+            furthest from the passed source coordinates.
+        :rtype: Tuple[dict, dict]
         """
 
         def dist_from_source(reg):
@@ -1308,9 +1311,21 @@ class BaseSource:
                     elif len(interim_reg) == 1:
                         results_dict[obs] = interim_reg[0]
                     # Matching to multiple sources would be very problematic, so throw an error
-                    elif len(interim_reg) > 1:
-                        raise MultipleMatchError("More than one match for {n} is found in the region file " 
-                                                 "for observation {o}".format(o=obs, n=self.name))
+                    elif len(interim_reg) > 1 and source_type == "pnt":
+                        # I made the _load_regions method sort the outputted region dictionaries by distance from the
+                        #  input coordinates, so I know that the 0th entry will be the closest to the source coords.
+                        #  Hence I choose that one for pnt source multi-matches like this, see comment 2 of issue #639
+                        #  for an example.
+                        results_dict[obs] = interim_reg[0]
+                        warnings.warn("{ns} matches for the point source {n} are found in the {o} region "
+                                      "file. The source nearest to the passed coordinates is accepted, all others "
+                                      "will be placed in the alternate match category and will not be removed "
+                                      "by masks.".format(o=obs, n=self.name, ns=len(interim_reg)))
+
+                    elif len(interim_reg) > 1 and source_type == "ext":
+                        raise MultipleMatchError("More than one match for {n} is found in the region file "
+                                                 "for observation {o}, this cannot yet be dealt with "
+                                                 "for extended sources.".format(o=obs, n=self.name))
 
                 # Alt match is used for when there is a secondary match to a point source
                 alt_match_reg = [entry for entry in self._initial_regions[obs][self._initial_region_matches[obs]]
