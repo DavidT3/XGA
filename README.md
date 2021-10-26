@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/DavidT3/XGA/master/xga/files/long_xga_logo.png" width="600">
+<img src="https://raw.githubusercontent.com/DavidT3/XGA/master/xga/files/long_xga_logo.png" width="400">
 
 [![Documentation Status](https://readthedocs.org/projects/xga/badge/?version=latest)](https://xga.readthedocs.io/en/latest/?badge=latest)
 [![Coverage Percentage](https://raw.githubusercontent.com/DavidT3/XGA/feat/coverageBadgeBodge/tests/coverage_badge.svg)](https://raw.githubusercontent.com/DavidT3/XGA/coverageBadgeBodge/tests/coverage_badge.svg)
