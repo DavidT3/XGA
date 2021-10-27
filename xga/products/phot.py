@@ -4,6 +4,7 @@
 import os
 import warnings
 from typing import Tuple, List, Union
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle
-from regions import read_ds9, PixelRegion
+from regions import read_ds9, PixelRegion, SkyRegion
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
@@ -76,7 +77,7 @@ class Image(BaseProduct):
 
         # This checks whether a region file has been passed, and if it has then processes it
         if reg_file_path != '' and os.path.exists(reg_file_path):
-            self._regions = self._process_regfile(reg_file_path)
+            self._regions = self._process_regions(reg_file_path)
             self._reg_file_path = reg_file_path
         elif reg_file_path != '' and not os.path.exists(reg_file_path):
             warnings.warn("That region file path does not exist")
@@ -201,21 +202,38 @@ class Image(BaseProduct):
             raise FailedProductError("SAS has generated this image without a WCS capable of "
                                      "going from pixels to RA-DEC.")
 
-    def _process_regfile(self, path: str) -> List[PixelRegion]:
+    def _process_regions(self, path: str = None, reg_list: List[Union[PixelRegion, SkyRegion]] = None) \
+            -> List[PixelRegion]:
         """
         This internal function just takes the path to a region file and processes it into a form that
         this object requires for viewing.
 
-        :param str path: The path to the region file to be processed
+        :param str path: The path of a region file to be processed, can be None but only if the
+            other argument is given.
+        :param List[PixelRegion/SkyRegion] reg_list: A list of region objects to be processed, default is None.
         :return: A list of pixel regions.
         :rtype: List[PixelRegion]
         """
-        ds9_regs = read_ds9(path)
+        # This method can deal with either an input of a region file path or of a list of region objects, but
+        #  firstly we need to check that at least one of the inputs isn't None
+        if all([path is None, reg_list is None]):
+            raise ValueError("Either a path or a list of region objects must be passed, you have passed neither")
+        elif all([path is not None, reg_list is not None]):
+            raise ValueError("You have passed both a path and a list of regions, pass one or the other.")
+
+        # The behaviour here depends on whether regions or a path have been passed
+        if path is not None:
+            ds9_regs = read_ds9(path)
+        else:
+            ds9_regs = deepcopy(reg_list)
+
+        # Checking what kind of regions there are, as that changes whether they need to be converted or not
         final_regs = []
         for reg in ds9_regs:
             if isinstance(reg, PixelRegion):
                 final_regs.append(reg)
             else:
+                # Regions in sky coordinates need to be in pixels for overlaying on the image
                 final_regs.append(reg.to_pixel(self._wcs_radec))
 
         return final_regs
@@ -413,20 +431,30 @@ class Image(BaseProduct):
         return self._regions
 
     @regions.setter
-    def regions(self, new_path: str):
+    def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]]]):
         """
         A setter for regions associated with this object, a region file path is passed, then that file
         is processed into the required format.
 
-        :param str new_path: A new region file path.
+        :param str/List[SkyRegion/PixelRegion] new_reg: A new region file path, or a list of region objects.
         """
-        if new_path != '' and os.path.exists(new_path):
-            self._reg_file_path = new_path
-            self._regions = self._process_regfile(new_path)
-        elif new_path == '':
+        if not isinstance(new_reg, (str, list)):
+            raise TypeError("Please pass either a path to a region file or a list of "
+                            "SkyRegion/PixelRegion objects.")
+
+        if isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
+            self._reg_file_path = new_reg
+            self._regions = self._process_regions(new_reg)
+        elif isinstance(new_reg, str) and new_reg == '':
             pass
-        else:
+        elif isinstance(new_reg, str):
             warnings.warn("That region file path does not exist")
+        elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
+            self._reg_file_path = ""
+            self._regions = self._process_regions(reg_list=new_reg)
+        else:
+            raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
+                             "a list of SkyRegion/PixelRegion objects")
 
     @property
     def shape(self) -> Tuple[int, int]:
