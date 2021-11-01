@@ -6,7 +6,7 @@ from warnings import warn
 
 import numpy as np
 from astropy.cosmology import Planck15
-from astropy.units import Quantity
+from astropy.units import Quantity, Unit, arcmin
 from numpy import ndarray
 from tqdm import tqdm
 
@@ -108,6 +108,25 @@ class BaseSample:
         """
 
         return Quantity([s.ra_dec.value for s in self._sources.values()], 'deg')
+
+    @property
+    def peaks(self) -> Quantity:
+        """
+        This property getter will fetch peak coordinates for the sources in this sample. An exception will
+        be raised if the source objects do not have a peak attribute, and a warning will be presented if all
+        user supplied ra-dec values are the same as all peak values.
+
+        :return: A quantity containing the peak coordinates measured for the sources in the sample.
+        :rtype: Quantity
+        """
+        if not hasattr(self[0], 'peak'):
+            raise AttributeError("The sources making up this sample do not have a peak property.")
+
+        if all([s.ra_dec.value == s.peak.value for s in self._sources.values()]):
+            warn("All user supplied ra-dec values are the same as the peak ra-dec values, likely means that peak "
+                 "finding was not run for this sample.")
+
+        return Quantity([s.peak.value for s in self._sources.values()], 'deg')
 
     @property
     def redshifts(self) -> ndarray:
