@@ -28,10 +28,35 @@ class ExtendedSource(BaseSource):
     their astrophysical class. This class is subclassed by GalaxyCluster, which then adds more specific analyses,
     for instance.
     """
-    def __init__(self, ra, dec, redshift=None, name=None, custom_region_radius=None, use_peak=True,
-                 peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"),
-                 back_inn_rad_factor=1.05, back_out_rad_factor=1.5, cosmology=Planck15,
-                 load_products=True, load_fits=False):
+    def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
+                 custom_region_radius: Quantity = None, use_peak: bool = True,
+                 peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
+                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
+                 load_products: bool = True, load_fits: bool = False, peak_find_method: str = "hierarchical"):
+        """
+        The init for the general extended source XGA class, takes information on the position (and optionally
+        redshift) of source of interest, matches to extended regions, and optionally performs peak finding.
+
+        :param float ra: The right-ascension of the source, in degrees.
+        :param float dec: The declination of the source, in degrees.
+        :param float redshift: The redshift of the source, optional. Default is None.
+        :param str name: The name of the source, optional. Name will be constructed from position if None.
+        :param Quantity custom_region_radius: A custom analysis region radius for this source, optional.
+        :param bool use_peak: Whether peak position should be found and used.
+        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak position
+            from. Default is 0.5keV
+        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak position
+            from. Default is 2.0keV.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
+        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param bool load_products: Whether existing products should be loaded from disk.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+            is hierarchical, simple may also be passed.
+        """
         # Calling the BaseSource init method
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
 
@@ -108,18 +133,18 @@ class ExtendedSource(BaseSource):
             raise NoRegionsError("{n} has not been detected in ANY region files, and no custom region or "
                                  " overdensity radius has been passed. No analysis is possible.".format(n=self.name))
 
-        # Call to a method that goes through all the observations and finds the X-ray centroid. Also at the same
-        #  time finds the X-ray centroid of the combined ratemap (an essential piece of information).
-        self._all_peaks()
+        # Call to a method that goes through all the observations and finds the X-ray peak. Also at the same
+        #  time finds the X-ray peak of the combined ratemap (an essential piece of information).
+        self._all_peaks(peak_find_method)
         if self._use_peak:
             self._default_coord = self.peak
 
     def find_peak(self, rt: RateMap, method: str = "hierarchical", num_iter: int = 20, peak_unit: UnitBase = deg) \
             -> Tuple[Quantity, bool, bool, ndarray, List]:
         """
-        A method that will find the X-ray centroid for the RateMap that has been passed in. It takes
+        A method that will find the X-ray peak for the RateMap that has been passed in. It takes
         the user supplied coordinates from source initialisation as a starting point, finds the peak within a 500kpc
-        radius, re-centres the region, and iterates until the centroid converges to within 15kpc, or until 20
+        radius, re-centres the region, and iterates until the peak converges to within 15kpc, or until 20
         20 iterations has been reached.
 
         :param RateMap rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
@@ -183,13 +208,15 @@ class ExtendedSource(BaseSource):
 
         return peak, near_edge, converged, chosen_coords, other_coords
 
-    def _all_peaks(self):
+    def _all_peaks(self, method: str):
         """
         An internal method that finds the X-ray peaks for all of the available observations and instruments,
         as well as the combined ratemap. Peak positions for individual ratemap products are allowed to not
         converge, and will just write None to the peak dictionary, but if the peak of the combined ratemap fails
         to converge an error will be thrown. The combined ratemap peak will also be stored by itself in an
         attribute, to allow a property getter easy access.
+
+        :param str method: The method to be used for peak finding.
         """
         en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
         comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt]
@@ -204,7 +231,7 @@ class ExtendedSource(BaseSource):
             comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
 
         if self._use_peak:
-            coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(comb_rt)
+            coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(comb_rt, method=method)
             # Updating nH for new coord, probably won't make a difference most of the time
             self._nH = nh_lookup(coord)[0]
         else:
