@@ -1506,7 +1506,7 @@ class RateMap(Image):
 
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
             aren't to be searched, and 1 for those that are.
-        :param float redshift: The redshift of the source that we wish to find the X-ray centroid of.
+        :param float redshift: The redshift of the source that we wish to find the X-ray peak of.
         :param cosmology: An astropy cosmology object.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given

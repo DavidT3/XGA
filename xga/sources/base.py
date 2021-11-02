@@ -3149,6 +3149,28 @@ class BaseSource:
         # And return our ordered dictionaries
         return obs_inst, snrs
 
+    def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
+        """
+        This method calculates the separation between the user supplied ra_dec coordinates, and the peak
+        coordinates in the requested off_unit. If there is no peak attribute and error will be thrown, and if no
+        peak has been calculated then the result will be 0.
+
+        :param Unit/str off_unit: The unit that the offset should be in.
+        :return: The offset between ra_dec and peak, in the requested unit.
+        :rtype: Quantity
+        """
+        # Check that the source has a peak attribute to fetch, otherwise throw error
+        if not hasattr(self, 'peak'):
+            raise AttributeError("This source does not have a peak attribute, and so an offset cannot be calculated.")
+
+        # Calculate the euclidean distance between ra_dec and peak
+        sep = np.sqrt(abs(self.ra_dec[0] - self.peak[0]) ** 2 + abs(self.ra_dec[1] - self.peak[1]) ** 2)
+        # Convert the separation to the requested unit - this will throw an error if the unit is stupid
+        conv_sep = self.convert_radius(sep, off_unit)
+
+        # Return the converted separation
+        return conv_sep
+
     def info(self):
         """
         Very simple function that just prints a summary of important information related to the source object..
