@@ -37,8 +37,6 @@ around `source` objects, which are representative of X-ray sources in real life.
 different properties and methods, which either relate to relevant properties of or perform measurements which are only 
 relevant to that type of astronomical source, with some properties/methods being common to all sources.
 
-[comment]: <> (![The XGA logo. \label{fig:xga_logo}]&#40;figures/quick_xga_logo.png&#41;{width=35%})
-
 XGA also contains `product` classes, which provide interfaces to X-ray data products, with built in methods for 
 analysis, manipulation, and visualisation. The `RateMap` (a count rate map of a particular observation) class for 
 instance includes view methods (demonstrated in \autoref{fig:ratemap_mask}), 
