@@ -3149,7 +3149,7 @@ class BaseSource:
         # And return our ordered dictionaries
         return obs_inst, snrs
 
-    def offset(self, off_unit: Union[Unit, str] = "arcmin"):
+    def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
         """
         This method calculates the separation between the user supplied ra_dec coordinates, and the peak
         coordinates in the requested off_unit. If there is no peak attribute and error will be thrown, and if no
