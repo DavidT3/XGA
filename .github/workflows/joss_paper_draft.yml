@@ -34,4 +34,4 @@ jobs:
         with:
           name: paper
           # This is the output path where Pandoc will write the compiled PDF
-          path: paper/current_xga_paper.pdf
+          path: paper/paper.pdf
