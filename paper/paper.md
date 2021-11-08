@@ -20,7 +20,7 @@ authors:
 affiliations:
   - name: Department of Physics and Astronomy, University of Sussex, Brighton, BN1 9QH, UK
     index: 1
-date: 02 November 2021
+date: 08 November 2021
 bibliography: paper.bib
 ---
 # Summary
@@ -114,9 +114,14 @@ The `XSPEC` (@xspec) interface we have developed for XGA is far less comprehensi
 implemented in the `PyXspec` module, but scales with multiple cores for the analysis of multiple sources 
 simultaneously much more easily. 
 
-# Ongoing research projects
-As \texttt{XGA} is a new piece of work, written over the last year, there are currently no published works that make use of 
-it. There are, however, several projects that use XGA extensively nearing publication. The first of these is a hydrostatic 
+# Research projects using XGA
+\texttt{XGA} is a new module, but we consider it to be stable and appropriate for scientific use. As such 
+it has been used in several recent pieces of work; this has included an {\em XMM} analysis of the eFEDS cluster 
+candidate catalogue (@efedsxcs), where we produced the first temperature calibration between {\em XMM} and 
+{\em eROSITA}, a multi-wavelength analysis of an ACT selected galaxy cluster ({\color{red} DENISHA REF}), and {\em XMM}
+follow-up of Dark Energy Survey (DES) variability selected low-mass AGN candidates ({\color{red} COLIN REF - SUBMITTED}).
+
+There are also several projects that use XGA extensively nearing publication. The first of these is a hydrostatic 
 and gas mass analysis of the SDSS redMaPPer (@redmappersdss)-XCS optically selected galaxy cluster sample (@sdssxcs) and 
 well as the ACTDR5 (@actdr5)-XCS sample of Sunyaev-Zel'dovich (SZ) selected galaxy clusters. This work also compares commonly measured X-ray properties of clusters 
 (the X-ray luminosity L$_{\rm{x}}$, and the temperature T$_{\rm{x}}$) both to results from the existing XCS pipeline and from literature, confirming 
@@ -128,7 +133,8 @@ clusters. Finally an exploration of the X-ray properties of a new sample of Pea 
 the point source class, the `XSPEC` interface, and the upper limit luminosity functionality.
 
 # Acknowledgements
-DT, KR, and PG acknowledge support from the UK Science and Technology Facilities Council via grants ST/P006760/1 (DT),  ST/P000525/1 and ST/T000473/1 (PG, KR).
+DT, KR, and PG acknowledge support from the UK Science and Technology Facilities Council via grants ST/P006760/1 (DT), 
+ST/P000525/1 and ST/T000473/1 (PG, KR).
 
 David J. Turner would like to thank Aswin P. Vijayan, Lucas Porth, Tim Lingard, and Reese Wilkinson for useful 
 discussions during the course of writing this module.
