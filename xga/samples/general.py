@@ -27,7 +27,7 @@ class ExtendedSample(BaseSample):
             raise TypeError("Please pass None or a quantity object for custom_region_radius, rather than an "
                             "array or list.")
         elif custom_region_radius is None:
-            custom_region_radius = [np.NaN]*len(ra)
+            custom_region_radius = [None]*len(ra)
         # People might pass a single value for custom_region_radius, in which case we turn it into
         #  a non-scalar quantity
         elif custom_region_radius is not None and custom_region_radius.isscalar:
@@ -76,7 +76,7 @@ class ExtendedSample(BaseSample):
                         #  whether this has been set yet when all radii should be forced to be the same unit
                         self._cr_unit = cr.unit
                     else:
-                        self._custom_radii.append(cr)
+                        self._custom_radii.append(np.NaN)
                         self._cr_unit = Unit('')
                     final_names.append(n)
                 except NoValidObservationsError:
