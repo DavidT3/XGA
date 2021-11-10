@@ -30,15 +30,15 @@ class BaseProduct:
     """
     The super class for all SAS generated products in XGA. Stores relevant file path information, parses the std_err
     output of the generation process, and stores the instrument and ObsID that the product was generated for.
+
+    :param str path: The path to where the product file SHOULD be located.
+    :param str stdout_str: The stdout from calling the terminal command.
+    :param str stderr_str: The stderr from calling the terminal command.
+    :param str gen_cmd: The command used to generate the product.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
         """
         The initialisation method for the BaseProduct class.
-
-        :param str path: The path to where the product file SHOULD be located.
-        :param str stdout_str: The stdout from calling the terminal command.
-        :param str stderr_str: The stderr from calling the terminal command.
-        :param str gen_cmd: The command used to generate the product.
         """
         # This attribute stores strings that indicate why a product object has been deemed as unusable
         self._why_unusable = []
@@ -318,9 +318,18 @@ class BaseProduct:
 
 class BaseAggregateProduct:
     """
-    A base class for any XGA products that are an aggregate of an XGA SAS product.
+    A base class for any XGA products that are an aggregate of an XGA SAS product, for instance this is sub-classed
+    to make the AnnularSpectra class. Users really shouldn't be instantiating these for themselves.
+
+    :param list file_paths: The file paths of the main files for a given aggregate product.
+    :param str prod_type: The product type of the individual elements.
+    :param str obs_id: The ObsID related to the product.
+    :param str instrument: The instrument related to the product.
     """
     def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str):
+        """
+        The init method for the BaseAggregateProduct class
+        """
         self._all_paths = file_paths
         self._all_usable = True
         self._obs_id = obs_id
@@ -495,6 +504,26 @@ class BaseProfile1D:
     """
     The superclass for all 1D radial profile products, with built in fitting, viewing, and result retrieval
     functionality. Classes derived from BaseProfile1D can be added together to create Aggregate Profiles.
+
+    :param Quantity radii: The radii at which the y values of this profile have been measured.
+    :param Quantity values: The y values of this profile.
+    :param Quantity centre: The central coordinate the profile was generated from.
+    :param str source_name: The name of the source this profile is associated with.
+    :param str obs_id: The observation which this profile was generated from.
+    :param str inst: The instrument which this profile was generated from.
+    :param Quantity radii_err: Uncertainties on the radii.
+    :param Quantity values_err: Uncertainties on the values.
+    :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. If this
+        value is supplied a set_storage_key value must also be supplied.
+    :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+        associated AnnularSpectra generates to place itself in XGA's store structure.
+    :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+        units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+        values converted to degrees, and allows this object to construct a predictable storage key.
+    :param Quantity x_norm: An astropy quantity to use to normalise the x-axis values, this is only used when
+        plotting if the user tells the view method that they wish for the plot to use normalised x-axis data.
+    :param Quantity y_norm: An astropy quantity to use to normalise the y-axis values, this is only used when
+        plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
@@ -503,26 +532,6 @@ class BaseProfile1D:
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
-
-        :param Quantity radii: The radii at which the y values of this profile have been measured.
-        :param Quantity values: The y values of this profile.
-        :param Quantity centre: The central coordinate the profile was generated from.
-        :param str source_name: The name of the source this profile is associated with.
-        :param str obs_id: The observation which this profile was generated from.
-        :param str inst: The instrument which this profile was generated from.
-        :param Quantity radii_err: Uncertainties on the radii.
-        :param Quantity values_err: Uncertainties on the values.
-        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. If this
-            value is supplied a set_storage_key value must also be supplied.
-        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
-            associated AnnularSpectra generates to place itself in XGA's store structure.
-        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
-            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
-            values converted to degrees, and allows this object to construct a predictable storage key.
-        :param Quantity x_norm: An astropy quantity to use to normalise the x-axis values, this is only used when
-            plotting if the user tells the view method that they wish for the plot to use normalised x-axis data.
-        :param Quantity y_norm: An astropy quantity to use to normalise the y-axis values, this is only used when
-            plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
         """
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
@@ -2041,8 +2050,13 @@ class BaseAggregateProfile1D:
     """
     Quite a simple class that is generated when multiple 1D radial profile objects are added together. The
     purpose of instances of this class is simply to make it easy to view 1D radial profiles on the same axes.
+
+    :param list profiles: A list of profile objects (of the same type) to include in this aggregate profile.
     """
     def __init__(self, profiles: List[BaseProfile1D]):
+        """
+        The init for the BaseAggregateProfile1D class.
+        """
         # This checks that all types of profiles in the profiles list are the same
         types = [type(p) for p in profiles]
         if len(set(types)) != 1:
