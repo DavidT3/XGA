@@ -29,6 +29,43 @@ class ScalingRelation:
     """
     This class is designed to store all information pertaining to a scaling relation fit, either performed by XGA
     or from literature. It also aims to make creating publication quality plots simple and easy.
+
+    :param np.ndarray fit_pars: The results of the fit to a model that describes this scaling relation.
+    :param np.ndarray fit_par_errs: The uncertainties on the fit results for this scalin relation.
+    :param model_func: A Python function of the model which this scaling relation is described by.
+        PLEASE NOTE, the function must be defined in the style used in xga.models.misc;
+        i.e. powerlaw(x: np.ndarray, k: float, a: float), where the first argument is for x values, and the
+        following arguments are all fit parameters.
+    :param Quantity x_norm: Quantity to normalise the x data by.
+    :param Quantity y_norm: Quantity to normalise the y data by.
+    :param str x_name: The name to be used for the x-axis of the plot (DON'T include the unit, that will be
+        inferred from an astropy Quantity.
+    :param str y_name: The name to be used for the y-axis of the plot (DON'T include the unit, that will be
+        inferred from an astropy Quantity.
+    :param str fit_method: The method used to fit this data, if known.
+    :param Quantity x_data: The x-data used to fit this scaling relation, if available. This should be
+        the raw, un-normalised data.
+    :param Quantity y_data: The y-data used to fit this scaling relation, if available. This should be
+        the raw, un-normalised data.
+    :param Quantity x_err: The x-errors used to fit this scaling relation, if available. This should be
+        the raw, un-normalised data.
+    :param Quantity y_err: The y-errors used to fit this scaling relation, if available. This should be
+        the raw, un-normalised data.
+    :param Quantity x_lims: The range of x values in which this relation is valid, default is None. If this
+        information is supplied, please pass it as a Quantity array, with the first element being the lower
+        bound and the second element being the upper bound.
+    :param odr.Output odr_output: The orthogonal distance regression output object associated with this
+        relation's fit, if available and applicable.
+    :param np.ndarray chains: The parameter chains associated with this relation's fit, if available and
+        applicable. They should be of shape N_stepxN_par, where N_steps is the number of steps (after burn-in
+        is removed), and N_par is the number of parameters in the fit.
+    :param str relation_name: A suitable name for this relation.
+    :param str relation_author: The author who deserves credit for this relation.
+    :param str relation_year: The year this relation was produced, default is the current year.
+    :param str relation_doi: The DOI of the original paper this relation appeared in.
+    :param np.ndarray scatter_par: A parameter describing the intrinsic scatter of y|x. Optional as many fits don't
+        include this.
+    :param np.ndarray scatter_chain: A corresponding MCMC chain for the scatter parameter. Optional.
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, fit_method: str = 'unknown', x_data: Quantity = None,
@@ -39,43 +76,6 @@ class ScalingRelation:
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
-
-        :param np.ndarray fit_pars: The results of the fit to a model that describes this scaling relation.
-        :param np.ndarray fit_par_errs: The uncertainties on the fit results for this scalin relation.
-        :param model_func: A Python function of the model which this scaling relation is described by.
-            PLEASE NOTE, the function must be defined in the style used in xga.models.misc;
-            i.e. powerlaw(x: np.ndarray, k: float, a: float), where the first argument is for x values, and the
-            following arguments are all fit parameters.
-        :param Quantity x_norm: Quantity to normalise the x data by.
-        :param Quantity y_norm: Quantity to normalise the y data by.
-        :param str x_name: The name to be used for the x-axis of the plot (DON'T include the unit, that will be
-            inferred from an astropy Quantity.
-        :param str y_name: The name to be used for the y-axis of the plot (DON'T include the unit, that will be
-            inferred from an astropy Quantity.
-        :param str fit_method: The method used to fit this data, if known.
-        :param Quantity x_data: The x-data used to fit this scaling relation, if available. This should be
-            the raw, un-normalised data.
-        :param Quantity y_data: The y-data used to fit this scaling relation, if available. This should be
-            the raw, un-normalised data.
-        :param Quantity x_err: The x-errors used to fit this scaling relation, if available. This should be
-            the raw, un-normalised data.
-        :param Quantity y_err: The y-errors used to fit this scaling relation, if available. This should be
-            the raw, un-normalised data.
-        :param Quantity x_lims: The range of x values in which this relation is valid, default is None. If this
-            information is supplied, please pass it as a Quantity array, with the first element being the lower
-            bound and the second element being the upper bound.
-        :param odr.Output odr_output: The orthogonal distance regression output object associated with this
-            relation's fit, if available and applicable.
-        :param np.ndarray chains: The parameter chains associated with this relation's fit, if available and
-            applicable. They should be of shape N_stepxN_par, where N_steps is the number of steps (after burn-in
-            is removed), and N_par is the number of parameters in the fit.
-        :param str relation_name: A suitable name for this relation.
-        :param str relation_author: The author who deserves credit for this relation.
-        :param str relation_year: The year this relation was produced, default is the current year.
-        :param str relation_doi: The DOI of the original paper this relation appeared in.
-        :param np.ndarray scatter_par: A parameter describing the intrinsic scatter of y|x. Optional as many fits don't
-            include this.
-        :param np.ndarray scatter_chain: A corresponding MCMC chain for the scatter parameter. Optional.
         """
         # These will always be passed in, and are assumed to be in the order required by the model_func that is also
         #  passed in by the user.
@@ -732,8 +732,13 @@ class AggregateScalingRelation:
     This class is akin to the BaseAggregateProfile class, in that it is the result of a sum of ScalingRelation
     objects. References to the component objects will be stored within the structure of this class, and it primarily
     exists to allow plots with multiple relations to be generated.
+
+    :param List[ScalingRelation] relations: A list of scaling relations objects to be combined in this object.
     """
     def __init__(self, relations: List[ScalingRelation]):
+        """
+        Init method for the AggregateScalingRelation, that allows for the joint viewing of sets of scaling relations.
+        """
         # There aren't specific classes for different types of relations, but I do need to check that whatever
         #  relations are being added together have the same x and y units
         x_units = [sr.x_unit for sr in relations]
