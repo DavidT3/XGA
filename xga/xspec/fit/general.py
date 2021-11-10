@@ -41,13 +41,12 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param List[BaseSource] sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
         desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
-        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
-        inner radius will be ignored. If you are fitting for multiple sources then you can also pass a
-        Quantity with one entry per source.
+        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any value
+        passed for inner_radius is ignored, and the fit performed on spectra for the entire region. If you are
+        fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param str/Quantity inner_radius: The name or value of the outer radius of the region that the
         desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
-        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
-        inner radius will be ignored. By default this is zero arcseconds, resulting in a circular spectrum. If
+        or Quantity(1000, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum. If
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param Quantity start_temp: The initial temperature for the fit.
     :param start_met: The initial metallicity for the fit (in ZSun).
@@ -185,15 +184,14 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     normalisations (constant*tbabs*powerlaw, or constant*tbabs*zpowerlw).
 
     :param List[BaseSource] sources: A single source object, or a sample of sources.
-    :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
-        desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
-        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
-        inner radius will be ignored. If you are fitting for multiple sources then you can also pass a
-        Quantity with one entry per source.
+     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
+        desired spectrum covers (for instance 'point' would be acceptable for a PointSource,
+        or Quantity(40, 'arcsec')). If 'region' is chosen (to use the regions in region files), then any value
+        passed for inner_radius is ignored, and the fit performed on spectra for the entire region. If you are
+        fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param str/Quantity inner_radius: The name or value of the outer radius of the region that the
-        desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
-        or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
-        inner radius will be ignored. By default this is zero arcseconds, resulting in a circular spectrum. If
+        desired spectrum covers (for instance 'point' would be acceptable for a PointSource,
+        or Quantity(40, 'arcsec')). By default this is zero arcseconds, resulting in a circular spectrum. If
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param bool redshifted: Whether the powerlaw that includes redshift (zpowerlw) should be used.
     :param Quantity lum_en: Energy bands in which to measure luminosity.
