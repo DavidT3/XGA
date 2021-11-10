@@ -26,6 +26,6 @@ your work to this page.
      - eFEDS-XCS Cluster Comparison
    * - `D. S. Pillay <https://orcid.org/0000-0002-1602-4168>`_
      - 2021
-     -
-     -
+     - `MDPI Galaxies <https://doi.org/10.3390/galaxies9040097>`_
+     - `NASA/ADS <https://ui.adsabs.harvard.edu/abs/2021arXiv211104340P/abstract>`_
      - ACTCL J0019.6+0336 Follow-up
