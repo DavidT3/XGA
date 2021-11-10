@@ -16,18 +16,18 @@ class BetaProfile1D(BaseModel1D):
     """
     An XGA model implementation of the beta profile, essentially a projected isothermal king profile, it can be
     used to describe a simple galaxy cluster radial surface brightness profile.
+
+    :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+        used start values. The units are checked against default start values.
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('ct/(s*arcmin**2)'),
                  cust_start_pars: List[Quantity] = None):
         """
         The init of a subclass of the XGA BaseModel1D class, describing the surface brightness beta profile model.
-
-        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
-            used start values. The units are checked against default start values.
         """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -184,19 +184,19 @@ class DoubleBetaProfile1D(BaseModel1D):
     An XGA model implementation of the double beta profile, a summation of two single beta models. Often thought
     to deal better with peaky cluster cores that you might get from a cool-core cluster, this model can be used
     to describe a galaxy cluster radial surface brightness profile.
+
+    :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+        used start values. The units are checked against default start values.
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('ct/(s*arcmin**2)'),
                  cust_start_pars: List[Quantity] = None):
         """
         The init of a subclass of the XGA BaseModel1D class, describing the surface brightness double-beta
         profile model.
-
-        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
-            used start values. The units are checked against default start values.
         """
 
         # If a string representation of a unit was passed then we make it an astropy unit

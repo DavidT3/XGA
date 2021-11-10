@@ -15,6 +15,29 @@ class ExtendedSample(BaseSample):
     """
     The sample class for exploring general extended sources without the extra information required to
     analyse more specific X-ray extended sources (like galaxy clusters).
+
+    :param np.ndarray ra: The right-ascensions of the extended sources, in degrees.
+    :param np.ndarray dec: The declinations of the extended sources, in degrees.
+    :param np.ndarray redshift: The redshifts of the extended sources, optional. Default is None.
+    :param np.ndarray name: The names of the extended sources, optional. If no names are supplied
+        then they will be constructed from the supplied coordinates.
+    :param Quantity custom_region_radius: Custom analysis region radius(ii) for these sources, optional. Either
+        pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
+    :param bool use_peak: Whether peak positions should be found and used.
+    :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
+        position from. Default is 0.5keV.
+    :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak
+        position from. Default is 2.0keV.
+    :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+        radius for the background region. Default is 1.05.
+    :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+        radius for the background region. Default is 1.5.
+    :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+    :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
+    :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
+    :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+        is hierarchical, simple may also be passed.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
@@ -24,29 +47,6 @@ class ExtendedSample(BaseSample):
                  peak_find_method: str = "hierarchical"):
         """
         The init method of the ExtendedSample class.
-
-        :param np.ndarray ra: The right-ascension of the extended sources, in degrees.
-        :param np.ndarray dec: The declination of the extended sources, in degrees.
-        :param np.ndarray redshift: The redshifts of the extended sources, optional. Default is None.
-        :param np.ndarray name: The names of the extended sources, optional. If no names are supplied
-            then they will be constructed from the supplied coordinates.
-        :param Quantity custom_region_radius: Custom analysis region radius(ii) for these sources, optional. Either
-            pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
-        :param bool use_peak: Whether peak positions should be found and used.
-        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
-            position from. Default is 0.5keV.
-        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak
-            position from. Default is 2.0keV.
-        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
-            radius for the background region. Default is 1.05.
-        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
-            radius for the background region. Default is 1.5.
-        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
-        :param bool load_fits: Whether existing fits should be loaded from disk.
-        :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
-        :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
-        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
-            is hierarchical, simple may also be passed.
         """
         if custom_region_radius is not None and not isinstance(custom_region_radius, Quantity):
             raise TypeError("Please pass None or a quantity object for custom_region_radius, rather than an "
@@ -157,6 +157,28 @@ class PointSample(BaseSample):
     """
     The sample class for general point sources, without the extra information required to analyse more specific
     X-ray point sources.
+
+    :param np.ndarray ra: The right-ascensions of the point sources, in degrees.
+    :param np.ndarray dec: The declinations of the point sources, in degrees.
+    :param np.ndarray redshift: The redshifts of the point sources, optional. Default is None.
+    :param np.ndarray name: The names of the point sources, optional. If no names are supplied
+        then they will be constructed from the supplied coordinates.
+    :param Quantity point_radius: The point source analysis region radius(ii) for this sample. Either
+        pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
+    :param bool use_peak: Whether peak positions should be found and used. For PointSample the 'simple' peak
+        finding method is the only one available.
+    :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
+        position from. Default is 0.5keV.
+    :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak
+        position from. Default is 2.0keV.
+    :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+        radius for the background region. Default is 1.05.
+    :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+        radius for the background region. Default is 1.5.
+    :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+    :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
+    :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
                  point_radius: Quantity = Quantity(30, 'arcsec'), use_peak: bool = False,
@@ -165,28 +187,6 @@ class PointSample(BaseSample):
                  cosmology=Planck15, load_fits: bool = False, no_prog_bar: bool = False, psf_corr: bool = False):
         """
         The init method of the PointSample class.
-
-        :param np.ndarray ra: The right-ascension of the extended sources, in degrees.
-        :param np.ndarray dec: The declination of the extended sources, in degrees.
-        :param np.ndarray redshift: The redshifts of the extended sources, optional. Default is None.
-        :param np.ndarray name: The names of the extended sources, optional. If no names are supplied
-            then they will be constructed from the supplied coordinates.
-        :param Quantity point_radius: The point source analysis region radius(ii) for this sample. Either
-            pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
-        :param bool use_peak: Whether peak positions should be found and used. For PointSample the 'simple' peak
-            finding method is the only one available.
-        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
-            position from. Default is 0.5keV.
-        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak
-            position from. Default is 2.0keV.
-        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
-            radius for the background region. Default is 1.05.
-        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
-            radius for the background region. Default is 1.5.
-        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
-        :param bool load_fits: Whether existing fits should be loaded from disk.
-        :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
-        :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
         """
 
         # Strongly enforce that its a quantity, this also means that it should be guaranteed that all radii have

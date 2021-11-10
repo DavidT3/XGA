@@ -22,10 +22,10 @@ your work to this page.
    * - `D. J. Turner <https://orcid.org/0000-0001-9658-1396>`_
      - 2021
      -
-     - `ePrint <https://ui.adsabs.harvard.edu/abs/2021arXiv210911807T/abstract>`_
+     - `ADS <https://ui.adsabs.harvard.edu/abs/2021arXiv210911807T/abstract>`_
      - eFEDS-XCS Cluster Comparison
    * - `D. S. Pillay <https://orcid.org/0000-0002-1602-4168>`_
      - 2021
-     -
-     -
+     - `MDPI Galaxies <https://doi.org/10.3390/galaxies9040097>`_
+     - `ADS <https://ui.adsabs.harvard.edu/abs/2021arXiv211104340P/abstract>`_
      - ACTCL J0019.6+0336 Follow-up

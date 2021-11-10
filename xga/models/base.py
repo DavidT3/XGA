@@ -28,6 +28,26 @@ class BaseModel1D(metaclass=ABCMeta):
     The superclass of XGA's 1D models, with base functionality implemented, including the numerical methods for
     calculating derivatives and abel transforms which can be overwritten by subclasses if analytical solutions
     are available. The BaseModel class shouldn't be instantiated by itself, as it won't do anything.
+
+    :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param List[Quantity] start_pars: The start values of the model parameters for any fitting function that
+        used start values.
+    :param List[Dict[str, Union[Quantity, str]]] par_priors: The priors on the model parameters, for any
+        fitting function that uses them.
+    :param str model_name: The simple name of the particular model, e.g. 'beta'.
+    :param str model_pub_name: A smart name for the model that might be used in a publication
+        plot, e.g. 'Beta Profile'
+    :param List[str] par_pub_names: The names of the parameters of the model, as they should be used in plots
+        for publication. As matplotlib supports LaTeX formatting for labels these should use $$ syntax.
+    :param str describes: An identifier for the type of data this model describes, e.g. 'Surface Brightness'.
+    :param dict info: A dictionary with information about the model, used by the info() method. Can hold
+        a general description, reference, authors etc.
+    :param Quantity x_lims: Upper and lower limits outside of which the model may not be valid, to be passed as
+        a single non-scalar astropy quantity, with the first entry being the lower limit and the second entry
+        being the upper limit. Default is None.
     """
 
     def __init__(self, x_unit: Union[Unit, str], y_unit: Union[Unit, str], start_pars: List[Quantity],
@@ -36,26 +56,6 @@ class BaseModel1D(metaclass=ABCMeta):
         """
         Initialisation method for the base model class, just sets up all the necessary attributes and does some
         checks on the passed in parameters.
-
-        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param List[Quantity] start_pars: The start values of the model parameters for any fitting function that
-            used start values.
-        :param List[Dict[str, Union[Quantity, str]]] par_priors: The priors on the model parameters, for any
-            fitting function that uses them.
-        :param str model_name: The simple name of the particular model, e.g. 'beta'.
-        :param str model_pub_name: A smart name for the model that might be used in a publication
-            plot, e.g. 'Beta Profile'
-        :param List[str] par_pub_names: The names of the parameters of the model, as they should be used in plots
-            for publication. As matplotlib supports LaTeX formatting for labels these should use $$ syntax.
-        :param str describes: An identifier for the type of data this model describes, e.g. 'Surface Brightness'.
-        :param dict info: A dictionary with information about the model, used by the info() method. Can hold
-            a general description, reference, authors etc.
-        :param Quantity x_lims: Upper and lower limits outside of which the model may not be valid, to be passed as
-            a single non-scalar astropy quantity, with the first entry being the lower limit and the second entry
-            being the upper limit. Default is None.
         """
         # These are the prior types that XGA currently understands
         self._prior_types = ['uniform']
