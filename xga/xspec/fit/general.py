@@ -44,7 +44,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any value
         passed for inner_radius is ignored, and the fit performed on spectra for the entire region. If you are
         fitting for multiple sources then you can also pass a Quantity with one entry per source.
-    :param str/Quantity inner_radius: The name or value of the outer radius of the region that the
+    :param str/Quantity inner_radius: The name or value of the inner radius of the region that the
         desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
         or Quantity(1000, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum. If
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
@@ -189,7 +189,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         or Quantity(40, 'arcsec')). If 'region' is chosen (to use the regions in region files), then any value
         passed for inner_radius is ignored, and the fit performed on spectra for the entire region. If you are
         fitting for multiple sources then you can also pass a Quantity with one entry per source.
-    :param str/Quantity inner_radius: The name or value of the outer radius of the region that the
+    :param str/Quantity inner_radius: The name or value of the inner radius of the region that the
         desired spectrum covers (for instance 'point' would be acceptable for a PointSource,
         or Quantity(40, 'arcsec')). By default this is zero arcseconds, resulting in a circular spectrum. If
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
