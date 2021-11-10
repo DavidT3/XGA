@@ -41,7 +41,8 @@ class BaseSource:
     """
     The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
     functionality upon which the rest of XGA is built, includes selecting observations, reading in data products,
-    and storing newly created data products.
+    and storing newly created data products. Base functionality is included, but this type of source shouldn't
+    often need to be instantiated by a user.
 
     :param float ra: The right ascension (in degrees) of the source.
     :param float dec: The declination (in degrees) of the source.
@@ -59,9 +60,7 @@ class BaseSource:
                  load_products: bool = True, load_fits: bool = False):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
-        others. Base functionality is included, but this type of source shouldn't often need to be instantiated by
-        a user.
-
+        others.
         """
         self._ra_dec = np.array([ra, dec])
         if name is not None:
@@ -3283,13 +3282,14 @@ class NullSource:
     A useful, but very limited, source class. By default this source class will include all ObsIDs present in the
     XGA census, and as such can be used for bulk generation of SAS products. It can also be made to only include
     certain ObsIDs.
+
+
+    :param List obs: An optional list of ObsIDs to include in the NullSource, otherwise all available ObsIDs
+        will be included.
     """
     def __init__(self, obs: List[str] = None):
         """
         The method used to initiate the NullSource class.
-
-        :param List obs: An optional list of ObsIDs to include in the NullSource, otherwise all available ObsIDs
-            will be included.
         """
         # To find all census entries with non-na coordinates
         cleaned_census = CENSUS.dropna()
