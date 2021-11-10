@@ -33,28 +33,30 @@ class Image(BaseProduct):
     This class stores image data from X-ray observations. It also allows easy, direct, access to that data, and
     implements many helpful methods with extra functionality (including coordinate transforms, peak finders, and
     a powerful view method).
+
+    :param str path: The path to where the product file SHOULD be located.
+    :param str obs_id: The ObsID related to the Image being declared.
+    :param str instrument: The instrument related to the Image being declared.
+    :param str stdout_str: The stdout from calling the terminal command.
+    :param str stderr_str: The stderr from calling the terminal command.
+    :param str gen_cmd: The command used to generate the product.
+    :param Quantity lo_en: The lower energy bound used to generate this product.
+    :param Quantity hi_en: The upper energy bound used to generate this product.
+    :param str reg_file_path: Path to a region file for this image.
+    :param bool smoothed: Has this image been smoothed, default is False. This information can also be
+        set after the instantiation of an image.
+    :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
+        kernel used or a dictionary of information (required structure detailed in
+        parse_smoothing). Default is None
+    :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
+        is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+        ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  lo_en: Quantity, hi_en: Quantity, reg_file_path: str = '', smoothed: bool = False,
                  smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None):
         """
         The initialisation method for the Image class.
-
-        :param str path: The path to where the product file SHOULD be located.
-        :param str stdout_str: The stdout from calling the terminal command.
-        :param str stderr_str: The stderr from calling the terminal command.
-        :param str gen_cmd: The command used to generate the product.
-        :param Quantity lo_en: The lower energy bound used to generate this product.
-        :param Quantity hi_en: The upper energy bound used to generate this product.
-        :param str reg_file_path: Path to a region file for this image.
-        :param bool smoothed: Has this image been smoothed, default is False. This information can also be
-            set after the instantiation of an image.
-        :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
-            kernel used or a dictionary of information (required structure detailed in
-            parse_smoothing). Default is None
-        :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
-            is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
-            ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._shape = None
@@ -1146,10 +1148,26 @@ class Image(BaseProduct):
 class ExpMap(Image):
     """
     A very simple subclass of the Image product class - designed to allow for easy interaction with exposure maps.
+
+    :param str path: The path to where the product file SHOULD be located.
+    :param str obs_id: The ObsID related to the ExpMap being declared.
+    :param str instrument: The instrument related to the ExpMap being declared.
+    :param str stdout_str: The stdout from calling the terminal command.
+    :param str stderr_str: The stderr from calling the terminal command.
+    :param str gen_cmd: The command used to generate the product.
+    :param Quantity lo_en: The lower energy bound used to generate this product.
+    :param Quantity hi_en: The upper energy bound used to generate this product.
+    :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
+        is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+        ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity):
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en)
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None):
+        """
+        Init of the ExpMap class.
+        """
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
+                         obs_inst_combs=obs_inst_combs)
         self._prod_type = "expmap"
 
     def get_exp(self, at_coord: Quantity) -> float:
@@ -1197,15 +1215,15 @@ class RateMap(Image):
     """
     A very powerful class which allows interactions with 'RateMaps', though these are not directly generated by
     SAS, they are images divided by matching exposure maps, to provide a count rate image.
+
+    :param Image xga_image: The image component of the RateMap.
+    :param ExpMap xga_expmap: The exposure map component of the RateMap.
+    :param str reg_file_path: A path to a region file that you might wish to overlay on views of this product.
     """
     def __init__(self, xga_image: Image, xga_expmap: ExpMap, reg_file_path: str = ''):
         """
         This initialises a RateMap instance, where a count-rate image is divided by an exposure map, to create a map
         of X-ray counts.
-
-        :param Image xga_image: The image component of the RateMap.
-        :param ExpMap xga_expmap: The exposure map component of the RateMap.
-        :param str reg_file_path:
         """
         if type(xga_image) != Image or type(xga_expmap) != ExpMap:
             raise TypeError("xga_image must be an XGA Image object, and xga_expmap must be an "
@@ -1724,8 +1742,23 @@ class RateMap(Image):
 
 
 class PSF(Image):
+    """
+    A subclass of image that is a wrapper for 2D images of PSFs that can be generated by SAS. This can be used to
+    view the PSF and is used in other analyses to correct images.
+
+    :param str path: The path to where the product file SHOULD be located.
+    :param str psf_model: The model used for the generation of the PSF.
+    :param str obs_id: The ObsID related to the PSF being declared.
+    :param str instrument: The instrument related to the PSF being declared.
+    :param str stdout_str: The stdout from calling the terminal command.
+    :param str stderr_str: The stderr from calling the terminal command.
+    :param str gen_cmd: The command used to generate the product.
+    """
     def __init__(self, path: str, psf_model: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str):
+        """
+        The init method for PSF class.
+        """
         lo_en = Quantity(0, 'keV')
         hi_en = Quantity(100, 'keV')
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en)
@@ -1829,8 +1862,24 @@ class PSF(Image):
 
 
 class PSFGrid(BaseAggregateProduct):
+    """
+    :param list file_paths: The file paths of the individual PSF files for this grid.
+    :param int bins: The number of bins per side of the grid.
+    :param str psf_model: The model used to generate PSFs.
+    :param np.ndarray x_bounds: The upper and lower x boundaries of the bins in image pixel coordinates.
+    :param np.ndarray y_bounds: The upper and lower y boundaries of the bins in image pixel coordinates.
+    :param str obs_id: The ObsID for which this PSFGrid was generated.
+    :param str instrument: The instrument for which this PSFGrid was generated.
+    :param str stdout_str: The stdout from calling the terminal command.
+    :param str stderr_str: The stderr from calling the terminal command.
+    :param str gen_cmd: The commands used to generate the products.
+    """
     def __init__(self, file_paths: list, bins: int, psf_model: str, x_bounds: np.ndarray, y_bounds: np.ndarray,
                  obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
+        """
+        The init of the PSFGrid class - a subclass of BaseAggregateProduct that wraps a set of PSFs that have been
+        generated at different points on the detector.
+        """
         super().__init__(file_paths, 'psf', obs_id, instrument)
         self._psf_model = psf_model
         # Set none here because if I want positions of PSFs and there has been an error during generation, the user
