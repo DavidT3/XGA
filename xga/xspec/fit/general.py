@@ -184,7 +184,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     normalisations (constant*tbabs*powerlaw, or constant*tbabs*zpowerlw).
 
     :param List[BaseSource] sources: A single source object, or a sample of sources.
-     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
+    :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
         desired spectrum covers (for instance 'point' would be acceptable for a PointSource,
         or Quantity(40, 'arcsec')). If 'region' is chosen (to use the regions in region files), then any value
         passed for inner_radius is ignored, and the fit performed on spectra for the entire region. If you are
