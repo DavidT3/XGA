@@ -25,6 +25,43 @@ warnings.simplefilter('ignore', wcs.FITSFixedWarning)
 class GalaxyCluster(ExtendedSource):
     """
     This class is for the declaration and analysis of GalaxyCluster sources, and is a subclass of ExtendedSource.
+    Using this source for cluster analysis gives you access to many more analyses than an ExtendedSource, and due
+    to the passing of overdensity radii it has a more physically based idea of the size of the object. There are
+    also extra source matching steps to deal with the possible detection of cool cores as point sources.
+
+    :param float ra: The right-ascension of the cluster, in degrees.
+    :param float dec: The declination of the cluster, in degrees.
+    :param float redshift: The redshift of the cluster, required for cluster analysis.
+    :param str name: The name of the cluster, optional. Name will be constructed from position if None.
+    :param Quantity r200: A value for the R200 of the source. At least one overdensity radius must be passed.
+    :param Quantity r500: A value for the R500 of the source. At least one overdensity radius must be passed.
+    :param Quantity r2500: A value for the R2500 of the source. At least one overdensity radius must be passed.
+    :param richness: An optical richness of the cluster, optional.
+    :param richness_err: An uncertainty on the optical richness of the cluster, optional.
+    :param Quantity wl_mass: A weak lensing mass of the cluster, optional.
+    :param Quantity wl_mass_err: An uncertainty on the weak lensing mass of the cluster, optional.
+    :param Quantity custom_region_radius: A custom analysis region radius for this cluster, optional.
+    :param bool use_peak: Whether peak position should be found and used.
+    :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak position
+        from. Default is 0.5keV
+    :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak position
+        from. Default is 2.0keV.
+    :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+        radius for the background region. Default is 1.05.
+    :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+        radius for the background region. Default is 1.5.
+    :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+    :param bool load_products: Whether existing products should be loaded from disk.
+    :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+        is hierarchical, simple may also be passed.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+        certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+    :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
+    :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+        is hierarchical, simple may also be passed.
     """
     def __init__(self, ra, dec, redshift, name=None, r200: Quantity = None, r500: Quantity = None,
                  r2500: Quantity = None, richness: float = None, richness_err: float = None,
@@ -35,40 +72,6 @@ class GalaxyCluster(ExtendedSource):
                  peak_find_method: str = "hierarchical"):
         """
         The init of the GalaxyCluster specific XGA class, takes information on the cluster to enable analyses.
-
-        :param float ra: The right-ascension of the cluster, in degrees.
-        :param float dec: The declination of the cluster, in degrees.
-        :param float redshift: The redshift of the cluster, required for cluster analysis.
-        :param str name: The name of the cluster, optional. Name will be constructed from position if None.
-        :param Quantity r200: A value for the R200 of the source. At least one overdensity radius must be passed.
-        :param Quantity r500: A value for the R500 of the source. At least one overdensity radius must be passed.
-        :param Quantity r2500: A value for the R2500 of the source. At least one overdensity radius must be passed.
-        :param richness: An optical richness of the cluster, optional.
-        :param richness_err: An uncertainty on the optical richness of the cluster, optional.
-        :param Quantity wl_mass: A weak lensing mass of the cluster, optional.
-        :param Quantity wl_mass_err: An uncertainty on the weak lensing mass of the cluster, optional.
-        :param Quantity custom_region_radius: A custom analysis region radius for this cluster, optional.
-        :param bool use_peak: Whether peak position should be found and used.
-        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak position
-            from. Default is 0.5keV
-        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak position
-            from. Default is 2.0keV.
-        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
-            radius for the background region. Default is 1.05.
-        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
-            radius for the background region. Default is 1.5.
-        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
-        :param bool load_products: Whether existing products should be loaded from disk.
-        :param bool load_fits: Whether existing fits should be loaded from disk.
-        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
-            is hierarchical, simple may also be passed.
-        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
-            certain fraction of a certain region is covered by an ObsID. Default is True.
-        :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
-        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
-        :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
-        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
-            is hierarchical, simple may also be passed.
         """
         self._radii = {}
         if r200 is None and r500 is None and r2500 is None:
