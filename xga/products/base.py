@@ -32,6 +32,8 @@ class BaseProduct:
     output of the generation process, and stores the instrument and ObsID that the product was generated for.
 
     :param str path: The path to where the product file SHOULD be located.
+    :param str obs_id: The ObsID related to the product being declared.
+    :param str instrument: The instrument related to the product being declared.
     :param str stdout_str: The stdout from calling the terminal command.
     :param str stderr_str: The stderr from calling the terminal command.
     :param str gen_cmd: The command used to generate the product.
