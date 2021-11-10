@@ -166,10 +166,10 @@ class PointSample(BaseSample):
         """
         The init method of the PointSample class.
 
-        :param np.ndarray ra: The right-ascension of the extended sources, in degrees.
-        :param np.ndarray dec: The declination of the extended sources, in degrees.
-        :param np.ndarray redshift: The redshifts of the extended sources, optional. Default is None.
-        :param np.ndarray name: The names of the extended sources, optional. If no names are supplied
+        :param np.ndarray ra: The right-ascension of the point sources, in degrees.
+        :param np.ndarray dec: The declination of the point sources, in degrees.
+        :param np.ndarray redshift: The redshifts of the point sources, optional. Default is None.
+        :param np.ndarray name: The names of the point sources, optional. If no names are supplied
             then they will be constructed from the supplied coordinates.
         :param Quantity point_radius: The point source analysis region radius(ii) for this sample. Either
             pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
