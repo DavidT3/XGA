@@ -21,6 +21,9 @@ class Star(PointSource):
     :param float ra: The right-ascension of the star, in degrees.
     :param float dec: The declination of the star, in degrees.
     :param Quantity distance: A proper distance to the star. Default is None.
+    :param Quantity proper_motion: An astropy quantity describing the star's movement across the sky. This may
+        have either one (for the magnitude of proper motion) or two (for an RA Dec proper motion vector)
+        components. It must be in units that can be converted to arcseconds per year. Default is None.
     :param str name: The name of the star, optional. If no names are supplied then they will be constructed
         from the supplied coordinates.
     :param Quantity point_radius: The point source analysis region radius for this sample. An astropy quantity
@@ -58,12 +61,8 @@ class Star(PointSource):
         if isinstance(distance, Quantity) and not distance.unit.is_equivalent('pc'):
             raise UnitConversionError("The distance argument cannot be converted to pc.")
 
-        # Checking that the proper motion argument information is correctly formatted and in an appropriate unit
-        if isinstance(proper_motion, Quantity) and not proper_motion.unit.is_equivalent('m/s'):
-            raise UnitConversionError("The proper_motion argument cannot be converted to m/s.")
-        elif isinstance(proper_motion, Quantity):
-            raise NotImplementedError("I haven't yet implemented full checking for proper motion, and I also don't"
-                                      " yet know what to do with it")
+        # Checks the proper motion passed is acceptable
+        self._check_proper_motion(proper_motion)
 
         # Storing distance and proper motion in class attributes for use later
         self._distance = distance
@@ -72,12 +71,42 @@ class Star(PointSource):
     @property
     def distance(self) -> Quantity:
         """
-        The distance to the star, as was passed in on creation of this source object.
+        Property returning the distance to the star, as was passed in on creation of this source object.
 
         :return: The distance to the star.
         :rtype: Quantity
         """
         return self._distance
 
+    @property
+    def proper_motion(self) -> Quantity:
+        """
+        Property returning the proper motion (absolute value or vector) of the star.
 
+        :return: A proper motion magnitude or vector.
+        :rtype: Quantity
+        """
+        return self._proper_motion
 
+    @proper_motion.setter
+    def proper_motion(self, new_val: Quantity):
+        # Runs the checks on proper motion, if it fails an exception is raised
+        self._check_proper_motion(new_val)
+
+        self._proper_motion = new_val
+
+    @staticmethod
+    def _check_proper_motion(prop_mot: Quantity):
+        """
+        Just checks that proper motion is passed in a way that the source will accept and understand.
+
+        :param Quantity prop_mot: The proper motion quantity.
+        """
+        # Checking that the proper motion argument information is correctly formatted and in an appropriate
+        #  unit. I think it tends to be measured in arcseconds / yr, and of course its a vector
+        if isinstance(prop_mot, Quantity) and not prop_mot.unit.is_equivalent('arcsec/yr'):
+            raise UnitConversionError("Proper motion value cannot be converted to arcsec/yr, please give proper"
+                                      "motion in different units.")
+        elif isinstance(prop_mot, Quantity) and not prop_mot.isscalar and len(prop_mot) > 2:
+            raise ValueError("Proper motion may have one or two components (for absolute value and "
+                             "vector respectively), no more.")
