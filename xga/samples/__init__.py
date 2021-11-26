@@ -4,5 +4,6 @@
 from .base import BaseSample
 from .extended import ClusterSample
 from .general import PointSample
+from .point import StarSample
 
 

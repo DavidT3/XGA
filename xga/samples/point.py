@@ -1,3 +1,153 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 17:25. Copyright (c) David J Turner
 
+import numpy as np
+from astropy.cosmology import Planck15
+from astropy.units import Quantity, Unit, UnitConversionError
+from tqdm import tqdm
+
+from .base import BaseSample
+from .general import PointSample
+from ..exceptions import NoValidObservationsError
+from ..sources.point import Star
+
+
+class StarSample(BaseSample):
+    """
+    An XGA class for the analysis of a large sample of local X-ray emitting stars.
+    Takes information on stars to enable analysis.
+    """
+    def __init__(self, ra: np.ndarray, dec: np.ndarray, distance: np.ndarray = None, name: np.ndarray = None,
+                 proper_motion: Quantity = None, point_radius: Quantity = Quantity(30, 'arcsec'),
+                 match_radius: Quantity = Quantity(10, 'arcsec'),
+                 use_peak: bool = False, peak_lo_en: Quantity = Quantity(0.5, "keV"),
+                 peak_hi_en: Quantity = Quantity(2.0, "keV"), back_inn_rad_factor: float = 1.05,
+                 back_out_rad_factor: float = 1.5, cosmology=Planck15, load_fits: bool = False,
+                 no_prog_bar: bool = False, psf_corr: bool = False):
+        """
+         The init of the StarSample XGA class.
+        """
+        # Strongly enforce that its a quantity, this also means that it should be guaranteed that all radii have
+        #  a single unit
+        if not isinstance(point_radius, Quantity):
+            raise TypeError("Please pass a quantity object for point_radius, rather than an array or list.")
+        # People might pass a single value for point_radius, in which case we turn it into a non-scalar quantity
+        elif point_radius.isscalar:
+            point_radius = Quantity([point_radius.value] * len(ra), point_radius.unit)
+        elif not point_radius.isscalar and len(point_radius) != len(ra):
+            raise ValueError("If you pass a set of radii (rather than a single radius) to point_radius then there"
+                             " must be one entry per object passed to this sample object.")
+
+        # This does the checking for distance, making sure that if its a Quantity it fulfills our requirements
+        if isinstance(distance, Quantity) and distance.isscalar:
+            raise ValueError("Please pass a non-scalar quantity for distance.")
+        elif isinstance(distance, Quantity) and len(distance) != len(ra):
+            raise ValueError("Please pass a non-scalar quantity for distance, with one entry per source.")
+        elif isinstance(distance, Quantity) and not distance.unit.is_equivalent('parsec'):
+            raise UnitConversionError("Please pass distances that can be converted to parsecs.")
+
+        # Here I also perform checks on the proper motion information passed (if any)
+        if isinstance(proper_motion, Quantity) and proper_motion.isscalar:
+            raise ValueError("Please pass a non-scalar quantity for proper_motion.")
+        elif isinstance(proper_motion, Quantity) and proper_motion.ndim == 1 and len(proper_motion) != len(ra):
+            raise ValueError("Please pass a non-scalar quantity for proper motion, and if passing proper"
+                             " motion magnitudes please have one entry per source.")
+        elif isinstance(proper_motion, Quantity) and proper_motion.ndim == 2 and proper_motion.shape != (len(ra), 2):
+            raise ValueError("Please pass a non-scalar quantity for proper motion, and if passing proper"
+                             " motion magnitudes please have one entry of two components per source.")
+
+        # I don't like having this here, but it does avoid a circular import problem
+        from xga.sas import evselect_image, eexpmap, emosaic
+
+        # Using the super defines BaseSources and stores them in the self._sources dictionary
+        super().__init__(ra, dec, None, name, cosmology, load_products=True, load_fits=False, no_prog_bar=no_prog_bar)
+        evselect_image(self, peak_lo_en, peak_hi_en)
+        eexpmap(self, peak_lo_en, peak_hi_en)
+        emosaic(self, "image", peak_lo_en, peak_hi_en)
+        emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+
+        del self._sources
+        self._sources = {}
+
+        # A list to store the inds of any declarations that failed due to NoValidObservations, so some
+        #  attributes can be cleaned up later
+        final_names = []
+        self._point_radii = []
+        self._distances = []
+        self._proper_motions = []
+        with tqdm(desc="Setting up Point Sources", total=len(self._accepted_inds), disable=no_prog_bar) as dec_lb:
+            for ind in range(len(self._accepted_inds)):
+                r, d = ra[self._accepted_inds[ind]], dec[self._accepted_inds[ind]]
+                if distance is None:
+                    di = None
+                else:
+                    di = distance[self._accepted_inds[ind]]
+
+                if proper_motion is None:
+                    pm = None
+                else:
+                    pm = proper_motion[self._accepted_inds[ind]]
+
+                n = self._names[ind]
+                pr = point_radius[self._accepted_inds[ind]]
+
+                # Observation cleaning goes on automatically in PointSource, so if a NoValidObservations error is
+                #  thrown I have to catch it and not add that source to this sample.
+                try:
+                    self._sources[n] = Star(r, d, di, n, pm, pr, match_radius, use_peak, peak_lo_en, peak_hi_en,
+                                            back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits, False)
+                    self._point_radii.append(pr.value)
+                    self._distances.append(di)
+                    self._proper_motions.append(pm)
+                    # I know this will write to this over and over, but it seems a bit silly to check whether this has
+                    #  been set yet when all radii should be forced to be the same unit
+                    self._pr_unit = pr.unit
+                    final_names.append(n)
+                except NoValidObservationsError:
+                    self._failed_sources[n] = "CleanedNoMatch"
+
+                dec_lb.update(1)
+        self._names = final_names
+
+        # I've cleaned the observations, and its possible some of the data has been thrown away,
+        #  so I should regenerate the mosaic images/expmaps
+        emosaic(self, "image", peak_lo_en, peak_hi_en)
+        emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+
+        # I don't offer the user choices as to the configuration for PSF correction at the moment
+        if psf_corr:
+            # Trying to see if this stops a circular import issue I've been having
+            from ..imagetools.psf import rl_psf
+            rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
+
+    @property
+    def point_radii(self) -> Quantity:
+        """
+        Property getter for the radii of the regions used for analysis of the stars in this sample.
+
+        :return: A non-scalar Quantity of the point source radii used for analysis of the stars in
+            this sample.
+        :rtype: Quantity
+        """
+        return Quantity(self._point_radii, self._pr_unit)
+
+    @property
+    def point_radii_unit(self) -> Unit:
+        """
+        Property getter for the unit which the point radii values are stored in.
+
+        :return: The unit that the point radii are stored in.
+        :rtype: Unit
+        """
+        return self._pr_unit
+
+    def _del_data(self, key: int):
+        """
+        Specific to the StarSample class, this deletes the extra data stored during the initialisation
+        of this type of sample.
+
+        :param int key: The index or name of the source to delete.
+        """
+        del self._point_radii[key]
+        del self._distances[key]
+        del self._proper_motions[key]
