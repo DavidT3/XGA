@@ -59,6 +59,19 @@ class Star(PointSource):
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
                  load_products: bool = True, load_fits: bool = False, regen_merged: bool = True):
 
+        # This is before the super init call so that the changed _source_type_match method has a matching radius
+        #  attribute to use
+        # Check that the matching radius argument is acceptable, in terms of its units
+        if isinstance(match_radius, Quantity) and not match_radius.unit.is_equivalent('arcsec'):
+            raise UnitConversionError("The match_radius argument must be in units that can be converted to arcseconds.")
+        elif not isinstance(match_radius, Quantity):
+            raise TypeError("The match_radius must be an astropy quantity that can be converted to arcseconds.")
+        else:
+            match_radius = match_radius.to('arcsec')
+
+        # Storing the match radius in an attribute
+        self._match_radius = match_radius
+
         # Run the init of the PointSource superclass
         super().__init__(ra, dec, None, name, point_radius, use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                          back_out_rad_factor, cosmology, load_products, load_fits, regen_merged)
@@ -73,22 +86,11 @@ class Star(PointSource):
         elif distance is not None:
             distance = distance.to('pc')
 
-        # Check that the matching radius argument is acceptable, in terms of its units
-        if isinstance(match_radius, Quantity) and not match_radius.unit.is_equivalent('arcsec'):
-            raise UnitConversionError("The match_radius argument must be in units that can be converted to arcseconds.")
-        elif not isinstance(match_radius, Quantity):
-            raise TypeError("The match_radius must be an astropy quantity that can be converted to arcseconds.")
-        else:
-            match_radius = match_radius.to('arcsec')
-
         # Checks the proper motion passed is acceptable
         self._check_proper_motion(proper_motion)
         # Then makes sure to convert it to the expected unit if its not None
         if proper_motion is not None:
             proper_motion = proper_motion.to("arcsec/yr")
-
-        # Storing the match radius in an attribute
-        self._match_radius = match_radius
 
         # Storing distance and proper motion in class attributes for use later
         self._distance = distance
@@ -96,11 +98,10 @@ class Star(PointSource):
 
     def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
         """
-        A function to override the _source_type_match method of the BaseSource class, containing slightly
-        more complex matching criteria for galaxy clusters. Galaxy clusters having their own version of this
-        method was driven by issue #407, the problems I was having with low redshift clusters particularly.
-
-
+        A function to override the _source_type_match method of the BaseSource class, containing a slightly more
+        complex version of the point source matching criteria that the PointSource class uses. Here point source
+        regions are considered a match if any part of them falls within the match_radius passed on instantiation
+        of the Star class.
 
         :param str source_type: Should either be ext or pnt, describes what type of source I
             should be looking for in the region files.
@@ -109,90 +110,38 @@ class Star(PointSource):
             and a final dictionary with sources that aren't the target, or in the 2nd dictionary.
         :rtype: Tuple[Dict, Dict, Dict]
         """
-        def dist_from_source(reg):
-            """
-            Calculates the euclidean distance between the centre of a supplied region, and the
-            position of the source.
 
-            :param reg: A region object.
-            :return: Distance between region centre and source position.
-            """
-            ra = reg.center.ra.value
-            dec = reg.center.dec.value
-            return Quantity(np.sqrt(abs(ra - self._ra_dec[0]) ** 2 + abs(dec - self._ra_dec[1]) ** 2), 'deg')
+        # The original _source_type_match is run first, as it is still useful I just wish to refine the matches
+        #  a bit afterwards by accepting other regions within a certain radius.
+        results_dict, alt_match_dict, anti_results_dict = super()._source_type_match('pnt')
 
-        raise NotImplementedError("Not written this for Star yet")
-        results_dict, alt_match_dict, anti_results_dict = super()._source_type_match('ext')
+        # Then I run through the anti-results dictionary (no idea why I called it that originally but
+        #  I'm running with it), here is where the extra checks occur. This for loop iterates through the
+        #  different ObsIDs in the directory.
+        for k, v in anti_results_dict.items():
+            # We only want to check regions that are point sources, so in this instance we select red ones
+            recheck = [r for r in v if r.visual['color'] == 'red']
+            # Then we use the handy function I wrote ages ago to find if any of those regions lie within
+            #  match_radius of the ra_dec of the source. This will return regions that have ANY PART of
+            #  themselves within our search radius.
+            within = self.regions_within_radii(Quantity(0, 'arcsec'), self._match_radius, self.ra_dec, recheck)
 
-        # The 0.66 and 2.25 factors are intended to shift the r200 and r2500 values to approximately r500, and were
-        #  decided on by dividing the Arnaud et al. 2005 R-T relations by one another and finding the mean factor
-        if self._radii['r500'] is not None:
-            check_rad = self.convert_radius(self._radii['r500'] * 0.15, 'deg')
-        elif self._radii['r200'] is not None:
-            check_rad = self.convert_radius(self._radii['r200'] * 0.66 * 0.15, 'deg')
-        else:
-            check_rad = self.convert_radius(self._radii['r2500'] * 2.25 * 0.15, 'deg')
+            # Make a copy of the current ObsID's non matched regions
+            reg_copy = np.array(v).copy()
 
-        # Here we scrub the anti-results dictionary (I don't know why I called it that...) to make sure cool cores
-        #  aren't accidentally removed, and that chunks of cluster emission aren't removed
-        new_anti_results = {}
-        for obs in self._obs:
-            # This is where the cleaned interlopers will be stored
-            new_anti_results[obs] = []
-            # Cycling through the current interloper regions for the current ObsID
-            for reg_obj in anti_results_dict[obs]:
-                # Calculating the distance (in degrees) of the centre of the current interloper region from
-                #  the user supplied coordinates of the cluster
-                dist = dist_from_source(reg_obj)
+            # Find which of those regions are now considered to be extra matches, but as indexes
+            ex_matches = np.argwhere(np.isin(v, within)).flatten()
+            # And the inverse information, which should be kept as non-matches
+            inv_ex_matches = np.argwhere(~np.isin(v, within)).flatten()
 
-                # If the current interloper source is a point source/a PSF sized extended source and is within the
-                #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
-                #  cool core and allow it to stay in the analysis
-                if reg_obj.visual["color"] == 'red' and dist < check_rad:
-                    # We do print a warning though
-                    warnings.warn("A point source has been detected in {o} and is very close to the user supplied "
-                                  "coordinates of {s}. It will not be excluded from analysis due to the possibility "
-                                  "of a mis-identified cool core".format(s=self.name, o=obs))
-                elif reg_obj.visual["color"] == "magenta" and dist < check_rad:
-                    warnings.warn("A PSF sized extended source has been detected in {o} and is very close to the "
-                                  "user supplied coordinates of {s}. It will not be excluded from analysis due "
-                                  "to the possibility of a mis-identified cool core".format(s=self.name, o=obs))
-                else:
-                    new_anti_results[obs].append(reg_obj)
+            # As for some reason I stored these as lists of regions, we have to convert back to a list, which is
+            #  unfortunate but oh well got to be consistent. Then the regions that are kept as non-matches are made
+            #  the new anti-results entry for that ObsID
+            anti_results_dict[k] = list(reg_copy[inv_ex_matches])
+            # This concatenates the new (if there are any) extra matches to the existing alternative matches list
+            alt_match_dict[k] += list(reg_copy[ex_matches])
 
-            # Here we run through the 'chosen' region for each observation (so the region that we think is the
-            #  cluster) and check if any of the current set of interloper regions intersects with it. If they do
-            #  then they are allowed to stay in the analysis under assumption that they're actually part of the
-            #  cluster
-            for res_obs in results_dict:
-                if results_dict[res_obs] is not None:
-                    # Reads out the chosen region for res_obs
-                    src_reg_obj = results_dict[res_obs]
-                    # Stores its central coordinates in an astropy quantity
-                    centre = Quantity([src_reg_obj.center.ra.value, src_reg_obj.center.dec.value], 'deg')
-
-                    # At first I set the checking radius to the semimajor axis
-                    rad = Quantity(src_reg_obj.width.to('deg').value/2, 'deg')
-                    # And use my handy method to find which regions intersect with a circle with the semimajor length
-                    #  as radius, centred on the centre of the current chosen region
-                    within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
-                    # Make sure to only select extended (green) sources
-                    within_width = [reg for reg in within_width if reg.visual['color'] == 'green']
-
-                    # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
-                    #  then it would intersect with the ellipse of the current chosen region.
-                    rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
-                    within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
-                    within_height = [reg for reg in within_height if reg.visual['color'] == 'green']
-
-                    # This finds which regions are present in both lists and makes sure if they are in both
-                    #  then they are NOT removed from the analysis
-                    intersect_regions = list(set(within_width) & set(within_height))
-                    for inter_reg in intersect_regions:
-                        inter_reg_ind = new_anti_results[obs].index(inter_reg)
-                        new_anti_results[obs].pop(inter_reg_ind)
-
-        return results_dict, alt_match_dict, new_anti_results
+        return results_dict, alt_match_dict, anti_results_dict
 
     @property
     def match_radius(self) -> Quantity:
