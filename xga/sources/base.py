@@ -1711,8 +1711,8 @@ class BaseSource:
 
         return sn
 
-    def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity,
-                             deg_central_coord: Quantity, regions_to_search: np.ndarray = None) -> np.ndarray:
+    def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity, deg_central_coord: Quantity,
+                             regions_to_search: Union[np.ndarray, list] = None) -> np.ndarray:
         """
         This function finds and returns any interloper regions (by default) that have any part of their boundary
         within the specified radii, centered on the specified central coordinate. Users may also pass their own
@@ -1722,7 +1722,7 @@ class BaseSource:
         :param Quantity outer_radius: The outer radius of the area to search for interlopers in.
         :param Quantity deg_central_coord: The central coordinate (IN DEGREES) of the area to search for
             interlopers in.
-        :param np.ndarray regions_to_search: An optional parameter that allows the user to pass a specific
+        :param np.ndarray/list regions_to_search: An optional parameter that allows the user to pass a specific
             list of regions to check. Default is None, in which case the interloper_regions internal list
             will be used.
         :return: A numpy array of the interloper regions (or user passed regions) within the specified area.
