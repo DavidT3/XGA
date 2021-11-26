@@ -76,7 +76,7 @@ class StarSample(BaseSample):
         self._point_radii = []
         self._distances = []
         self._proper_motions = []
-        with tqdm(desc="Setting up Point Sources", total=len(self._accepted_inds), disable=no_prog_bar) as dec_lb:
+        with tqdm(desc="Setting up Stars", total=len(self._accepted_inds), disable=no_prog_bar) as dec_lb:
             for ind in range(len(self._accepted_inds)):
                 r, d = ra[self._accepted_inds[ind]], dec[self._accepted_inds[ind]]
                 if distance is None:
