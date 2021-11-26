@@ -1712,19 +1712,20 @@ class BaseSource:
         return sn
 
     def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity,
-                             deg_central_coord: Quantity, interloper_regions: np.ndarray = None) -> np.ndarray:
+                             deg_central_coord: Quantity, regions_to_search: np.ndarray = None) -> np.ndarray:
         """
-        This function finds and returns any interloper regions that have any part of their boundary within
-        the specified radii, centered on the specified central coordinate.
+        This function finds and returns any interloper regions (by default) that have any part of their boundary
+        within the specified radii, centered on the specified central coordinate. Users may also pass their own
+        array of regions to check.
 
         :param Quantity inner_radius: The inner radius of the area to search for interlopers in.
         :param Quantity outer_radius: The outer radius of the area to search for interlopers in.
         :param Quantity deg_central_coord: The central coordinate (IN DEGREES) of the area to search for
             interlopers in.
-        :param np.ndarray interloper_regions: An optional parameter that allows the user to pass a specific
+        :param np.ndarray regions_to_search: An optional parameter that allows the user to pass a specific
             list of regions to check. Default is None, in which case the interloper_regions internal list
             will be used.
-        :return: A numpy array of the interloper regions within the specified area.
+        :return: A numpy array of the interloper regions (or user passed regions) within the specified area.
         :rtype: np.ndarray
         """
         def perimeter_points(reg_cen_x: float, reg_cen_y: float, reg_major_rad: float, reg_minor_rad: float,
@@ -1763,17 +1764,16 @@ class BaseSource:
         if deg_central_coord.unit != deg:
             raise UnitConversionError("The central coordinate must be in degrees for this function.")
 
-        # If no custom interloper regions array was passed, we use the internal array
-        if interloper_regions is None:
-            interloper_regions = self._interloper_regions.copy()
+        # If no custom regions array was passed, we use the internal array of interloper regions
+        if regions_to_search is None:
+            regions_to_search = self._interloper_regions.copy()
 
         inner_radius = self.convert_radius(inner_radius, 'deg')
         outer_radius = self.convert_radius(outer_radius, 'deg')
 
         # Then we can check to make sure that the outer radius is larger than the inner radius
         if inner_radius >= outer_radius:
-            raise ValueError("A SAS region for {s} cannot have an inner_radius larger than or equal to its "
-                             "outer_radius".format(s=self.name))
+            raise ValueError("inner_radius cannot be larger than or equal to outer_radius".format(s=self.name))
 
         # I think my last attempt at this type of function was made really slow by something to with the regions
         #  module, so I'm going to try and move away from that here
@@ -1784,12 +1784,12 @@ class BaseSource:
                                                                r.width.to('deg').value/2,
                                                                r.height.to('deg').value/2, r.angle.to('rad').value)
                                               - deg_central_coord.value) ** 2, axis=1))
-                              for r in interloper_regions])
+                              for r in regions_to_search])
 
         # Finds which of the possible interlopers have any part of their boundary within the annulus in consideration
         int_within = np.unique(np.where((int_dists < outer_radius.value) & (int_dists > inner_radius.value))[0])
 
-        return np.array(interloper_regions)[int_within]
+        return np.array(regions_to_search)[int_within]
 
     @staticmethod
     def _interloper_sas_string(reg: EllipseSkyRegion, im: Image, output_unit: Union[UnitBase, str]) -> str:
