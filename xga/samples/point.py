@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/10/2020, 17:25. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 26/11/2021, 16:56. Copyright (c) David J Turner
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -7,7 +7,6 @@ from astropy.units import Quantity, Unit, UnitConversionError
 from tqdm import tqdm
 
 from .base import BaseSample
-from .general import PointSample
 from ..exceptions import NoValidObservationsError
 from ..sources.point import Star
 
@@ -16,14 +15,42 @@ class StarSample(BaseSample):
     """
     An XGA class for the analysis of a large sample of local X-ray emitting stars.
     Takes information on stars to enable analysis.
+
+    :param np.ndarray ra: The right-ascensions of the stars, in degrees.
+    :param np.ndarray dec: The declinations of the stars, in degrees.
+    :param np.ndarray distance: The distances to the stars in units convertible to parsecs, optional. Default is None.
+    :param np.ndarray name: The names of the stars, optional. If no names are supplied
+        then they will be constructed from the supplied coordinates.
+    :param Quantity proper_motion: The proper motion of the stars, optional. This should be passed as a non-scalar
+        astropy quantity; if magnitudes are passed it should be in the form Quantity([4, 5, 2, 7,...], 'arcsec/yr'),
+        and if vectors are passed it should be in the form Quantity([[4, 2.3], [5, 4.3], [2, 2.5],
+        [7.2, 6.9],...], 'arcsec/yr'), where the first is in RA and the second in Dec. Units should be convertible to
+        arcseconds per year. Default is None
+    :param Quantity point_radius: The point source analysis region radius(ii) for this sample. Either
+        pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
+    :param Quantity match_radius: The radius within which point source regions are accepted as a match to the
+        RAs and Dec passed by the user. The default value is 10 arcseconds.
+    :param bool use_peak: Whether peak positions should be found and used. For StarSample the 'simple' peak
+        finding method is the only one available.
+    :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
+        position from. Default is 0.5keV.
+    :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak
+        position from. Default is 2.0keV.
+    :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+        radius for the background region. Default is 1.05.
+    :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+        radius for the background region. Default is 1.5.
+    :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+    :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
+    :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, distance: np.ndarray = None, name: np.ndarray = None,
                  proper_motion: Quantity = None, point_radius: Quantity = Quantity(30, 'arcsec'),
-                 match_radius: Quantity = Quantity(10, 'arcsec'),
-                 use_peak: bool = False, peak_lo_en: Quantity = Quantity(0.5, "keV"),
-                 peak_hi_en: Quantity = Quantity(2.0, "keV"), back_inn_rad_factor: float = 1.05,
-                 back_out_rad_factor: float = 1.5, cosmology=Planck15, load_fits: bool = False,
-                 no_prog_bar: bool = False, psf_corr: bool = False):
+                 match_radius: Quantity = Quantity(10, 'arcsec'), use_peak: bool = False,
+                 peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
+                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
+                 load_fits: bool = False, no_prog_bar: bool = False, psf_corr: bool = False):
         """
          The init of the StarSample XGA class.
         """
