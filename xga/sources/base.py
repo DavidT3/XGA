@@ -2331,20 +2331,22 @@ class BaseSource:
         """
         return self._disassociated_obs
 
-    def disassociate_obs(self, to_remove: Union[dict, str]):
+    def disassociate_obs(self, to_remove: Union[dict, str, list]):
         """
         Method that uses the supplied dictionary to safely remove data from the source. This data will no longer
         be used in any analyses, and would typically be removed because it is of poor quality, or doesn't contribute
         enough to justify its presence.
 
-        :param dict/str to_remove: A dictionary of observations to remove, either in the style of
-            the source.instruments dictionary (with the top level keys being ObsIDs, and the lower levels
-            being instrument names), or a string containing an ObsID.
+        :param dict/str/list to_remove: Either a dictionary of observations to remove, (in the style of
+            the source.instruments dictionary with the top level keys being ObsIDs, and the lower levels
+            being instrument names), a string containing an ObsID, or a list of ObsIDs.
         """
         # Users can pass just an ObsID string, but we then need to convert it to the form
         #  that the rest of the function requires
         if isinstance(to_remove, str):
             to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
+        elif isinstance(to_remove, list):
+            to_remove = {o: deepcopy(self.instruments[o]) for o in to_remove}
 
         if not self._disassociated:
             self._disassociated = True
