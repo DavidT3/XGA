@@ -27,6 +27,28 @@ class Spectrum(BaseProduct):
     measured from it (X-ray luminosity for example) can be associated with an instance of this object, as well as
     conversion factors that can be calculated from XSPEC. If a model has been fitted then the data and model
     can be viewed.
+
+    :param str path: The path to the spectrum file.
+    :param str rmf_path: The path to the RMF generated for the spectrum file.
+    :param str arf_path: The path to the ARF generated for the spectrum file.
+    :param str b_path: The path to the background spectrum generated for the spectrum file.
+    :param Quantity central_coord: The central coordinate of the spectrum region.
+    :param Quantity inn_rad: The inner radius of the spectrum region.
+    :param Quantity out_rad: The outer radius of the spectrum region.
+    :param str obs_id: The ObsID from which this spectrum was generated.
+    :param str instrument: The instrument which this spectrum was generated.
+    :param bool grouped: Was this spectrum grouped?
+    :param int min_counts: The minimum counts applied for the grouping.
+    :param float min_sn: The minimum signal to noise applied for the grouping.
+    :param int over_sample: Level of oversampling applied to spectrum grouping.
+    :param str stdout_str: The stdout from the generation process.
+    :param str stderr_str: The stderr for the generation process.
+    :param str gen_cmd: The generation command for the spectrum stack.
+    :param bool region: Was this spectrum generated from a region in a region file?
+    :param str b_rmf_path: The path to the RMF generated for the background spectrum (if applicable, XGA no longer
+        generates these by default, as XSPEC does not make use of them).
+    :param str b_arf_path: The path to the ARF generated for the background spectrum (if applicable, XGA no longer
+        generates these by default, as XSPEC does not make use of them).
     """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str,
@@ -35,28 +57,6 @@ class Spectrum(BaseProduct):
         """
         The init of the Spectrum class, sets up both the base product behind the Spectrum and the specific
         information/abilities that a spectrum needs.
-
-        :param str path: The path to the spectrum file.
-        :param str rmf_path: The path to the RMF generated for the spectrum file.
-        :param str arf_path: The path to the ARF generated for the spectrum file.
-        :param str b_path: The path to the background spectrum generated for the spectrum file.
-        :param Quantity central_coord: The central coordinate of the spectrum region.
-        :param Quantity inn_rad: The inner radius of the spectrum region.
-        :param Quantity out_rad: The outer radius of the spectrum region.
-        :param str obs_id: The ObsID from which this spectrum was generated.
-        :param str instrument: The instrument which this spectrum was generated.
-        :param bool grouped: Was this spectrum grouped?
-        :param int min_counts: The minimum counts applied for the grouping.
-        :param float min_sn: The minimum signal to noise applied for the grouping.
-        :param int over_sample: Level of oversampling applied to spectrum grouping.
-        :param str stdout_str: The stdout from the generation process.
-        :param str stderr_str: The stderr for the generation process.
-        :param str gen_cmd: The generation command for the spectrum stack.
-        :param bool region: Was this spectrum generated from a region in a region file?
-        :param str b_rmf_path: The path to the RMF generated for the background spectrum (if applicable, XGA no longer
-            generates these by default, as XSPEC does not make use of them).
-        :param str b_arf_path: The path to the ARF generated for the background spectrum (if applicable, XGA no longer
-            generates these by default, as XSPEC does not make use of them).
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._prod_type = "spectrum"
@@ -868,13 +868,13 @@ class Spectrum(BaseProduct):
 class AnnularSpectra(BaseAggregateProduct):
     """
     A class designed to hold a set of XGA spectra generated in concentric, circular annuli.
+
+    :param List[Spectrum] spectra: A list of XGA spectrum objects which make up this set.
     """
     def __init__(self, spectra: List[Spectrum]):
         """
         The init method for the AnnularSpectrum class, performs checks and organises the spectra which
         have been passed in, for easy retrieval.
-
-        :param List[Spectrum] spectra: A list of XGA spectrum objects which make up this set.
         """
         super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined")
 

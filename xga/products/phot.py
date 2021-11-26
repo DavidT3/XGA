@@ -4,6 +4,7 @@
 import os
 import warnings
 from typing import Tuple, List, Union
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle
-from regions import read_ds9, PixelRegion
+from regions import read_ds9, PixelRegion, SkyRegion
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
@@ -32,28 +33,30 @@ class Image(BaseProduct):
     This class stores image data from X-ray observations. It also allows easy, direct, access to that data, and
     implements many helpful methods with extra functionality (including coordinate transforms, peak finders, and
     a powerful view method).
+
+    :param str path: The path to where the product file SHOULD be located.
+    :param str obs_id: The ObsID related to the Image being declared.
+    :param str instrument: The instrument related to the Image being declared.
+    :param str stdout_str: The stdout from calling the terminal command.
+    :param str stderr_str: The stderr from calling the terminal command.
+    :param str gen_cmd: The command used to generate the product.
+    :param Quantity lo_en: The lower energy bound used to generate this product.
+    :param Quantity hi_en: The upper energy bound used to generate this product.
+    :param str reg_file_path: Path to a region file for this image.
+    :param bool smoothed: Has this image been smoothed, default is False. This information can also be
+        set after the instantiation of an image.
+    :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
+        kernel used or a dictionary of information (required structure detailed in
+        parse_smoothing). Default is None
+    :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
+        is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+        ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  lo_en: Quantity, hi_en: Quantity, reg_file_path: str = '', smoothed: bool = False,
                  smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None):
         """
         The initialisation method for the Image class.
-
-        :param str path: The path to where the product file SHOULD be located.
-        :param str stdout_str: The stdout from calling the terminal command.
-        :param str stderr_str: The stderr from calling the terminal command.
-        :param str gen_cmd: The command used to generate the product.
-        :param Quantity lo_en: The lower energy bound used to generate this product.
-        :param Quantity hi_en: The upper energy bound used to generate this product.
-        :param str reg_file_path: Path to a region file for this image.
-        :param bool smoothed: Has this image been smoothed, default is False. This information can also be
-            set after the instantiation of an image.
-        :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
-            kernel used or a dictionary of information (required structure detailed in
-            parse_smoothing). Default is None
-        :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
-            is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
-            ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
         self._shape = None
@@ -76,7 +79,7 @@ class Image(BaseProduct):
 
         # This checks whether a region file has been passed, and if it has then processes it
         if reg_file_path != '' and os.path.exists(reg_file_path):
-            self._regions = self._process_regfile(reg_file_path)
+            self._regions = self._process_regions(reg_file_path)
             self._reg_file_path = reg_file_path
         elif reg_file_path != '' and not os.path.exists(reg_file_path):
             warnings.warn("That region file path does not exist")
@@ -201,21 +204,38 @@ class Image(BaseProduct):
             raise FailedProductError("SAS has generated this image without a WCS capable of "
                                      "going from pixels to RA-DEC.")
 
-    def _process_regfile(self, path: str) -> List[PixelRegion]:
+    def _process_regions(self, path: str = None, reg_list: List[Union[PixelRegion, SkyRegion]] = None) \
+            -> List[PixelRegion]:
         """
         This internal function just takes the path to a region file and processes it into a form that
         this object requires for viewing.
 
-        :param str path: The path to the region file to be processed
+        :param str path: The path of a region file to be processed, can be None but only if the
+            other argument is given.
+        :param List[PixelRegion/SkyRegion] reg_list: A list of region objects to be processed, default is None.
         :return: A list of pixel regions.
         :rtype: List[PixelRegion]
         """
-        ds9_regs = read_ds9(path)
+        # This method can deal with either an input of a region file path or of a list of region objects, but
+        #  firstly we need to check that at least one of the inputs isn't None
+        if all([path is None, reg_list is None]):
+            raise ValueError("Either a path or a list of region objects must be passed, you have passed neither")
+        elif all([path is not None, reg_list is not None]):
+            raise ValueError("You have passed both a path and a list of regions, pass one or the other.")
+
+        # The behaviour here depends on whether regions or a path have been passed
+        if path is not None:
+            ds9_regs = read_ds9(path)
+        else:
+            ds9_regs = deepcopy(reg_list)
+
+        # Checking what kind of regions there are, as that changes whether they need to be converted or not
         final_regs = []
         for reg in ds9_regs:
             if isinstance(reg, PixelRegion):
                 final_regs.append(reg)
             else:
+                # Regions in sky coordinates need to be in pixels for overlaying on the image
                 final_regs.append(reg.to_pixel(self._wcs_radec))
 
         return final_regs
@@ -413,20 +433,30 @@ class Image(BaseProduct):
         return self._regions
 
     @regions.setter
-    def regions(self, new_path: str):
+    def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]]]):
         """
         A setter for regions associated with this object, a region file path is passed, then that file
         is processed into the required format.
 
-        :param str new_path: A new region file path.
+        :param str/List[SkyRegion/PixelRegion] new_reg: A new region file path, or a list of region objects.
         """
-        if new_path != '' and os.path.exists(new_path):
-            self._reg_file_path = new_path
-            self._regions = self._process_regfile(new_path)
-        elif new_path == '':
+        if not isinstance(new_reg, (str, list)):
+            raise TypeError("Please pass either a path to a region file or a list of "
+                            "SkyRegion/PixelRegion objects.")
+
+        if isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
+            self._reg_file_path = new_reg
+            self._regions = self._process_regions(new_reg)
+        elif isinstance(new_reg, str) and new_reg == '':
             pass
-        else:
+        elif isinstance(new_reg, str):
             warnings.warn("That region file path does not exist")
+        elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
+            self._reg_file_path = ""
+            self._regions = self._process_regions(reg_list=new_reg)
+        else:
+            raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
+                             "a list of SkyRegion/PixelRegion objects")
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -1118,10 +1148,26 @@ class Image(BaseProduct):
 class ExpMap(Image):
     """
     A very simple subclass of the Image product class - designed to allow for easy interaction with exposure maps.
+
+    :param str path: The path to where the product file SHOULD be located.
+    :param str obs_id: The ObsID related to the ExpMap being declared.
+    :param str instrument: The instrument related to the ExpMap being declared.
+    :param str stdout_str: The stdout from calling the terminal command.
+    :param str stderr_str: The stderr from calling the terminal command.
+    :param str gen_cmd: The command used to generate the product.
+    :param Quantity lo_en: The lower energy bound used to generate this product.
+    :param Quantity hi_en: The upper energy bound used to generate this product.
+    :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
+        is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+        ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity):
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en)
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None):
+        """
+        Init of the ExpMap class.
+        """
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
+                         obs_inst_combs=obs_inst_combs)
         self._prod_type = "expmap"
 
     def get_exp(self, at_coord: Quantity) -> float:
@@ -1169,15 +1215,15 @@ class RateMap(Image):
     """
     A very powerful class which allows interactions with 'RateMaps', though these are not directly generated by
     SAS, they are images divided by matching exposure maps, to provide a count rate image.
+
+    :param Image xga_image: The image component of the RateMap.
+    :param ExpMap xga_expmap: The exposure map component of the RateMap.
+    :param str reg_file_path: A path to a region file that you might wish to overlay on views of this product.
     """
     def __init__(self, xga_image: Image, xga_expmap: ExpMap, reg_file_path: str = ''):
         """
         This initialises a RateMap instance, where a count-rate image is divided by an exposure map, to create a map
         of X-ray counts.
-
-        :param Image xga_image: The image component of the RateMap.
-        :param ExpMap xga_expmap: The exposure map component of the RateMap.
-        :param str reg_file_path:
         """
         if type(xga_image) != Image or type(xga_expmap) != ExpMap:
             raise TypeError("xga_image must be an XGA Image object, and xga_expmap must be an "
@@ -1478,7 +1524,7 @@ class RateMap(Image):
 
         :param np.ndarray mask: A numpy array used to weight the data. It should be 0 for pixels that
             aren't to be searched, and 1 for those that are.
-        :param float redshift: The redshift of the source that we wish to find the X-ray centroid of.
+        :param float redshift: The redshift of the source that we wish to find the X-ray peak of.
         :param cosmology: An astropy cosmology object.
         :param UnitBase out_unit: The desired output unit of the peak coordinates, the default is degrees.
         :return: An astropy quantity containing the coordinate of the X-ray peak of this ratemap (given
@@ -1696,8 +1742,23 @@ class RateMap(Image):
 
 
 class PSF(Image):
+    """
+    A subclass of image that is a wrapper for 2D images of PSFs that can be generated by SAS. This can be used to
+    view the PSF and is used in other analyses to correct images.
+
+    :param str path: The path to where the product file SHOULD be located.
+    :param str psf_model: The model used for the generation of the PSF.
+    :param str obs_id: The ObsID related to the PSF being declared.
+    :param str instrument: The instrument related to the PSF being declared.
+    :param str stdout_str: The stdout from calling the terminal command.
+    :param str stderr_str: The stderr from calling the terminal command.
+    :param str gen_cmd: The command used to generate the product.
+    """
     def __init__(self, path: str, psf_model: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str):
+        """
+        The init method for PSF class.
+        """
         lo_en = Quantity(0, 'keV')
         hi_en = Quantity(100, 'keV')
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en)
@@ -1801,8 +1862,24 @@ class PSF(Image):
 
 
 class PSFGrid(BaseAggregateProduct):
+    """
+    :param list file_paths: The file paths of the individual PSF files for this grid.
+    :param int bins: The number of bins per side of the grid.
+    :param str psf_model: The model used to generate PSFs.
+    :param np.ndarray x_bounds: The upper and lower x boundaries of the bins in image pixel coordinates.
+    :param np.ndarray y_bounds: The upper and lower y boundaries of the bins in image pixel coordinates.
+    :param str obs_id: The ObsID for which this PSFGrid was generated.
+    :param str instrument: The instrument for which this PSFGrid was generated.
+    :param str stdout_str: The stdout from calling the terminal command.
+    :param str stderr_str: The stderr from calling the terminal command.
+    :param str gen_cmd: The commands used to generate the products.
+    """
     def __init__(self, file_paths: list, bins: int, psf_model: str, x_bounds: np.ndarray, y_bounds: np.ndarray,
                  obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
+        """
+        The init of the PSFGrid class - a subclass of BaseAggregateProduct that wraps a set of PSFs that have been
+        generated at different points on the detector.
+        """
         super().__init__(file_paths, 'psf', obs_id, instrument)
         self._psf_model = psf_model
         # Set none here because if I want positions of PSFs and there has been an error during generation, the user

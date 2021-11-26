@@ -28,8 +28,11 @@ jobs:
     
     # This job has several steps
     steps:
-      # Checks out the master branch (what we want to build and publish), then activates a relatively recent version of Python
-    - uses: actions/checkout@master
+      # Checks out the master branch (what we want to build and publish - hopefully with the VCS info that versioneer needs), then 
+      #  activates a relatively recent version of Python
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
     - name: Setup the Python install
       uses: actions/setup-python@v1
       with:

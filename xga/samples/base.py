@@ -6,9 +6,10 @@ from warnings import warn
 
 import numpy as np
 from astropy.cosmology import Planck15
-from astropy.units import Quantity
+from astropy.units import Quantity, Unit, arcmin, UnitConversionError
 from numpy import ndarray
 from tqdm import tqdm
+from matplotlib import pyplot as plt
 
 from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
     NoValidObservationsError
@@ -20,7 +21,19 @@ from ..sourcetools.misc import coord_to_name
 class BaseSample:
     """
     The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
-    interesting X-ray sources easy.
+    interesting X-ray sources easy. This in particular creates samples of BaseSource object. It doesn't seem
+    likely that users should need to declare one of these, they should use one of the general ExtendedSample or
+    PointSample classes if they are doing exploratory analyses, or a more specific subclass like ClusterSample.
+
+    :param ndarray ra: The right-ascensions of the sources, in degrees.
+    :param ndarray dec: The declinations of the sources, in degrees.
+    :param ndarray redshift: The redshifts of the sources, optional. Default is None
+    :param ndarray name: The names of the sources, optional. Default is None, in which case the names will be
+        constructed from the coordinates.
+    :param cosmology: An astropy cosmology object to be used in distance calculations and analyses.
+    :param bool load_products: Whether existing products should be loaded from disk.
+    :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param bool no_prog_bar: Whether a progress bar should be shown as sources are declared.
     """
     def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None, cosmology=Planck15,
                  load_products: bool = True, load_fits: bool = False, no_prog_bar: bool = False):
@@ -108,6 +121,25 @@ class BaseSample:
         """
 
         return Quantity([s.ra_dec.value for s in self._sources.values()], 'deg')
+
+    @property
+    def peaks(self) -> Quantity:
+        """
+        This property getter will fetch peak coordinates for the sources in this sample. An exception will
+        be raised if the source objects do not have a peak attribute, and a warning will be presented if all
+        user supplied ra-dec values are the same as all peak values.
+
+        :return: A quantity containing the peak coordinates measured for the sources in the sample.
+        :rtype: Quantity
+        """
+        if not hasattr(self[0], 'peak'):
+            raise AttributeError("The sources making up this sample do not have a peak property.")
+
+        if all([np.array_equal(s.ra_dec.value, s.peak.value) for s in self._sources.values()]):
+            warn("All user supplied ra-dec values are the same as the peak ra-dec values, likely means that peak "
+                 "finding was not run for this sample.")
+
+        return Quantity([s.peak.value for s in self._sources.values()], 'deg')
 
     @property
     def redshifts(self) -> ndarray:
@@ -279,6 +311,102 @@ class BaseSample:
         if not triggered:
             print("All available spectra are okay")
         print("-----------------------------------------------------\n")
+
+    def offsets(self, off_unit: Union[Unit, str] = arcmin) -> Quantity:
+        """
+        Uses the offset method built into the sources to fetch the offsets between ra_dec and peak for all
+        sources in the sample.
+
+        :param Unit/str off_unit: The desired unit for the offsets to be in.
+        :return: The offsets.
+        :rtype: Quantity
+        """
+        # This call fetches peaks which we then never use, but it triggers a check that will trigger a warning if
+        #  all the ra_dec values are the same as all the peak values
+        ps = self.peaks
+        # Use list comprehension to grab all the offsets, then convert to a single quantity
+        offsets = Quantity([s.offset(off_unit) for s in self._sources.values()])
+
+        return offsets
+
+    def view_offset_dist(self, off_unit: Union[Unit, str] = arcmin, figsize: tuple = (6, 6),
+                         bins: Union[str, np.ndarray, int] = 'auto', x_lims: Quantity = None, x_scale: str = 'log',
+                         y_scale: str = 'log', colour: str = "cadetblue", alpha: float = 0.5, title: str = '',
+                         font_size: int = 13, data_label: str = '', y_label: str = "N", save_path: str = None):
+        """
+        A method to create a histogram of the offsets of user from peak coordinates for the objects in
+        this sample. A range of options to customise the plot are supplied.
+
+        :param Unit/str off_unit: The desired output unit of separation, default is arcmin.
+        :param tuple figsize: The size of the figure produced.
+        :param str/np.ndarray/int bins: This is passed directly through to the plt.hist bins argument, default is auto.
+        :param Quantity x_lims: Set the limits for the x-axis, first element should be lower, second element
+            upper. Default is None in which case matplotlib decides.
+        :param str x_scale: The scale for the x-axis, default is log.
+        :param str y_scale: The scale for the y-axis, default is log.
+        :param str colour: The colour of the bars, default is cadetblue.
+        :param float alpha: The alpha (transparency) value of the the bars, default is 0.5.
+        :param str title: A title to be added to the plot. Default is empty, which means no title will be
+            added. Fontsize will be 1.2 times the font_size argument.
+        :param int font_size: The font_size argument sets the font_size of the axis labels. Default is 13.
+        :param str data_label: Whether the data should be labelled, default is empty. If this is set a legend will
+            be added.
+        :param str y_label: The y-axis label, default is N.
+        :param str save_path: A path to save the figure on, optional. Default is None in which case the figure is
+            not saved to disk.
+        """
+
+        # Uses the convenience method for calculating separation that is built into BaseSource to grab
+        #  all the offsets
+        seps = self.offsets(off_unit)
+
+        # x_lims is allowed to be None, in which case it will be automatic, but if it isn't then we check it
+        #  is structured as we expect it to be
+        if x_lims is not None and x_lims.unit != seps.unit:
+            raise UnitConversionError("The x_lims unit must be the same as off_unit.")
+        elif x_lims is not None and (x_lims.isscalar or len(x_lims) != 2):
+            raise ValueError("x_lims must have one entry for lower limit, and one for upper limit.")
+
+        # Set up the figure, with minorticks on and ticks facing inwards
+        plt.figure(figsize=figsize)
+        plt.minorticks_on()
+        plt.tick_params(which='both', top=True, right=True, direction='in')
+
+        # Plot the histogram, stepfilled makes it look good when saved as a pdf
+        plt.hist(seps.value, color=colour, label=data_label, alpha=alpha, bins=bins, histtype='stepfilled')
+
+        # Set the y_label as the argument value
+        plt.ylabel(y_label, fontsize=font_size)
+
+        # If x-axis limits were passed, then set them.
+        if x_lims is not None:
+            plt.xlim(*x_lims.value)
+
+        # Setup the x-axis label, using the separation value units, then add to figure
+        off_label = r"Offset [{u}]".format(u=seps.unit.to_string())
+        plt.xlabel(off_label, fontsize=font_size)
+
+        # Set the axis scales to the arguments.
+        plt.xscale(x_scale)
+        plt.yscale(y_scale)
+
+        # If the data_label argument was not empty, we must add a legend.
+        if data_label != '':
+            plt.legend(fontsize=font_size)
+
+        # If the title argument was not empty, we must add a legend
+        if title != '':
+            plt.title(title, fontsize=font_size*1.2)
+
+        # Turn on tight layout to remove white space
+        plt.tight_layout()
+
+        # Check whether the user wants this plot save or not, if so then call savefig
+        if save_path is not None:
+            plt.savefig(save_path)
+
+        # Show the figure
+        plt.show()
 
     def info(self):
         """

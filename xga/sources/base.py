@@ -41,26 +41,26 @@ class BaseSource:
     """
     The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
     functionality upon which the rest of XGA is built, includes selecting observations, reading in data products,
-    and storing newly created data products.
+    and storing newly created data products. Base functionality is included, but this type of source shouldn't
+    often need to be instantiated by a user.
+
+    :param float ra: The right ascension (in degrees) of the source.
+    :param float dec: The declination (in degrees) of the source.
+    :param float redshift: The redshift of the source, default is None. Not supplying a redshift means that
+        proper distance units such as kpc cannot be used.
+    :param str name: The name of the source, default is None in which case a name will be assembled from the
+        coordinates given.
+    :param cosmology: An astropy cosmology object to use for analysis of this source, default is Planck15.
+    :param bool load_products: Should existing XGA generated products for this source be loaded in, default
+        is True.
+    :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
+        load_products is True. Default is False.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None, cosmology=Planck15,
                  load_products: bool = True, load_fits: bool = False):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
-        others. Base functionality is included, but this type of source shouldn't often need to be instantiated by
-        a user.
-
-        :param float ra: The right ascension (in degrees) of the source.
-        :param float dec: The declination (in degrees) of the source.
-        :param float redshift: The redshift of the source, default is None. Not supplying a redshift means that
-            proper distance units such as kpc cannot be used.
-        :param str name: The name of the source, default is None in which case a name will be assembled from the
-            coordinates given.
-        :param cosmology: An astropy cosmology object to use for analysis of this source, default is Planck15.
-        :param bool load_products: Should existing XGA generated products for this source be loaded in, default
-            is True.
-        :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
-            load_products is True. Default is False.
+        others.
         """
         self._ra_dec = np.array([ra, dec])
         if name is not None:
@@ -3170,6 +3170,28 @@ class BaseSource:
         # And return our ordered dictionaries
         return obs_inst, snrs
 
+    def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
+        """
+        This method calculates the separation between the user supplied ra_dec coordinates, and the peak
+        coordinates in the requested off_unit. If there is no peak attribute and error will be thrown, and if no
+        peak has been calculated then the result will be 0.
+
+        :param Unit/str off_unit: The unit that the offset should be in.
+        :return: The offset between ra_dec and peak, in the requested unit.
+        :rtype: Quantity
+        """
+        # Check that the source has a peak attribute to fetch, otherwise throw error
+        if not hasattr(self, 'peak'):
+            raise AttributeError("This source does not have a peak attribute, and so an offset cannot be calculated.")
+
+        # Calculate the euclidean distance between ra_dec and peak
+        sep = np.sqrt(abs(self.ra_dec[0] - self.peak[0]) ** 2 + abs(self.ra_dec[1] - self.peak[1]) ** 2)
+        # Convert the separation to the requested unit - this will throw an error if the unit is stupid
+        conv_sep = self.convert_radius(sep, off_unit)
+
+        # Return the converted separation
+        return conv_sep
+
     def info(self):
         """
         Very simple function that just prints a summary of important information related to the source object..
@@ -3281,13 +3303,14 @@ class NullSource:
     A useful, but very limited, source class. By default this source class will include all ObsIDs present in the
     XGA census, and as such can be used for bulk generation of SAS products. It can also be made to only include
     certain ObsIDs.
+
+
+    :param List obs: An optional list of ObsIDs to include in the NullSource, otherwise all available ObsIDs
+        will be included.
     """
     def __init__(self, obs: List[str] = None):
         """
         The method used to initiate the NullSource class.
-
-        :param List obs: An optional list of ObsIDs to include in the NullSource, otherwise all available ObsIDs
-            will be included.
         """
         # To find all census entries with non-na coordinates
         cleaned_census = CENSUS.dropna()

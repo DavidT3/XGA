@@ -14,19 +14,19 @@ class KingProfile1D(BaseModel1D):
     """
     An XGA model implementation of the King profile, describing an isothermal sphere. This describes a
     radial density profile and assumes spherical symmetry.
+
+    :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+        used start values. The units are checked against default start values.
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3'),
                  cust_start_pars: List[Quantity] = None):
         """
         The init of a subclass of the XGA BaseModel1D class, describing a basic model for galaxy cluster gas
         density, the king profile.
-
-        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
-            used start values. The units are checked against default start values.
         """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -121,19 +121,19 @@ class SimpleVikhlininDensity1D(BaseModel1D):
     An XGA model implementation of a simplified version of Vikhlinin's full density model. Used relatively recently
     in https://doi.org/10.1051/0004-6361/201833325 by Ghirardini et al., a simplified form of Vikhlinin's full
     density model, which can be found in https://doi.org/10.1086/500288.
+
+    :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+        used start values. The units are checked against default start values.
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3'),
                  cust_start_pars: List[Quantity] = None):
         """
         The init of a subclass of the XGA BaseModel1D class, describing a simplified version of Vikhlinin et al.'s
         model for the gas density profile of a galaxy cluster.
-
-        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
-            used start values. The units are checked against default start values.
         """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -256,19 +256,19 @@ class VikhlininDensity1D(BaseModel1D):
     An XGA model implementation of Vikhlinin's full density model for galaxy cluster intra-cluster medium,
     which can be found in https://doi.org/10.1086/500288. It is a radial profile, so an assumption
     of spherical symmetry is baked in.
+
+    :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+        used start values. The units are checked against default start values.
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3'),
                  cust_start_pars: List[Quantity] = None):
         """
         The init of a subclass of the XGA BaseModel1D class, describing the full version of Vikhlinin et al.'s
         model for the gas density profile of a galaxy cluster.
-
-        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
-            used start values. The units are checked against default start values.
         """
 
         # If a string representation of a unit was passed then we make it an astropy unit

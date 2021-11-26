@@ -21,6 +21,38 @@ class ClusterSample(BaseSample):
     """
     A sample class to be used for declaring and analysing populations of galaxy clusters, with many cluster-science
     specific functions, such as the ability to create common scaling relations.
+
+    :param np.ndarray ra: The right-ascensions of the clusters, in degrees.
+    :param np.ndarray dec: The declinations of the clusters, in degrees.
+    :param np.ndarray redshift: The redshifts of the clusters, required for cluster analysis.
+    :param np.ndarray name: The names of the clusters.
+    :param Quantity r200: Values for the R200s of the clusters. At least one overdensity radius must be passed.
+    :param Quantity r500: Values for the R500s of the clusters. At least one overdensity radius must be passed.
+    :param Quantity r2500: Values for the R2500s of the clusters. At least one overdensity radius must be passed.
+    :param np.ndarray richness: Optical richnesses of the clusters, optional.
+    :param np.ndarray richness_err: Uncertainties on the optical richnesses of the clusters, optional.
+    :param Quantity wl_mass: Weak lensing masses of the clusters, optional.
+    :param Quantity wl_mass_err: Uncertainties on the weak lensing masses of the clusters, optional.
+    :param Quantity custom_region_radius: A custom analysis region radius for this cluster, optional.
+    :param bool use_peak: Whether peak position should be found and used.
+    :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak position
+        from. Default is 0.5keV
+    :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak position
+        from. Default is 2.0keV.
+    :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+        radius for the background region. Default is 1.05.
+    :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+        radius for the background region. Default is 1.5.
+    :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+    :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+        is hierarchical, simple may also be passed.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+        certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+    :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+        is hierarchical, simple may also be passed.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray, name: np.ndarray, r200: Quantity = None,
                  r500: Quantity = None, r2500: Quantity = None, richness: np.ndarray = None,
@@ -29,7 +61,12 @@ class ClusterSample(BaseSample):
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
                  load_fits: bool = False, clean_obs: bool = True, clean_obs_reg: str = "r200",
-                 clean_obs_threshold: float = 0.3, no_prog_bar: bool = False, psf_corr: bool = False):
+                 clean_obs_threshold: float = 0.3, no_prog_bar: bool = False, psf_corr: bool = False,
+                 peak_find_method: str = "hierarchical"):
+        """
+        The init of the ClusterSample XGA class, for the analysis of a large sample of galaxy clusters.
+        Takes information on the clusters to enable analyses.
+        """
 
         # I don't like having this here, but it does avoid a circular import problem
         from xga.sas import evselect_image, eexpmap, emosaic
@@ -104,15 +141,15 @@ class ClusterSample(BaseSample):
                         self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr,
                                                          use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                          back_out_rad_factor, cosmology, True, load_fits, clean_obs,
-                                                         clean_obs_reg, clean_obs_threshold, False)
+                                                         clean_obs_reg, clean_obs_threshold, False, peak_find_method)
                         final_names.append(n)
                     except PeakConvergenceFailedError:
                         warn("The peak finding algorithm has not converged for {}, using user "
                              "supplied coordinates".format(n))
                         self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr, False,
-                                                         peak_lo_en, peak_hi_en, back_inn_rad_factor, back_out_rad_factor,
-                                                         cosmology, True, load_fits, clean_obs, clean_obs_reg,
-                                                         clean_obs_threshold, False)
+                                                         peak_lo_en, peak_hi_en, back_inn_rad_factor,
+                                                         back_out_rad_factor, cosmology, True, load_fits, clean_obs,
+                                                         clean_obs_reg, clean_obs_threshold, False, peak_find_method)
                         final_names.append(n)
 
                     except NoValidObservationsError:

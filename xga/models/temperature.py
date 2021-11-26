@@ -15,19 +15,19 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
     """
     An XGA model implementation of the simplified version of Vikhlinin's temperature model. This is for the
     description of 3D temperature profiles of galaxy clusters.
+
+    :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+        used start values. The units are checked against default start values.
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV'),
                  cust_start_pars: List[Quantity] = None):
         """
         The init of a subclass of the XGA BaseModel1D class, describing a simple version of the galaxy cluster
         temperature profile model created by Vikhlinin et al.
-
-        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
-            used start values. The units are checked against default start values.
         """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -145,19 +145,19 @@ class VikhlininTemperature1D(BaseModel1D):
     """
     An XGA model implementation of the full version of Vikhlinin's temperature model. This is for the
     description of 3D temperature profiles of galaxy clusters.
+
+    :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+        used start values. The units are checked against default start values.
     """
     def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV'),
                  cust_start_pars: List[Quantity] = None):
         """
         The init of a subclass of the XGA BaseModel1D class, describing the full version of the galaxy cluster
         temperature profile model created by Vikhlinin et al.
-
-        :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
-            representation or an astropy unit object.
-        :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
-            used start values. The units are checked against default start values.
         """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
