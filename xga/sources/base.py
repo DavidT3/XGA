@@ -2348,11 +2348,30 @@ class BaseSource:
         elif isinstance(to_remove, list):
             to_remove = {o: deepcopy(self.instruments[o]) for o in to_remove}
 
+        # We also check to make sure that the data we're being asked to remove actually is associated with the
+        #  source. We shall be forgiving if it isn't, and just issue a warning to let the user know that they are
+        #  assuming data was here that actually isn't present
+        # Iterating through the keys (ObsIDs) in to_remove
+        for o in to_remove:
+            if o not in self.obs_ids:
+                warnings.warn("{o} data cannot be removed from {s} as they are not associated with "
+                              "it.".format(o=o, s=self.name))
+            # Check to see whether any of the instruments for o are not actually associated with the source
+            elif any([i not in self.instruments[o] for i in to_remove[o]]):
+                bad_list = [i for i in to_remove[o] if i not in self.instruments[o]]
+                bad_str = "/".join(bad_list)
+                warnings.warn("{o}-{ib} data cannot be removed from {s} as they are not associated "
+                              "with it.".format(o=o, ib=bad_str, s=self.name))
+
+        # Sets the attribute that tells us whether any data has been removed
         if not self._disassociated:
             self._disassociated = True
 
+        # We want to store knowledge of what data has been removed, if there hasn't been anything taken away yet
+        #  then we can just set it equal to the to_remove dictionary
         if len(self._disassociated_obs) == 0:
             self._disassociated_obs = to_remove
+        # Otherwise we have to add the data to the existing dictionary structure
         else:
             for o in to_remove:
                 if o not in self._disassociated_obs:
