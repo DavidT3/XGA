@@ -1711,20 +1711,21 @@ class BaseSource:
 
         return sn
 
-    def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity,
-                             deg_central_coord: Quantity, interloper_regions: np.ndarray = None) -> np.ndarray:
+    def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity, deg_central_coord: Quantity,
+                             regions_to_search: Union[np.ndarray, list] = None) -> np.ndarray:
         """
-        This function finds and returns any interloper regions that have any part of their boundary within
-        the specified radii, centered on the specified central coordinate.
+        This function finds and returns any interloper regions (by default) that have any part of their boundary
+        within the specified radii, centered on the specified central coordinate. Users may also pass their own
+        array of regions to check.
 
         :param Quantity inner_radius: The inner radius of the area to search for interlopers in.
         :param Quantity outer_radius: The outer radius of the area to search for interlopers in.
         :param Quantity deg_central_coord: The central coordinate (IN DEGREES) of the area to search for
             interlopers in.
-        :param np.ndarray interloper_regions: An optional parameter that allows the user to pass a specific
+        :param np.ndarray/list regions_to_search: An optional parameter that allows the user to pass a specific
             list of regions to check. Default is None, in which case the interloper_regions internal list
             will be used.
-        :return: A numpy array of the interloper regions within the specified area.
+        :return: A numpy array of the interloper regions (or user passed regions) within the specified area.
         :rtype: np.ndarray
         """
         def perimeter_points(reg_cen_x: float, reg_cen_y: float, reg_major_rad: float, reg_minor_rad: float,
@@ -1763,17 +1764,16 @@ class BaseSource:
         if deg_central_coord.unit != deg:
             raise UnitConversionError("The central coordinate must be in degrees for this function.")
 
-        # If no custom interloper regions array was passed, we use the internal array
-        if interloper_regions is None:
-            interloper_regions = self._interloper_regions.copy()
+        # If no custom regions array was passed, we use the internal array of interloper regions
+        if regions_to_search is None:
+            regions_to_search = self._interloper_regions.copy()
 
         inner_radius = self.convert_radius(inner_radius, 'deg')
         outer_radius = self.convert_radius(outer_radius, 'deg')
 
         # Then we can check to make sure that the outer radius is larger than the inner radius
         if inner_radius >= outer_radius:
-            raise ValueError("A SAS region for {s} cannot have an inner_radius larger than or equal to its "
-                             "outer_radius".format(s=self.name))
+            raise ValueError("inner_radius cannot be larger than or equal to outer_radius".format(s=self.name))
 
         # I think my last attempt at this type of function was made really slow by something to with the regions
         #  module, so I'm going to try and move away from that here
@@ -1784,12 +1784,12 @@ class BaseSource:
                                                                r.width.to('deg').value/2,
                                                                r.height.to('deg').value/2, r.angle.to('rad').value)
                                               - deg_central_coord.value) ** 2, axis=1))
-                              for r in interloper_regions])
+                              for r in regions_to_search])
 
         # Finds which of the possible interlopers have any part of their boundary within the annulus in consideration
         int_within = np.unique(np.where((int_dists < outer_radius.value) & (int_dists > inner_radius.value))[0])
 
-        return np.array(interloper_regions)[int_within]
+        return np.array(regions_to_search)[int_within]
 
     @staticmethod
     def _interloper_sas_string(reg: EllipseSkyRegion, im: Image, output_unit: Union[UnitBase, str]) -> str:
@@ -2331,26 +2331,47 @@ class BaseSource:
         """
         return self._disassociated_obs
 
-    def disassociate_obs(self, to_remove: Union[dict, str]):
+    def disassociate_obs(self, to_remove: Union[dict, str, list]):
         """
         Method that uses the supplied dictionary to safely remove data from the source. This data will no longer
         be used in any analyses, and would typically be removed because it is of poor quality, or doesn't contribute
         enough to justify its presence.
 
-        :param dict/str to_remove: A dictionary of observations to remove, either in the style of
-            the source.instruments dictionary (with the top level keys being ObsIDs, and the lower levels
-            being instrument names), or a string containing an ObsID.
+        :param dict/str/list to_remove: Either a dictionary of observations to remove, (in the style of
+            the source.instruments dictionary with the top level keys being ObsIDs, and the lower levels
+            being instrument names), a string containing an ObsID, or a list of ObsIDs.
         """
         # Users can pass just an ObsID string, but we then need to convert it to the form
         #  that the rest of the function requires
         if isinstance(to_remove, str):
             to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
+        elif isinstance(to_remove, list):
+            to_remove = {o: deepcopy(self.instruments[o]) for o in to_remove}
 
+        # We also check to make sure that the data we're being asked to remove actually is associated with the
+        #  source. We shall be forgiving if it isn't, and just issue a warning to let the user know that they are
+        #  assuming data was here that actually isn't present
+        # Iterating through the keys (ObsIDs) in to_remove
+        for o in to_remove:
+            if o not in self.obs_ids:
+                warnings.warn("{o} data cannot be removed from {s} as they are not associated with "
+                              "it.".format(o=o, s=self.name))
+            # Check to see whether any of the instruments for o are not actually associated with the source
+            elif any([i not in self.instruments[o] for i in to_remove[o]]):
+                bad_list = [i for i in to_remove[o] if i not in self.instruments[o]]
+                bad_str = "/".join(bad_list)
+                warnings.warn("{o}-{ib} data cannot be removed from {s} as they are not associated "
+                              "with it.".format(o=o, ib=bad_str, s=self.name))
+
+        # Sets the attribute that tells us whether any data has been removed
         if not self._disassociated:
             self._disassociated = True
 
+        # We want to store knowledge of what data has been removed, if there hasn't been anything taken away yet
+        #  then we can just set it equal to the to_remove dictionary
         if len(self._disassociated_obs) == 0:
             self._disassociated_obs = to_remove
+        # Otherwise we have to add the data to the existing dictionary structure
         else:
             for o in to_remove:
                 if o not in self._disassociated_obs:
@@ -3190,7 +3211,7 @@ class BaseSource:
         print("On-Axis - {}".format(len(self._onaxis)))
         print("With regions - {}".format(len(self._initial_regions)))
         print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
-        print("Obs with one match - {}".format(sum([1 for o in self._initial_region_matches if
+        print("Obs with 1 detection - {}".format(sum([1 for o in self._initial_region_matches if
                                                     self._initial_region_matches[o].sum() == 1])))
         print("Obs with >1 matches - {}".format(sum([1 for o in self._initial_region_matches if
                                                      self._initial_region_matches[o].sum() > 1])))

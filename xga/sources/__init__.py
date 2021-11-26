@@ -3,6 +3,7 @@
 
 from .base import BaseSource, NullSource
 from .extended import GalaxyCluster
+from .point import Star
 from .general import ExtendedSource, PointSource
 
 
