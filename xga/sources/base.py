@@ -3168,7 +3168,7 @@ class BaseSource:
         print("On-Axis - {}".format(len(self._onaxis)))
         print("With regions - {}".format(len(self._initial_regions)))
         print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
-        print("Obs with one match - {}".format(sum([1 for o in self._initial_region_matches if
+        print("Obs with 1 detection - {}".format(sum([1 for o in self._initial_region_matches if
                                                     self._initial_region_matches[o].sum() == 1])))
         print("Obs with >1 matches - {}".format(sum([1 for o in self._initial_region_matches if
                                                      self._initial_region_matches[o].sum() > 1])))
