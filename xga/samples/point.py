@@ -66,6 +66,7 @@ class StarSample(BaseSample):
         emosaic(self, "image", peak_lo_en, peak_hi_en)
         emosaic(self, "expmap", peak_lo_en, peak_hi_en)
 
+        # Remove the BaseSources
         del self._sources
         self._sources = {}
 
@@ -108,6 +109,8 @@ class StarSample(BaseSample):
 
                 dec_lb.update(1)
         self._names = final_names
+        # Store the matching radius as an attribute, though its also in the sources
+        self._match_radius = match_radius
 
         # I've cleaned the observations, and its possible some of the data has been thrown away,
         #  so I should regenerate the mosaic images/expmaps
@@ -140,6 +143,36 @@ class StarSample(BaseSample):
         :rtype: Unit
         """
         return self._pr_unit
+
+    @property
+    def match_radius(self) -> Quantity:
+        """
+        This tells you the matching radius used during the setup of this StarSample instance.
+
+        :return: Matching radius defined at instantiation.
+        :rtype: Quantity
+        """
+        return self._match_radius
+
+    @property
+    def distances(self) -> Quantity:
+        """
+        Property returning the distance to the star, as was passed in on creation of this source object.
+
+        :return: The distance to the star.
+        :rtype: Quantity
+        """
+        return Quantity(self._distances)
+
+    @property
+    def proper_motions(self) -> Quantity:
+        """
+        Property returning the proper motion (absolute value or vector) of the star.
+
+        :return: A proper motion magnitude or vector.
+        :rtype: Quantity
+        """
+        return Quantity(self._proper_motions)
 
     def _del_data(self, key: int):
         """
