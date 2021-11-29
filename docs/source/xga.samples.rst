@@ -25,4 +25,10 @@ samples.extended module
    :undoc-members:
    :show-inheritance:
 
+samples.point module
+-----------------------
 
+.. automodule:: xga.samples.point
+   :members:
+   :undoc-members:
+   :show-inheritance:
