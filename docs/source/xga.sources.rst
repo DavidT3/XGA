@@ -25,5 +25,11 @@ sources.extended module
    :undoc-members:
    :show-inheritance:
 
+sources.point module
+-----------------------
 
+.. automodule:: xga.sources.point
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
