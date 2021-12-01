@@ -119,9 +119,9 @@ simultaneously much more easily.
 
 # Research projects using XGA
 \texttt{XGA} is stable and appropriate for scientific use, and as such it has been used in several recent pieces of 
-work; this has included an *XMM* analysis of the eFEDS cluster 
-candidate catalogue (@efedsxcs), where we produced the first temperature calibration between *XMM* and 
-*eROSITA*, a multi-wavelength analysis of an ACT selected galaxy cluster (@denisha), and {\em XMM}
+work; this has included an XMM analysis of the eFEDS cluster 
+candidate catalogue (@efedsxcs), where we produced the first temperature calibration between XMM and 
+eROSITA, a multi-wavelength analysis of an ACT selected galaxy cluster (@denisha), and XMM
 follow-up of Dark Energy Survey (DES) variability selected low-mass AGN candidates (Burke et al. (in prep)).
 
 There are also several projects that use XGA nearing publication. The first of these is a hydrostatic 
