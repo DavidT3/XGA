@@ -20,7 +20,7 @@ authors:
 affiliations:
   - name: Department of Physics and Astronomy, University of Sussex, Brighton, BN1 9QH, UK
     index: 1
-date: 08 November 2021
+date: 01 December 2021
 bibliography: paper.bib
 ---
 # Summary
@@ -30,6 +30,8 @@ galaxy is actively accreting matter), and supernovae remnants. This makes the an
 useful for a wide variety of fields in astrophysics and cosmology. Galaxy clusters, for instance, can act as 
 laboratories for the exploration of many astrophysical processes, as well as providing insight into how the Universe 
 has evolved during its lifetime, as they are excellent tracers of the formation of large scale structure.
+
+![The logo of the \texttt{XGA} module. \label{fig:xga_logo}](figures/quick_xga_logo.png){width=40%}
 
 We have developed a new Python module (X-ray: Generate and Analyse, hereafter referred to as \texttt{XGA}) to provide
 interactive and automated analyses of X-ray emitting sources. `XGA` is centered around `source` and `sample` classes, 
