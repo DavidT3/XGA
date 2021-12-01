@@ -76,15 +76,7 @@ for fitting models, creating an interface with XSPEC (@xspec), the popular X-ray
 provides simplified interaction with the underlying software that can be run simultaneously when multiple sources are
 being analysed at the same time. 
 
-[comment]: <> (![The output of the view method of a `Spectrum` instance associated with a GalaxyCluster source, which has been fitted )
 
-[comment]: <> (with a plasma emission model. \label{fig:a907_spec}]&#40;figures/A907_spec.png&#41;{width=85%})
-
-[comment]: <> (![The output of the view method of an `AnnularSpectrum` instance associated with a GalaxyCluster source. Here the )
-
-[comment]: <> (plasma emission models which have been fitted to each annulus are )
-
-[comment]: <> (displayed.\label{fig:ann_spec}]&#40;figures/ann_spec.png&#41;{width=90%})
 
 Many more features are built into XGA, enabled by the source based structure, as well as the product generation 
 and XSPEC interface. One of these features is the ability to measure hydrostatic galaxy cluster masses; this 
