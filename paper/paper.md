@@ -32,33 +32,33 @@ laboratories for the exploration of many astrophysical processes, as well as pro
 has evolved during its lifetime, as they are excellent tracers of the formation of large scale structure.
 
 We have developed a new Python module (X-ray: Generate and Analyse, hereafter referred to as \texttt{XGA}) to provide
-interactive and automated analyses of X-ray emitting sources, in order to . `XGA` revolves 
-around `source` objects, which are representative of X-ray sources in real life. These `source` classes all have 
+interactive and automated analyses of X-ray emitting sources. `XGA` is centered around `source` and `sample` classes, 
+and the concept of making all available data and simple analyses easily accessible . These `source` classes all have 
 different properties and methods, which either relate to relevant properties of or perform measurements which are only 
 relevant to that type of astronomical source, with some properties/methods being common to all sources.
 
-XGA also contains `product` classes, which provide interfaces to X-ray data products, with built in methods for 
+XGA also contains `product` classes, which provide interfaces to X-ray data products, with built-in methods for 
 analysis, manipulation, and visualisation. The `RateMap` (a count rate map of a particular observation) class for 
 instance includes view methods (demonstrated in \autoref{fig:ratemap_mask}), 
 methods for coordinate conversion, and for measuring the peak of the X-ray emission. 
-We also provide classes for interacting with spectra (both global and annular, where \autoref{fig:a907_spec} and 
-\autoref{fig:ann_spec} demonstrate the view methods), PSFs, and a base class for XGA profile
+We also provide classes for interacting with spectra (both global and annular), PSFs, and a base class for XGA profile
 objects, which allow for the storage, fitting, and viewing of radial profiles generated through XGA processes.
 
 ![The output of the view method of a RateMap instance where a mask to remove interloper sources has been applied, with 
 an added crosshair to indicate coordinates of 
 interest. \label{fig:ratemap_mask}](figures/ratemap_crosshair_intmask.png){width=80%}
 
-This approach means that the user can either remain removed from contact with the X-ray data if they choose, or
-interact with it directly for lower level analyses that they are building around the `XGA` platform.
-With the advent of new X-ray observatories such as eROSITA (@erosita), XRISM (@xrism), ATHENA (@athena), and 
-Lynx (@lynx), it would seem to be a good time for a new, open-source, software package that is open for anyone to 
+This approach means that the user can quickly and easily complete common analyses without manually searching through 
+large amounts of archival data for relevant observations, thus being left free to focus on extracting the maximum 
+scientific gain. With the advent of new X-ray observatories such as eROSITA (@erosita), XRISM (@xrism), ATHENA (@athena), and 
+Lynx (@lynx), it is the perfect time for a new, open-source, software package that is open for anyone to 
 use and scrutinise.
 
 # Statement of need
-The initial goal for this new module was the measurement of hydrostatic masses of galaxy clusters for the XMM 
-Cluster Survey (XCS, @xcsfoundation), but has become an attempt to provide the X-ray astronomy community with an 
-open source, general purpose tool to build research projects upon. One of the chief advantages of this module is that 
+This module was developed by the XMM Cluster Survey (XCS, @xcsfoundation) to enable simple, interactive, analyses of 
+X-ray sources, from galaxy clusters to AGN, for the whole astronomy community.
+
+One of the chief advantages of this module is that 
 it simplifies the process of generating the data products which are required for most work involving X-ray 
 analysis; once the user has supplied cleaned event lists (and optionally region files), and a source object has decided 
 which observations should be associated with it, an analysis region can be specified and spectra (along with any 
@@ -76,19 +76,22 @@ for fitting models, creating an interface with XSPEC (@xspec), the popular X-ray
 provides simplified interaction with the underlying software that can be run simultaneously when multiple sources are
 being analysed at the same time. 
 
-![The output of the view method of a `Spectrum` instance associated with a GalaxyCluster source, which has been fitted 
-with a plasma emission model. \label{fig:a907_spec}](figures/A907_spec.png){width=85%}
+[comment]: <> (![The output of the view method of a `Spectrum` instance associated with a GalaxyCluster source, which has been fitted )
 
-![The output of the view method of an `AnnularSpectrum` instance associated with a GalaxyCluster source. Here the 
-plasma emission models which have been fitted to each annulus are 
-displayed.\label{fig:ann_spec}](figures/ann_spec.png){width=90%}
+[comment]: <> (with a plasma emission model. \label{fig:a907_spec}]&#40;figures/A907_spec.png&#41;{width=85%})
+
+[comment]: <> (![The output of the view method of an `AnnularSpectrum` instance associated with a GalaxyCluster source. Here the )
+
+[comment]: <> (plasma emission models which have been fitted to each annulus are )
+
+[comment]: <> (displayed.\label{fig:ann_spec}]&#40;figures/ann_spec.png&#41;{width=90%})
 
 Many more features are built into XGA, enabled by the source based structure, as well as the product generation 
 and XSPEC interface. These features are largely motivated by a desire to measure hydrostatic galaxy cluster masses; this 
 includes the measurement of 3D gas density profiles, 3D temperature profiles, gas mass, and total mass profiles. New 
 methods for the measurement of central cluster coordinates and PSF correction of XMM images were also created to enable 
 this, as well as Python classes for various data products (with many useful built in methods). This includes a radial 
-profile class, with built in viewing methods, and a fitting method based around the `emcee` ensemble MCMC 
+profile class, with built-in viewing methods, and a fitting method based around the `emcee` ensemble MCMC 
 sampler (@emcee). The profile fitting capability also motivated the creation of model class, with methods for 
 storing and interacting with fitted models; including integration and differentiation methods, inverse abel 
 transforms, and predictions from the model.
