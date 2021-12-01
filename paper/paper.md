@@ -87,7 +87,7 @@ being analysed at the same time.
 [comment]: <> (displayed.\label{fig:ann_spec}]&#40;figures/ann_spec.png&#41;{width=90%})
 
 Many more features are built into XGA, enabled by the source based structure, as well as the product generation 
-and XSPEC interface. These features are largely motivated by a desire to measure hydrostatic galaxy cluster masses; this 
+and XSPEC interface. One of these features is the ability to measure hydrostatic galaxy cluster masses; this 
 includes the measurement of 3D gas density profiles, 3D temperature profiles, gas mass, and total mass profiles. New 
 methods for the measurement of central cluster coordinates and PSF correction of XMM images were also created to enable 
 this, as well as Python classes for various data products (with many useful built in methods). This includes a radial 
@@ -108,7 +108,7 @@ of `XGA`. Our new software is also designed to be used interactively, as well as
 as these.
 
 Some specific analyses built into `XGA` have comparable open source software packages available; for instance 
-`pyprofit` (@erositagasmass) is a recently released Python module that was designed 
+`pyproffit` (@erositagasmass) is a recently released Python module that was designed 
 for the measurement of gas density from X-ray surface brightness profiles. We do not believe that any existing X-ray 
 analysis module has an equivalent to the source and sample based structure which XGA is built around, or to the 
 product classes that have been written to interact with X-ray data products.
@@ -118,11 +118,11 @@ implemented in the `PyXspec` module, but scales with multiple cores for the anal
 simultaneously much more easily. 
 
 # Research projects using XGA
-\texttt{XGA} is stable and appropriate for scientific use. As such 
-it has been used in several recent pieces of work; this has included an {\em XMM} analysis of the eFEDS cluster 
-candidate catalogue (@efedsxcs), where we produced the first temperature calibration between {\em XMM} and 
-{\em eROSITA}, a multi-wavelength analysis of an ACT selected galaxy cluster ({\color{red} DENISHA REF}), and {\em XMM}
-follow-up of Dark Energy Survey (DES) variability selected low-mass AGN candidates ({\color{red} COLIN REF - SUBMITTED}).
+\texttt{XGA} is stable and appropriate for scientific use, and as such it has been used in several recent pieces of 
+work; this has included an *XMM* analysis of the eFEDS cluster 
+candidate catalogue (@efedsxcs), where we produced the first temperature calibration between *XMM* and 
+*eROSITA*, a multi-wavelength analysis of an ACT selected galaxy cluster (@denisha), and {\em XMM}
+follow-up of Dark Energy Survey (DES) variability selected low-mass AGN candidates (Burke et al. (in prep)).
 
 There are also several projects that use XGA nearing publication. The first of these is a hydrostatic 
 and gas mass analysis of the redMaPPeR (@redmappersdss) SDSS-XCS optically selected galaxy cluster sample (@sdssxcs) and 
