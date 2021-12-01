@@ -115,14 +115,14 @@ implemented in the `PyXspec` module, but scales with multiple cores for the anal
 simultaneously much more easily. 
 
 # Research projects using XGA
-\texttt{XGA} is a new module, but we consider it to be stable and appropriate for scientific use. As such 
+\texttt{XGA} is stable and appropriate for scientific use. As such 
 it has been used in several recent pieces of work; this has included an {\em XMM} analysis of the eFEDS cluster 
 candidate catalogue (@efedsxcs), where we produced the first temperature calibration between {\em XMM} and 
 {\em eROSITA}, a multi-wavelength analysis of an ACT selected galaxy cluster ({\color{red} DENISHA REF}), and {\em XMM}
 follow-up of Dark Energy Survey (DES) variability selected low-mass AGN candidates ({\color{red} COLIN REF - SUBMITTED}).
 
-There are also several projects that use XGA extensively nearing publication. The first of these is a hydrostatic 
-and gas mass analysis of the SDSS redMaPPer (@redmappersdss)-XCS optically selected galaxy cluster sample (@sdssxcs) and 
+There are also several projects that use XGA nearing publication. The first of these is a hydrostatic 
+and gas mass analysis of the redMaPPeR (@redmappersdss) SDSS-XCS optically selected galaxy cluster sample (@sdssxcs) and 
 well as the ACTDR5 (@actdr5)-XCS sample of Sunyaev-Zel'dovich (SZ) selected galaxy clusters. This work also compares commonly measured X-ray properties of clusters 
 (the X-ray luminosity L$_{\rm{x}}$, and the temperature T$_{\rm{x}}$) both to results from the existing XCS pipeline and from literature, confirming 
 that `XGA` measurements are consistent with previous work. Similar work is being done on a Dark Energy Survey (DES)Y3-XCS optically 
