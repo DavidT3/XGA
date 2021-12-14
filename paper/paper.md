@@ -119,11 +119,11 @@ eROSITA, a multi-wavelength analysis of an ACT selected galaxy cluster (@denisha
 follow-up of Dark Energy Survey (DES) variability selected low-mass AGN candidates (Burke et al. (in prep)).
 
 There are also several projects that use XGA nearing publication. The first of these is a hydrostatic 
-and gas mass analysis of the redMaPPeR (@redmappersdss) SDSS-XCS optically selected galaxy cluster sample (@sdssxcs) and 
-well as the ACTDR5 (@actdr5)-XCS sample of Sunyaev-Zel'dovich (SZ) selected galaxy clusters. This work also compares commonly measured X-ray properties of clusters 
+and gas mass analysis of the redMaPPeR (@redmappersdss) SDSS selected XCS galaxy cluster sample (@sdssxcs) and 
+well as the ACTDR5 (@actdr5) Sunyaev-Zel'dovich (SZ)  selected XCS sample of galaxy clusters. This work also compares commonly measured X-ray properties of clusters 
 (the X-ray luminosity L$_{\rm{x}}$, and the temperature T$_{\rm{x}}$) both to results from the existing XCS pipeline and from literature, confirming 
-that `XGA` measurements are consistent with previous work. Similar work is being done on a Dark Energy Survey (DES)Y3-XCS optically 
-selected sample of clusters, though this will also include analysis from other XCS tools, and will not be focussed only
+that `XGA` measurements are consistent with previous work. Similar work is being done on a Dark Energy Survey Year 3 (DESY3) optically 
+selected XCS sample of clusters, though this will also include analysis from other XCS tools, and will not be focussed only
 on mass measurements. `XGA`'s ability to stack and combine X-ray surface brightness profiles is currently being 
 used, in combination with weak lensing information from DES, to look for signs of modified gravity in galaxy 
 clusters. Finally an exploration of the X-ray properties of a new sample of Pea galaxies is being performed using
