@@ -17,10 +17,13 @@ authors:
   - name: Kathy Romer
     orcid: 0000-0002-9328-879X
     affiliation: 1
+  - name: Violetta Korbina
+    orcid: 
+    affiliation: 1
 affiliations:
   - name: Department of Physics and Astronomy, University of Sussex, Brighton, BN1 9QH, UK
     index: 1
-date: 01 December 2021
+date: 31 December 2021
 bibliography: paper.bib
 ---
 # Summary
