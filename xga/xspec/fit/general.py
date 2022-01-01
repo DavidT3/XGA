@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/06/2021, 11:19. Copyright (c) David J Turner
+#  Last modified by Violetta Korbina (vk227@sussex.ac.uk) 30/12/2021, 22:27 (GMT+1). Copyright (c) Violetta Korbina
 
 import warnings
 from typing import List, Union
