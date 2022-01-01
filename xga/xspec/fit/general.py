@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by Violetta Korbina (vk227@sussex.ac.uk) 30/12/2021, 22:27 (GMT+1). Copyright (c) Violetta Korbina
+#  Last modified by Violetta Korbina (vk227@sussex.ac.uk) 01/01/2022, 17:39 (GMT+1). Copyright (c) Violetta Korbina
 
 import warnings
 from typing import List, Union
@@ -371,7 +371,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         model = "constant*tbabs*zbbody"
         par_names = "{factor nH kT Redshift norm}"
     else:
-        model = "constant*tbabs*blackbody"
+        model = "constant*tbabs*bbody"
         par_names = "{factor nH kT norm}"
 
     script_paths = []
