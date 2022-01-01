@@ -310,8 +310,8 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 @xspec_call
 def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
-              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_temperature: float = 1.,
-              lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
+              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_temperature: Quantity = Quantity(0.001, "keV"),
+              lo_en: Quantity = Quantity(0.2, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
               freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
               fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
               over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
@@ -392,14 +392,18 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
         # Turn spectra paths into TCL style list for substitution into template
         specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
+
+        # Whatever start temperature is passed gets converted to keV, this will be put in the template
+        t = start_temperature.to("keV", equivalencies=u.temperature_energy()).value
+
         # For this model, we have to know the redshift of the source.
         if redshifted and source.redshift is None:
             raise ValueError("You cannot supply a source without a redshift if you have elected to fit zbbody.")
         elif redshifted and source.redshift is not None:
-            par_values = "{{{0} {1} {2} {3} {4}}}".format(1., source.nH.to("10^22 cm^-2").value, start_temperature,
+            par_values = "{{{0} {1} {2} {3} {4}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
                                                           source.redshift, 1.)
         else:
-            par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, start_temperature, 1.)
+            par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, t, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependant on user input
         if redshifted and freeze_nh:
