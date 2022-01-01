@@ -371,7 +371,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         model = "constant*tbabs*zbbody"
         par_names = "{factor nH kT Redshift norm}"
     else:
-        model = "constant*tbabs*blackbody"
+        model = "constant*tbabs*bbody"
         par_names = "{factor nH kT norm}"
 
     script_paths = []
