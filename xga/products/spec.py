@@ -1,6 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 10:02. Copyright (c) David J Turner
-
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 10:08. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -9,7 +8,7 @@ from typing import Tuple, Union, List, Dict
 import numpy as np
 from astropy.io import fits
 from astropy.units import Quantity, Unit, UnitConversionError
-from fitsio import hdu, FITS, read
+from fitsio import hdu, FITS, read, read_header
 from matplotlib import legend_handler
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
@@ -198,12 +197,15 @@ class Spectrum(BaseProduct):
         #  grouped from the original raw spectrum and quality contains a quality flag 0=good 1=not good)
         self._spec_group = None
         self._spec_quality = None
+        # Also add an attribute to store the header of the primary table
+        self._spec_header = None
 
         # Now all of the same but for the background spectrum
         self._back_counts = None
         self._back_channels = None
         self._back_group = None
         self._back_quality = None
+        self._back_header = None
 
     def _update_spec_headers(self, which_spec: str):
         """
@@ -257,6 +259,34 @@ class Spectrum(BaseProduct):
                     self._back_group = all_dat['GROUPING']
                     self._back_quality = all_dat['QUALITY']
 
+            except OSError:
+                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
+                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
+                                        "associated with {s}.".format(f=self.path, s=self.src_name))
+
+        else:
+            reasons = ", ".join(self.not_usable_reasons)
+            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
+                                     "data from it; reason give is {}. Check the usable attribute next "
+                                     "time".format(reasons))
+
+    def _read_header_on_demand(self, src_spec: bool = True):
+        """
+        Internal method to read the spectrum (or background spectrum) header associated with this Spectrum object into
+        memory when it is requested by another method. Doing it on-demand saves on wasting memory.
+
+        :param bool src_spec: This parameter controls whether it is the source or background spectrum header that
+            is read into memory. If True (the default) then the source spectrum is read, otherwise the background
+            spectrum is read.
+        """
+
+        # Usable flag to check that nothing went wrong in the spectrum generation
+        if self.usable:
+            try:
+                if src_spec:
+                    self._spec_header = read_header(self.path)
+                else:
+                    self._back_header = read_header(self.background)
             except OSError:
                 raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
                                         "the file, it doesn't exist, or maybe an SFTP problem? This product is "
