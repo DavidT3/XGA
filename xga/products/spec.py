@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 11:02. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 11:31. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -310,6 +310,66 @@ class Spectrum(BaseProduct):
             raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
                                      "data from it; reason give is {}. Check the usable attribute next "
                                      "time".format(reasons))
+
+    @property
+    def counts(self) -> Quantity:
+        """
+        The array of counts associated with each channel of the spectrum.
+
+        :rtype: Quantity
+        :return: The counts quantity in units of 'ct'.
+        """
+        # Checks whether the initial value of the spec counts attribute has been overwritten, if not then I run
+        #  the read on demand method to grab the information from the file.
+        if self._spec_counts is None:
+            self._read_on_demand(True)
+
+        return Quantity(self._spec_counts, 'ct')
+
+    @property
+    def channels(self) -> np.ndarray:
+        """
+        The array of instrument channels in the spectrum.
+
+        :rtype: np.ndarray
+        :return: An array of channels.
+        """
+        # Checks whether the initial value of the channels attribute has been overwritten, if not then I run
+        #  the read on demand method to grab the information from the file.
+        if self._spec_channels is None:
+            self._read_on_demand(True)
+
+        return self._spec_channels
+
+    @property
+    def grouping(self) -> np.ndarray:
+        """
+        The grouping information from the spectrum
+
+        :rtype: np.ndarray
+        :return: An array of group IDs.
+        """
+        # Checks whether the initial value of the attribute has been overwritten, if not then I run
+        #  the read on demand method to grab the information from the file.
+        if self._spec_group is None:
+            self._read_on_demand(True)
+
+        return self._spec_group
+
+    @property
+    def quality(self) -> np.ndarray:
+        """
+        The quality information from the spectrum. A 0 flag value means good quality, 1 means not good quality.
+
+        :rtype: np.ndarray
+        :return: An array of quality flags.
+        """
+        # Checks whether the initial value of the attribute has been overwritten, if not then I run
+        #  the read on demand method to grab the information from the file.
+        if self._spec_quality is None:
+            self._read_on_demand(True)
+
+        return self._spec_quality
 
     @property
     def path(self) -> str:
