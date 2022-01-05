@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 12:07. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 12:14. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -356,7 +356,20 @@ class Spectrum(BaseProduct):
             self._read_on_demand(True)
 
         return Quantity(self._spec_counts, 'ct')
-    
+
+    @property
+    def exposure(self) -> Quantity:
+        """
+        The weighted (from individual exposure times of different CCD chips) exposure time of the
+        source spectrum, as used by XSPEC.
+
+        :rtype: Quantity
+        :return: The exposure time for the source spectrum, in units of seconds.
+        """
+        # Fetch the exposure time from the header and create a quantity
+        exp_time = Quantity(float(self.header['EXPOSURE']), 's')
+        return exp_time
+
     @property
     def count_rates(self) -> Quantity:
         """
@@ -366,10 +379,8 @@ class Spectrum(BaseProduct):
         :rtype: Quantity
         :return: The counts/second quantity in units of 'ct/s'.
         """
-        # Fetch the exposure time from the header and create a quantity
-        exp_time = Quantity(float(self.header['EXPOSURE']), 's')
 
-        return self.counts/exp_time
+        return self.counts/self.exposure
 
     @property
     def channels(self) -> np.ndarray:
@@ -460,6 +471,19 @@ class Spectrum(BaseProduct):
         return Quantity(self._back_counts, 'ct')
 
     @property
+    def back_exposure(self) -> Quantity:
+        """
+        The weighted (from individual exposure times of different CCD chips) exposure time of the
+        background spectrum, as used by XSPEC.
+
+        :rtype: Quantity
+        :return: The exposure time for the background spectrum, in units of seconds.
+        """
+        # Fetch the exposure time from the header and create a quantity
+        exp_time = Quantity(float(self.back_header['EXPOSURE']), 's')
+        return exp_time
+
+    @property
     def back_count_rates(self) -> Quantity:
         """
         The array of counts/second associated with each channel of the background spectrum. This takes the
@@ -468,10 +492,8 @@ class Spectrum(BaseProduct):
         :rtype: Quantity
         :return: The counts/second quantity in units of 'ct/s'.
         """
-        # Fetch the exposure time from the background header and create a quantity
-        exp_time = Quantity(float(self.back_header['EXPOSURE']), 's')
 
-        return self.back_counts / exp_time
+        return self.back_counts / self.back_exposure
 
     @property
     def back_channels(self) -> np.ndarray:
@@ -832,21 +854,6 @@ class Spectrum(BaseProduct):
         if not isinstance(new_ident, int):
             raise TypeError("Spectrum set identifiers may ONLY be positive integers")
         self._set_ident = new_ident
-
-    @property
-    def exposure(self) -> Quantity:
-        """
-        Property that returns the spectrum exposure time used by XSPEC.
-
-        :return: Spectrum exposure time.
-        :rtype: Quantity
-        """
-        if self._exp is None:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with this Spectrum")
-        else:
-            exp = Quantity(self._exp, 's')
-
-        return exp
 
     def add_fit_data(self, model: str, tab_line, plot_data: hdu.table.TableHDU):
         """
