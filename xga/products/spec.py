@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 11:31. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 11:44. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -8,7 +8,7 @@ from typing import Tuple, Union, List, Dict
 import numpy as np
 from astropy.io import fits
 from astropy.units import Quantity, Unit, UnitConversionError
-from fitsio import hdu, FITS, read, read_header
+from fitsio import hdu, FITS, read, read_header, FITSHDR
 from matplotlib import legend_handler
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
@@ -310,7 +310,34 @@ class Spectrum(BaseProduct):
             raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
                                      "data from it; reason give is {}. Check the usable attribute next "
                                      "time".format(reasons))
+    
+    @property
+    def header(self) -> FITSHDR:
+        """
+        The SPECTRUM table header of the source spectrum. This property was called header because I suspect
+        this will be more the more useful of the two headers that a Spectrum instance allows you to access.
 
+        :rtype: FITSHDR
+        :return: The SPECTRUM fits table header.
+        """
+        # Check whether the specific header has been read in yet, if not then trigger that
+        if self._spec_spec_header is None:
+            self._read_header_on_demand(src_spec=True, primary_header=False)
+        return self._spec_spec_header
+    
+    @property
+    def primary_header(self) -> FITSHDR:
+        """
+        The PRIMARY (overall) header of the source spectrum file.
+
+        :rtype: FITSHDR
+        :return: The PRIMARY (overall) fits file header.
+                """
+        # Check whether the specific header has been read in yet, if not then trigger that
+        if self._prim_spec_header is None:
+            self._read_header_on_demand(src_spec=True, primary_header=True)
+        return self._prim_spec_header
+    
     @property
     def counts(self) -> Quantity:
         """
@@ -370,6 +397,97 @@ class Spectrum(BaseProduct):
             self._read_on_demand(True)
 
         return self._spec_quality
+
+    @property
+    def back_header(self) -> FITSHDR:
+        """
+        The SPECTRUM table header of the background spectrum. This property was called header because I suspect
+        this will be more the more useful of the two headers that a Spectrum instance allows you to access.
+
+        :rtype: FITSHDR
+        :return: The SPECTRUM fits table header.
+        """
+        # Check whether the specific header has been read in yet, if not then trigger that
+        if self._spec_back_header is None:
+            self._read_header_on_demand(src_spec=False, primary_header=False)
+        return self._spec_back_header
+
+    @property
+    def back_primary_header(self) -> FITSHDR:
+        """
+        The PRIMARY (overall) header of the background spectrum file.
+
+        :rtype: FITSHDR
+        :return: The PRIMARY (overall) fits file header.
+                """
+        # Check whether the specific header has been read in yet, if not then trigger that
+        if self._prim_back_header is None:
+            self._read_header_on_demand(src_spec=False, primary_header=True)
+        return self._prim_back_header
+
+    @property
+    def back_counts(self) -> Quantity:
+        """
+        The array of counts associated with each channel of the background spectrum.
+
+        :rtype: Quantity
+        :return: The counts quantity in units of 'ct'.
+        """
+        # Checks whether the initial value of the background spec counts attribute has been overwritten, if not
+        #  then I run the read on demand method to grab the information from the file.
+        if self._back_counts is None:
+            # Passing false means it won't read the source spectrum, but instead the background spectrum
+            self._read_on_demand(False)
+
+        return Quantity(self._back_counts, 'ct')
+
+    @property
+    def back_channels(self) -> np.ndarray:
+        """
+        The array of instrument channels in the background spectrum.
+
+        :rtype: np.ndarray
+        :return: An array of channels.
+        """
+        # Checks whether the initial value of the background channels attribute has been overwritten, if not then I run
+        #  the read on demand method to grab the information from the file.
+        if self._back_channels is None:
+            # Passing false means it won't read the source spectrum, but instead the background spectrum
+            self._read_on_demand(False)
+
+        return self._back_channels
+
+    @property
+    def back_grouping(self) -> np.ndarray:
+        """
+        The grouping information from the background spectrum
+
+        :rtype: np.ndarray
+        :return: An array of group IDs.
+        """
+        # Checks whether the initial value of the attribute has been overwritten, if not then I run
+        #  the read on demand method to grab the information from the file.
+        if self._back_group is None:
+            # Passing false means it won't read the source spectrum, but instead the background spectrum
+            self._read_on_demand(False)
+
+        return self._back_group
+
+    @property
+    def back_quality(self) -> np.ndarray:
+        """
+        The quality information from the background spectrum. A 0 flag value means good quality, 1 means
+        not good quality.
+
+        :rtype: np.ndarray
+        :return: An array of quality flags.
+        """
+        # Checks whether the initial value of the attribute has been overwritten, if not then I run
+        #  the read on demand method to grab the information from the file.
+        if self._back_quality is None:
+            self._read_on_demand(False)
+
+        return self._back_quality
 
     @property
     def path(self) -> str:
