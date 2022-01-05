@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 10:08. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 11:02. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -197,15 +197,18 @@ class Spectrum(BaseProduct):
         #  grouped from the original raw spectrum and quality contains a quality flag 0=good 1=not good)
         self._spec_group = None
         self._spec_quality = None
-        # Also add an attribute to store the header of the primary table
-        self._spec_header = None
+        # Also add an attribute to store the overall header of the spectrum
+        self._prim_spec_header = None
+        # And an attribute for the SPECTRUM table header
+        self._spec_spec_header = None
 
         # Now all of the same but for the background spectrum
         self._back_counts = None
         self._back_channels = None
         self._back_group = None
         self._back_quality = None
-        self._back_header = None
+        self._prim_back_header = None
+        self._spec_back_header = None
 
     def _update_spec_headers(self, which_spec: str):
         """
@@ -270,23 +273,33 @@ class Spectrum(BaseProduct):
                                      "data from it; reason give is {}. Check the usable attribute next "
                                      "time".format(reasons))
 
-    def _read_header_on_demand(self, src_spec: bool = True):
+    def _read_header_on_demand(self, src_spec: bool = True, primary_header: bool = True):
         """
         Internal method to read the spectrum (or background spectrum) header associated with this Spectrum object into
-        memory when it is requested by another method. Doing it on-demand saves on wasting memory.
+        memory when it is requested by another method. Doing it on-demand saves on wasting memory. Either the header of
 
         :param bool src_spec: This parameter controls whether it is the source or background spectrum header that
             is read into memory. If True (the default) then the source spectrum is read, otherwise the background
             spectrum is read.
+        :param bool primary_header: Whether the header from the primary table (the default) should be read. The
+            alternative is to read the header of the SPECTRUM table.
         """
 
         # Usable flag to check that nothing went wrong in the spectrum generation
         if self.usable:
             try:
-                if src_spec:
-                    self._spec_header = read_header(self.path)
-                else:
-                    self._back_header = read_header(self.background)
+                # Here we read in the particular header that has been requested to the relevant attribute. The
+                #  source or background spectrum headers can be chosen, as well as whether the primary header (for the
+                #  whole file) or the SPECTRUM header (for the spectrum table) are read in.
+                if src_spec and primary_header:
+                    self._prim_spec_header = read_header(self.path)
+                elif src_spec and not primary_header:
+                    self._spec_spec_header = read_header(self.path, 'SPECTRUM')
+                elif not src_spec and primary_header:
+                    self._prim_back_header = read_header(self.background)
+                elif not src_spec and not primary_header:
+                    self._spec_back_header = read_header(self.background, 'SPECTRUM')
+
             except OSError:
                 raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
                                         "the file, it doesn't exist, or maybe an SFTP problem? This product is "
