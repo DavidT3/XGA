@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 17:28. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 11:21. Copyright (c) David J Turner
 
 import os
 import warnings
-from typing import Tuple, List, Union
 from copy import deepcopy
+from typing import Tuple, List, Union
 
 import numpy as np
 import pandas as pd
@@ -1346,7 +1346,7 @@ class RateMap(Image):
         """
         pix_coord = self.coord_conv(at_coord, pix).value
         rate = self.data[pix_coord[1], pix_coord[0]]
-        return Quantity(rate, "ct/s^-1")
+        return Quantity(rate, "ct/s")
 
     def get_count(self, at_coord: Quantity) -> float:
         """
