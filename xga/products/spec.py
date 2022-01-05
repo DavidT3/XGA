@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 12:04. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 12:07. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -261,9 +261,9 @@ class Spectrum(BaseProduct):
                     self._back_channels = all_dat['CHANNEL']
 
                     # Background spectra do not necessarily have these entries
-                    if "GROUPING" in all_dat:
+                    if "GROUPING" in all_dat.dtype.names:
                         self._back_group = all_dat['GROUPING']
-                    if "QUALITY" in all_dat:
+                    if "QUALITY" in all_dat.dtype.names:
                         self._back_quality = all_dat['QUALITY']
 
             except OSError:
