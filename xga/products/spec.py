@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 11:44. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 11:58. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -352,6 +352,20 @@ class Spectrum(BaseProduct):
             self._read_on_demand(True)
 
         return Quantity(self._spec_counts, 'ct')
+    
+    @property
+    def count_rates(self) -> Quantity:
+        """
+        The array of counts/second associated with each channel of the spectrum. This takes the counts property
+        and divides it by the EXPOSURE entry in the spectrum header.
+
+        :rtype: Quantity
+        :return: The counts/second quantity in units of 'ct/s'.
+        """
+        # Fetch the exposure time from the header and create a quantity
+        exp_time = Quantity(float(self.header['EXPOSURE']), 's')
+
+        return self.counts/exp_time
 
     @property
     def channels(self) -> np.ndarray:
@@ -440,6 +454,20 @@ class Spectrum(BaseProduct):
             self._read_on_demand(False)
 
         return Quantity(self._back_counts, 'ct')
+
+    @property
+    def back_count_rates(self) -> Quantity:
+        """
+        The array of counts/second associated with each channel of the background spectrum. This takes the
+        back_counts property and divides it by the EXPOSURE entry in the background spectrum header.
+
+        :rtype: Quantity
+        :return: The counts/second quantity in units of 'ct/s'.
+        """
+        # Fetch the exposure time from the background header and create a quantity
+        exp_time = Quantity(float(self.back_header['EXPOSURE']), 's')
+
+        return self.back_counts / exp_time
 
     @property
     def back_channels(self) -> np.ndarray:
