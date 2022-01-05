@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2021, 09:12. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 10:02. Copyright (c) David J Turner
 
 
 import os
@@ -9,7 +9,7 @@ from typing import Tuple, Union, List, Dict
 import numpy as np
 from astropy.io import fits
 from astropy.units import Quantity, Unit, UnitConversionError
-from fitsio import hdu, FITS
+from fitsio import hdu, FITS, read
 from matplotlib import legend_handler
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
@@ -187,6 +187,24 @@ class Spectrum(BaseProduct):
         # This holds a unique random identifier for the set itself, and again will only be set from outside
         self._set_ident = None
 
+        # We also setup empty attributes (akin to the data attribute in the Image class) to store the actual
+        #  data from the spectrum and background spectrum should they ever need to be read into memory from the file
+        #  by this object
+        # First the raw counts per channel of the source spectrum
+        self._spec_counts = None
+        # Secondly the channels with which each count data point is associated
+        self._spec_channels = None
+        # And finally attributes to store the group and quality of each data entry (group showing how they were
+        #  grouped from the original raw spectrum and quality contains a quality flag 0=good 1=not good)
+        self._spec_group = None
+        self._spec_quality = None
+
+        # Now all of the same but for the background spectrum
+        self._back_counts = None
+        self._back_channels = None
+        self._back_group = None
+        self._back_quality = None
+
     def _update_spec_headers(self, which_spec: str):
         """
         An internal method that will 'push' the current class attributes that hold the paths to data products
@@ -210,6 +228,45 @@ class Spectrum(BaseProduct):
                     spec_fits["SPECTRUM"].header["RESPFILE"] = self._back_rmf
                 if self._back_arf is not None:
                     spec_fits["SPECTRUM"].header["ANCRFILE"] = self._back_arf
+
+    def _read_on_demand(self, src_spec: bool = True):
+        """
+        Internal method to read the spectrum (or background spectrum) associated with this Spectrum object into
+        memory when it is requested by another method. Doing it on-demand saves on wasting memory.
+
+        :param bool src_spec: This parameter controls whether it is the source or background spectrum that
+            is read into memory. If True (the default) then the source spectrum is read, otherwise the background
+            spectrum is read.
+        """
+
+        # Usable flag to check that nothing went wrong in the spectrum generation
+        if self.usable:
+            try:
+                # Populate the source spectrum relevant attributes if we're asked to load the source
+                if src_spec:
+                    all_dat = read(self.path)
+                    self._spec_counts = all_dat['COUNTS']
+                    self._spec_channels = all_dat['CHANNEL']
+                    self._spec_group = all_dat['GROUPING']
+                    self._spec_quality = all_dat['QUALITY']
+                # And if not then the only other option is to populate the background spectrum attributes
+                else:
+                    all_dat = read(self.background)
+                    self._back_counts = all_dat['COUNTS']
+                    self._back_channels = all_dat['CHANNEL']
+                    self._back_group = all_dat['GROUPING']
+                    self._back_quality = all_dat['QUALITY']
+
+            except OSError:
+                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
+                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
+                                        "associated with {s}.".format(f=self.path, s=self.src_name))
+
+        else:
+            reasons = ", ".join(self.not_usable_reasons)
+            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
+                                     "data from it; reason give is {}. Check the usable attribute next "
+                                     "time".format(reasons))
 
     @property
     def path(self) -> str:
