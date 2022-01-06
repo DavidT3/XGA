@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:18. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:21. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -710,6 +710,11 @@ class Spectrum(BaseProduct):
             self._rmf = new_path
             # Push to the actual file
             self._update_spec_headers("main")
+            # If the data from an RMF have been loaded already then we make them go away
+            self._redist_matrix_info = None
+            self._rmf_channels = None
+            self._rmf_channels_lo_en = None
+            self._rmf_channels_hi_en = None
         else:
             raise FileNotFoundError("The new RMF file does not exist")
 
@@ -734,6 +739,10 @@ class Spectrum(BaseProduct):
         if os.path.exists(new_path):
             self._arf = new_path
             self._update_spec_headers("main")
+            # If ARF data has been loaded into memory then we must remove it
+            self._arf_eff_area = None
+            self._arf_lo_en = None
+            self._arf_hi_en = None
         else:
             raise FileNotFoundError("The new ARF file does not exist")
 
