@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:31. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 13:32. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1214,7 +1214,72 @@ class Spectrum(BaseProduct):
 
         return self._plot_data[model]
 
-    # def conv_channel_energy(self, input: Quantity) -> Quantity:
+    def conv_channel_energy(self, to_convert: Quantity) -> Quantity:
+        """
+        This method will use RMF information to convert between channels and energy, and vice versa. If converting
+        from channel to energy, the return will be the midpoint of the energy bin associated with that channel.
+
+        :param Quantity to_convert: The input Quantity, either with units of energy, or no units (which will be
+            taken to mean channels). Any channel input will be converted to an integer, floats are not valid.
+        :rtype: Quantity
+        :return: The converted value, either as a channel (for energy input) or an energy (for channel input).
+        """
+        if not to_convert.unit.is_equivalent("keV") and to_convert.unit != "":
+            raise UnitConversionError("The to_convert argument must be in units of energy (e.g. convertible to keV) or "
+                                      "unitless (for instance Quantity(50) would be a unitless quantity).")
+        elif to_convert.unit.is_equivalent('keV'):
+            # If only one value is passed in then we make it iterable for now because its easier to write the
+            #  rest of the code - I'll change it back at the end
+            if to_convert.isscalar:
+                ens = Quantity([to_convert])
+            else:
+                ens = to_convert
+
+            # Checking that energies are within a valid range
+            if not np.all((ens > self.rmf_channels_lo_en.min()) & (ens <= self.rmf_channels_hi_en.max())):
+                raise UnitConversionError("Some energies in to_convert are outside the range of this spectrum's "
+                                          "instrument, please enter values between {l} "
+                                          "and {u}".format(l=self.rmf_channels_lo_en.min(),
+                                                           u=self.rmf_channels_hi_en.max()))
+            # Finding the index of the energy bin that brackets the input energy value(s)
+            rel_inds = np.array([np.where((e > self.rmf_channels_lo_en) & (e <= self.rmf_channels_hi_en))[0][0] 
+                                 for e in ens])
+            # Getting the equivelant channel
+            converted_vals = Quantity(self.rmf_channels[rel_inds])
+
+            # Returning the result to a single value if it was passed in as one
+            if len(converted_vals) == 1:
+                converted_vals = converted_vals[0]
+
+        elif to_convert.unit == "":
+            # It is unphysical for channels to be anything other than integers, also want it to be iterable
+            if to_convert.isscalar:
+                int_chans = np.array([to_convert.value.astype(int)])
+            else:
+                int_chans = to_convert.value.astype(int)
+
+            # Checking that channels are within a valid range
+            test_in = np.isin(int_chans, self.rmf_channels)
+            if not all(test_in):
+                raise UnitConversionError("Some channels in to_convert are outside the range of this spectrum's "
+                                          "instrument, please enter values between {l} and "
+                                          "{u}".format(l=self.rmf_channels.min(), u=self.rmf_channels.max()))
+
+            # I would rather use some clever numpy solution, but this will do for now. Although I am almost certain
+            #  that channels and indices of self.rmf_channels will always be the same I can't guarantee that channels
+            #  will never start at 1 or something, so I'm doing it with a list comprehension as the easiest way to
+            #  preserve the order of the input channels
+            rel_inds = np.array([np.where(self.rmf_channels == c)[0][0] for c in int_chans])
+            rel_lo_ens = self.rmf_channels_lo_en[rel_inds]
+            rel_hi_ens = self.rmf_channels_hi_en[rel_inds]
+            # Calculate the midpoint of the energy bins
+            converted_vals = (rel_hi_ens + rel_lo_ens)/2
+            # If only one value was passed in then we change our array back into a single quantity
+            if len(converted_vals) == 1:
+                converted_vals = converted_vals[0]
+
+        return converted_vals
+
 
     def view_arf(self, figsize: Tuple = (8, 6), xscale: str = 'linear', yscale: str = 'linear',
                  lo_en: Quantity = Quantity(0.0, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
@@ -1254,7 +1319,7 @@ class Spectrum(BaseProduct):
         # Title and axis labels
         plt.ylabel("Effective Area [cm$^{2}$]", fontsize=12)
         plt.xlabel("Energy [keV]", fontsize=12)
-        plt.title("{o}-{i} Response Curve".format(o=self.obs_id, i=self.instrument.upper()), fontsize=14)
+        plt.title("{o}-{i} Sensitivity Curve".format(o=self.obs_id, i=self.instrument.upper()), fontsize=14)
 
         # Aaaand finally actually plot it
         plt.tight_layout()
