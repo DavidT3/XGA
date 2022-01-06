@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:21. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:26. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -660,6 +660,59 @@ class Spectrum(BaseProduct):
             self._read_response_on_demand(rmf=False)
 
         return self._arf_hi_en
+
+    @property
+    def rmf_channels(self) -> np.ndarray:
+        """
+        The channels present in the RMF EBOUND table, used for converting between channel and energy when used in
+        conjunction with rmf_channels_lo_en and rmf_channels_hi_en.
+
+        :rtype: np.ndarray
+        :return: A numpy array containing the channels in the EBOUND table.
+        """
+        # Checking whether the data have been read in yet, if not then do so
+        if self._rmf_channels is None:
+            self._read_response_on_demand(rmf=True)
+
+        return self._rmf_channels
+
+    @property
+    def rmf_channels_lo_en(self) -> Quantity:
+        """
+        The lower energy bounds for the RMF EBOUND channels.
+
+        :rtype: Quantity
+        :return: A quantity containing the lower energy bounds for RMF channels, in units keV.
+        """
+        # Checking whether the data have been read in yet, if not then do so
+        if self._rmf_channels_lo_en is None:
+            self._read_response_on_demand(rmf=True)
+
+        return self._rmf_channels_lo_en
+
+    @property
+    def rmf_channels_hi_en(self) -> Quantity:
+        """
+        The upper energy bounds for the RMF EBOUND channels.
+
+        :rtype: Quantity
+        :return: A quantity containing the upper energy bounds for RMF channels, in units keV.
+        """
+        # Checking whether the data have been read in yet, if not then do so
+        if self._rmf_channels_hi_en is None:
+            self._read_response_on_demand(rmf=True)
+
+        return self._rmf_channels_hi_en
+    
+    @property
+    def rmf_redist_matrix(self) -> np.ndarray:
+        """
+        The contents of the RMF MATRIX table.
+
+        :rtype: np.ndarray
+        :return: A numpy array with names columns.
+        """
+        return self._redist_matrix_info
 
     @property
     def path(self) -> str:
