@@ -310,8 +310,8 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 @xspec_call
 def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
-              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_temperature: Quantity = Quantity(0.001, "keV"),
-              lo_en: Quantity = Quantity(0.2, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
+              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_temp: Quantity = Quantity(1, "keV"),
+              lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
               freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
               fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
               over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
@@ -333,7 +333,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param bool redshifted: Whether the powerlaw that includes redshift (zpowerlw) should be used.
     :param Quantity lum_en: Energy bands in which to measure luminosity.
-    :param float start_temperature: The starting value for the temperature of the blackbody.
+    :param float start_temp: The starting value for the temperature of the blackbody.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
@@ -394,7 +394,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
 
         # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        t = start_temperature.to("keV", equivalencies=u.temperature_energy()).value
+        t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
 
         # For this model, we have to know the redshift of the source.
         if redshifted and source.redshift is None:
