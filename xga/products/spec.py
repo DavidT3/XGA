@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 05/01/2022, 12:14. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:04. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -210,6 +210,22 @@ class Spectrum(BaseProduct):
         self._prim_back_header = None
         self._spec_back_header = None
 
+        # Attributes to store ARF information
+        # The actual effective area information will live in this attribute
+        self._arf_eff_area = None
+        # The corresponding energy bounds will be stored in these attributes
+        self._arf_lo_en = None
+        self._arf_hi_en = None
+
+        # Attributes to store RMF information
+        # This is a one is a bit of a cop out for now, I'm going to store the entire redist matrix table because
+        #  I don't know if I'm actually going to do anything with it
+        self._redist_matrix_info = None
+        # Here I will store lookup information to convert channels to a lower and upper energy bound
+        self._rmf_channels = None
+        self._rmf_channels_lo_en = None
+        self._rmf_channels_hi_en = None
+
     def _update_spec_headers(self, which_spec: str):
         """
         An internal method that will 'push' the current class attributes that hold the paths to data products
@@ -249,14 +265,17 @@ class Spectrum(BaseProduct):
             try:
                 # Populate the source spectrum relevant attributes if we're asked to load the source
                 if src_spec:
-                    all_dat = read(self.path)
+                    # Make this variable so the FileNotFoundError can work
+                    rel_path = self.path
+                    all_dat = read(rel_path)
                     self._spec_counts = all_dat['COUNTS']
                     self._spec_channels = all_dat['CHANNEL']
                     self._spec_group = all_dat['GROUPING']
                     self._spec_quality = all_dat['QUALITY']
                 # And if not then the only other option is to populate the background spectrum attributes
                 else:
-                    all_dat = read(self.background)
+                    rel_path = self.background
+                    all_dat = read(rel_path)
                     self._back_counts = all_dat['COUNTS']
                     self._back_channels = all_dat['CHANNEL']
 
@@ -269,7 +288,7 @@ class Spectrum(BaseProduct):
             except OSError:
                 raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
                                         "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-                                        "associated with {s}.".format(f=self.path, s=self.src_name))
+                                        "associated with {s}.".format(f=rel_path, s=self.src_name))
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
@@ -296,25 +315,81 @@ class Spectrum(BaseProduct):
                 #  source or background spectrum headers can be chosen, as well as whether the primary header (for the
                 #  whole file) or the SPECTRUM header (for the spectrum table) are read in.
                 if src_spec and primary_header:
-                    self._prim_spec_header = read_header(self.path)
+                    rel_path = self.path
+                    self._prim_spec_header = read_header(rel_path)
                 elif src_spec and not primary_header:
-                    self._spec_spec_header = read_header(self.path, 'SPECTRUM')
+                    rel_path = self.path
+                    self._spec_spec_header = read_header(rel_path, 'SPECTRUM')
                 elif not src_spec and primary_header:
-                    self._prim_back_header = read_header(self.background)
+                    rel_path = self.background
+                    self._prim_back_header = read_header(rel_path)
                 elif not src_spec and not primary_header:
-                    self._spec_back_header = read_header(self.background, 'SPECTRUM')
+                    rel_path = self.background
+                    self._spec_back_header = read_header(rel_path, 'SPECTRUM')
 
             except OSError:
                 raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
                                         "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-                                        "associated with {s}.".format(f=self.path, s=self.src_name))
+                                        "associated with {s}.".format(f=rel_path, s=self.src_name))
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
             raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
                                      "data from it; reason give is {}. Check the usable attribute next "
                                      "time".format(reasons))
-    
+
+    def _read_response_on_demand(self, rmf: bool = True):
+        """
+        Internal method to read the response information for this spectrum into memory. Either the redistribution
+        matrix and channel-to-energy conversion information from the RMF, or the effective area as a discrete function
+        of energy from the ARF.
+
+        :param bool rmf: Whether the RMF information should be read into memory, default True. If False, the ARF
+            information will be read into memory.
+        """
+
+        # Usable flag to check that nothing went wrong in the spectrum generation
+        if self.usable:
+            try:
+                # Populate the relevant response attributes if we're asked to load the rmf
+                if rmf:
+                    # This so that the error message if it can't be read works properly
+                    rel_path = self.rmf
+                    # I'm reading the whole fits file because there are two tables I'm interested in
+                    all_dat = FITS(rel_path)
+                    # This stores the matrix table as a numpy array with named columns
+                    self._redist_matrix_info = all_dat['MATRIX'].read().copy()
+                    # Reading out the second table containing the conversions between energy and channel
+                    chan_dat = all_dat['EBOUNDS'].read()
+                    # Setting up arrays of RMF channels with their equivelant lower and upper energy bounds
+                    self._rmf_channels = chan_dat['CHANNEL']
+                    self._rmf_channels_lo_en = Quantity(chan_dat['E_MIN'], 'keV')
+                    self._rmf_channels_hi_en = Quantity(chan_dat['E_MAX'], 'keV')
+                    all_dat.close()
+                # And if not then the only other option is to populate the ARF attributes
+                else:
+                    rel_path = self.arf
+                    # Read in the ARF fits file from the arf property
+                    arf_read = FITS(rel_path)
+                    # Read out the data from the ARF table into attributes
+                    self._arf_lo_en = Quantity(arf_read[1]['ENERG_LO'].read(), 'keV')
+                    self._arf_hi_en = Quantity(arf_read[1]['ENERG_HI'].read(), 'keV')
+                    self._arf_eff_area = Quantity(arf_read[1]['SPECRESP'].read(), 'cm^2')
+
+                    # And make sure to close the arf file after reading
+                    arf_read.close()
+
+            except OSError:
+                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
+                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
+                                        "associated with {s}.".format(f=rel_path, s=self.src_name))
+
+        else:
+            reasons = ", ".join(self.not_usable_reasons)
+            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
+                                     "data from it; reason give is {}. Check the usable attribute next "
+                                     "time".format(reasons))
+
     @property
     def header(self) -> FITSHDR:
         """
@@ -1034,6 +1109,9 @@ class Spectrum(BaseProduct):
 
         return self._plot_data[model]
 
+    # def conv_channel_energy(self, input: Quantity) -> Quantity:
+
+
     def get_arf_data(self) -> Tuple[Quantity, Quantity]:
         """
         Reads in and returns the ARF effective areas for this spectrum.
@@ -1180,6 +1258,86 @@ class Spectrum(BaseProduct):
 
         else:
             warnings.warn("There are no XSPEC fits associated with this Spectrum, you can't view it.")
+
+    def new_view(self, figsize: Tuple = (8, 6), lo_lim: Quantity = Quantity(0.0, "keV"),
+                 hi_lim: Quantity = Quantity(30.0, "keV"), back_sub: bool = True, energy: bool = True):
+        raise NotImplementedError("This is a temporary method which will eventually replace view(), no-one"
+                                  " should ever see this")
+        # This just ensures that everything works if someone has passed an integer for the channel limits
+        lo_lim = Quantity(lo_lim)
+        hi_lim = Quantity(hi_lim)
+
+        # Performing checks on the limits
+        if lo_lim >= hi_lim:
+            raise ValueError("The hi_lim argument cannot be less than or equal to the lo_lim argument")
+        elif energy and (not lo_lim.unit.is_equivalent('keV') or not hi_lim.unit.is_equivalent('keV')):
+            raise UnitConversionError("If energy is True, the lo_lim and hi_lim arguments must be convertible to "
+                                      "keV.")
+        elif not energy and (lo_lim.unit != '' or hi_lim.unit != ''):
+            raise UnitConversionError("If energy is False, the lo_lim and hi_lim arguments must be unitless "
+                                      "Quantities representing instrument channels.")
+        elif not energy:
+            lo_lim = lo_lim.value
+            hi_lim = hi_lim.value
+        elif energy:
+            lo_lim = lo_lim.to("keV").value
+            hi_lim = hi_lim.to("keV").value
+
+        # This uses the AREASCAL keyword (the product of EXPOSURE times AREASCAL is the exposure duration for any
+        #  fully exposed pixels in each channel - my experience is that this is normally 1 for XMM products) to
+        #  effectively scale the exposure time by dividing the count rate by it
+        src_rate = self.count_rates / self.header['AREASCAL']
+
+        # This scales the background count rates by the AREASCAL (as above), but also by the ratio of BACKSCAL
+        #  values, which scales the background flux to the same area as the source
+        bck_rate = (self.header['BACKSCAL']/self.back_header['BACKSCAL']) \
+                   * (self.back_count_rates / self.back_header['AREASCAL'])
+
+        # Create figure object
+        plt.figure(figsize=figsize)
+
+        # Set the plot up to look nice and professional.
+        ax = plt.gca()
+        ax.minorticks_on()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        # Set the title with all relevant information about the spectrum object in it
+        plt.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()))
+
+        if back_sub and energy:
+            raise NotImplementedError()
+            plt.xlabel("Energy [keV]")
+        elif back_sub and not energy:
+            pass
+            plt.xlabel("Channel")
+        elif not back_sub and energy:
+            raise NotImplementedError()
+            plt.xlabel("Energy [keV]")
+        else:
+            plt.errorbar(self.channels, src_rate.value, xerr=0, yerr=0, fmt="k+", label="source", zorder=1)
+            plt.errorbar(self.back_channels, bck_rate.value, xerr=0, yerr=0, fmt="c+", label="background", zorder=1)
+            plt.xlabel("Channel")
+
+        # Generate the legend for the data and model(s)
+        plt.legend(loc="best")
+
+        # Ensure axis is limited to the chosen energy range
+        plt.xlim(lo_lim, hi_lim)
+
+        plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
+
+        ax.set_xscale("log")
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+        ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+        plt.tight_layout()
+        # Display the spectrum
+        plt.show()
+
+        # Wipe the figure
+        plt.close("all")
+
 
 
 class AnnularSpectra(BaseAggregateProduct):
