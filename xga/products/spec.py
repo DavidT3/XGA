@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:04. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:18. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -617,6 +617,49 @@ class Spectrum(BaseProduct):
             self._read_on_demand(False)
 
         return self._back_quality
+
+    @property
+    def eff_area(self) -> Quantity:
+        """
+        The discrete effective area curve of the telescope. These area values correspond to upper and lower energy
+        bounds that can be accessed using the eff_area_lo_en and eff_area_hi_en properties
+
+        :rtype: Quantity
+        :return: A quantity containing the effective area values in units of cm^-2.
+        """
+        # Checking whether the data have been read in yet, if not then do so
+        if self._arf_eff_area is None:
+            self._read_response_on_demand(rmf=False)
+
+        return self._arf_eff_area
+
+    @property
+    def eff_area_lo_en(self) -> Quantity:
+        """
+        The lower energy bounds for the effective area curve.
+
+        :rtype: Quantity
+        :return: A quantity containing the lower energy bounds for effective area values in units keV.
+        """
+        # Checking whether the data have been read in yet, if not then do so
+        if self._arf_lo_en is None:
+            self._read_response_on_demand(rmf=False)
+
+        return self._arf_lo_en
+
+    @property
+    def eff_area_hi_en(self) -> Quantity:
+        """
+        The upper energy bounds for the effective area curve.
+
+        :rtype: Quantity
+        :return: A quantity containing the upper energy bounds for effective area values in units keV.
+        """
+        # Checking whether the data have been read in yet, if not then do so
+        if self._arf_hi_en is None:
+            self._read_response_on_demand(rmf=False)
+
+        return self._arf_hi_en
 
     @property
     def path(self) -> str:
