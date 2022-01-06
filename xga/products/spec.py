@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:26. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:31. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1216,30 +1216,6 @@ class Spectrum(BaseProduct):
 
     # def conv_channel_energy(self, input: Quantity) -> Quantity:
 
-
-    def get_arf_data(self) -> Tuple[Quantity, Quantity]:
-        """
-        Reads in and returns the ARF effective areas for this spectrum.
-
-        :return: The mid point of the energy bins and their corresponding effective areas.
-        :rtype: Tuple[Quantity, Quantity]
-        """
-        # Read in the ARF fits file from the arf property
-        arf_read = FITS(self.arf)
-        # Read out the data from the ARF table into python variables
-        lo_lims = arf_read[1]['ENERG_LO'].read()
-        hi_lims = arf_read[1]['ENERG_HI'].read()
-        eff_area = Quantity(arf_read[1]['SPECRESP'].read(), 'cm^2')
-
-        # The centre of the upper and lower limit values for each area is used to calculate the central energy of
-        #  the bin
-        mid_en = Quantity((hi_lims+lo_lims)/2, 'keV')
-        # And make sure to close the arf file after reading
-        arf_read.close()
-
-        # Return the energies and effective areas
-        return mid_en, eff_area
-
     def view_arf(self, figsize: Tuple = (8, 6), xscale: str = 'linear', yscale: str = 'linear',
                  lo_en: Quantity = Quantity(0.0, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
         """
@@ -1264,8 +1240,8 @@ class Spectrum(BaseProduct):
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
         # Get the data and plot it
-        ens, areas = self.get_arf_data()
-        plt.plot(ens, areas, color='black')
+        ens = (self.eff_area_hi_en+self.eff_area_lo_en)/2
+        plt.plot(ens, self.eff_area, color='black')
 
         # Set the lower y-lim to be zero, and then the user supplied x-lims
         plt.ylim(0)

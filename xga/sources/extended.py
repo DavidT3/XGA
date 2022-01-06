@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/07/2021, 20:42. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 11:31. Copyright (c) David J Turner
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -956,7 +956,9 @@ class GalaxyCluster(ExtendedSource):
 
             # For the current spectrum we retrieve the ARF information so that we can use it to weight things with
             #  later
-            ens, ars = s.get_arf_data()
+            ens = (s.eff_area_hi_en + s.eff_area_lo_en) / 2
+            ars = s.eff_area
+
             # This finds only the areas in the current energy range we're considering
             rel_ars = ars[np.argwhere((ens <= hi_en) & (ens >= lo_en)).T[0]]
             # And finds the mean effective area in that range
