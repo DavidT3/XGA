@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 07/01/2022, 10:35. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 07/01/2022, 14:15. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -271,8 +271,11 @@ class Spectrum(BaseProduct):
                     all_dat = read(rel_path)
                     self._spec_counts = all_dat['COUNTS']
                     self._spec_channels = all_dat['CHANNEL']
-                    self._spec_group = all_dat['GROUPING']
+                    # If the spectrum has not been grouped it may not have this column
+                    if "GROUPING" in all_dat.dtype.names:
+                        self._spec_group = all_dat['GROUPING']
                     self._spec_quality = all_dat['QUALITY']
+
                 # And if not then the only other option is to populate the background spectrum attributes
                 else:
                     rel_path = self.background
@@ -476,11 +479,16 @@ class Spectrum(BaseProduct):
     @property
     def grouping(self) -> np.ndarray:
         """
-        The grouping information from the spectrum
+        The grouping information from the spectrum. A 1 entry indicates the first channel in a group and -1
+        indicates a member of the current group.
 
         :rtype: np.ndarray
         :return: An array of group IDs.
         """
+        if not self.grouped:
+            raise ValueError("This spectrum was generated without grouping, and so you cannot "
+                             "retrieve grouping information.")
+
         # Checks whether the initial value of the attribute has been overwritten, if not then I run
         #  the read on demand method to grab the information from the file.
         if self._spec_group is None:
@@ -491,7 +499,7 @@ class Spectrum(BaseProduct):
     @property
     def quality(self) -> np.ndarray:
         """
-        The quality information from the spectrum. A 0 flag value means good quality, 1 means not good quality.
+        The quality information from the spectrum. 0 = good quality, 1 is bad quality and 2 means dubious.
 
         :rtype: np.ndarray
         :return: An array of quality flags.
@@ -1280,6 +1288,26 @@ class Spectrum(BaseProduct):
                 converted_vals = converted_vals[0]
 
         return converted_vals
+
+    def get_grouped_data(self, count_rate: bool = False, energy: bool = True):
+        """
+
+
+        :param bool count_rate:
+        :param bool energy:
+        :rtype:
+        :return:
+        """
+        # Check whether this spectrum was actually grouped on generation
+        if not self.grouped:
+            raise ValueError("This spectrum was generated without grouping, and so you cannot "
+                             "retrieve grouped data.")
+
+        raise NotImplementedError("Currently working on this")
+        grp_start_inds = np.argwhere(self.grouping == 1)
+        print(grp_start_inds)
+
+
 
     def view_arf(self, figsize: Tuple = (8, 6), xscale: str = 'linear', yscale: str = 'linear',
                  lo_en: Quantity = Quantity(0.0, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
