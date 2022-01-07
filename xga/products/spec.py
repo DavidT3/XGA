@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2022, 13:32. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 07/01/2022, 09:59. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -15,7 +15,8 @@ from matplotlib.ticker import ScalarFormatter, FuncFormatter
 from mpl_toolkits.mplot3d import Axes3D
 
 from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
-from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError
+from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError, \
+    FailedProductError
 from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D, APECNormalisation1D
 from ..utils import dict_search
 
@@ -458,11 +459,11 @@ class Spectrum(BaseProduct):
         return self.counts/self.exposure
 
     @property
-    def channels(self) -> np.ndarray:
+    def channels(self) -> Quantity:
         """
         The array of instrument channels in the spectrum.
 
-        :rtype: np.ndarray
+        :rtype: Quantity
         :return: An array of channels.
         """
         # Checks whether the initial value of the channels attribute has been overwritten, if not then I run
@@ -470,7 +471,7 @@ class Spectrum(BaseProduct):
         if self._spec_channels is None:
             self._read_on_demand(True)
 
-        return self._spec_channels
+        return Quantity(self._spec_channels)
 
     @property
     def grouping(self) -> np.ndarray:
@@ -571,11 +572,11 @@ class Spectrum(BaseProduct):
         return self.back_counts / self.back_exposure
 
     @property
-    def back_channels(self) -> np.ndarray:
+    def back_channels(self) -> Quantity:
         """
         The array of instrument channels in the background spectrum.
 
-        :rtype: np.ndarray
+        :rtype: Quantity
         :return: An array of channels.
         """
         # Checks whether the initial value of the background channels attribute has been overwritten, if not then I run
@@ -584,7 +585,7 @@ class Spectrum(BaseProduct):
             # Passing false means it won't read the source spectrum, but instead the background spectrum
             self._read_on_demand(False)
 
-        return self._back_channels
+        return Quantity(self._back_channels)
 
     @property
     def back_grouping(self) -> np.ndarray:
@@ -1280,7 +1281,6 @@ class Spectrum(BaseProduct):
 
         return converted_vals
 
-
     def view_arf(self, figsize: Tuple = (8, 6), xscale: str = 'linear', yscale: str = 'linear',
                  lo_en: Quantity = Quantity(0.0, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
         """
@@ -1325,7 +1325,7 @@ class Spectrum(BaseProduct):
         plt.tight_layout()
         plt.show()
 
-    def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV"),
+    def view(self, lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
              figsize: Tuple = (8, 6)):
         """
         Very simple method to plot the data/models associated with this Spectrum object,
@@ -1405,10 +1405,28 @@ class Spectrum(BaseProduct):
         else:
             warnings.warn("There are no XSPEC fits associated with this Spectrum, you can't view it.")
 
-    def new_view(self, figsize: Tuple = (8, 6), lo_lim: Quantity = Quantity(0.0, "keV"),
-                 hi_lim: Quantity = Quantity(30.0, "keV"), back_sub: bool = True, energy: bool = True):
-        raise NotImplementedError("This is a temporary method which will eventually replace view(), no-one"
-                                  " should ever see this")
+    def new_view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
+                 hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
+                 save_path: str = None):
+        """
+        A method for viewing the data associated with this Spectrum instance.
+
+        :param tuple figsize: The desired size of the output figure, default is (10, 7).
+        :param Quantity lo_lim: The lower limit applied to the plot, either a unitless Quantity (representing
+            channels) or an energy Quantity. Limits will be automatically converted to the units of the x-axis.
+            Default is 0.3 keV, matching the default lower limit of the XGA implementation of XSPEC fitting.
+        :param Quantity hi_lim: The upper limit applied to the plot, either a unitless Quantity (representing
+            channels) or an energy Quantity. Limits will be automatically converted to the units of the x-axis.
+            Default is 7.9 keV, matching the default lower limit of the XGA implementation of XSPEC fitting.
+        :param bool back_sub: Whether the plotted data should have their background subtracted, default is True.
+        :param bool energy: Controls whether the x-axis is in units of energy, default is True. If False then
+            channels are plotted instead.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
+        """
+        warnings.warn("This method is being developed as a replacement for the clumsy approach taken in view(), but "
+                      "is not yet complete. Ideally the plots produced by this method will be equivelant to those"
+                      "produced by XSPEC, but that is not yet the case.")
         # This just ensures that everything works if someone has passed an integer for the channel limits
         lo_lim = Quantity(lo_lim)
         hi_lim = Quantity(hi_lim)
@@ -1416,18 +1434,25 @@ class Spectrum(BaseProduct):
         # Performing checks on the limits
         if lo_lim >= hi_lim:
             raise ValueError("The hi_lim argument cannot be less than or equal to the lo_lim argument")
-        elif energy and (not lo_lim.unit.is_equivalent('keV') or not hi_lim.unit.is_equivalent('keV')):
-            raise UnitConversionError("If energy is True, the lo_lim and hi_lim arguments must be convertible to "
-                                      "keV.")
-        elif not energy and (lo_lim.unit != '' or hi_lim.unit != ''):
-            raise UnitConversionError("If energy is False, the lo_lim and hi_lim arguments must be unitless "
-                                      "Quantities representing instrument channels.")
-        elif not energy:
-            lo_lim = lo_lim.value
-            hi_lim = hi_lim.value
-        elif energy:
+
+        # These just make sure that limits in units of either channel or energy are converted appropriately to what
+        #  we're plotting on the x-axis, channels or energies.
+        if not energy and lo_lim.unit != '':
+            lo_lim = self.conv_channel_energy(lo_lim)
+        if not energy and hi_lim.unit != '':
+            hi_lim = self.conv_channel_energy(hi_lim)
+        if energy and not lo_lim.unit.is_equivalent('keV'):
+            lo_lim = self.conv_channel_energy(lo_lim)
+        if energy and not hi_lim.unit.is_equivalent('keV'):
+            hi_lim = self.conv_channel_energy(hi_lim)
+
+        # Reads out the values of the limits as matplotlib sometimes gets upset by astropy quantities
+        if energy:
             lo_lim = lo_lim.to("keV").value
             hi_lim = hi_lim.to("keV").value
+        else:
+            lo_lim = lo_lim.value
+            hi_lim = hi_lim.value
 
         # This uses the AREASCAL keyword (the product of EXPOSURE times AREASCAL is the exposure duration for any
         #  fully exposed pixels in each channel - my experience is that this is normally 1 for XMM products) to
@@ -1439,8 +1464,14 @@ class Spectrum(BaseProduct):
         bck_rate = (self.header['BACKSCAL']/self.back_header['BACKSCAL']) \
                    * (self.back_count_rates / self.back_header['AREASCAL'])
 
+        # And finally subtracting one from the other
+        src_sub_bck_rate = src_rate - bck_rate
+
         # Create figure object
         plt.figure(figsize=figsize)
+
+        # Ensure axis is limited to the chosen energy range
+        plt.xlim(lo_lim, hi_lim)
 
         # Set the plot up to look nice and professional.
         ax = plt.gca()
@@ -1450,27 +1481,36 @@ class Spectrum(BaseProduct):
         # Set the title with all relevant information about the spectrum object in it
         plt.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()))
 
+        # Plotting the data, accounting for the different combinations of x-axis and y-axis
         if back_sub and energy:
-            raise NotImplementedError()
+            plt.errorbar(self.conv_channel_energy(self.channels).value, src_sub_bck_rate.value, xerr=0, yerr=0,
+                         fmt="k+", label="background subtracted data", zorder=1)
+            # plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
+            plt.ylabel("Counts s$^{-1}$")
             plt.xlabel("Energy [keV]")
         elif back_sub and not energy:
-            pass
+            plt.errorbar(self.channels, src_sub_bck_rate.value, xerr=0, yerr=0, fmt="k+",
+                         label="background subtracted data", zorder=1)
+            # plt.ylabel("Normalised Counts s$^{-1}$ Channel$^{-1}$")
+            plt.ylabel("Counts s$^{-1}$")
             plt.xlabel("Channel")
         elif not back_sub and energy:
-            raise NotImplementedError()
+            plt.errorbar(self.conv_channel_energy(self.channels).value, src_rate.value, xerr=0, yerr=0, fmt="k+",
+                         label="source", zorder=1)
+            plt.errorbar(self.conv_channel_energy(self.back_channels).value, bck_rate.value, xerr=0, yerr=0, fmt="cx",
+                         label="background", zorder=1)
+            # plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
+            plt.ylabel("Counts s$^{-1}$")
             plt.xlabel("Energy [keV]")
-        else:
+        elif not back_sub and not energy:
             plt.errorbar(self.channels, src_rate.value, xerr=0, yerr=0, fmt="k+", label="source", zorder=1)
-            plt.errorbar(self.back_channels, bck_rate.value, xerr=0, yerr=0, fmt="c+", label="background", zorder=1)
+            plt.errorbar(self.back_channels, bck_rate.value, xerr=0, yerr=0, fmt="cx", label="background", zorder=1)
+            # plt.ylabel("Normalised Counts s$^{-1}$ Channel$^{-1}$")
+            plt.ylabel("Counts s$^{-1}$")
             plt.xlabel("Channel")
 
         # Generate the legend for the data and model(s)
         plt.legend(loc="best")
-
-        # Ensure axis is limited to the chosen energy range
-        plt.xlim(lo_lim, hi_lim)
-
-        plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
 
         ax.set_xscale("log")
         ax.xaxis.set_major_formatter(ScalarFormatter())
@@ -1478,6 +1518,11 @@ class Spectrum(BaseProduct):
         ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         plt.tight_layout()
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
         # Display the spectrum
         plt.show()
 
