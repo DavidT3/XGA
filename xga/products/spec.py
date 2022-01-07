@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 07/01/2022, 09:59. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 07/01/2022, 10:35. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1528,7 +1528,6 @@ class Spectrum(BaseProduct):
 
         # Wipe the figure
         plt.close("all")
-
 
 
 class AnnularSpectra(BaseAggregateProduct):
