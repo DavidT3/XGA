@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 07/01/2022, 14:15. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2022, 17:52. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1289,25 +1289,96 @@ class Spectrum(BaseProduct):
 
         return converted_vals
 
-    def get_grouped_data(self, count_rate: bool = False, energy: bool = True):
+    def get_grouped_data(self, count_rate: bool = True) -> Tuple[Quantity]:
         """
+        In many cases a spectrum is 'grouped' after generation, which involves combining sequential channels to
+        increase the signal to noise. This method reads any grouping information in the spectrum associated with
+        this object and returns the grouped data, along with everything necessary to use it. The properties that
+        returns counts, energy bins etc all give the raw data, unlike this method.
 
-
-        :param bool count_rate:
-        :param bool energy:
-        :rtype:
-        :return:
+        :param bool count_rate: Should the grouped spectrum data be returned as a count-rate, default is True. If
+            set to False then grouped data will be returned as counts.
+        :rtype: Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity]
+        :return: The source count-rates (or counts), the background count-rates (or counts), the lower energy bounds
+            of the groups, the upper energy bounds of the groups, the channel midpoints of the groups (with width
+            in a second column), the energy midpoints of the groups (with width in a second column).
         """
         # Check whether this spectrum was actually grouped on generation
         if not self.grouped:
             raise ValueError("This spectrum was generated without grouping, and so you cannot "
                              "retrieve grouped data.")
 
-        raise NotImplementedError("Currently working on this")
-        grp_start_inds = np.argwhere(self.grouping == 1)
-        print(grp_start_inds)
+        # As the beginning of a group is indicated by a 1, we assemble a list of indexes where the grouping
+        #  value is 1. After that -1 values indicate that the channel belongs to a group, but we now we know where
+        #  each sequential group starts, we can figure out what belongs to them
+        grp_start_inds = np.squeeze(np.argwhere(self.grouping == 1))
 
+        # Setting up empty quantities to store the grouped counts in later, both source and background
+        src_grpd_cnts = Quantity(np.zeros(grp_start_inds.shape), 'ct')
+        bck_grpd_cnts = Quantity(np.zeros(grp_start_inds.shape), 'ct')
 
+        # Setting up empty quantities to store the lower and upper energy bounds for the groups
+        bins_lo_en = Quantity(np.zeros(grp_start_inds.shape), 'keV')
+        bins_hi_en = Quantity(np.zeros(grp_start_inds.shape), 'keV')
+        # Empty quantities (with two columns now) to store central energy and channel values, along with
+        #  an 'uncertainty' column that gives the width of the group
+        en_cens = Quantity(np.zeros((len(grp_start_inds), 2)), 'keV')
+        chans = Quantity(np.zeros((len(grp_start_inds), 2)))
+
+        # I really did try to figure out a more efficent way to do this, but this is what I'm resorting to for now
+        for grped_ind, grp_ind in enumerate(grp_start_inds):
+            # grped_ind = the position in the grp_start_inds array (so goes continuously from 0 to len(grp_start_inds)
+            # grp_ind = the actual channel index where a group starts, so it isn't continuous (apart from when
+            #  no bins have been created).
+
+            # In this instance, the last group (i.e. highest energy group) is actually just a single channel
+            #  That means we don't need to check whether this group has more than 1 channel, because it can't
+            if grped_ind == (len(grp_start_inds)-1):
+                src_grpd_cnts[grped_ind] = self.counts[-1]
+                bck_grpd_cnts[grped_ind] = self.back_counts[-1]
+                bins_lo_en[grped_ind] = self.rmf_channels_lo_en[-1]
+                bins_hi_en[grped_ind] = self.rmf_channels_hi_en[-1]
+                cur_chan = self.rmf_channels[-1]
+                next_chan = self.rmf_channels[-1]
+            else:
+                # Adding the entries in the group together and putting them in the pre-declared quantity
+                src_grpd_cnts[grped_ind] = self.counts[grp_ind:grp_start_inds[grped_ind+1]].sum()
+                bck_grpd_cnts[grped_ind] = self.back_counts[grp_ind:grp_start_inds[grped_ind+1]].sum()
+
+                # Finding the lower and upper energy bounds of the group
+                bins_lo_en[grped_ind] = self.rmf_channels_lo_en[grp_ind]
+                bins_hi_en[grped_ind] = self.rmf_channels_hi_en[grp_start_inds[grped_ind+1]-1]
+
+                # Finding the start and end channel values in the group
+                cur_chan = self.rmf_channels[grp_ind]
+                next_chan = self.rmf_channels[grp_start_inds[grped_ind+1]-1]
+
+            # If the 'group' is actually just made up of one channel then we just put that current channel
+            #  in the quantity, with a width of 0
+            if cur_chan == next_chan:
+                chans[grped_ind] = Quantity([cur_chan, 0])
+            # Otherwise we calculate the midpoint of the group, and the width
+            else:
+                mid = (cur_chan + next_chan) / 2
+                width = (next_chan - cur_chan) / 2
+                chans[grped_ind, :] = Quantity([mid, width])
+
+            # Always calculate the energy midpoint and width of a group, even if there is only one entry, because
+            #  we know the upper and lower energy bounds of every channel from the RMF
+            en_mid = (bins_lo_en[grped_ind]+ bins_hi_en[grped_ind])/2
+            en_width = (bins_hi_en[grped_ind] - bins_lo_en[grped_ind])/2
+            en_cens[grped_ind] = Quantity([en_mid, en_width])
+
+        # Simple enough, if the user wants a count rate then divide by exposure, if just counts then don't
+        if count_rate:
+            src_grpd = src_grpd_cnts / self.exposure
+            bck_grpd = bck_grpd_cnts / self.exposure
+        else:
+            src_grpd = src_grpd_cnts
+            bck_grpd = bck_grpd_cnts
+
+        # Return all the useful information that we have calculated.
+        return src_grpd, bck_grpd, bins_lo_en, bins_hi_en, chans, en_cens
 
     def view_arf(self, figsize: Tuple = (8, 6), xscale: str = 'linear', yscale: str = 'linear',
                  lo_en: Quantity = Quantity(0.0, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
@@ -1435,7 +1506,7 @@ class Spectrum(BaseProduct):
 
     def new_view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
                  hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
-                 save_path: str = None):
+                 grouped: bool = True, save_path: str = None):
         """
         A method for viewing the data associated with this Spectrum instance.
 
@@ -1449,12 +1520,21 @@ class Spectrum(BaseProduct):
         :param bool back_sub: Whether the plotted data should have their background subtracted, default is True.
         :param bool energy: Controls whether the x-axis is in units of energy, default is True. If False then
             channels are plotted instead.
+        :param bool grouped: Whether the grouped spectrum should be plotted, default is True. If the spectrum has not
+            been grouped then this be automatically set to False.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
         """
         warnings.warn("This method is being developed as a replacement for the clumsy approach taken in view(), but "
                       "is not yet complete. Ideally the plots produced by this method will be equivelant to those"
                       "produced by XSPEC, but that is not yet the case.")
+
+        # This just checks whether the grouped argument to this method is compatible with whether the spectrum
+        #  associated with this Spectrum instance has actually been grouped - if not then we automatically
+        #  set the method argument to False
+        if not self.grouped:
+            grouped = False
+
         # This just ensures that everything works if someone has passed an integer for the channel limits
         lo_lim = Quantity(lo_lim)
         hi_lim = Quantity(hi_lim)
@@ -1481,6 +1561,15 @@ class Spectrum(BaseProduct):
         else:
             lo_lim = lo_lim.value
             hi_lim = hi_lim.value
+
+        # Here we grab the count-rates of the channels in this spectrum - either straight from the property
+        #  or the get_grouped_data() method
+        # if not grouped:
+        #     sct = self.count_rates.copy()
+        #     bct = self.back_count_rates.copy()
+        #
+        # else:
+        #     sct, bct,
 
         # This uses the AREASCAL keyword (the product of EXPOSURE times AREASCAL is the exposure duration for any
         #  fully exposed pixels in each channel - my experience is that this is normally 1 for XMM products) to
