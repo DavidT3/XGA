@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2022, 17:52. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2022, 18:11. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1564,22 +1564,32 @@ class Spectrum(BaseProduct):
 
         # Here we grab the count-rates of the channels in this spectrum - either straight from the property
         #  or the get_grouped_data() method
-        # if not grouped:
-        #     sct = self.count_rates.copy()
-        #     bct = self.back_count_rates.copy()
-        #
-        # else:
-        #     sct, bct,
+        if not grouped:
+            sct = self.count_rates.copy()
+            bct = self.back_count_rates.copy()
+            if energy:
+                x_dat = self.conv_channel_energy(self.channels).value
+            else:
+                x_dat = self.channels
+        else:
+            grp_info = self.get_grouped_data()
+            sct = grp_info[0]
+            bct = grp_info[1]
+            # TODO make width error bars work
+            if energy:
+                x_dat = grp_info[-1][:, 0].value
+            else:
+                x_dat = grp_info[4][:, 0].value
 
         # This uses the AREASCAL keyword (the product of EXPOSURE times AREASCAL is the exposure duration for any
         #  fully exposed pixels in each channel - my experience is that this is normally 1 for XMM products) to
         #  effectively scale the exposure time by dividing the count rate by it
-        src_rate = self.count_rates / self.header['AREASCAL']
+        src_rate = sct / self.header['AREASCAL']
 
         # This scales the background count rates by the AREASCAL (as above), but also by the ratio of BACKSCAL
         #  values, which scales the background flux to the same area as the source
         bck_rate = (self.header['BACKSCAL']/self.back_header['BACKSCAL']) \
-                   * (self.back_count_rates / self.back_header['AREASCAL'])
+                   * (bct / self.back_header['AREASCAL'])
 
         # And finally subtracting one from the other
         src_sub_bck_rate = src_rate - bck_rate
@@ -1598,30 +1608,31 @@ class Spectrum(BaseProduct):
         # Set the title with all relevant information about the spectrum object in it
         plt.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()))
 
+        # TODO Some of this is extraneous now I think
         # Plotting the data, accounting for the different combinations of x-axis and y-axis
         if back_sub and energy:
-            plt.errorbar(self.conv_channel_energy(self.channels).value, src_sub_bck_rate.value, xerr=0, yerr=0,
+            plt.errorbar(x_dat, src_sub_bck_rate.value, xerr=0, yerr=0,
                          fmt="k+", label="background subtracted data", zorder=1)
             # plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
             plt.ylabel("Counts s$^{-1}$")
             plt.xlabel("Energy [keV]")
         elif back_sub and not energy:
-            plt.errorbar(self.channels, src_sub_bck_rate.value, xerr=0, yerr=0, fmt="k+",
+            plt.errorbar(x_dat, src_sub_bck_rate.value, xerr=0, yerr=0, fmt="k+",
                          label="background subtracted data", zorder=1)
             # plt.ylabel("Normalised Counts s$^{-1}$ Channel$^{-1}$")
             plt.ylabel("Counts s$^{-1}$")
             plt.xlabel("Channel")
         elif not back_sub and energy:
-            plt.errorbar(self.conv_channel_energy(self.channels).value, src_rate.value, xerr=0, yerr=0, fmt="k+",
+            plt.errorbar(x_dat, src_rate.value, xerr=0, yerr=0, fmt="k+",
                          label="source", zorder=1)
-            plt.errorbar(self.conv_channel_energy(self.back_channels).value, bck_rate.value, xerr=0, yerr=0, fmt="cx",
+            plt.errorbar(x_dat, bck_rate.value, xerr=0, yerr=0, fmt="cx",
                          label="background", zorder=1)
             # plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
             plt.ylabel("Counts s$^{-1}$")
             plt.xlabel("Energy [keV]")
         elif not back_sub and not energy:
-            plt.errorbar(self.channels, src_rate.value, xerr=0, yerr=0, fmt="k+", label="source", zorder=1)
-            plt.errorbar(self.back_channels, bck_rate.value, xerr=0, yerr=0, fmt="cx", label="background", zorder=1)
+            plt.errorbar(x_dat, src_rate.value, xerr=0, yerr=0, fmt="k+", label="source", zorder=1)
+            plt.errorbar(x_dat, bck_rate.value, xerr=0, yerr=0, fmt="cx", label="background", zorder=1)
             # plt.ylabel("Normalised Counts s$^{-1}$ Channel$^{-1}$")
             plt.ylabel("Counts s$^{-1}$")
             plt.xlabel("Channel")
