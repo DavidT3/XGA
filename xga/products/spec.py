@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2022, 18:11. Copyright (c) David J Turner
+#   Last modified by David J Turner (david.turner@sussex.ac.uk) 11/01/2022, 12:30. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1506,7 +1506,7 @@ class Spectrum(BaseProduct):
 
     def new_view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
                  hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
-                 grouped: bool = True, save_path: str = None):
+                 grouped: bool = True, xscale: str = "log", yscale: str = "linear", save_path: str = None):
         """
         A method for viewing the data associated with this Spectrum instance.
 
@@ -1522,12 +1522,15 @@ class Spectrum(BaseProduct):
             channels are plotted instead.
         :param bool grouped: Whether the grouped spectrum should be plotted, default is True. If the spectrum has not
             been grouped then this be automatically set to False.
+        :param str xscale: The scaling to be applied to the x-axis, default is 'log'.
+        :param str yscale: The scaling to be applied to the y-axis, default is 'linear'.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
         """
         warnings.warn("This method is being developed as a replacement for the clumsy approach taken in view(), but "
                       "is not yet complete. Ideally the plots produced by this method will be equivelant to those"
-                      "produced by XSPEC, but that is not yet the case.")
+                      "produced by XSPEC, but that is not yet the case."
+                      "When finished, it will be renamed as view() and the old method will be removed")
 
         # This just checks whether the grouped argument to this method is compatible with whether the spectrum
         #  associated with this Spectrum instance has actually been grouped - if not then we automatically
@@ -1640,7 +1643,8 @@ class Spectrum(BaseProduct):
         # Generate the legend for the data and model(s)
         plt.legend(loc="best")
 
-        ax.set_xscale("log")
+        ax.set_xscale(xscale)
+        ax.set_yscale(yscale)
         ax.xaxis.set_major_formatter(ScalarFormatter())
         ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
         ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
