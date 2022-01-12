@@ -642,8 +642,17 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
                 src.update_products(dens_prof)
                 final_dens_profs.append(dens_prof)
 
+            # It is possible that no normalisation profile exists because the spectral fitting failed, we account
+            #  for that here
             except NoProductAvailableError:
                 warn("{s} doesn't have a matching apec normalisation profile, skipping.")
+                final_dens_profs.append(None)
+                continue
+
+            # It's also possible that the gas_density_profile method of our normalisation profile is going to
+            #  throw a ValueError because some values are infinite or NaNs - we have to catch that too
+            except ValueError:
+                warn("{s}'s density profile has NaN values in it, skipping.", stacklevel=2)
                 final_dens_profs.append(None)
                 continue
 
