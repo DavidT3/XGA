@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/09/2021, 12:00. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2022, 09:57. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -647,14 +647,12 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
             except NoProductAvailableError:
                 warn("{s} doesn't have a matching apec normalisation profile, skipping.")
                 final_dens_profs.append(None)
-                continue
 
             # It's also possible that the gas_density_profile method of our normalisation profile is going to
             #  throw a ValueError because some values are infinite or NaNs - we have to catch that too
             except ValueError:
                 warn("{s}'s density profile has NaN values in it, skipping.", stacklevel=2)
                 final_dens_profs.append(None)
-                continue
 
             dens_prog.update(1)
 
