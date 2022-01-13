@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2022, 09:57. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/01/2022, 10:14. Copyright (c) David J Turner
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -623,7 +623,6 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
 
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and the
     #  gas_density_profile method of APECNormalisation1D
-
     final_dens_profs = []
     with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as dens_prog:
         for src_ind, src in enumerate(sources):
@@ -635,7 +634,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
 
                 obs_id = 'combined'
                 inst = 'combined'
-                # Seeing as we're here, I might as well make a  density profile from the apec normalisation profile
+                # Seeing as we're here, I might as well make a density profile from the apec normalisation profile
                 dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real,
                                                                sigma, num_dens)
                 # Then I store it in the source
