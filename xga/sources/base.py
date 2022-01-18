@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 12:05. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2022, 14:25. Copyright (c) David J Turner
 
 import os
 import pickle
@@ -983,12 +983,26 @@ class BaseSource:
                 #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
                 # First two columns are skipped because they are energy limits
                 combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
-                # Getting the spectra for each column, then assigning rates and lums
-                for comb in combos:
-                    spec = self.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
-                    spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
-                                          res_table["rate_{}".format(comb)].values,
-                                          res_table["Lx_{}".format(comb)].values, model)
+                # Getting the spectra for each column, then assigning rates and luminosities.
+                # Due to the danger of a fit using a piece of data (an ObsID-instrument combo) that isn't currently
+                #  associated with the source, we first fetch the spectra, then in a second loop we assign the factors
+                rel_spec = []
+                try:
+                    for comb in combos:
+                        spec = self.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
+                        rel_spec.append(spec)
+
+                    for comb_ind, comb in enumerate(combos):
+                        rel_spec[comb_ind].add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
+                                                            res_table["rate_{}".format(comb)].values,
+                                                            res_table["Lx_{}".format(comb)].values, model)
+
+                # This triggers in the case of something like issue #738, where a previous fit used data that is
+                #  not loaded into this source (either because it was manually removed, or because the central
+                #  position has changed etc.)
+                except NotAssociatedError:
+                    warnings.warn("Existing fit for {s} could not be loaded due to a mismatch in available "
+                                  "data".format(s=self.name), stacklevel=2)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
