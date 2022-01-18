@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/05/2021, 15:50. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/01/2022, 14:36. Copyright (c) David J Turner
 
 import warnings
 from typing import Tuple, List, Union
@@ -235,7 +235,7 @@ class ExtendedSource(BaseSource):
             # Updating nH for new coord, probably won't make a difference most of the time
             self._nH = nh_lookup(coord)[0]
         else:
-            # If we don't care about peak finding then this is the boi to go for
+            # If we don't care about peak finding then this is the one to go for
             coord = self.ra_dec
             near_edge = comb_rt.near_edge(coord)
             converged = True
