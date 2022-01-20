@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/08/2021, 09:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2022, 12:19. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -705,6 +705,22 @@ class BaseProfile1D:
 
         self._save_path = None
 
+    def _model_allegiance(self, model: BaseModel1D):
+        """
+        This internal method with a silly name just checks whether a model instance has already been associated
+        with a profile other than this one, or if it has any association with a profile. If there is an association
+        with another profile then it throws an error, as that that can cause serious problems that have caught me
+        out before (see issue #742). If there is no association it sets the models profile attribute.
+
+        :param BaseModel1D model: An instance of a BaseModel1D class (or subclass) to check.
+        """
+        if model.profile is not None and model.profile != self:
+            raise ModelNotAssociatedError("The passed model instance is already associated with another profile, and"
+                                          " as such cannot be fit to this one. Ensure that individual model instances"
+                                          " are declared for each profile you are fitting.")
+        elif model.profile is None:
+            model.profile = self
+
     def emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
                   num_samples: int) -> Tuple[BaseModel1D, bool]:
         """
@@ -714,7 +730,7 @@ class BaseProfile1D:
         likelihood estimate is run, and if that fails the method will revert to using the start parameters
         set in the model instance.
 
-        :param BaseModel1D model: The model to be fit to the data.
+        :param BaseModel1D model: The model to be fit to the data, you cannot pass a model name for this argument.
         :param int num_steps: The number of steps each chain should take.
         :param int num_walkers: The number of walkers to be run for the ensemble sampler.
         :param bool progress_bar: Whether a progress bar should be displayed.
