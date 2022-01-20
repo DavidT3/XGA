@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2022, 12:12. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2022, 15:07. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -1074,8 +1074,8 @@ class BaseModel1D(metaclass=ABCMeta):
         # Have to do this here to avoid circular import errors
         from ..products import BaseProfile1D
 
-        if not isinstance(new_val, BaseProfile1D):
-            raise TypeError("You may only set the profile property with an XGA profile object.")
+        if new_val is not None and not isinstance(new_val, BaseProfile1D):
+            raise TypeError("You may only set the profile property with an XGA profile object, or None.")
         else:
             self._profile = new_val
 
