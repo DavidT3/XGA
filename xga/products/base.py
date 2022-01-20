@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2022, 12:25. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2022, 15:13. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -788,7 +788,11 @@ class BaseProfile1D:
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
         #  we try maximum likelihood, and if that fails then we fall back on the default start parameters in the
         #  model.
-        curve_fit_model, success = self.nlls_fit(deepcopy(model), 10, show_warn=False)
+        # Making a copy of the model, and setting the profile to None otherwise the allegiance check gets very upset
+        curve_fit_model = deepcopy(model)
+        curve_fit_model.profile = None
+
+        curve_fit_model, success = self.nlls_fit(curve_fit_model, 10, show_warn=False)
         if success or curve_fit_model.fit_warning == "Very large parameter uncertainties":
             base_start_pars = np.array([p.value for p in curve_fit_model.model_pars])
         else:
@@ -937,6 +941,9 @@ class BaseProfile1D:
 
         # And finally storing the fit method used in the model itself
         model.fit_method = "mcmc"
+
+        # Explicitly deleting the curve fit model, just to be safe
+        del curve_fit_model
 
         return model, success
 
