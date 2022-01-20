@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/06/2021, 14:29. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2022, 15:07. Copyright (c) David J Turner
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -154,6 +154,12 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # I'm going to store any volume integral results within the model itself
         self._vol_ints = {'pars': {}, 'par_dists': {}}
+
+        # This attribute stores a reference to a profile that a model instance has been used to fit. If the model
+        #  exists in isolation and hasn't been fit through a profile fit() method then it will remain None, but
+        #  otherwise I'm storing the profile to avoid one model being fit to two different profiles accidentally.
+        #  The BaseProfile1D internal method _model_allegiance sets this
+        self._profile = None
 
     def __call__(self, x: Quantity, use_par_dist: bool = False) -> Quantity:
         """
@@ -1047,8 +1053,31 @@ class BaseModel1D(metaclass=ABCMeta):
         """
         self._success = new_val
 
+    @property
+    def profile(self):
+        """
+        The profile that this model has been fit to.
 
+        :return: The profile object that this has been fit to, if no fit has been performed then this property
+            will return None.
+        :rtype: BaseProfile1D
+        """
+        return self._profile
 
+    @profile.setter
+    def profile(self, new_val):
+        """
+        The property setter for the profile that this model has been fit to.
+
+        :param BaseProfile1D new_val: A profile object that this model has been fit to.
+        """
+        # Have to do this here to avoid circular import errors
+        from ..products import BaseProfile1D
+
+        if new_val is not None and not isinstance(new_val, BaseProfile1D):
+            raise TypeError("You may only set the profile property with an XGA profile object, or None.")
+        else:
+            self._profile = new_val
 
 
 

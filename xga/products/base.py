@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/08/2021, 09:32. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2022, 15:13. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -705,6 +705,22 @@ class BaseProfile1D:
 
         self._save_path = None
 
+    def _model_allegiance(self, model: BaseModel1D):
+        """
+        This internal method with a silly name just checks whether a model instance has already been associated
+        with a profile other than this one, or if it has any association with a profile. If there is an association
+        with another profile then it throws an error, as that that can cause serious problems that have caught me
+        out before (see issue #742). If there is no association it sets the models profile attribute.
+
+        :param BaseModel1D model: An instance of a BaseModel1D class (or subclass) to check.
+        """
+        if model.profile is not None and model.profile != self:
+            raise ModelNotAssociatedError("The passed model instance is already associated with another profile, and"
+                                          " as such cannot be fit to this one. Ensure that individual model instances"
+                                          " are declared for each profile you are fitting.")
+        elif model.profile is None:
+            model.profile = self
+
     def emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
                   num_samples: int) -> Tuple[BaseModel1D, bool]:
         """
@@ -714,7 +730,7 @@ class BaseProfile1D:
         likelihood estimate is run, and if that fails the method will revert to using the start parameters
         set in the model instance.
 
-        :param BaseModel1D model: The model to be fit to the data.
+        :param BaseModel1D model: The model to be fit to the data, you cannot pass a model name for this argument.
         :param int num_steps: The number of steps each chain should take.
         :param int num_walkers: The number of walkers to be run for the ensemble sampler.
         :param bool progress_bar: Whether a progress bar should be displayed.
@@ -744,6 +760,17 @@ class BaseProfile1D:
 
             return to_replace_arr
 
+        # The very first thing I do is to check whether the passed model is ACTUALLY a model or a model name - I
+        #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
+        #  allows either an instance or a model name.
+        if not isinstance(model, BaseModel1D):
+            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
+                            "rather than a model name.")
+        # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
+        #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
+        else:
+            self._model_allegiance(model)
+
         # I'm just defining these here so that the lines don't get too long for PEP standards
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
@@ -761,7 +788,11 @@ class BaseProfile1D:
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
         #  we try maximum likelihood, and if that fails then we fall back on the default start parameters in the
         #  model.
-        curve_fit_model, success = self.nlls_fit(deepcopy(model), 10, show_warn=False)
+        # Making a copy of the model, and setting the profile to None otherwise the allegiance check gets very upset
+        curve_fit_model = deepcopy(model)
+        curve_fit_model.profile = None
+
+        curve_fit_model, success = self.nlls_fit(curve_fit_model, 10, show_warn=False)
         if success or curve_fit_model.fit_warning == "Very large parameter uncertainties":
             base_start_pars = np.array([p.value for p in curve_fit_model.model_pars])
         else:
@@ -911,6 +942,9 @@ class BaseProfile1D:
         # And finally storing the fit method used in the model itself
         model.fit_method = "mcmc"
 
+        # Explicitly deleting the curve fit model, just to be safe
+        del curve_fit_model
+
         return model, success
 
     def nlls_fit(self, model: BaseModel1D, num_samples: int, show_warn: bool) -> Tuple[BaseModel1D, bool]:
@@ -927,6 +961,17 @@ class BaseProfile1D:
             fit was successful or not.
         :rtype: Tuple[BaseModel1D, bool]
         """
+        # The very first thing I do is to check whether the passed model is ACTUALLY a model or a model name - I
+        #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
+        #  allows either an instance or a model name.
+        if not isinstance(model, BaseModel1D):
+            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
+                            "rather than a model name.")
+        # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
+        #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
+        else:
+            self._model_allegiance(model)
+
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
         rads = self.fit_radii.copy().value
@@ -1010,6 +1055,17 @@ class BaseProfile1D:
         # TODO REMEMBER TO USE THE FIT RADII PROPERTY
         # Tell the model whether we think the fit was successful or not
         # model.success = success
+
+        # The very first thing I do is to check whether the passed model is ACTUALLY a model or a model name - I
+        #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
+        #  allows either an instance or a model name.
+        if not isinstance(model, BaseModel1D):
+            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
+                            "rather than a model name.")
+        # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
+        #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
+        else:
+            self._model_allegiance(model)
 
         # And finally storing the fit method used in the model itself
         model.fit_method = "odr"
