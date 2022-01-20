@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2022, 12:19. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/01/2022, 12:25. Copyright (c) David J Turner
 
 import inspect
 import os
@@ -760,6 +760,17 @@ class BaseProfile1D:
 
             return to_replace_arr
 
+        # The very first thing I do is to check whether the passed model is ACTUALLY a model or a model name - I
+        #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
+        #  allows either an instance or a model name.
+        if not isinstance(model, BaseModel1D):
+            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
+                            "rather than a model name.")
+        # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
+        #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
+        else:
+            self._model_allegiance(model)
+
         # I'm just defining these here so that the lines don't get too long for PEP standards
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
@@ -943,6 +954,17 @@ class BaseProfile1D:
             fit was successful or not.
         :rtype: Tuple[BaseModel1D, bool]
         """
+        # The very first thing I do is to check whether the passed model is ACTUALLY a model or a model name - I
+        #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
+        #  allows either an instance or a model name.
+        if not isinstance(model, BaseModel1D):
+            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
+                            "rather than a model name.")
+        # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
+        #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
+        else:
+            self._model_allegiance(model)
+
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
         rads = self.fit_radii.copy().value
@@ -1026,6 +1048,17 @@ class BaseProfile1D:
         # TODO REMEMBER TO USE THE FIT RADII PROPERTY
         # Tell the model whether we think the fit was successful or not
         # model.success = success
+
+        # The very first thing I do is to check whether the passed model is ACTUALLY a model or a model name - I
+        #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
+        #  allows either an instance or a model name.
+        if not isinstance(model, BaseModel1D):
+            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
+                            "rather than a model name.")
+        # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
+        #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
+        else:
+            self._model_allegiance(model)
 
         # And finally storing the fit method used in the model itself
         model.fit_method = "odr"
