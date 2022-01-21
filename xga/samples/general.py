@@ -1,5 +1,7 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2021, 13:34. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/01/2022, 13:39. Copyright (c) David J Turner
+
+from warnings import warn
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -7,7 +9,7 @@ from astropy.units import Quantity, Unit
 from tqdm import tqdm
 
 from .base import BaseSample
-from ..exceptions import NoValidObservationsError
+from ..exceptions import NoValidObservationsError, PeakConvergenceFailedError
 from ..sources.general import PointSource, ExtendedSource
 
 
@@ -103,6 +105,13 @@ class ExtendedSample(BaseSample):
                     else:
                         self._custom_radii.append(np.NaN)
                         self._cr_unit = Unit('')
+                    final_names.append(n)
+                except PeakConvergenceFailedError:
+                    warn("The peak finding algorithm has not converged for {}, using user "
+                         "supplied coordinates".format(n))
+                    self._sources[n] = ExtendedSource(r, d, z, n, cr, False, peak_lo_en, peak_hi_en,
+                                                      back_inn_rad_factor, back_out_rad_factor, cosmology, True,
+                                                      load_fits, peak_find_method)
                     final_names.append(n)
                 except NoValidObservationsError:
                     self._failed_sources[n] = "CleanedNoMatch"
@@ -239,6 +248,13 @@ class PointSample(BaseSample):
                     # I know this will write to this over and over, but it seems a bit silly to check whether this has
                     #  been set yet when all radii should be forced to be the same unit
                     self._pr_unit = pr.unit
+                    final_names.append(n)
+                except PeakConvergenceFailedError:
+                    warn("The peak finding algorithm has not converged for {}, using user "
+                         "supplied coordinates".format(n))
+                    self._sources[n] = PointSource(r, d, z, n, pr, False, peak_lo_en, peak_hi_en,
+                                                   back_inn_rad_factor, back_out_rad_factor, cosmology, True,
+                                                   load_fits, False)
                     final_names.append(n)
                 except NoValidObservationsError:
                     self._failed_sources[n] = "CleanedNoMatch"
