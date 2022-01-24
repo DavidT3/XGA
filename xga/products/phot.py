@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/01/2022, 13:04. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/01/2022, 18:07. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1842,7 +1842,7 @@ class PSF(Image):
         hi_en = Quantity(100, 'keV')
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en)
         self._prod_type = "psf"
-        self.data_unit = Unit('')
+        self._data_unit = Unit('')
         self._psf_centre = None
         self._psf_model = psf_model
 
