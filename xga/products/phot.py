@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/01/2022, 12:13. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/01/2022, 12:31. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -67,6 +67,8 @@ class Image(BaseProduct):
         self._prod_type = "image"
         self._data = None
         self._header = None
+        # Adding an attribute to tell the product what its data units are, as there are subclasses of Image
+        self._data_unit = Unit("ct")
 
         # This is a flag to let XGA know that the Image object has been PSF corrected
         self._psf_corrected = False
@@ -519,6 +521,16 @@ class Image(BaseProduct):
         """
         del self._data
         self._data = None
+
+    @property
+    def data_unit(self) -> Unit:
+        """
+        The unit of the data associated with this photometric product.
+
+        :return: An astropy unit object describing the units of this objects' data.
+        :rtype: Unit
+        """
+        return self._data_unit
 
     # This one doesn't get a setter, as I require this WCS to not be none in the _read_on_demand method
     @property
