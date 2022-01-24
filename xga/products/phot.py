@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/01/2022, 12:33. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/01/2022, 13:04. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1148,7 +1148,8 @@ class Image(BaseProduct):
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
                            ch_thickness)
-        plt.colorbar(ax.images[0])
+        cbar = plt.colorbar(ax.images[0])
+        cbar.ax.set_label(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
         # Display the image
         plt.show()
@@ -1209,7 +1210,8 @@ class Image(BaseProduct):
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
                            ch_thickness)
-        plt.colorbar(ax.images[0])
+        cbar = plt.colorbar(ax.images[0], label=self.data_unit.to_string('latex'))
+        cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
 
         # Save figure to disk
