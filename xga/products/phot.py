@@ -1,10 +1,10 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/08/2021, 17:28. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/01/2022, 12:13. Copyright (c) David J Turner
 
 import os
 import warnings
-from typing import Tuple, List, Union
 from copy import deepcopy
+from typing import Tuple, List, Union
 
 import numpy as np
 import pandas as pd
@@ -1140,6 +1140,68 @@ class Image(BaseProduct):
         plt.tight_layout()
         # Display the image
         plt.show()
+
+        # Wipe the figure
+        plt.close("all")
+
+    def save_view(self, save_path: str, cross_hair: Quantity = None, mask: np.ndarray = None,
+                  chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, figsize: Tuple = (10, 8),
+                  zoom_in: bool = False, manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
+                  radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
+                  stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
+                  ch_thickness: float = 0.8):
+        """
+        This is entirely equivalent to the view() method, but instead of displaying the view it will save it to
+        a path of your choosing.
+
+        :param str save_path: The path (including file name) where you wish to save the view.
+        :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
+            the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
+            passing two, each row of a quantity is considered to be a separate coordinate pair.
+        :param np.ndarray mask: Allows the user to pass a numpy mask and view the masked
+            data if they so choose.
+        :param np.ndarray chosen_points: A numpy array of a chosen point cluster from a hierarchical peak finder.
+        :param list other_points: A list of numpy arrays of point clusters that weren't chosen by the
+            hierarchical peak finder.
+        :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this method.
+        :param bool zoom_in: Sets whether the figure limits should be set automatically so that borders with no
+            data are reduced.
+        :param tuple manual_zoom_xlims: If set, this will override the automatic zoom in and manually set a part
+            of the x-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+            to be applied.
+        :param tuple manual_zoom_ylims: If set, this will override the automatic zoom in and manually set a part
+            of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
+            lower limit, second the upper limit. Variable zoom_in must still be true for these limits
+            to be applied.
+        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
+            only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
+        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
+            the background value for a given profile, will only be triggered if a cross_hair coordinate is
+            also specified and contains only one coordinate.
+        :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
+        :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
+            to remove artificially bright pixels, default is True.
+        :param bool view_regions: If regions have been associated with this object (either on init or using
+            the 'regions' property setter, should they be displayed. Default is False.
+        :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
+            certain circumstances. Default is 0.8.
+        """
+
+        # Create figure object
+        fig = plt.figure(figsize=figsize)
+
+        # Turns off any ticks and tick labels, we don't want them in an image
+        ax = plt.gca()
+
+        ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
+                           manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
+                           ch_thickness)
+        plt.colorbar(ax.images[0])
+        plt.tight_layout()
+
+        # Save figure to disk
+        plt.savefig(save_path)
 
         # Wipe the figure
         plt.close("all")
