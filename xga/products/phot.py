@@ -1,5 +1,5 @@
 #  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/01/2022, 12:31. Copyright (c) David J Turner
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/01/2022, 12:33. Copyright (c) David J Turner
 
 import os
 import warnings
@@ -1243,6 +1243,8 @@ class ExpMap(Image):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
                          obs_inst_combs=obs_inst_combs)
         self._prod_type = "expmap"
+        # Need to overwrite the data unit attribute set by the Image init
+        self._data_unit = Unit("s")
 
     def get_exp(self, at_coord: Quantity) -> float:
         """
@@ -1316,6 +1318,7 @@ class RateMap(Image):
         super().__init__(xga_image.path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
                          xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1])
         self._prod_type = "ratemap"
+        self._data_unit = Unit("ct/s")
 
         # Reading in the PSF status from the Image passed in
         self._psf_corrected = xga_image.psf_corrected
@@ -1837,6 +1840,7 @@ class PSF(Image):
         hi_en = Quantity(100, 'keV')
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en)
         self._prod_type = "psf"
+        self.data_unit = Unit('')
         self._psf_centre = None
         self._psf_model = psf_model
 
