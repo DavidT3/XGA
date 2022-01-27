@@ -23,7 +23,7 @@ authors:
 affiliations:
   - name: Department of Physics and Astronomy, University of Sussex, Brighton, BN1 9QH, UK
     index: 1
-date: 31 December 2021
+date: 27 January 2022
 bibliography: paper.bib
 ---
 # Summary
@@ -55,12 +55,12 @@ interest. \label{fig:ratemap_mask}](figures/ratemap_crosshair_intmask.png){width
 
 This approach means that the user can quickly and easily complete common analyses without manually searching through 
 large amounts of archival data for relevant observations, thus being left free to focus on extracting the maximum 
-scientific gain. With the advent of new X-ray observatories such as eROSITA (@erosita), XRISM (@xrism), ATHENA (@athena), and 
-Lynx (@lynx), it is the perfect time for a new, open-source, software package that is open for anyone to 
+scientific gain. With the advent of new X-ray observatories such as eROSITA [@erosita], XRISM [@xrism], ATHENA [@athena], and 
+Lynx [@lynx], it is the perfect time for a new, open-source, software package that is open for anyone to 
 use and scrutinise.
 
 # Statement of need
-This module was developed by the XMM Cluster Survey (XCS, @xcsfoundation) to enable simple, interactive, analyses of 
+This module was developed by the XMM Cluster Survey [XCS, @xcsfoundation] to enable simple, interactive, analyses of 
 X-ray sources, from galaxy clusters to AGN, for the whole astronomy community.
 
 One of the chief advantages of this module is that 
@@ -77,7 +77,7 @@ only be used on the command line, and most commands require significant setup an
 useful commands and provides the user with an easy way to generate these products for large samples of 
 objects (which will scale across multiple cores), while taking into account complex factors (such as removing interloper sources) 
 that vary from source to source. To extract useful information from the generated spectra, we implemented a method 
-for fitting models, creating an interface with XSPEC (@xspec), the popular X-ray spectral fitting language. This interface again
+for fitting models, creating an interface with XSPEC [@xspec], the popular X-ray spectral fitting language. This interface again
 provides simplified interaction with the underlying software that can be run simultaneously when multiple sources are
 being analysed at the same time. 
 
@@ -89,15 +89,15 @@ includes the measurement of 3D gas density profiles, 3D temperature profiles, ga
 methods for the measurement of central cluster coordinates and PSF correction of XMM images were also created to enable 
 this, as well as Python classes for various data products (with many useful built in methods). This includes a radial 
 profile class, with built-in viewing methods, and a fitting method based around the `emcee` ensemble MCMC 
-sampler ([@emcee]). The profile 
+sampler [@emcee]. The profile 
 storing and interacting with fitted models; including integration and differentiation methods, inverse abel 
 transforms, and predictions from the model.
 
 # Existing software packages
 To the knowledge of the authors, no software package exists that provides features completely equivalent to 
 XGA, particularly in the open source domain. That is not to say that there are no software tools similar to 
-the module that we have constructed; several research groups including XCS (@xcsmethod), XXL (@xxllt), 
-LoCuSS (@locusshydro), and the cluster group at UC Santa Cruz (@matcha) have developed pipelines to measure 
+the module that we have constructed; several research groups including XCS [@xcsmethod], XXL [@xxllt], 
+LoCuSS [@locusshydro], and the cluster group at UC Santa Cruz [@matcha] have developed pipelines to measure 
 the luminosity and temperature of X-ray emitting galaxy clusters, though these have not been made public. It is 
 also important to note that these pipelines are normally designed to measure a particular aspect of a 
 particular type of X-ray source (galaxy clusters in these cases), and as such they lack the generality and flexibility 
@@ -105,25 +105,25 @@ of `XGA`. Our new software is also designed to be used interactively, as well as
 as these.
 
 Some specific analyses built into `XGA` have comparable open source software packages available; for instance 
-`pyproffit` (@erositagasmass) is a recently released Python module that was designed 
+`pyproffit` [@erositagasmass] is a recently released Python module that was designed 
 for the measurement of gas density from X-ray surface brightness profiles. We do not believe that any existing X-ray 
 analysis module has an equivalent to the source and sample based structure which XGA is built around, or to the 
 product classes that have been written to interact with X-ray data products.
 
-The `XSPEC` (@xspec) interface we have developed for XGA is far less comprehensive than the full Python wrapping 
+The `XSPEC` [@xspec] interface we have developed for XGA is far less comprehensive than the full Python wrapping 
 implemented in the `PyXspec` module, but scales with multiple cores for the analysis of multiple sources 
 simultaneously much more easily. 
 
 # Research projects using XGA
 \texttt{XGA} is stable and appropriate for scientific use, and as such it has been used in several recent pieces of 
 work; this has included an XMM analysis of the eFEDS cluster 
-candidate catalogue (@efedsxcs), where we produced the first temperature calibration between XMM and 
-eROSITA, a multi-wavelength analysis of an ACT selected galaxy cluster (@denisha), and XMM
-follow-up of Dark Energy Survey (DES) variability selected low-mass AGN candidates (Burke et al. (in prep)).
+candidate catalogue [@efedsxcs], where we produced the first temperature calibration between XMM and 
+eROSITA, a multi-wavelength analysis of an ACT selected galaxy cluster [@denisha], and XMM
+follow-up of Dark Energy Survey (DES) variability selected low-mass AGN candidates [@desagn].
 
 There are also several projects that use XGA nearing publication. The first of these is a hydrostatic 
-and gas mass analysis of the redMaPPeR (@redmappersdss) SDSS selected XCS galaxy cluster sample (@sdssxcs) and 
-well as the ACTDR5 (@actdr5) Sunyaev-Zel'dovich (SZ)  selected XCS sample of galaxy clusters. This work also compares commonly measured X-ray properties of clusters 
+and gas mass analysis of the redMaPPeR [@redmappersdss] SDSS selected XCS galaxy cluster sample [@sdssxcs] and 
+well as the ACTDR5 [@actdr5] Sunyaev-Zel'dovich (SZ)  selected XCS sample of galaxy clusters. This work also compares commonly measured X-ray properties of clusters 
 (the X-ray luminosity L$_{\rm{x}}$, and the temperature T$_{\rm{x}}$) both to results from the existing XCS pipeline and from literature, confirming 
 that `XGA` measurements are consistent with previous work. Similar work is being done on a Dark Energy Survey Year 3 (DESY3) optically 
 selected XCS sample of clusters, though this will also include analysis from other XCS tools, and will not be focussed only
