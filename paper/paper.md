@@ -89,7 +89,7 @@ includes the measurement of 3D gas density profiles, 3D temperature profiles, ga
 methods for the measurement of central cluster coordinates and PSF correction of XMM images were also created to enable 
 this, as well as Python classes for various data products (with many useful built in methods). This includes a radial 
 profile class, with built-in viewing methods, and a fitting method based around the `emcee` ensemble MCMC 
-sampler (@emcee). The profile fitting capability also motivated the creation of model class, with methods for 
+sampler ([@emcee]). The profile 
 storing and interacting with fitted models; including integration and differentiation methods, inverse abel 
 transforms, and predictions from the model.
 
