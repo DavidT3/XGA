@@ -23,20 +23,20 @@ authors:
 affiliations:
   - name: Department of Physics and Astronomy, University of Sussex, Brighton, BN1 9QH, UK
     index: 1
-date: 27 January 2022
+date: 28 January 2022
 bibliography: paper.bib
 ---
 # Summary
 X-ray telescopes allow for the investigation of some of the most extreme objects and processes in the 
 Universe; this includes galaxy clusters, active galactic nuclei (where a supermassive black hole at the centre of the 
-galaxy is actively accreting matter), and supernovae remnants. This makes the analysis of X-ray observations very 
-useful for a wide variety of fields in astrophysics and cosmology. Galaxy clusters, for instance, can act as 
+galaxy is actively accreting matter), and supernovae remnants. This makes the analysis of X-ray observations 
+useful for a variety of fields in astrophysics and cosmology. Galaxy clusters, for instance, can act as 
 laboratories for the exploration of many astrophysical processes, as well as providing insight into how the Universe 
 has evolved during its lifetime, as they are excellent tracers of the formation of large scale structure.
 
-![The logo of the \texttt{XGA} module. \label{fig:xga_logo}](figures/quick_xga_logo.png){width=40%}
+[//]: # (![The logo of the \texttt{XGA} module. \label{fig:xga_logo}]&#40;figures/quick_xga_logo.png&#41;{width=40%})
 
-We have developed a new Python module (X-ray: Generate and Analyse, hereafter referred to as \texttt{XGA}) to provide
+We have developed a new Python module (XMM: Generate and Analyse, hereafter referred to as \texttt{XGA}) to provide
 interactive and automated analyses of X-ray emitting sources. `XGA` is centered around `source` and `sample` classes, 
 and the concept of making all available data and simple analyses easily accessible . These `source` classes all have 
 different properties and methods, which either relate to relevant properties of or perform measurements which are only 
@@ -49,9 +49,11 @@ methods for coordinate conversion, and for measuring the peak of the X-ray emiss
 We also provide classes for interacting with spectra (both global and annular), PSFs, and a base class for XGA profile
 objects, which allow for the storage, fitting, and viewing of radial profiles generated through XGA processes.
 
-![The output of the view method of a RateMap instance where a mask to remove interloper sources has been applied, with 
-an added crosshair to indicate coordinates of 
-interest. \label{fig:ratemap_mask}](figures/ratemap_crosshair_intmask.png){width=80%}
+[//]: # (![The output of the view method of a RateMap instance where a mask to remove interloper sources has been applied, with )
+
+[//]: # (an added crosshair to indicate coordinates of )
+
+[//]: # (interest. \label{fig:ratemap_mask}]&#40;figures/ratemap_crosshair_intmask.png&#41;{width=80%})
 
 This approach means that the user can quickly and easily complete common analyses without manually searching through 
 large amounts of archival data for relevant observations, thus being left free to focus on extracting the maximum 
@@ -72,6 +74,8 @@ case of extended sources, how these properties vary spatially. Similar procedure
 available, where images (and merged images from all available data for a given source) can be easily generated en 
 masse, then combined with masks automatically generated from supplied region files to perform photometric analyses.
 
+{\color{red} Talk about products and more specific new methods?}
+
 Software to generate X-ray data products is supplied by the telescope teams, but in the case of XMM-Newton it can 
 only be used on the command line, and most commands require significant setup and configuration. XGA wraps the most 
 useful commands and provides the user with an easy way to generate these products for large samples of 
@@ -79,19 +83,18 @@ objects (which will scale across multiple cores), while taking into account comp
 that vary from source to source. To extract useful information from the generated spectra, we implemented a method 
 for fitting models, creating an interface with XSPEC [@xspec], the popular X-ray spectral fitting language. This interface again
 provides simplified interaction with the underlying software that can be run simultaneously when multiple sources are
-being analysed at the same time. 
-
-
+being analysed at the same time.
 
 Many more features are built into XGA, enabled by the source based structure, as well as the product generation 
-and XSPEC interface. One of these features is the ability to measure hydrostatic galaxy cluster masses; this 
-includes the measurement of 3D gas density profiles, 3D temperature profiles, gas mass, and total mass profiles. New 
-methods for the measurement of central cluster coordinates and PSF correction of XMM images were also created to enable 
-this, as well as Python classes for various data products (with many useful built in methods). This includes a radial 
-profile class, with built-in viewing methods, and a fitting method based around the `emcee` ensemble MCMC 
-sampler [@emcee]. The profile 
-storing and interacting with fitted models; including integration and differentiation methods, inverse abel 
-transforms, and predictions from the model.
+and XSPEC interface. This includes a set of profile classs, with built-in viewing methods, and a fitting method based 
+around the `emcee` ensemble MCMC sampler [@emcee]. Profiles also support storing and interacting with fitted 
+models; including integration and differentiation methods, inverse abel transforms, and predictions from the model. 
+An example of the utility of these profiles is the galaxy cluster hydrostatic mass measurement feature; this 
+requires the measurement of 3D gas density profiles, 3D temperature profiles, gas mass, and total mass profiles. 
+
+[//]: # (It also includes new methods for the measurement of central cluster coordinates, the PSF correction of XMM images, and )
+
+[//]: # (the stacking of )
 
 # Existing software packages
 To the knowledge of the authors, no software package exists that provides features completely equivalent to 
@@ -136,7 +139,7 @@ the point source class, the `XSPEC` interface, and the upper limit luminosity fu
 DT, KR, and PG acknowledge support from the UK Science and Technology Facilities Council via grants ST/P006760/1 (DT), 
 ST/P000525/1 and ST/T000473/1 (PG, KR).
 
-David J. Turner would like to thank Aswin P. Vijayan, Lucas Porth, Tim Lingard, and Reese Wilkinson for useful 
+David J. Turner would like to thank Aswin P. Vijayan, Lucas Porth, and Tim Lingard for useful 
 discussions during the course of writing this module.
 
 # References
