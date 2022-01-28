@@ -89,7 +89,7 @@ models; including integration and differentiation methods, inverse abel transfor
 An example of the utility of these profiles is the galaxy cluster hydrostatic mass measurement feature; this 
 requires the measurement of 3D gas density profiles, 3D temperature profiles, gas mass, and total mass profiles. 
 
-
+![A flowchart giving a brief overview of \texttt{XGA} \label{fig:flowchart}](figures/XGA%20Flowchart.png)
 
 # Existing software packages
 To the knowledge of the authors, no software package exists that provides features completely equivalent to 
