@@ -34,7 +34,6 @@ useful for a variety of fields in astrophysics and cosmology. Galaxy clusters, f
 laboratories for the exploration of many astrophysical processes, as well as providing insight into how the Universe 
 has evolved during its lifetime, as they are excellent tracers of the formation of large scale structure.
 
-[//]: # (![The logo of the \texttt{XGA} module. \label{fig:xga_logo}]&#40;figures/quick_xga_logo.png&#41;{width=40%})
 
 We have developed a new Python module (XMM: Generate and Analyse, hereafter referred to as \texttt{XGA}) to provide
 interactive and automated analyses of X-ray emitting sources. `XGA` is centered around `source` and `sample` classes, 
@@ -49,11 +48,6 @@ methods for coordinate conversion, and for measuring the peak of the X-ray emiss
 We also provide classes for interacting with spectra (both global and annular), PSFs, and a base class for XGA profile
 objects, which allow for the storage, fitting, and viewing of radial profiles generated through XGA processes.
 
-[//]: # (![The output of the view method of a RateMap instance where a mask to remove interloper sources has been applied, with )
-
-[//]: # (an added crosshair to indicate coordinates of )
-
-[//]: # (interest. \label{fig:ratemap_mask}]&#40;figures/ratemap_crosshair_intmask.png&#41;{width=80%})
 
 This approach means that the user can quickly and easily complete common analyses without manually searching through 
 large amounts of archival data for relevant observations, thus being left free to focus on extracting the maximum 
@@ -74,6 +68,7 @@ case of extended sources, how these properties vary spatially. Similar procedure
 available, where images (and merged images from all available data for a given source) can be easily generated en 
 masse, then combined with masks automatically generated from supplied region files to perform photometric analyses.
 
+{\color{red} Talk about products and more specific new methods?}
 
 Software to generate X-ray data products is supplied by the telescope teams, but in the case of XMM-Newton it can 
 only be used on the command line, and most commands require significant setup and configuration. XGA wraps the most 
@@ -91,9 +86,7 @@ models; including integration and differentiation methods, inverse abel transfor
 An example of the utility of these profiles is the galaxy cluster hydrostatic mass measurement feature; this 
 requires the measurement of 3D gas density profiles, 3D temperature profiles, gas mass, and total mass profiles. 
 
-[//]: # (It also includes new methods for the measurement of central cluster coordinates, the PSF correction of XMM images, and )
 
-[//]: # (the stacking of )
 
 # Existing software packages
 To the knowledge of the authors, no software package exists that provides features completely equivalent to 
