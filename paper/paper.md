@@ -28,22 +28,21 @@ bibliography: paper.bib
 ---
 
 # Summary
+The XMM Cluster Survey [XCS, @xcsfoundation] have developed a new Python module (X-ray: Generate and Analyse, hereafter 
+referred to as \texttt{XGA}) to provide interactive and automated analyses of X-ray emitting sources observed by the 
+_XMM_-Newton space telescope. \texttt{XGA} is centered around the concept of making all available data easily accessible 
+and analysable; the user provides information on the source they want to investigate and \texttt{XGA} will then find 
+all relevant observations and generate all the required date products. This approach means that the user can quickly 
+and easily complete common analyses without manually searching through large amounts of archival data for relevant 
+observations, thus being left free to focus on extracting the maximum scientific gain. With the advent of new X-ray 
+observatories such as eROSITA [@erosita], XRISM [@xrism], ATHENA [@athena], and Lynx [@lynx], it is the perfect time 
+for a new, open-source, software package that is open for anyone to use and scrutinise.
+
+# Statement of need
 X-ray telescopes allow for the investigation of some of the most extreme objects and processes in the 
 Universe; this includes galaxy clusters, active galactic nuclei (AGN), and X-ray emitting stars. This makes the analysis 
 of X-ray observations useful for a variety of fields in astrophysics and cosmology. Galaxy clusters are useful as 
 astrophysical laboratories, and provide insight into how the Universe has evolved during its lifetime.
-
-We have developed a new Python module (X-ray: Generate and Analyse, hereafter referred to as \texttt{XGA}) to provide
-interactive and automated analyses of X-ray emitting sources observed by the _XMM_-Newton space telescope. \texttt{XGA} 
-is centered around the concept of making all available data easily accessible and analysable; the user provides 
-information on the source they want to investigate and \texttt{XGA} will then find all relevant observations and 
-generate all the required date products. This approach means that the user can quickly and easily complete common 
-analyses without manually searching through large amounts of archival data for relevant observations, thus being left 
-free to focus on extracting the maximum scientific gain. With the advent of new X-ray observatories such as 
-eROSITA [@erosita], XRISM [@xrism], ATHENA [@athena], and Lynx [@lynx], it is the perfect time for a new, open-source, 
-software package that is open for anyone to use and scrutinise.
-
-# Statement of need
 
 is centered around `source` and `sample` classes,  Different `source` classes, which represent different types of X-ray emitting astrophysical objects, all 
 have different properties and methods. These either relate to relevant properties of or perform measurements which are only 
@@ -58,8 +57,7 @@ with and analysing spectra, both g
 , PSFs, and a base class for \texttt{XGA} profile
 objects, which allow for the storage, fitting, and viewing of radial profiles generated through \texttt{XGA} processes.
 
-This module was developed by the XMM Cluster Survey [XCS, @xcsfoundation] to enable simple, interactive, analyses of 
-X-ray sources, from galaxy clusters to AGN, for the whole astronomy community.
+
 
 One of the chief advantages of this module is that 
 it simplifies the process of generating the data products which are required for most work involving X-ray 
