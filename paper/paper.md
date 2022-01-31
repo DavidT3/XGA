@@ -1,5 +1,5 @@
 ---
-title: '\texttt{XGA}: A module for the large-scale scientific exploitation of X-ray data'
+title: '\texttt{XGA}: A module for the large-scale scientific exploitation of archival X-ray astronomy data'
 tags:
   - Python
   - Astronomy
@@ -59,37 +59,32 @@ _XMM_ data products for large samples of objects (which will scale across multip
 complex factors (such as removing interloper sources) that vary from source to source.
 
 # Features
-
-We can use \texttt{XGA} to investigate both average properties and, in the 
-case of extended sources, how these properties vary spatially. Similar procedures for image based analysis are also 
-available, where images (and merged images from all available data for a given source) can be easily generated en 
-masse, then combined with masks automatically generated from supplied region files to perform photometric analyses.
-
-is centered around `source` and `sample` classes,  Different `source` classes, which represent different types of X-ray emitting astrophysical objects, all 
-have different properties and methods. These either relate to relevant properties of or perform measurements which are only 
-relevant to that type of astronomical source, with some properties/methods being common to all sources.
+\texttt{XGA} is centered around `source` and `sample` classes,  Different `source` classes, which represent different 
+types of X-ray emitting astrophysical objects, all have different properties and methods. These either relate to 
+relevant properties of or perform measurements which are only relevant to that type of astronomical source, with some 
+properties/methods being common to all sources.
 
 \texttt{XGA} also contains `product` classes, which provide interfaces to X-ray data products, with built-in methods for 
 analysis, manipulation, and visualisation. The `RateMap` (a count rate map of a particular observation) class for 
 instance includes view methods (a demonstration of masked views is shown in Figure \autoref{fig:ratemap_mask}), methods 
 for coordinate conversion, and for measuring the peak of the X-ray emission. We also provide classes for interacting 
-with and analysing spectra, both g
+with and analysing spectra (`Spectrum` and `AnnularSpectra`), both global and annular; as such we can use \texttt{XGA} 
+to investigate both average properties and, in the case of extended sources, how these properties vary spatially. Similar procedures for image 
+based analysis are also available, where images (and merged images from all available data for a given source) can be 
+easily generated en masse, then combined with masks automatically generated from supplied region files to perform 
+photometric analyses.
 
-, PSFs, and a base class for \texttt{XGA} profile
-objects, which allow for the storage, fitting, and viewing of radial profiles generated through \texttt{XGA} processes.
-
-
-To extract useful information from the generated spectra, we implemented a method 
-for fitting models, creating an interface with XSPEC [@xspec], the popular X-ray spectral fitting language. This interface again
-provides simplified interaction with the underlying software that can be run simultaneously when multiple sources are
-being analysed at the same time.
-
-Many more features are built into \texttt{XGA}, enabled by the source based structure, as well as the product generation 
-and XSPEC interface. This includes a set of profile classes, with built-in viewing methods, and a fitting method based 
+We also include a set of profile classes, with built-in viewing methods, and a fitting method based 
 around the `emcee` ensemble MCMC sampler [@emcee]. Profiles also support storing and interacting with fitted 
 models; including integration and differentiation methods, inverse abel transforms, and predictions from the model. 
 An example of the utility of these profiles is the galaxy cluster hydrostatic mass measurement feature; this 
-requires the measurement of 3D gas density profiles, 3D temperature profiles, gas mass, and total mass profiles. 
+requires the measurement of 3D gas density profiles, 3D temperature profiles, gas mass, and total mass profiles.
+
+To extract useful information from the generated spectra, we implemented a method 
+for fitting models, creating an interface with XSPEC [@xspec], the popular X-ray spectral fitting language. This 
+interface includes the ability to fit XSPEC models (e.g. plasma emission and blackbody) and simplifies interaction with 
+the underlying software and data by automatically performing simultaneous fits with all available data. Fits also can 
+be run simultaneously when multiple sources are being analysed at the same time.
 
 ![A flowchart giving a brief overview of \texttt{XGA} \label{fig:flowchart}](figures/xga_flowchart.png)
 
@@ -123,9 +118,10 @@ follow-up of Dark Energy Survey (DES) variability selected low-mass AGN candidat
 
 There are also several projects that use \texttt{XGA} nearing publication. The first of these is a hydrostatic 
 and gas mass analysis of the redMaPPeR [@redmappersdss] SDSS selected XCS galaxy cluster sample [@sdssxcs] and 
-well as the ACTDR5 [@actdr5] Sunyaev-Zel'dovich (SZ) selected XCS sample of galaxy clusters. This work also compares commonly measured X-ray properties of clusters 
-(the X-ray luminosity L$_{\rm{x}}$, and the temperature T$_{\rm{x}}$) both to results from the existing XCS pipeline and from literature, confirming 
-that \texttt{XGA} measurements are consistent with previous work. Similar work is being done on a Dark Energy Survey Year 3 (DESY3) optically 
+well as the ACTDR5 [@actdr5] Sunyaev-Zel'dovich (SZ) selected XCS sample of galaxy clusters. This work also compares 
+commonly measured X-ray properties of clusters (the X-ray luminosity L$_{\rm{x}}$, and the temperature T$_{\rm{x}}$) 
+both to results from the existing XCS pipeline and from literature, confirming that \texttt{XGA} measurements are 
+consistent with previous work. Similar work is being done on a Dark Energy Survey Year 3 (DESY3) optically 
 selected XCS sample of clusters, though this will also include analysis from other XCS tools, and will not be focussed only
 on mass measurements. \texttt{XGA}'s ability to stack and combine X-ray surface brightness profiles is currently being 
 used, in combination with weak lensing information from DES, to look for signs of modified gravity in galaxy 
