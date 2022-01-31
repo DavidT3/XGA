@@ -104,11 +104,11 @@ for the measurement of gas density from X-ray surface brightness profiles. We do
 analysis module has an equivalent to the source and sample based structure which \texttt{XGA} is built around, or to the 
 product classes that have been written to interact with X-ray data products.
 
-![A flowchart giving a brief overview of \texttt{XGA} \label{fig:flowchart}](figures/xga_flowchart.png)
-
 The `XSPEC` [@xspec] interface we have developed for \texttt{XGA} is far less comprehensive than the full Python wrapping 
 implemented in the `PyXspec` module, but scales with multiple cores for the analysis of multiple sources 
 simultaneously much more easily. 
+
+![A flowchart giving a brief overview of \texttt{XGA} \label{fig:flowchart}](figures/xga_flowchart.png)
 
 # Research projects using \texttt{XGA}
 \texttt{XGA} is stable and appropriate for scientific use, and as such it has been used in several recent pieces of 
