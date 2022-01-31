@@ -58,6 +58,8 @@ often the case due to the large archive of data available. \texttt{XGA} provides
 _XMM_ data products for large samples of objects (which will scale across multiple cores), while taking into account 
 complex factors (such as removing interloper sources) that vary from source to source.
 
+![Testing testing\label{fig:rtspec}](figures/combo_rt_spec_a907.png)
+
 # Features
 \texttt{XGA} is centered around `source` and `sample` classes,  Different `source` classes, which represent different 
 types of X-ray emitting astrophysical objects, all have different properties and methods. These either relate to 
