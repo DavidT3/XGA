@@ -58,7 +58,7 @@ often the case due to the large archive of data available. \texttt{XGA} provides
 _XMM_ data products for large samples of objects (which will scale across multiple cores), while taking into account 
 complex factors (such as removing interloper sources) that vary from source to source.
 
-![Testing testing\label{fig:rtspec}](figures/combo_rt_spec_a907.png)
+![Testing testing \label{fig:rtspec}](figures/combo_rt_spec_a907.png)
 
 # Features
 \texttt{XGA} is centered around `source` and `sample` classes,  Different `source` classes, which represent different 
@@ -68,10 +68,11 @@ properties/methods being common to all sources.
 
 \texttt{XGA} also contains `product` classes, which provide interfaces to X-ray data products, with built-in methods for 
 analysis, manipulation, and visualisation. The `RateMap` (a count rate map of a particular observation) class for 
-instance includes view methods (a demonstration of masked views is shown in Figure \autoref{fig:ratemap_mask}), methods 
+instance includes view methods (left hand side of Figure \autoref{fig:rtspec}), methods 
 for coordinate conversion, and for measuring the peak of the X-ray emission. We also provide classes for interacting 
-with and analysing spectra (`Spectrum` and `AnnularSpectra`), both global and annular; as such we can use \texttt{XGA} 
-to investigate both average properties and, in the case of extended sources, how these properties vary spatially. Similar procedures for image 
+with, analysing, and viewing spectra (`Spectrum`, see right hand side of Figure \autoref{fig:rtspec} and 
+`AnnularSpectra`), both global and annular; as such we can use \texttt{XGA} to investigate both average properties 
+and, in the case of extended sources, how these properties vary spatially. Similar procedures for image 
 based analysis are also available, where images (and merged images from all available data for a given source) can be 
 easily generated en masse, then combined with masks automatically generated from supplied region files to perform 
 photometric analyses.
