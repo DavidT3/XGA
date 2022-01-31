@@ -29,23 +29,19 @@ bibliography: paper.bib
 
 # Summary
 X-ray telescopes allow for the investigation of some of the most extreme objects and processes in the 
-Universe; this includes galaxy clusters, active galactic nuclei (where a supermassive black hole at the centre of the 
-galaxy is actively accreting matter), and supernovae remnants. This makes the analysis of X-ray observations 
-useful for a variety of fields in astrophysics and cosmology. Galaxy clusters, for instance, can act as 
-laboratories for the exploration of many astrophysical processes, as well as providing insight into how the Universe 
-has evolved during its lifetime, as they are excellent tracers of the formation of large scale structure.
+Universe; this includes galaxy clusters, active galactic nuclei (AGN), and X-ray emitting stars. This makes the analysis 
+of X-ray observations useful for a variety of fields in astrophysics and cosmology. Galaxy clusters are useful as 
+astrophysical laboratories, and provide insight into how the Universe has evolved during its lifetime.
 
 We have developed a new Python module (X-ray: Generate and Analyse, hereafter referred to as \texttt{XGA}) to provide
 interactive and automated analyses of X-ray emitting sources observed by the _XMM_-Newton space telescope. \texttt{XGA} 
 is centered around the concept of making all available data easily accessible and analysable; the user provides 
 information on the source they want to investigate and \texttt{XGA} will then find all relevant observations and 
-generate all the required date products.
-
-This approach means that the user can quickly and easily complete common analyses without manually searching through 
-large amounts of archival data for relevant observations, thus being left free to focus on extracting the maximum 
-scientific gain. With the advent of new X-ray observatories such as eROSITA [@erosita], XRISM [@xrism], ATHENA [@athena], and 
-Lynx [@lynx], it is the perfect time for a new, open-source, software package that is open for anyone to 
-use and scrutinise.
+generate all the required date products. This approach means that the user can quickly and easily complete common 
+analyses without manually searching through large amounts of archival data for relevant observations, thus being left 
+free to focus on extracting the maximum scientific gain. With the advent of new X-ray observatories such as 
+eROSITA [@erosita], XRISM [@xrism], ATHENA [@athena], and Lynx [@lynx], it is the perfect time for a new, open-source, 
+software package that is open for anyone to use and scrutinise.
 
 # Statement of need
 
