@@ -23,7 +23,7 @@ authors:
 affiliations:
   - name: Department of Physics and Astronomy, University of Sussex, Brighton, BN1 9QH, UK
     index: 1
-date: 28 January 2022
+date: 31 January 2022
 bibliography: paper.bib
 ---
 
@@ -35,8 +35,7 @@ useful for a variety of fields in astrophysics and cosmology. Galaxy clusters, f
 laboratories for the exploration of many astrophysical processes, as well as providing insight into how the Universe 
 has evolved during its lifetime, as they are excellent tracers of the formation of large scale structure.
 
-
-We have developed a new Python module (XMM: Generate and Analyse, hereafter referred to as \texttt{XGA}) to provide
+We have developed a new Python module (X-ray: Generate and Analyse, hereafter referred to as \texttt{XGA}) to provide
 interactive and automated analyses of X-ray emitting sources. \texttt{XGA} is centered around `source` and `sample` classes, 
 and the concept of making all available data and simple analyses easily accessible . These `source` classes all have 
 different properties and methods, which either relate to relevant properties of or perform measurements which are only 
@@ -68,6 +67,8 @@ auxiliary files that are required) can be created. We can use \texttt{XGA} to in
 case of extended sources, how these properties vary spatially. Similar procedures for image based analysis are also 
 available, where images (and merged images from all available data for a given source) can be easily generated en 
 masse, then combined with masks automatically generated from supplied region files to perform photometric analyses.
+
+![A flowchart giving a brief overview of \texttt{XGA} \label{fig:flowchart}](figures/xga_flowchart.png)
 
 Software to generate X-ray data products is supplied by the telescope teams, but in the case of _XMM_-Newton it can 
 only be used on the command line, and most commands require significant setup and configuration. \texttt{XGA} wraps the most 
@@ -105,8 +106,6 @@ product classes that have been written to interact with X-ray data products.
 The `XSPEC` [@xspec] interface we have developed for \texttt{XGA} is far less comprehensive than the full Python wrapping 
 implemented in the `PyXspec` module, but scales with multiple cores for the analysis of multiple sources 
 simultaneously much more easily. 
-
-![A flowchart giving a brief overview of \texttt{XGA} \label{fig:flowchart}](figures/xga_flowchart.png)
 
 # Research projects using \texttt{XGA}
 \texttt{XGA} is stable and appropriate for scientific use, and as such it has been used in several recent pieces of 
