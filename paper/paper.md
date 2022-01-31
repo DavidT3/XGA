@@ -58,7 +58,11 @@ often the case due to the large archive of data available. \texttt{XGA} provides
 _XMM_ data products for large samples of objects (which will scale across multiple cores), while taking into account 
 complex factors (such as removing interloper sources) that vary from source to source.
 
-![Testing testing \label{fig:rtspec}](figures/combo_rt_spec_a907.png)
+![Demonstration of the view methods of the `RateMap` and `Spectrum` classes, when applied to the Abell 907 galaxy 
+cluster. Data from the _XMM_ EPIC-PN instrument of 0404910601 is used. _Left_: A count-rate map with a mask that 
+removes contaminant sources (using XCS region information) and applies an $R_{500}$ aperture. _Right_: A spectrum 
+generated for the $R_{500}$ region with contaminants removed, and fit with an absorbed plasma emission model using 
+XSPEC. \label{fig:rtspec}](figures/combo_rt_spec_a907.png)
 
 # Features
 \texttt{XGA} is centered around `source` and `sample` classes,  Different `source` classes, which represent different 
@@ -137,7 +141,7 @@ the point source class, the `XSPEC` interface, and the upper limit luminosity fu
 DT, KR, and PG acknowledge support from the UK Science and Technology Facilities Council via grants ST/P006760/1 (DT), 
 ST/P000525/1 and ST/T000473/1 (PG, KR).
 
-David J. Turner would like to thank Aswin P. Vijayan, Lucas Porth, and Tim Lingard for useful 
-discussions during the course of writing this module.
+David J. Turner would like to thank Aswin P. Vijayan, Lucas Porth, and Tim Lingard for useful discussions during the 
+course of writing this module.
 
 # References
