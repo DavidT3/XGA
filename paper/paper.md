@@ -8,7 +8,7 @@ tags:
   - Galaxy clusters
   - XMM
 authors:
-  - name: David J. Turner
+  - name: David J. Turner[^*]
     orcid: 0000-0001-9658-1396
     affiliation: 1
   - name: Paul A. Giles
@@ -58,6 +58,8 @@ often the case due to the large archive of data available. \texttt{XGA} provides
 _XMM_ data products for large samples of objects (which will scale across multiple cores), while taking into account 
 complex factors (such as removing interloper sources) that vary from source to source.
 
+[^*]: david.turner@sussex.ac.uk
+
 ![Demonstration of the view methods of the `RateMap` and `Spectrum` classes, when applied to the Abell 907 galaxy 
 cluster. Data from the _XMM_ EPIC-PN instrument of 0404910601 is used. _Left_: A count-rate map with a mask that 
 removes contaminant sources (using XCS region information) and applies an $R_{500}$ aperture. _Right_: A spectrum 
@@ -72,9 +74,9 @@ properties/methods being common to all sources.
 
 \texttt{XGA} also contains `product` classes, which provide interfaces to X-ray data products, with built-in methods for 
 analysis, manipulation, and visualisation. The `RateMap` (a count rate map of a particular observation) class for 
-instance includes view methods (left hand side of Figure \autoref{fig:rtspec}), methods 
+instance includes view methods (left hand side of \autoref{fig:rtspec}), methods 
 for coordinate conversion, and for measuring the peak of the X-ray emission. We also provide classes for interacting 
-with, analysing, and viewing spectra (`Spectrum`, see right hand side of Figure \autoref{fig:rtspec} and 
+with, analysing, and viewing spectra (`Spectrum`, see right hand side of \autoref{fig:rtspec} and 
 `AnnularSpectra`), both global and annular; as such we can use \texttt{XGA} to investigate both average properties 
 and, in the case of extended sources, how these properties vary spatially. Similar procedures for image 
 based analysis are also available, where images (and merged images from all available data for a given source) can be 
@@ -93,7 +95,7 @@ interface includes the ability to fit XSPEC models (e.g. plasma emission and bla
 the underlying software and data by automatically performing simultaneous fits with all available data. Fits also can 
 be run simultaneously when multiple sources are being analysed at the same time.
 
-![A flowchart giving a brief overview of \texttt{XGA} \label{fig:flowchart}](figures/xga_flowchart.png)
+![A flowchart giving a brief overview of the \texttt{XGA} workflow. \label{fig:flowchart}](figures/xga_flowchart.png)
 
 # Existing software packages
 To the knowledge of the authors, no software package exists that provides features completely equivalent to 
@@ -132,10 +134,19 @@ consistent with previous work. Similar work is being done on a Dark Energy Surve
 selected XCS sample of clusters, though this will also include analysis from other XCS tools, and will not be focussed only
 on mass measurements. \texttt{XGA}'s ability to stack and combine X-ray surface brightness profiles is currently being 
 used, in combination with weak lensing information from DES, to look for signs of modified gravity in galaxy 
-clusters. Finally an exploration of the X-ray properties of a new sample of Pea galaxies is being performed using
-the point source class, the `XSPEC` interface, and the upper limit luminosity functionality.
+clusters. Finally an exploration of the X-ray properties of a new sample of Pea galaxies is being performed.
 
 # Future Work
+In the future we intend to introduce support for the analysis of X-ray telescopes other than _XMM_-Newton, first 
+focusing on _Chandra_ and _eROSITA_, and then possibly considering the addition of other X-ray instruments. This will
+include the same ability to find relevant data and generate data products as is already implemented for _XMM_, and 
+will also involve the introduction of powerful multi-mission joint analyses to fully exploit the X-ray archives.
+
+We will also introduce more methods to analyse spatially varying properties of extended sources, including the ability 
+to fit two-dimensional models to count-rate maps of sources, and allow for the measurement of 2D maps of spectral 
+quantities such as temperature. The ability to analyse time-series X-ray information will be included, for the study 
+of variable objects, which will leverage \texttt{XGA}'s ability to locate all relevant observations. We are also 
+happy to work with others to introduce specific analysis features aren't already included.
 
 # Acknowledgements
 DT, KR, and PG acknowledge support from the UK Science and Technology Facilities Council via grants ST/P006760/1 (DT), 
