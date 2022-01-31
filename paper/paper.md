@@ -89,8 +89,6 @@ models; including integration and differentiation methods, inverse abel transfor
 An example of the utility of these profiles is the galaxy cluster hydrostatic mass measurement feature; this 
 requires the measurement of 3D gas density profiles, 3D temperature profiles, gas mass, and total mass profiles. 
 
-![A flowchart giving a brief overview of \texttt{XGA} \label{fig:flowchart}](figures/xga_flowchart.png)
-
 # Existing software packages
 To the knowledge of the authors, no software package exists that provides features completely equivalent to 
 \texttt{XGA}, particularly in the open source domain. That is not to say that there are no software tools similar to 
@@ -107,6 +105,8 @@ Some specific analyses built into \texttt{XGA} have comparable open source softw
 for the measurement of gas density from X-ray surface brightness profiles. We do not believe that any existing X-ray 
 analysis module has an equivalent to the source and sample based structure which \texttt{XGA} is built around, or to the 
 product classes that have been written to interact with X-ray data products.
+
+![A flowchart giving a brief overview of \texttt{XGA} \label{fig:flowchart}](figures/xga_flowchart.png)
 
 The `XSPEC` [@xspec] interface we have developed for \texttt{XGA} is far less comprehensive than the full Python wrapping 
 implemented in the `PyXspec` module, but scales with multiple cores for the analysis of multiple sources 
