@@ -26,9 +26,7 @@ affiliations:
 date: 28 January 2022
 bibliography: paper.bib
 ---
-  
-\color{red} At the moment this paper is ambigious on the telescopes it supports, to try and future proof it, but 
-actually I think I should switch it back to being about XMM, then add a future work section \color{black}
+
 # Summary
 X-ray telescopes allow for the investigation of some of the most extreme objects and processes in the 
 Universe; this includes galaxy clusters, active galactic nuclei (where a supermassive black hole at the centre of the 
@@ -129,6 +127,8 @@ on mass measurements. \texttt{XGA}'s ability to stack and combine X-ray surface 
 used, in combination with weak lensing information from DES, to look for signs of modified gravity in galaxy 
 clusters. Finally an exploration of the X-ray properties of a new sample of Pea galaxies is being performed using
 the point source class, the `XSPEC` interface, and the upper limit luminosity functionality.
+
+# Future Work
 
 # Acknowledgements
 DT, KR, and PG acknowledge support from the UK Science and Technology Facilities Council via grants ST/P006760/1 (DT), 
