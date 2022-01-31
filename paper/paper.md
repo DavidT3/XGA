@@ -69,8 +69,6 @@ case of extended sources, how these properties vary spatially. Similar procedure
 available, where images (and merged images from all available data for a given source) can be easily generated en 
 masse, then combined with masks automatically generated from supplied region files to perform photometric analyses.
 
-\color{red} Talk about products and more specific new methods? \color{black}
-
 Software to generate X-ray data products is supplied by the telescope teams, but in the case of _XMM_-Newton it can 
 only be used on the command line, and most commands require significant setup and configuration. \texttt{XGA} wraps the most 
 useful commands and provides the user with an easy way to generate these products for large samples of 
