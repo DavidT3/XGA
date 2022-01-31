@@ -149,8 +149,8 @@ of variable objects, which will leverage \texttt{XGA}'s ability to locate all re
 happy to work with others to introduce specific analysis features aren't already included.
 
 # Acknowledgements
-DT, KR, and PG acknowledge support from the UK Science and Technology Facilities Council via grants ST/P006760/1 (DT), 
-ST/P000525/1 and ST/T000473/1 (PG, KR).
+David J. Turner (DT), Kathy Romer (KR), and Paul A. Giles (PG) acknowledge support from the UK Science and 
+Technology Facilities Council via grants ST/P006760/1 (DT), ST/P000525/1 and ST/T000473/1 (PG, KR).
 
 David J. Turner would like to thank Aswin P. Vijayan, Lucas Porth, and Tim Lingard for useful discussions during the 
 course of writing this module.
