@@ -11,7 +11,7 @@ Planned XGA Features
 
 * **Ability to save ScalingRelation objects** - The ability to save ScalingRelation objects to disk in some way, so that code to generate them doesn't need to be run multiple times.
 
-* **Support for other X-ray telescopes** - Support for generation and analysis of data products from other telescopes (I guess than XGA will come to mean 'X-ray: Generate and Analyse', rather than 'XMM: Generate and Analyse').
+* **Support for other X-ray telescopes** - Support for generation and analysis of data products from other telescopes.
 
 * **Creating a Docker image for users to download** - Creating a Docker environment with SAS and HEASoft already installed, for ease of use.
 
