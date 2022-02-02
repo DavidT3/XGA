@@ -1,3 +1,6 @@
+# This modification is heavily based on GitHub user zonca's version linked
+#  in https://github.com/openjournals/joss/issues/132#issuecomment-890440692
+
 # The overall name of this action
 name: Compile draft XGA JOSS Paper
 
@@ -22,16 +25,34 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-        # Then use the JOSS action to build the paper
-      - name: Build draft PDF
-        uses: openjournals/openjournals-draft-action@master
-        # Sets the specific journal to be built for, and where the Markdown file lives
+      - name: Build TeX and PDF
+        uses: docker://openjournals/paperdraft:latest
         with:
-          journal: joss
-          paper-path: paper/paper.md
+          args: '-k paper/paper.md'
+        # Sets the specific journal to be built for, and where the Markdown file lives
+        env:
+          GIT_SHA: $GITHUB_SHA
+          JOURNAL: joss
       - name: Upload
         uses: actions/upload-artifact@v1
         with:
           name: paper
-          # This is the output path where Pandoc will write the compiled PDF
-          path: paper/paper.pdf
+          path: paper/
+
+#    # Sets up the steps of the job, firstly we check out the master branch
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#        # Then use the JOSS action to build the paper
+#      - name: Build draft PDF
+#        uses: openjournals/openjournals-draft-action@master
+#        # Sets the specific journal to be built for, and where the Markdown file lives
+#        with:
+#          journal: joss
+#          paper-path: paper/paper.md
+#      - name: Upload
+#        uses: actions/upload-artifact@v1
+#        with:
+#          name: paper
+#          # This is the output path where Pandoc will write the compiled PDF
+#          path: paper/paper.pdf
