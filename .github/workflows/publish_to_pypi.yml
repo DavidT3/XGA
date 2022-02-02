@@ -41,14 +41,17 @@ jobs:
         build
         --user
     
+#     - name: Build a binary wheel and source tarball
+#       run: >-
+#         python -m
+#         build
+#         --sdist
+#         --wheel
+#         --outdir dist/
+#         .
     - name: Build a binary wheel and source tarball
       run: >-
-        python -m
-        build
-        --sdist
-        --wheel
-        --outdir dist/
-        .
+        python3 setup.py sdist bdist_wheel
     
     # Then the module is published to the real PyPI index
     - name: Publish to PyPI
