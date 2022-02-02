@@ -1,3 +1,6 @@
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
@@ -58,8 +61,8 @@ if not os.path.exists(config_path):
 
 # -- Project information -----------------------------------------------------
 
-project = 'XMM: Generate and Analyse (XGA)'
-copyright = '2021, David J Turner'
+project = 'X-ray: Generate and Analyse (XGA)'
+copyright = '2022, David J Turner'
 author = 'David J Turner'
 
 # The full version, including alpha/beta/rc tags
