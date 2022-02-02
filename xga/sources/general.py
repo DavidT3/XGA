@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 14:25. Copyright (c) The Contributors
 
 import warnings
 from typing import Tuple, List, Union
@@ -474,6 +474,13 @@ class PointSource(BaseSource):
         else:
             raise UnitConversionError("Can't convert {u} to a XGA supported length unit".format(u=point_radius.unit))
         self._radii["search"] = search_aperture
+
+        # This generates masks to remove interloper regions
+        self._interloper_masks = {}
+        for obs_id in self.obs_ids:
+            # Generating and storing these because they should only
+            cur_im = self.get_products("image", obs_id)[0]
+            self._interloper_masks[obs_id] = self._generate_interloper_mask(cur_im)
 
         # Here we automatically clean the observations, to make sure the point source does actually lie
         #  on the detector and not just near it
