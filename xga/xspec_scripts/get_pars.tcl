@@ -1,4 +1,4 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2020, 15:37. Copyright (c) David J Turner
 
 # This is a convenience script that shouldn't really be needed by anyone but me, it takes a list of XSPEC models,

@@ -1,15 +1,11 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 01/09/2020, 16:11. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
 
-import warnings
-from typing import Tuple, List, Union, Dict
+from typing import Tuple, Dict
 
 import numpy as np
-from astropy import wcs
-from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck15
-from astropy.units import Quantity, UnitBase, deg, UnitConversionError
-from numpy import ndarray
+from astropy.units import Quantity, UnitConversionError
 
 from .general import PointSource
 
