@@ -191,6 +191,6 @@ David J. Turner would like to thank Aswin P. Vijayan, Lucas Porth, and
 Tim Lingard for useful discussions during the course of writing this
 module.
 
-We acknowledge contributions to the {\em XMM} Cluster Survey from A. Bermeo, M. Hilton, P. J. Rooney, S. Bhargava, L. Ebrahimpour, R. G. Mann, M. Manolopoulou, J. Mayers, E. W. Upsdell, C. Vergara, P. T. P. Viana, R. Wilkinson, C. A. Collins, R. C. Nichol, J. P. Stott, and others.
+We acknowledge contributions to the _XMM_ Cluster Survey from A. Bermeo, M. Hilton, P. J. Rooney, S. Bhargava, L. Ebrahimpour, R. G. Mann, M. Manolopoulou, J. Mayers, E. W. Upsdell, C. Vergara, P. T. P. Viana, R. Wilkinson, C. A. Collins, R. C. Nichol, J. P. Stott, and others.
 
 # References
