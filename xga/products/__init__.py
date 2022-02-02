@@ -1,5 +1,5 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/02/2021, 12:30. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
 
 from .base import BaseProduct, BaseAggregateProduct, BaseProfile1D, BaseAggregateProfile1D
 from .misc import EventList

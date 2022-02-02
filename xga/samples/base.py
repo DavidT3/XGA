@@ -1,5 +1,5 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2021, 17:50. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -7,12 +7,11 @@ from warnings import warn
 import numpy as np
 from astropy.cosmology import Planck15
 from astropy.units import Quantity, Unit, arcmin, UnitConversionError
+from matplotlib import pyplot as plt
 from numpy import ndarray
 from tqdm import tqdm
-from matplotlib import pyplot as plt
 
-from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NoValidObservationsError
+from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..exceptions import NoValidObservationsError
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
