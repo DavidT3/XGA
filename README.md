@@ -17,6 +17,16 @@ This module also supports more complex analyses for specific object types; the e
 This is a slightly more complex installation than many Python modules, but shouldn't be too difficult. If you're
 having issues feel free to contact me.
 
+## Data Required to use XGA
+### Cleaned Event Lists
+**This is very important** - Currently, to make use of this module, you **must** have access to cleaned XMM-Newton
+event lists, as XGA is not yet capable of producing them itself.
+
+### Region Files
+It will be beneficial if you have region files available, as it will allow XGA to remove interloper sources. If you
+wish to use existing region files, then they must be in a DS9 compatible format, **point sources** must be **red** and
+**extended sources** must be **green**.
+
 ## The Module
 XGA has been uploaded to PyPi, so you can simply run:
 ```shell script
@@ -34,8 +44,7 @@ python setup.py install
 XGA depends on two non-Python pieces of software:
 * XMM's Science Analysis System (SAS) - Version 17.0.0, but other versions should be largely compatible with the
     software. SAS version 14.0.0 however, does not support features that PSF correction of images depends on.
-* HEASoft's XSPEC - Version 12.10.1, **I can't guarantee later versions will work.**
-* HEASoft's XSPEC - Version 12.10.1, **I can't guarantee later versions will work.**
+* HEASoft's XSPEC - Version 12.10.1, but other versions should be largely compatible even if I have not tested them.
 
 All required Python modules can be found in requirements.txt, and should be added to your system during the 
 installation of XGA.
