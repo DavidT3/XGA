@@ -6,7 +6,7 @@ using XGA please cite the XGA software paper, which is the first entry in this t
 your work to this page.
 
 .. list-table::
-   :widths: 20 15 20 15 30
+   :widths: 20 15 10 15 40
    :header-rows: 1
 
    * - Lead Author
