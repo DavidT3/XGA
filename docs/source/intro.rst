@@ -21,7 +21,7 @@ to investigate how properties change radially with distance from the centre, and
 masses of clusters.
 
 While XGA is a piece of open source software, I would appreciate it if any work that makes use of it would cite the
-paper accompanying this package, which can be found in the :ref:`Publications using XGA` section.
+paper accompanying this package, which can be found in the :ref:`_xga_pub` section.
 
 If wish to contribute to XGA, have feature suggestions, or any comments at all, then please go to the
 "Getting Support" section and submit an issue on GitHub/send me an email, I'll be happy to hear from you!

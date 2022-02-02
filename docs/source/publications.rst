@@ -1,3 +1,4 @@
+.. _xga_pub:
 XGA Publications
 ================
 
