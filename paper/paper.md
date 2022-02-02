@@ -161,8 +161,8 @@ publication. The first of these is a hydrostatic and gas mass analysis
 of the redMaPPeR [@redmappersdss] SDSS selected XCS galaxy cluster
 sample [@sdssxcs] and well as the ACTDR5 [@actdr5] Sunyaev-Zel'dovich (SZ) selected XCS sample of galaxy clusters.
 This work also compares commonly measured X-ray properties of clusters
-(the X-ray luminosity L$_{\rm{x}}$, and the temperature
-T$_{\rm{x}}$) both to results from the existing XCS pipeline and from
+(the X-ray luminosity $L_{\rm{x}}$, and the temperature
+$T_{\rm{x}}$) both to results from the existing XCS pipeline and from
 literature, confirming that \texttt{XGA} measurements are consistent
 with previous work. This process is repeated with \texttt{XGA}'s galaxy cluster gas and hydrostatic mass measurements, again showing they are consistent with previous work. \texttt{XGA}'s ability to stack and
 combine X-ray surface brightness profiles is currently being used, in
