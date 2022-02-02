@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to XMM: Generate and Analyse (XGA)'s documentation!
+Welcome to X-ray: Generate and Analyse (XGA)'s documentation!
 ===========================================================
 .. toctree::
    :maxdepth: 2
