@@ -1,7 +1,7 @@
 Introduction to XGA
 ===================
 
-XMM: Generate and Analyse (XGA) is a Python module designed to make it easy to analyse X-ray sources that have been
+X-ray: Generate and Analyse (XGA) is a Python module designed to make it easy to analyse X-ray sources that have been
 observed by the XMM-Newton Space telescope. It is based around declaring different types of source and sample
 objects which correspond to real X-ray sources, finding all available data, and then insulating the user from the
 tedious generation and basic analysis of X-ray data products (though with the option to get stuck into the data
@@ -21,9 +21,7 @@ to investigate how properties change radially with distance from the centre, and
 masses of clusters.
 
 While XGA is a piece of open source software, I would appreciate it if any work that makes use of it would cite the
-Journal of Open Source Software paper that will accompany this package. It is in preparation, but has not yet been
-submitted, so if you are going to use this module in a piece of work please get in touch with me so we can work
-something out.
+paper accompanying this package, which can be found in the :ref:`Publications using XGA` section.
 
 If wish to contribute to XGA, have feature suggestions, or any comments at all, then please go to the
 "Getting Support" section and submit an issue on GitHub/send me an email, I'll be happy to hear from you!
