@@ -20,3 +20,24 @@ Welcome to X-ray: Generate and Analyse (XGA)'s documentation!
    Publications using XGA <publications.rst>
    Getting Support <support.rst>
 
+
+.. code-block::
+   :caption: If you make use of XGA in academic work, please cite the following software paper
+   :name: BibTeX Reference
+
+   @ARTICLE{2022arXiv220201236T,
+          author = {{Turner}, D.~J. and {Giles}, P.~A. and {Romer}, A.~K. and {Korbina}, V.},
+           title = "{XGA: A module for the large-scale scientific exploitation of archival X-ray astronomy data}",
+         journal = {arXiv e-prints},
+        keywords = {Astrophysics - Instrumentation and Methods for Astrophysics, Astrophysics - Cosmology and Nongalactic Astrophysics, Astrophysics - Astrophysics of Galaxies, Astrophysics - High Energy Astrophysical Phenomena},
+            year = 2022,
+           month = feb,
+             eid = {arXiv:2202.01236},
+           pages = {arXiv:2202.01236},
+   archivePrefix = {arXiv},
+          eprint = {2202.01236},
+    primaryClass = {astro-ph.IM},
+          adsurl = {https://ui.adsabs.harvard.edu/abs/2022arXiv220201236T},
+         adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+   }
+

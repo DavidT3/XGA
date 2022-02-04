@@ -16,7 +16,7 @@ your work to this page.
      - Notes
    * - `D. J. Turner <https://orcid.org/0000-0001-9658-1396>`_
      - 2022
-     -
+     - `ADS <https://ui.adsabs.harvard.edu/abs/2022arXiv220201236T/abstract>`_
      - `Repo <https://github.com/DavidT3/XGA>`_
      - XGA Software Paper
    * - `D. J. Turner <https://orcid.org/0000-0001-9658-1396>`_
