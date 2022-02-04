@@ -21,8 +21,6 @@ Welcome to X-ray: Generate and Analyse (XGA)'s documentation!
    Getting Support <support.rst>
 
 
-:
-
 .. code-block::
    :caption: If you make use of XGA in academic work, please cite the following software paper
    :name: BibTeX Reference
