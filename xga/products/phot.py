@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/02/2022, 10:39. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -949,10 +949,12 @@ class Image(BaseProduct):
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
+            only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+            of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
         :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is
-            also specified and contains only one coordinate.
+            the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+            specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
+            specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
@@ -1021,7 +1023,7 @@ class Image(BaseProduct):
             for cl in other_points:
                 ax.plot(cl[:, 0], cl[:, 1], 'D')
 
-        # If we want a cross hair, then we put one on here
+        # If we want a cross-hair, then we put one on here
         if cross_hair is not None:
             # For the case of a single coordinate
             if cross_hair.shape == (2,):
@@ -1030,21 +1032,6 @@ class Image(BaseProduct):
                 # Drawing the horizontal and vertical lines
                 ax.axvline(pix_coord[0], color="white", linewidth=ch_thickness)
                 ax.axhline(pix_coord[1], color="white", linewidth=ch_thickness)
-
-                # Drawing annular radii on the image, if they are enabled and passed. Only works with a
-                #  single coordinate, otherwise we wouldn't know which to centre on
-                for ann_rad in radial_bins_pix:
-                    artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1.5)
-                    ax.add_artist(artist)
-
-                # This draws the background region on as well, if present
-                if back_bin_pix is not None:
-                    inn_artist = Circle(pix_coord, back_bin_pix[0], fill=False, ec='white', linewidth=1.6,
-                                        linestyle='dashed')
-                    out_artist = Circle(pix_coord, back_bin_pix[1], fill=False, ec='white', linewidth=1.6,
-                                        linestyle='dashed')
-                    ax.add_artist(inn_artist)
-                    ax.add_artist(out_artist)
 
             # For the case of two coordinate pairs
             elif cross_hair.shape == (2, 2):
@@ -1059,11 +1046,33 @@ class Image(BaseProduct):
                 ax.axvline(pix_coord[1, 0], color="white", linewidth=ch_thickness, linestyle='dashed')
                 ax.axhline(pix_coord[1, 1], color="white", linewidth=ch_thickness, linestyle='dashed')
 
+                # Here I reset the pix_coord variable, so it ONLY contains the first entry. This is for the benefit
+                #  of the annulus-drawing part of the code that comes after
+                pix_coord = pix_coord[0, :]
+
             else:
                 # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
-                #  it isn't essential so I'll just display a warning
+                #  it isn't essential, so I'll just display a warning
                 warnings.warn("You have passed a cross_hair quantity that has more than two coordinate "
                               "pairs in it, or is otherwise the wrong shape.")
+                # Just in case annuli were also passed, I set the coordinate to None so that it knows something is wrong
+                pix_coord = None
+
+            if pix_coord is not None:
+                # Drawing annular radii on the image, if they are enabled and passed. If multiple coordinates have been
+                #  passed then I assume that they want to centre on the first entry
+                for ann_rad in radial_bins_pix:
+                    artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1.5)
+                    ax.add_artist(artist)
+
+                # This draws the background region on as well, if present
+                if back_bin_pix is not None:
+                    inn_artist = Circle(pix_coord, back_bin_pix[0], fill=False, ec='white', linewidth=1.6,
+                                        linestyle='dashed')
+                    out_artist = Circle(pix_coord, back_bin_pix[1], fill=False, ec='white', linewidth=1.6,
+                                        linestyle='dashed')
+                    ax.add_artist(inn_artist)
+                    ax.add_artist(out_artist)
 
         # Adds the actual image to the axis.
         ax.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
