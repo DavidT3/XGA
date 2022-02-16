@@ -174,7 +174,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
               lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_pho_index: float = 1.,
               lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-              freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
+              freeze_nh: bool = True, absorbed: bool = False, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
               fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
               over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
               timeout: Quantity = Quantity(1, 'hr')):
@@ -198,7 +198,8 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param float start_pho_index: The starting value for the photon index of the powerlaw.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
-        :param bool freeze_nh: Whether the hydrogen column density should be frozen.
+    :param bool freeze_nh: Whether the hydrogen column density should be frozen.
+    :param bool absorbed: Allows to fit unabsorbed power law model; set to True by default.
     :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
         equivalent to 1σ errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSerror.html)
         correctly.
@@ -312,14 +313,14 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
               lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_temp: Quantity = Quantity(1, "keV"),
               lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-              freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
+              freeze_nh: bool = True, absorbed: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
               fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
               over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
               timeout: Quantity = Quantity(1, 'hr')):
     """
-    This is a convenience function for fitting a tbabs absorbed blackbody (or zbbody if redshifted
-    is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
-    normalisations (constant*tbabs*bbody, or constant*tbabs*zbbody).
+    This is a convenience function for fitting either tbabs absorbed blackbody (or zbbody if redshifted
+    is selected) or unabsorbed blackbody (or zbbody) to source spectra, with a multiplicative constant included to deal with different spectrum
+    normalisations (constant*tbabs*bbody, constant*tbabs*zbbody, constant*bbody, or constant*zbbody).
 
     :param List[BaseSource] sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
@@ -337,6 +338,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
+    :param bool absorbed: Allows to fit unabsorbed blackbody model; set to True by default.
     :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
         equivalent to 1σ errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSerror.html)
         correctly.
@@ -362,12 +364,23 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                                                           min_sn, over_sample, one_rmf, num_cores)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
-    # This function is for a set model, either absorbed blackbody or absorbed zbbody
+    # This function is for a set model, either absorbed blackbody, absorbed zzbody,
+    #  unabsorbed bbody, or unabsorbed zbbody.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
     #  of TCL lists.
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
     lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
-    if redshifted:
+
+    # This if statement defines the model to be passed to XSPEC. Depending on variables
+    # the model is modified, giving flexible choice between unabsorbed and redshifted
+    # models for blackbody fit.
+    if not absorbed and redshifted:
+        model = "constant*zbbody"
+        par_names = "{factor kT Redshift norm}"
+    elif not absorbed:
+        model = "constant*bbody"
+        par_names = "{factor kT norm}"
+    elif redshifted:
         model = "constant*tbabs*zbbody"
         par_names = "{factor nH kT Redshift norm}"
     else:
@@ -396,30 +409,52 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         # Whatever start temperature is passed gets converted to keV, this will be put in the template
         t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
 
-        # For this model, we have to know the redshift of the source.
+        # Define the column density of the source
+        nh = source.nH.to("10^22 cm^-2").value
+
+        # In case of a redshifted model, the redshift has to be found and then passed to parameter par_values
+        # together with other parameters.
         if redshifted and source.redshift is None:
             raise ValueError("You cannot supply a source without a redshift if you have elected to fit zbbody.")
-        elif redshifted and source.redshift is not None:
-            par_values = "{{{0} {1} {2} {3} {4}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
-                                                          source.redshift, 1.)
-        else:
-            par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, t, 1.)
+        # This sets up a TCL list to be passed to the general XSPEC script.
+        elif absorbed and redshifted and source.redshift is not None:
+            par_values = "{{{0} {1} {2} {3} {4}}}".format(
+                1., nh, t, source.redshift, 1.)
+        elif not absorbed and redshifted and source.redshift is not None:
+            par_values = "{{{0} {1} {2} {3}}}".format(
+                1., t, source.redshift, 1.)
+        elif absorbed and not redshifted:
+            par_values = "{{{0} {1} {2} {3}}}".format(1., nh, t, 1.)
+        elif not absorbed and not redshifted:
+            par_values = "{{{0} {1} {2}}}".format(1., t, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependant on user input
-        if redshifted and freeze_nh:
+        if (not absorbed and redshifted and freeze_nh) or (not absorbed and redshifted and not freeze_nh):
+            if not freeze_nh:
+                warnings.warn(
+                    "You cannot elect to unfreeze nH if you have elected to fit unabsorbed model", stacklevel=2)
+            freezing = "{F F T F}"
+        elif (not absorbed and not redshifted and freeze_nh) or (not absorbed and not redshifted and not freeze_nh):
+            if not freeze_nh:
+                warnings.warn(
+                    "You cannot elect to unfreeze nH if you have elected to fit unabsorbed model", stacklevel=2)
+            freezing = "{F F F}"
+        elif absorbed and redshifted and freeze_nh:
             freezing = "{F T F T F}"
-        elif not redshifted and freeze_nh:
+        elif absorbed and not redshifted and freeze_nh:
             freezing = "{F T F F}"
-        elif redshifted and not freeze_nh:
+        elif absorbed and redshifted and not freeze_nh:
             freezing = "{F F F T F}"
-        elif not redshifted and not freeze_nh:
+        elif absorbed and not redshifted and not freeze_nh:
             freezing = "{F F F F}"
 
         # Set up the TCL list that defines which parameters are linked across different spectra,
         #  dependant on user input
-        if redshifted:
+        if not absorbed and not redshifted:
+            linking = "{F T T}"
+        elif absorbed and redshifted:
             linking = "{F T T T T}"
-        else:
+        elif (not absorbed and redshifted) or (absorbed and not redshifted):
             linking = "{F T T T}"
 
         # If the blackbody with redshift has been chosen, then we use the redshift attached to the source object
@@ -429,7 +464,9 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         else:
             z = 1
             warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
-                          " will be invalid, as redshift has been set to one.".format(s=source.name))
+                          " will be invalid, as redshift has been set to one.".format(
+                              s=source.name),
+                          stacklevel=2)
 
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
