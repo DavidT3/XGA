@@ -56,7 +56,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
-        equivelant to 1σ errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSerror.html)
+        equivalent to 1σ errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSerror.html)
         correctly.
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
@@ -199,9 +199,9 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
         :param bool freeze_nh: Whether the hydrogen column density should be frozen.
-    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which
-        should be equivelant to 1sigma errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec
-        /manual/XSerror.html) correctly.
+    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
+        equivalent to 1σ errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSerror.html)
+        correctly.
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
@@ -337,9 +337,9 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
-    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which
-        should be equivelant to 1sigma errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec
-        /manual/XSerror.html) correctly.
+    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
+        equivalent to 1σ errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSerror.html)
+        correctly.
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
