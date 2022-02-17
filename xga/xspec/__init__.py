@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
 
-from .fit import single_temp_apec, power_law, single_temp_apec_profile, blackbody
+from .fit import single_temp_apec, power_law, single_temp_apec_profile, blackbody, blackbody_gauss
 from .run import execute_cmd, xspec_call
