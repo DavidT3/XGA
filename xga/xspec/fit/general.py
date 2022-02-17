@@ -447,3 +447,162 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
     run_type = "fit"
     return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
+
+
+@xspec_call
+def blackbody_gauss(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
+                    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_temp: Quantity = Quantity(1, "keV"),
+                    line_en: Quantity = Quantity(0.385, "keV"), line_width: Quantity = Quantity(0.089, "keV"),
+                    lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"), freeze_nh: bool = True,
+                    par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr", fit_method: str = "leven",
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    one_rmf: bool = True, num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr')):
+    """
+    This is a convenience function for fitting either tbabs absorbed blackbody  (or zbbody if redshifted
+    is selected) with a Gaussian absorption line to source spectra, with a multiplicative constant included
+    to deal with different spectrum normalisations (constant*tbabs*(bbody-gauss), constant*tbabs*(zbbody-zgauss)).
+
+    :param List[BaseSource] sources: A single source object, or a sample of sources.
+    :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
+        desired spectrum covers (for instance 'point' would be acceptable for a PointSource,
+        or Quantity(40, 'arcsec')). If 'region' is chosen (to use the regions in region files), then any value
+        passed for inner_radius is ignored, and the fit performed on spectra for the entire region. If you are
+        fitting for multiple sources then you can also pass a Quantity with one entry per source.
+    :param str/Quantity inner_radius: The name or value of the inner radius of the region that the
+        desired spectrum covers (for instance 'point' would be acceptable for a PointSource,
+        or Quantity(40, 'arcsec')). By default this is zero arcseconds, resulting in a circular spectrum. If
+        you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
+    :param bool redshifted: Whether the powerlaw that includes redshift (zpowerlw) should be used.
+    :param Quantity lum_en: Energy bands in which to measure luminosity.
+    :param Quantity start_temp: The starting value for the temperature of the blackbody.
+    :param Quantity line_en: The starting value for the energy value of the gaussian absorption line.
+    :param Quantity line_width: The starting value for the width of the gaussian absorption line.
+    :param Quantity lo_en: The lower energy limit for the data to be fitted.
+    :param Quantity hi_en: The upper energy limit for the data to be fitted.
+    :param bool freeze_nh: Whether the hydrogen column density should be frozen.
+    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
+        equivalent to 1σ errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSerror.html)
+        correctly.
+    :param float lum_conf: The confidence level for XSPEC luminosity measurements.
+    :param str abund_table: The abundance table to use for the fit.
+    :param str fit_method: The XSPEC fit method to use.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
+    :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
+        Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
+        fits.
+    """
+    sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
+                                                          min_sn, over_sample, one_rmf, num_cores)
+    sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
+
+    # This function is for a set model, either absorbed blackbody, absorbed zzbody,
+    #  unabsorbed bbody, or unabsorbed zbbody.
+    # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
+    #  of TCL lists.
+    lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
+    lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
+
+    # This if statement defines the model to be passed to XSPEC. Depending on the variable choice
+    #  you can fit either a redshifted model or not
+    if redshifted:
+        model = "constant*tbabs*(zbbody+zgauss)"
+        par_names = "{factor nH kT Redshift norm LineE Sigma Redshift norm}"
+    else:
+        model = "constant*tbabs*(bbody+gauss)"
+        par_names = "{factor nH kT norm LineE Sigma norm}"
+
+    script_paths = []
+    outfile_paths = []
+    src_inds = []
+    for src_ind, source in enumerate(sources):
+        spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind], group_spec=group_spec,
+                                       min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+
+        # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
+        #  a source with only a single valid instrument for a single valid observation this may not be the case
+        if isinstance(spec_objs, Spectrum):
+            spec_objs = [spec_objs]
+
+        if len(spec_objs) == 0:
+            raise NoProductAvailableError("There are no matching spectra for {s}, you "
+                                          "need to generate them first!".format(s=source.name))
+
+        # Turn spectra paths into TCL style list for substitution into template
+        specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
+
+        # Whatever start temperature is passed gets converted to keV, this will be put in the template
+        t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
+
+        # Convert the line energy and width to keV
+        linee = line_en.to("keV", equivalencies=u.temperature_energy()).value
+        sigma = line_width.to(
+            "keV", equivalencies=u.temperature_energy()).value
+
+        # Define the column density of the source
+        nh = source.nH.to("10^22 cm^-2").value
+
+        # In case of a redshifted model, the redshift has to be found and then passed to parameter par_values
+        # together with other parameters.
+        if redshifted and source.redshift is None:
+            raise ValueError("You cannot supply a source without a redshift if you have elected to fit zbbody.")
+        # This sets up a TCL list to be passed to the general XSPEC script.
+        elif redshifted and source.redshift is not None:
+            par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8}}}".format(1., nh, t, source.redshift, 1.,
+                                                                          linee, sigma, source.redshift, 1.)
+        else:
+            par_values = "{{{0} {1} {2} {3} {4} {5} {6}}".format(1., nh, t, 1., linee, sigma, 1.)
+
+        # Set up the TCL list that defines which parameters are frozen, dependant on user input
+        if redshifted and freeze_nh:
+            freezing = "{F T F T F F F T F}"
+        elif redshifted and not freeze_nh:
+            freezing = "{F F F T F F F T F}"
+        elif not redshifted and freeze_nh:
+            freezing = "{F T F F F F F}"
+        elif not redshifted and not freeze_nh:
+            freezing = "{F F F F F F F}"
+
+        # Set up the TCL list that defines which parameters are linked across different spectra,
+        #  dependant on user input
+        if redshifted:
+            linking = "{F T T T T T T T T}"
+        else:
+            linking = "{F T T T T T T}"
+
+        # If the blackbody with redshift has been chosen, then we use the redshift attached to the source object
+        #  If not we just pass a filler redshift and the luminosities are invalid
+        if redshifted or (not redshifted and source.redshift is not None):
+            z = source.redshift
+        else:
+            z = 1
+            warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
+                          " will be invalid, as redshift has been set to one.".format(s=source.name),
+                          stacklevel=2)
+
+        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
+                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
+                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
+                                                    "{}", "{}", "{}", True)
+
+        # If the fit has already been performed we do not wish to perform it again
+        try:
+            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], None, group_spec, min_counts,
+                                     min_sn, over_sample)
+        except ModelNotAssociatedError:
+            script_paths.append(script_file)
+            outfile_paths.append(out_file)
+            src_inds.append(src_ind)
+
+    run_type = "fit"
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
