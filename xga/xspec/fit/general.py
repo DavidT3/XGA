@@ -561,7 +561,7 @@ def blackbody_gauss(sources: Union[BaseSource, BaseSample], outer_radius: Union[
             par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8}}}".format(1., nh, t, source.redshift, 1.,
                                                                           linee, sigma, source.redshift, 1.)
         else:
-            par_values = "{{{0} {1} {2} {3} {4} {5} {6}}".format(1., nh, t, 1., linee, sigma, 1.)
+            par_values = "{{{0} {1} {2} {3} {4} {5} {6}}}".format(1., nh, t, 1., linee, sigma, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependant on user input
         if redshifted and freeze_nh:
