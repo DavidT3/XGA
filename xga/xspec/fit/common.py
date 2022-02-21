@@ -173,7 +173,10 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         os.makedirs(dest_dir)
     # Defining where the output summary file of the fit is written
     out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model
-    script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + ".xcm"
+    if "(" or ")" in model:
+        model_name = model.replace("(", "B")
+        model_name = model_name.replace(")", "-")
+    script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model_name + ".xcm"
 
     # The template is filled out here, taking everything we have generated and everything the user
     #  passed in. The result is an XSPEC script that can be run as is.
