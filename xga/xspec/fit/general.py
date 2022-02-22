@@ -559,7 +559,7 @@ def blackbody_gauss(sources: Union[BaseSource, BaseSample], outer_radius: Union[
         # This sets up a TCL list to be passed to the general XSPEC script.
         elif redshifted and source.redshift is not None:
             par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8}}}".format(1., nh, t, source.redshift, 1.,
-                                                                          linee, sigma, source.redshift, 1.)
+                                                                          linee, sigma, source.redshift, 0.0005)
         else:
             par_values = "{{{0} {1} {2} {3} {4} {5} {6}}}".format(1., nh, t, 1., linee, sigma, 1.)
 
