@@ -784,12 +784,13 @@ class Spectrum(BaseProduct):
         plt.tight_layout()
         plt.show()
 
-    def view(self, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV"),
+    def view(self, save_path: str, lo_en: Quantity = Quantity(0.0, "keV"), hi_en: Quantity = Quantity(30.0, "keV"),
              figsize: Tuple = (8, 6)):
         """
         Very simple method to plot the data/models associated with this Spectrum object,
         between certain energy limits.
 
+        :param str save_path: The path (including file name) where you wish to save the view.
         :param Quantity lo_en: The lower energy limit from which to plot the spectrum.
         :param Quantity hi_en: The upper energy limit to plot the spectrum to.
         :param Tuple figsize: The desired size of the output figure.
@@ -857,6 +858,9 @@ class Spectrum(BaseProduct):
             plt.tight_layout()
             # Display the spectrum
             plt.show()
+
+            # Save figure to disk
+            plt.savefig(save_path)
 
             # Wipe the figure
             plt.close("all")
@@ -1911,6 +1915,3 @@ class AnnularSpectra(BaseAggregateProduct):
 
     def __getitem__(self, ind):
         return self.all_spectra[ind]
-
-
-
