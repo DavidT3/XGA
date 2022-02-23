@@ -1791,13 +1791,14 @@ class AnnularSpectra(BaseAggregateProduct):
 
         plt.close('all')
 
-    def view(self, model: str, figsize: tuple = (12, 8), elevation_angle: int = 30, azimuthal_angle: int = -60):
+    def view(self, save_path: str, model: str, figsize: tuple = (12, 8), elevation_angle: int = 30, azimuthal_angle: int = -60):
         """
         This view method is one of several in the AnnularSpectra class, and will display model fits to
         all spectra for each annuli in a 3D plot. No data is displayed in this viewing method, primarily
         because its so visually confusing. If you wish to see model fits displayed over actual data in this style,
         please use view_annuli.
 
+        :param str save_path: The path (including file name) where you wish to save the view.
         :param str model: The model fit to display
         :param tuple figsize: The size of the figure.
         :param int elevation_angle: The elevation angle in the z plane, in degrees.
@@ -1902,6 +1903,9 @@ class AnnularSpectra(BaseAggregateProduct):
         else:
             warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
                           "it".format(m=model))
+
+        # Save figure to disk
+        plt.savefig(save_path)
 
         plt.close('all')
 
