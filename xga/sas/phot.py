@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/02/2022, 16:33. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -36,8 +36,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
     :param Quantity lo_en: The lower energy limit for the image, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the image, in astropy energy units.
     :param str add_expr: A string to be added to the SAS expression keyword
-    :param int num_cores: The number of cores to use (if running locally), default is set to
-        90% of available.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
