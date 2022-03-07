@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/02/2022, 12:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2022, 09:56. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3360,6 +3360,11 @@ class NullSource:
         # This checks that the observations have at least one usable instrument
         self._obs = [o for o in obs if len(instruments[o]) > 0]
         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+
+        # Here we check to make sure that there is at least one valid ObsID remaining
+        if len(self._obs) == 0:
+            raise NoValidObservationsError("After checks using the XGA census, all ObsIDs associated with this "
+                                           "NullSource are considered unusable.")
 
         # The SAS generation routine might need this information
         self._att_files = {o: xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=o) for o in self._obs}
