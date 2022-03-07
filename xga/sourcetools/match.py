@@ -1,6 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/02/2022, 16:33. Copyright (c) The Contributors
-
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2022, 09:59. Copyright (c) The Contributors
+import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
 
@@ -9,8 +9,8 @@ from astropy.units.quantity import Quantity
 from pandas import DataFrame
 from tqdm import tqdm
 
-from .. import CENSUS, BLACKLIST, NUM_CORES
-from ..exceptions import NoMatchFoundError
+from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT
+from ..exceptions import NoMatchFoundError, NoValidObservationsError
 
 
 def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, float, DataFrame]:
@@ -21,6 +21,41 @@ def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, flo
     matches = matches[~matches["ObsID"].isin(BLACKLIST["ObsID"])]
 
     return ra, dec, matches
+
+
+def _on_obs_id(ra: float, dec: float, obs_id: Union[str, list, np.ndarray]):
+    if isinstance(obs_id, str):
+        obs_id = [obs_id]
+    from ..products import ExpMap
+
+    local_census = CENSUS.copy()
+
+    det = []
+    for o in obs_id:
+        cur_det = False
+        rel_row = local_census[local_census['ObsID'] == o].iloc[0]
+        for col in ['USE_PN', 'USE_MOS1', 'USE_MOS2']:
+            if rel_row[col] and not cur_det:
+                inst = col.split('_')[1].lower()
+
+                epath = OUTPUT + "{o}/{o}_{i}_0.5-2.0keVexpmap.fits".format(o=o, i=inst)
+                ex = ExpMap(epath, o, inst, '', '', '', Quantity(0.5, 'keV'), Quantity(2.0, 'keV'))
+                try:
+                    if ex.get_exp(Quantity([ra, dec], 'deg')) != 0:
+                        cur_det = True
+                except ValueError:
+                    pass
+
+                del ex
+
+        if cur_det:
+            det.append(o)
+
+    if len(det) == 0:
+        det = None
+    else:
+        det = np.array(det)
+    return ra, dec, det
 
 
 def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
@@ -98,3 +133,98 @@ def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         raise NoMatchFoundError("No XMM observation found within {a} of any input coordinate pairs".format(a=distance))
 
     return results
+
+
+def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray], num_cores: int = NUM_CORES):
+    from ..sources import NullSource
+    from ..sas import eexpmap
+
+    if isinstance(src_ra, float) and isinstance(src_dec, float):
+        src_ra = np.array([src_ra])
+        src_dec = np.array([src_dec])
+        num_cores = 1
+
+    if len(src_ra) != 1:
+        prog_dis = False
+    else:
+        prog_dis = True
+
+    all_repr = [repr(src_ra[ind]) + repr(src_dec[ind]) for ind in range(0, len(src_ra))]
+
+    init_res = np.array(simple_xmm_match(src_ra, src_dec, num_cores=num_cores), dtype=object)
+    further_check = np.array([len(t) > 0 for t in init_res])
+    # print(further_check)
+    rel_res = init_res[further_check]
+    rel_ra = src_ra[further_check]
+    rel_dec = src_dec[further_check]
+
+    obs_ids = list(set([o for t in init_res for o in t['ObsID'].values]))
+
+    epath = OUTPUT + "{o}/{o}_{i}_0.5-2.0keVexpmap.fits"
+    obs_ids = [o for o in obs_ids if not os.path.exists(epath.format(o=o, i='pn'))
+               and not os.path.exists(epath.format(o=o, i='mos1')) and not os.path.exists(epath.format(o=o, i='mos2'))]
+
+    try:
+        obs_src = NullSource(obs_ids)
+        # REMOVE
+        obs_src.info()
+
+        eexpmap(obs_src)
+    except NoValidObservationsError:
+        pass
+
+    e_matches = {}
+    order_list = []
+    if num_cores == 1:
+        raise NotImplementedError("HAVEN'T DONE THIS YET")
+        with tqdm(desc='Searching for observations near source coordinates', total=len(src_ra),
+                  disable=prog_dis) as onwards:
+            for ra_ind, r in enumerate(src_ra):
+                d = src_dec[ra_ind]
+                c_matches[repr(r) + repr(d)] = _simple_search(r, d, rad)[2]
+                order_list.append(repr(r) + repr(d))
+                onwards.update(1)
+    else:
+        with tqdm(desc="Confirming coordinates fall on an observation", total=len(rel_ra)) as onwards, \
+                Pool(num_cores) as pool:
+            def match_loop_callback(match_info):
+                nonlocal onwards  # The progress bar will need updating
+                nonlocal e_matches
+                e_matches[repr(match_info[0]) + repr(match_info[1])] = match_info[2]
+                onwards.update(1)
+
+            def bugger(err):
+                print(str(err))
+
+            for ra_ind, r in enumerate(rel_ra):
+                d = rel_dec[ra_ind]
+                o = rel_res[ra_ind]['ObsID'].values
+                order_list.append(repr(r) + repr(d))
+                pool.apply_async(_on_obs_id, args=(r, d, o), callback=match_loop_callback, error_callback=bugger)
+
+            pool.close()  # No more tasks can be added to the pool
+            pool.join()  # Joins the pool, the code will only move on once the pool is empty.
+
+    results = []
+    for rpr in all_repr:
+        if rpr in e_matches:
+            results.append(e_matches[rpr])
+        else:
+            results.append(None)
+    del e_matches
+
+    if len(results) == 1:
+        results = results[0]
+
+        if len(results) == 0:
+            raise NoMatchFoundError("No XMM observation found within {a} of ra={r} "
+                                    "dec={d}".format(r=round(src_ra[0], 4), d=round(src_dec[0], 4), a=distance))
+    elif all([r is None or len(r) == 0 for r in results]):
+        raise NoMatchFoundError("No XMM observation found within {a} of any input coordinate pairs".format(a=distance))
+
+    return results
+
+
+
+
+
