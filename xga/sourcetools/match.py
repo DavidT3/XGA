@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2022, 12:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2022, 14:54. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
@@ -36,38 +36,76 @@ def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, flo
     return ra, dec, matches
 
 
-def _on_obs_id(ra: float, dec: float, obs_id: Union[str, list, np.ndarray]):
-    if isinstance(obs_id, str):
-        obs_id = [obs_id]
+def _on_obs_id(ra: float, dec: float, obs_id: Union[str, list, np.ndarray]) -> Tuple[float, float, np.ndarray]:
+    """
+    Internal function used by the on_xmm_match function to check whether a passed coordinate falls directly on a
+    camera for a single (or set of) ObsID(s). Checks whether exposure time is 0 at the coordinate. It cycles through
+    cameras (PN, then MOS1, then MOS2), so if exposure time is 0 on PN it'll go to MOS1, etc. to try and
+    account for chip gaps in different cameras.
+
+    :param float ra: The right-ascension of the coordinate that may fall on the ObsID.
+    :param float dec: The declination of the coordinate that may fall on the ObsID.
+    :param str/list/np.ndarray obs_id: The ObsID(s) which we want to check whether the passed coordinate falls on.
+    :return: The input RA, input dec, and ObsID match array.
+    :rtype: Tuple[float, float, np.ndarray]
+    """
+    # Insert my standard complaint about not wanting to do an import here
     from ..products import ExpMap
 
+    # Makes sure that the obs_id variable is iterable, whether there is just one ObsID or a set, makes it easier
+    #  to write just one piece of code that deals with either type of input
+    if isinstance(obs_id, str):
+        obs_id = [obs_id]
+
+    # Less convinced I actually need to do this here, as I don't modify the census dataframe
     local_census = CENSUS.copy()
 
+    # Set oup a list to store detection information
     det = []
+    # We loop through the ObsID(s) - if just one was passed it'll only loop once (I made sure that ObsID was a list
+    #  a few lines above this)
     for o in obs_id:
+        # This variable describes whether the RA-Dec has a non-zero exposure for this current ObsID, starts off False
         cur_det = False
+        # Get the relevant census row for this ObsID, we specifically want to know which instruments XGA thinks
+        #  that it is allowed to use
         rel_row = local_census[local_census['ObsID'] == o].iloc[0]
+        # Loops through the census column names describing whether instruments can be used or not
         for col in ['USE_PN', 'USE_MOS1', 'USE_MOS2']:
+            # If the current instrument is allowed to be used (in the census), and ONLY if we haven't already
+            #  found a non-zero exposure for this ObsID, then we proceed
             if rel_row[col] and not cur_det:
+                # Get the actual instrument name by splitting the column
                 inst = col.split('_')[1].lower()
 
+                # Define an XGA exposure map - we can assume that it already exists because this internal function
+                #  will only be called from other functions that have already made sure the exposure maps are generated
                 epath = OUTPUT + "{o}/{o}_{i}_0.5-2.0keVexpmap.fits".format(o=o, i=inst)
                 ex = ExpMap(epath, o, inst, '', '', '', Quantity(0.5, 'keV'), Quantity(2.0, 'keV'))
+                # Then check to see if the exposure time is non-zero, if so then the coordinate lies on the current
+                #  XMM camera. The try-except is there to catch instances where the requested coordinate is outside
+                #  the data array, which is expected to happen sometimes.
                 try:
                     if ex.get_exp(Quantity([ra, dec], 'deg')) != 0:
                         cur_det = True
                 except ValueError:
                     pass
 
+                # Don't know if this is necessary, but I delete the exposure map to try and minimise the memory usage
                 del ex
 
+        # When we've looped through all possible instruments for an ObsID, and if the coordinate falls on a
+        #  camera, then we add the ObsID to the list of ObsIDs 'det' - meaning that there is at least some data
+        #  in that observation for the input coordinates
         if cur_det:
             det.append(o)
 
+    # If the list of ObsIDs with data is empty then its set to None, otherwise turned into a numpy array
     if len(det) == 0:
         det = None
     else:
         det = np.array(det)
+
     return ra, dec, det
 
 
