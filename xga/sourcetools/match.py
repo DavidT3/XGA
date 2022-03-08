@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2022, 14:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2022, 17:21. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
@@ -130,31 +130,46 @@ def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     # Extract the search distance as a float, specifically in degrees
     rad = distance.to('deg').value
 
+    # Here we perform a check to see whether a set of coordinates is being passed, and if so are the two
+    #  arrays the same length
     if isinstance(src_ra, np.ndarray) and isinstance(src_dec, np.ndarray) and len(src_ra) != len(src_dec):
         raise ValueError("If passing multiple pairs of coordinates, src_ra and src_dec must be of the same length.")
+    # Just one coordinate is also allowed, but still want it to be iterable so put it in an array
     elif isinstance(src_ra, float) and isinstance(src_dec, float):
         src_ra = np.array([src_ra])
         src_dec = np.array([src_dec])
         num_cores = 1
+    # Don't want one input being a single number and one being an array
     elif type(src_ra) != type(src_dec):
         raise TypeError("src_ra and src_dec must be the same type, either both floats or both arrays.")
 
+    # The prog_dis variable controls whether the tqdm progress bar is displayed or not, don't want it to be there
+    #  for single coordinate pairs
     if len(src_ra) != 1:
         prog_dis = False
     else:
         prog_dis = True
 
+    # The dictionary stores match dataframe information, with the keys comprised of the str(ra)+str(dec)
     c_matches = {}
+    # This helps keep track of the original coordinate order, so we can return information in the same order it
+    #  was passed in
     order_list = []
+    # If we only want to use one core, we don't set up a pool as it could be that a pool is open where
+    #  this function is being called from
     if num_cores == 1:
+        # Set up the tqdm instance in a with environment
         with tqdm(desc='Searching for observations near source coordinates', total=len(src_ra),
                   disable=prog_dis) as onwards:
+            # Simple enough, just iterates through the RAs and Decs calling the search function and stores the
+            #  results in the dictionary
             for ra_ind, r in enumerate(src_ra):
                 d = src_dec[ra_ind]
                 c_matches[repr(r)+repr(d)] = _simple_search(r, d, rad)[2]
                 order_list.append(repr(r)+repr(d))
                 onwards.update(1)
     else:
+        # This is all equivalent to what's above, but with function calls added to the multiprocessing pool
         with tqdm(desc="Searching for observations near source coordinates", total=len(src_ra)) as onwards, \
                 Pool(num_cores) as pool:
             def match_loop_callback(match_info):
@@ -171,15 +186,21 @@ def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
             pool.close()  # No more tasks can be added to the pool
             pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
+    # Changes the order of the results to the original pass in order and stores them in a list
     results = [c_matches[n] for n in order_list]
     del c_matches
 
+    # Result length of one means one coordinate was passed in, so we should pass back out a single dataframe
+    #  rather than a single dataframe in a list
     if len(results) == 1:
         results = results[0]
 
+        # Checks whether the dataframe inside the single result is length zero, if so then there are no relevant ObsIDs
         if len(results) == 0:
             raise NoMatchFoundError("No XMM observation found within {a} of ra={r} "
                                     "dec={d}".format(r=round(src_ra[0], 4), d=round(src_dec[0], 4), a=distance))
+    # If all the dataframes in the results list are length zero, then none of the coordinates has a
+    #  valid ObsID
     elif all([len(r) == 0 for r in results]):
         raise NoMatchFoundError("No XMM observation found within {a} of any input coordinate pairs".format(a=distance))
 
