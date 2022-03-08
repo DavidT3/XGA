@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2022, 09:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/03/2022, 12:16. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
@@ -14,12 +14,25 @@ from ..exceptions import NoMatchFoundError, NoValidObservationsError
 
 
 def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, float, DataFrame]:
+    """
+    Internal function used to multithread the simple XMM match function.
+
+    :param float ra: The right-ascension around which to search for observations.
+    :param float dec: The declination around which to search for observations.
+    :param float search_rad: The radius in which to search for observations.
+    :return: The input RA, input dec, and ObsID match dataframe.
+    :rtype: Tuple[float, float, DataFrame]
+    """
+    # Making a copy of the census because I add a distance-from-coords column - don't want to do that for the
+    #  original census especially when this is being multi-threaded
     local_census = CENSUS.copy()
     local_census["dist"] = np.sqrt((local_census["RA_PNT"] - ra) ** 2
                                    + (local_census["DEC_PNT"] - dec) ** 2)
+    # Select any ObsIDs within (or at) the search radius input to the function
     matches = local_census[local_census["dist"] <= search_rad]
+    # Remove any ObsID dataframe entries that are in the blacklist
     matches = matches[~matches["ObsID"].isin(BLACKLIST["ObsID"])]
-
+    del local_census
     return ra, dec, matches
 
 
@@ -153,7 +166,6 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
 
     init_res = np.array(simple_xmm_match(src_ra, src_dec, num_cores=num_cores), dtype=object)
     further_check = np.array([len(t) > 0 for t in init_res])
-    # print(further_check)
     rel_res = init_res[further_check]
     rel_ra = src_ra[further_check]
     rel_dec = src_dec[further_check]
@@ -166,9 +178,6 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
 
     try:
         obs_src = NullSource(obs_ids)
-        # REMOVE
-        obs_src.info()
-
         eexpmap(obs_src)
     except NoValidObservationsError:
         pass
@@ -194,7 +203,8 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
                 onwards.update(1)
 
             def bugger(err):
-                print(str(err))
+                # print(str(err))
+                raise err
 
             for ra_ind, r in enumerate(rel_ra):
                 d = rel_dec[ra_ind]
@@ -222,6 +232,7 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
     elif all([r is None or len(r) == 0 for r in results]):
         raise NoMatchFoundError("No XMM observation found within {a} of any input coordinate pairs".format(a=distance))
 
+    results = np.array(results, dtype=object)
     return results
 
 
