@@ -173,8 +173,8 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         os.makedirs(dest_dir)
     # Defining where the output summary file of the fit is written
     if "(" or ")" in model:
-        model_name = model.replace("(", "B")
-        model_name = model_name.replace(")", "-")
+        model_name = model.replace("(", "A")
+        model_name = model_name.replace(")", "B")
     out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model_name
     script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model_name + ".xcm"
 

@@ -75,9 +75,9 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     error = err_out_lines + err_err_lines
     warn = warn_out_lines + warn_err_lines
     if os.path.exists(out_file + "_info.csv") and run_type == "fit":
-        #if "B" or "-" in out_file:
-        #    out_file_name = out_file .replace("B", "(")
-        #    out_file_name = out_file_name.replace("-", ")")
+        if "A" or "B" in out_file:
+            out_file_name = out_file .replace("A", "(")
+            out_file_name = out_file_name.replace("B", ")")
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
         #  a Jupyter Notebook. So now I'm going to smoosh all the csv outputs into one fits.
@@ -89,7 +89,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         # The information about individual spectra, exposure times, luminosities etc.
         spec_info = pd.read_csv(out_file + "_info.csv", header="infer")
         # Gets added into the existing file
-        fitsio.write(out_file + ".fits", spec_info.to_records(index=False), extname="spec_info")
+        fitsio.write(out_file_name + ".fits", spec_info.to_records(index=False), extname="spec_info")
         del spec_info
 
         # This finds all of the matching spectrum plot csvs were generated
@@ -101,16 +101,16 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
             # Loop through and redefine names like this to ensure they're in the right order
             spec_plot = pd.read_csv(out_file + "_spec{}.csv".format(spec_i), header="infer")
             # Adds all the plot tables into the existing fits file in the right order
-            fitsio.write(out_file + ".fits", spec_plot.to_records(index=False), extname="plot{}".format(spec_i))
+            fitsio.write(out_file_name + ".fits", spec_plot.to_records(index=False), extname="plot{}".format(spec_i))
             del spec_plot
 
         # This reads in the fits we just made
-        with FITS(out_file + ".fits") as res_tables:
+        with FITS(out_file_name + ".fits") as res_tables:
             tab_names = [tab.get_extname() for tab in res_tables]
             if "results" not in tab_names or "spec_info" not in tab_names:
                 usable = False
         # I'm going to try returning the file path as that should be pickleable
-        res_tables = out_file + ".fits"
+        res_tables = out_file_name + ".fits"
     elif os.path.exists(out_file) and run_type == "conv_factors":
         res_tables = out_file
         usable = True
