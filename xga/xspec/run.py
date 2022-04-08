@@ -81,9 +81,9 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
         #  a Jupyter Notebook. So now I'm going to smoosh all the csv outputs into one fits.
-        results = pd.read_csv(out_file + "_results.csv", header="infer")
+        results = pd.read_csv(out_file_name + "_results.csv", header="infer")
         # This is the csv with the fit results in, creates new fits file and adds in
-        fitsio.write(out_file + ".fits", results.to_records(index=False), extname="results", clobber=True)
+        fitsio.write(out_file_name + ".fits", results.to_records(index=False), extname="results", clobber=True)
         del results
 
         # The information about individual spectra, exposure times, luminosities etc.
@@ -99,7 +99,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
                      if "{}_spec".format(out_file) in rel_path + "/" + sp]
         for spec_i in range(1, len(spec_tabs)+1):
             # Loop through and redefine names like this to ensure they're in the right order
-            spec_plot = pd.read_csv(out_file + "_spec{}.csv".format(spec_i), header="infer")
+            spec_plot = pd.read_csv(out_file_name + "_spec{}.csv".format(spec_i), header="infer")
             # Adds all the plot tables into the existing fits file in the right order
             fitsio.write(out_file_name + ".fits", spec_plot.to_records(index=False), extname="plot{}".format(spec_i))
             del spec_plot
