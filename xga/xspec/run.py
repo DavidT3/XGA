@@ -83,20 +83,20 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     file_name = os.path.basename(path_name).split('.')[0]
     if "A" or "B" in file_name:
         out_file_name = file_name.replace("A", "(").replace("B", ")")
-    
+
     if os.path.exists(out_file + "_info.csv") and run_type == "fit":
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
         #  a Jupyter Notebook. So now I'm going to smoosh all the csv outputs into one fits.
-        results = pd.read_csv(out_file_name + "_results.csv", header="infer")
+        results = pd.read_csv(out_file + "_results.csv", header="infer")
         # This is the csv with the fit results in, creates new fits file and adds in
-        fitsio.write(out_file_name + ".fits", results.to_records(index=False), extname="results", clobber=True)
+        fitsio.write(out_file + ".fits", results.to_records(index=False), extname="results", clobber=True)
         del results
 
         # The information about individual spectra, exposure times, luminosities etc.
         spec_info = pd.read_csv(out_file + "_info.csv", header="infer")
         # Gets added into the existing file
-        fitsio.write(out_file_name + ".fits", spec_info.to_records(index=False), extname="spec_info")
+        fitsio.write(out_file + ".fits", spec_info.to_records(index=False), extname="spec_info")
         del spec_info
 
         # This finds all of the matching spectrum plot csvs were generated
@@ -106,18 +106,19 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
                      if "{}_spec".format(out_file) in rel_path + "/" + sp]
         for spec_i in range(1, len(spec_tabs)+1):
             # Loop through and redefine names like this to ensure they're in the right order
-            spec_plot = pd.read_csv(out_file_name + "_spec{}.csv".format(spec_i), header="infer")
+            spec_plot = pd.read_csv(out_file + "_spec{}.csv".format(spec_i), header="infer")
             # Adds all the plot tables into the existing fits file in the right order
-            fitsio.write(out_file_name + ".fits", spec_plot.to_records(index=False), extname="plot{}".format(spec_i))
+            fitsio.write(out_file + ".fits", spec_plot.to_records(index=False), extname="plot{}".format(spec_i))
             del spec_plot
 
         # This reads in the fits we just made
-        with FITS(out_file_name + ".fits") as res_tables:
+        with FITS(out_file + ".fits") as res_tables:
             tab_names = [tab.get_extname() for tab in res_tables]
             if "results" not in tab_names or "spec_info" not in tab_names:
                 usable = False
         # I'm going to try returning the file path as that should be pickleable
-        res_tables = out_file_name + ".fits"
+        res_tables = out_file + ".fits"
+        os.rename(out_file + ".csv", out_file_name + ".csv")
     elif os.path.exists(out_file) and run_type == "conv_factors":
         res_tables = out_file
         usable = True
