@@ -74,10 +74,17 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
 
     error = err_out_lines + err_err_lines
     warn = warn_out_lines + warn_err_lines
+
+    #this small part of code helps tackle the fact that bash doesn't like the brackets
+    #used specifically for blackbody_gauss function as it has parentheses
+    #in the model name
+
+    path_name = os.path.abspath(out_file)
+    file_name = os.path.basename(path_name).split('.')[0]
+    if "A" or "B" in file_name:
+        out_file_name = file_name.replace("A", "(").replace("B", ")")
+    
     if os.path.exists(out_file + "_info.csv") and run_type == "fit":
-        if "A" or "B" in out_file:
-            out_file_name = out_file .replace("A", "(")
-            out_file_name = out_file_name.replace("B", ")")
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
         #  a Jupyter Notebook. So now I'm going to smoosh all the csv outputs into one fits.
