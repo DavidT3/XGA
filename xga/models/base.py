@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2022, 17:12. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -179,7 +179,7 @@ class BaseModel1D(metaclass=ABCMeta):
             raise UnitConversionError("You have passed an x value in units of {p}, but this model expects units of "
                                       "{e}".format(p=x.unit.to_string(), e=self._x_unit.to_string()))
         else:
-            # Just to be sure its in exactly the right units
+            # Just to be sure it's in exactly the right units
             x = x.to(self._x_unit)
 
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
