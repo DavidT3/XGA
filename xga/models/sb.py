@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/04/2022, 12:01. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -328,7 +328,7 @@ class DoubleBetaProfile1D(BaseModel1D):
         def transform(x_val: Quantity, beta: Quantity, r_core: Quantity, norm: Quantity, beta_two: Quantity,
                       r_core_two: Quantity, norm_two: Quantity):
             """
-            The function that calculates the inverse abel transform of this beta profile.
+            The function that calculates the inverse abel transform of this double beta profile.
 
             :param Quantity x_val: The x location(s) at which to calculate the value of the inverse abel transform.
             :param Quantity beta: The beta parameter of the first beta profile.
