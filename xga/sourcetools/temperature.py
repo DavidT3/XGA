@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2022, 12:48. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -165,8 +165,9 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                           over_sample: float = None, one_rmf: bool = True, abund_table: str = "angr",
-                           num_cores: int = NUM_CORES) -> List[Quantity]:
+                           over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
+                           abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
+                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES) -> List[Quantity]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using signal to noise measurements
@@ -210,7 +211,10 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
+    :param bool freeze_met: Whether the metallicity parameter in the fits to annuli in XSPEC should be frozen.
     :param str abund_table: The abundance table to use during the XSPEC fits.
+    :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
+    :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :return: A list of non-scalar astropy quantities containing the annular radii used to generate the
         projected temperature profiles created by this function. Each Quantity element of the list corresponds
@@ -264,12 +268,13 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         sources = sources[0]
 
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                             over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, abund_table=abund_table)
+                             over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, abund_table=abund_table,
+                             lo_en=temp_lo_en, hi_en=temp_hi_en, freeze_met=freeze_met)
 
     return all_rads
 
 
-def grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii: Union[Quantity, List[Quantity]],
+def _grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii: Union[Quantity, List[Quantity]],
                             growth_factor: float = 1.3, start_radius: Quantity = Quantity(20, 'arcsec'),
                             num_ann: int = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                             over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES):
@@ -418,8 +423,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         # This returns the boundary radii for the annuli
         ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined, use_worst, lo_en,
                                           hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
-                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, abund_table,
-                                          num_cores)
+                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf=one_rmf,
+                                          abund_table=abund_table, num_cores=num_cores)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 

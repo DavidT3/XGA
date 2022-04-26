@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2022, 12:48. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -612,8 +612,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
         # This returns the boundary radii for the annuli
         ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined, use_worst, lo_en,
                                           hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
-                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, abund_table,
-                                          num_cores)
+                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf=one_rmf,
+                                          abund_table=abund_table, num_cores=num_cores)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
