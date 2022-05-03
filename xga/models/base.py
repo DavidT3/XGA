@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 13:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 14:18. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -406,6 +406,13 @@ class BaseModel1D(metaclass=ABCMeta):
         elif inner_radius is not None and not inner_radius.unit.is_equivalent(outer_radius):
             raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
                                       " as the outer_radius Quantity.")
+
+        # Do a basic sanity checks on the radii, they can't be below zero because that doesn't make any sense
+        #  physically. Also make sure that outer_radius isn't less than inner_radius
+        if inner_radius.value < 0 or outer_radius < inner_radius:
+            raise ValueError("Both inner_radius and outer_radius must be greater than zero (though inner_radius "
+                             "may be None, which is equivalent to zero). Also, outer_radius must be greater than "
+                             "inner_radius.")
 
         # Perform checks on the input outer radius units - don't need to explicitly check the inner radius units
         #  because I've already ensured that they're the same as outer_radius
