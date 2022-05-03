@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/04/2022, 17:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 12:17. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -366,7 +366,8 @@ class BaseModel1D(metaclass=ABCMeta):
 
         return transform_res
 
-    def volume_integral(self, outer_radius: Quantity, use_par_dist: bool = False) -> Quantity:
+    def volume_integral(self, outer_radius: Quantity, inner_radius: Quantity = None,
+                        use_par_dist: bool = False) -> Quantity:
         """
         Calculates a numerical value for the volume integral of the function over a sphere of
         radius outer_radius. The scipy quad function is used. This method can either return a single value
@@ -377,6 +378,8 @@ class BaseModel1D(metaclass=ABCMeta):
         integration over a sphere.
 
         :param Quantity outer_radius: The radius to integrate out to.
+        :param Quantity inner_radius: The inner bound of the radius integration. Default is None, which results
+            in an inner radius of 0 in the units of outer_radius being used.
         :param bool use_par_dist: Should the parameter distributions be used to calculate a volume
             integral distribution; this can only be used if a fit has been performed using the model instance.
             Default is False, in which case the current parameters will be used to calculate a single value
@@ -395,32 +398,55 @@ class BaseModel1D(metaclass=ABCMeta):
 
             return x**2 * self.model(x, *pars)
 
-        # Perform checks on the input radius units
+        # This checks to see if inner radius is None (probably how it will be used most of the time), and if
+        #  it is then creates a Quantity with the same units as outer_radius
+        if inner_radius is None:
+            inner_radius = Quantity(0, outer_radius.unit)
+        elif inner_radius is not None and not inner_radius.unit.is_equivalent(outer_radius):
+            raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
+                                      " as the outer_radius Quantity.")
+
+        # Perform checks on the input outer radius units - don't need to explicitly check the inner radius units
+        #  because I've already ensured that they're the same as outer_radius
         if not outer_radius.unit.is_equivalent(self._x_unit):
             raise UnitConversionError("Outer radius cannot be converted to units of "
                                       "{}".format(self._x_unit.to_string()))
         else:
             outer_radius = outer_radius.to(self._x_unit)
+            # We already know that this conversion is possible, because I checked that inner_radius units are
+            #  equivalent to outer_radius
+            inner_radius = inner_radius.to(self._x_unit)
 
-        if use_par_dist and outer_radius in self._vol_ints['pars']:
+        # Here I just check to see whether this particular integral has been performed already, no sense repeating a
+        #  costly-ish calculation if it has. Where the results are stored depends on whether the integral was performed
+        #  using the median parameter values or the distributions
+        if use_par_dist and outer_radius in self._vol_ints['pars'] and \
+                inner_radius in self._vol_ints['pars'][outer_radius]:
+            # This makes sure the rest of the code in this function knows that this calculation has already been run
             already_run = True
-            integral_res = self._vol_ints['pars'][outer_radius]
-        elif not use_par_dist and outer_radius in self._vol_ints['par_dists']:
+            integral_res = self._vol_ints['pars'][outer_radius][inner_radius]
+
+        # Equivalent to the above clause but for par distribution results rather than the median single values used
+        #  to concisely represent the models
+        elif not use_par_dist and outer_radius in self._vol_ints['par_dists'] and \
+                inner_radius in self._vol_ints['par_dists'][outer_radius]:
             already_run = True
-            integral_res = self._vol_ints['par_dists'][outer_radius]
+            integral_res = self._vol_ints['par_dists'][outer_radius][inner_radius]
+
+        # Otherwise, this particular integral just hasn't been run
         else:
             already_run = False
 
         # The user can either request a single value using the current model parameters, or a distribution
         #  using the current parameter distributions (if set)
         if not use_par_dist and not already_run:
-            integral_res = 4 * np.pi * quad(integrand, 0, outer_radius.value, args=[p.value for p
-                                                                                    in self._model_pars])[0]
+            integral_res = 4 * np.pi * quad(integrand, inner_radius.value, outer_radius.value,
+                                            args=[p.value for p in self._model_pars])[0]
         elif use_par_dist and len(self._par_dists[0]) != 0 and not already_run:
             unitless_dists = [par_d.value for par_d in self.par_dists]
             integral_res = np.zeros(len(unitless_dists[0]))
             for par_ind in range(len(unitless_dists[0])):
-                integral_res[par_ind] = 4 * np.pi * quad(integrand, 0, outer_radius.value,
+                integral_res[par_ind] = 4 * np.pi * quad(integrand, inner_radius.value, outer_radius.value,
                                                          args=[par_d[par_ind] for par_d in unitless_dists])[0]
         elif use_par_dist and len(self._par_dists[0]) == 0 and not already_run:
             raise XGAFitError("No fit has been performed with this model, so there are no parameter distributions"
@@ -429,9 +455,9 @@ class BaseModel1D(metaclass=ABCMeta):
         if not already_run:
             integral_res = Quantity(integral_res, self.y_unit * self.x_unit**3)
             if use_par_dist:
-                self._vol_ints['par_dists'][outer_radius] = integral_res
+                self._vol_ints['par_dists'][outer_radius][inner_radius] = integral_res
             else:
-                self._vol_ints['pars'][outer_radius] = integral_res
+                self._vol_ints['pars'][outer_radius][inner_radius] = integral_res
 
         return integral_res
 
