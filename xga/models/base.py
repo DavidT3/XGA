@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 12:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 13:45. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -447,11 +447,15 @@ class BaseModel1D(metaclass=ABCMeta):
         # The user can either request a single value using the current model parameters, or a distribution
         #  using the current parameter distributions (if set)
         if not use_par_dist and not already_run:
+            # Runs the volume integral for a sphere for the representative parameter values of this model
             integral_res = 4 * np.pi * quad(integrand, inner_radius.value, outer_radius.value,
                                             args=[p.value for p in self._model_pars])[0]
         elif use_par_dist and len(self._par_dists[0]) != 0 and not already_run:
+            # Runs the volume integral for the parameter distributions (assuming there are any) of this model
             unitless_dists = [par_d.value for par_d in self.par_dists]
             integral_res = np.zeros(len(unitless_dists[0]))
+            # An unfortunately unsophisticated way of doing this, but stepping through the parameter distributions
+            #  one by one.
             for par_ind in range(len(unitless_dists[0])):
                 integral_res[par_ind] = 4 * np.pi * quad(integrand, inner_radius.value, outer_radius.value,
                                                          args=[par_d[par_ind] for par_d in unitless_dists])[0]
@@ -459,6 +463,7 @@ class BaseModel1D(metaclass=ABCMeta):
             raise XGAFitError("No fit has been performed with this model, so there are no parameter distributions"
                               " available.")
 
+        # If there wasn't already a result stored, the integration result is saved in a dictionary
         if not already_run:
             integral_res = Quantity(integral_res, self.y_unit * self.x_unit ** 3)
             if use_par_dist:
