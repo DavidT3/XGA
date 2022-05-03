@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 12:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 12:36. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -315,7 +315,7 @@ class BaseModel1D(metaclass=ABCMeta):
             method = 'direct'
             force_change = True
         else:
-            dr = (x[1]-x[0]).value
+            dr = (x[1] - x[0]).value
 
         # If the user just wants to use the current values of the model parameters then this is what happens
         if not use_par_dist:
@@ -362,7 +362,7 @@ class BaseModel1D(metaclass=ABCMeta):
                 else:
                     raise ValueError("{} is not a recognised inverse abel transform type".format(method))
 
-        transform_res = Quantity(transform_res, self._y_unit/self._x_unit)
+        transform_res = Quantity(transform_res, self._y_unit / self._x_unit)
 
         return transform_res
 
@@ -386,6 +386,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :return: The result of the integration, either a single value or a distribution.
         :rtype: Quantity
         """
+
         def integrand(x: float, pars: List[float]):
             """
             Internal function to wrap the model function.
@@ -396,7 +397,7 @@ class BaseModel1D(metaclass=ABCMeta):
             :rtype: float
             """
 
-            return x**2 * self.model(x, *pars)
+            return x ** 2 * self.model(x, *pars)
 
         # This checks to see if inner radius is None (probably how it will be used most of the time), and if
         #  it is then creates a Quantity with the same units as outer_radius
@@ -420,22 +421,28 @@ class BaseModel1D(metaclass=ABCMeta):
         # Here I just check to see whether this particular integral has been performed already, no sense repeating a
         #  costly-ish calculation if it has. Where the results are stored depends on whether the integral was performed
         #  using the median parameter values or the distributions
-        if use_par_dist and outer_radius in self._vol_ints['pars'] and \
-                inner_radius in self._vol_ints['pars'][outer_radius]:
+        if not use_par_dist and (outer_radius in self._vol_ints['pars'] and
+                                 inner_radius in self._vol_ints['pars'][outer_radius]):
             # This makes sure the rest of the code in this function knows that this calculation has already been run
             already_run = True
             integral_res = self._vol_ints['pars'][outer_radius][inner_radius]
 
         # Equivalent to the above clause but for par distribution results rather than the median single values used
         #  to concisely represent the models
-        elif not use_par_dist and outer_radius in self._vol_ints['par_dists'] and \
-                inner_radius in self._vol_ints['par_dists'][outer_radius]:
+        elif use_par_dist and (outer_radius in self._vol_ints['par_dists'] and
+                               inner_radius in self._vol_ints['par_dists'][outer_radius]):
             already_run = True
             integral_res = self._vol_ints['par_dists'][outer_radius][inner_radius]
 
         # Otherwise, this particular integral just hasn't been run
         else:
             already_run = False
+            # In this case I pre-emptively add the outer radius to the dictionary keys, for use later to store
+            #  the result. I don't add the inner radius because it will be automatically added
+            if use_par_dist:
+                self._vol_ints['par_dists'][outer_radius] = {}
+            else:
+                self._vol_ints['pars'][outer_radius] = {}
 
         # The user can either request a single value using the current model parameters, or a distribution
         #  using the current parameter distributions (if set)
@@ -453,7 +460,7 @@ class BaseModel1D(metaclass=ABCMeta):
                               " available.")
 
         if not already_run:
-            integral_res = Quantity(integral_res, self.y_unit * self.x_unit**3)
+            integral_res = Quantity(integral_res, self.y_unit * self.x_unit ** 3)
             if use_par_dist:
                 self._vol_ints['par_dists'][outer_radius][inner_radius] = integral_res
             else:
@@ -590,7 +597,7 @@ class BaseModel1D(metaclass=ABCMeta):
         # Check if there are parameter distributions associated with this model
         if len(self._par_dists[0] != 0):
             # Set up the figure
-            figsize = (6, 5*self.num_pars)
+            figsize = (6, 5 * self.num_pars)
             fig, ax_arr = plt.subplots(ncols=1, nrows=self.num_pars, figsize=figsize)
 
             # Iterate through the axes and plot the histograms
@@ -603,8 +610,8 @@ class BaseModel1D(metaclass=ABCMeta):
                 err = self.model_par_errs[ax_ind]
                 # Depending how many entries there are per parameter in the error quantity depends how we plot them
                 if err.isscalar:
-                    ax.axvline(self.model_pars[ax_ind].value-err.value, color='red', linestyle='dashed')
-                    ax.axvline(self.model_pars[ax_ind].value+err.value, color='red', linestyle='dashed')
+                    ax.axvline(self.model_pars[ax_ind].value - err.value, color='red', linestyle='dashed')
+                    ax.axvline(self.model_pars[ax_ind].value + err.value, color='red', linestyle='dashed')
                 elif not err.isscalar and len(err) == 2:
                     ax.axvline(self.model_pars[ax_ind].value - err[0].value, color='red', linestyle='dashed')
                     ax.axvline(self.model_pars[ax_ind].value + err[1].value, color='red', linestyle='dashed')
@@ -1104,10 +1111,3 @@ class BaseModel1D(metaclass=ABCMeta):
             raise TypeError("You may only set the profile property with an XGA profile object, or None.")
         else:
             self._profile = new_val
-
-
-
-
-
-
-
