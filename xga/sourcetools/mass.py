@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2022, 12:57. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -61,8 +61,10 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                              temp_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]], global_radius: Quantity,
                              fit_method: str = "mcmc", num_walkers: int = 20, num_steps: int = 20000,
                              sb_pix_step: int = 1, sb_min_snr: Union[int, float] = 0.0, inv_abel_method: str = None,
-                             temp_min_snr: float = 20, abund_table: str = "angr", group_spec: bool = True,
-                             spec_min_counts: int = 5, spec_min_sn: float = None, over_sample: float = None,
+                             temp_min_snr: float = 20, freeze_met: bool = True, abund_table: str = "angr",
+                             temp_lo_en: Quantity = Quantity(0.3, 'keV'), temp_hi_en: Quantity = Quantity(7.9, 'keV'),
+                             group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
+                             over_sample: float = None,
                              num_cores: int = NUM_CORES, show_warn: bool = True) -> List[HydrostaticMass]:
     """
     A convenience function that should allow the user to easily measure hydrostatic masses of a sample of galaxy
@@ -107,8 +109,11 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
         'analytical' for models with an analytical solution to the inverse abel transform, or 'direct' for
         models which don't have an analytical solution. Default is None.
     :param int/float temp_min_snr: The minimum signal to noise for a temperature measurement annulus, default is 30.
+    :param bool freeze_met: Whether the metallicity parameter in the fits to annuli in XSPEC should be frozen.
     :param str abund_table: The abundance table to use for fitting, and the conversion factor required during density
         calculations.
+    :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
+    :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param int spec_min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
@@ -148,7 +153,8 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     # Attempt to measure their 3D temperature profiles
     temp_profs = onion_deproj_temp_prof(cut_sources, cut_rads, min_snr=temp_min_snr, min_counts=spec_min_counts,
                                         min_sn=spec_min_sn, over_sample=over_sample, abund_table=abund_table,
-                                        num_cores=num_cores)
+                                        num_cores=num_cores, freeze_met=freeze_met, temp_lo_en=temp_lo_en,
+                                        temp_hi_en=temp_hi_en)
     # This just allows us to quickly lookup the temperature profile we need later
     temp_prof_dict = {str(cut_sources[p_ind]): p for p_ind, p in enumerate(temp_profs)}
 

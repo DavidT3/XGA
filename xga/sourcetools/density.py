@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 11:31. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -545,8 +545,10 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
                           hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                           psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                          over_sample: float = None, one_rmf: bool = True, abund_table: str = "angr",
-                          num_data_real: int = 10000, sigma: int = 1, num_cores: int = NUM_CORES) -> List[GasDensity3D]:
+                          over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
+                          abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
+                          temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 10000, sigma: int = 1,
+                          num_cores: int = NUM_CORES) -> List[GasDensity3D]:
     """
     A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First checks whether the
     required annular spectra already exist and have been fit using XSPEC, if not then they are generated and fitted,
@@ -594,8 +596,11 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
+    :param bool freeze_met: Whether the metallicity parameter in the fits to annuli in XSPEC should be frozen.
     :param str abund_table: The abundance table to use both for the conversion from n_exn_p to n_e^2 during density
         calculation, and the XSPEC fit.
+    :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
+    :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_data_real: The number of random realisations to generate when propagating profile uncertainties.
     :param int sigma: What sigma uncertainties should newly created profiles have, the default is 2σ.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
@@ -612,8 +617,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
         # This returns the boundary radii for the annuli
         ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined, use_worst, lo_en,
                                           hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
-                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, abund_table,
-                                          num_cores)
+                                          exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, freeze_met,
+                                          abund_table, temp_lo_en, temp_hi_en, num_cores)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
