@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 11:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 18:55. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -11,11 +11,12 @@ import pandas as pd
 from astropy import wcs
 from astropy.convolution import Kernel
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError, Unit
-from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize, BaseStretch
+from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize, BaseStretch, BaseInterval
 from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Ellipse
+from matplotlib.widgets import Button
 from regions import read_ds9, PixelRegion, SkyRegion
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
@@ -1229,6 +1230,268 @@ class Image(BaseProduct):
         # Wipe the figure
         plt.close("all")
 
+    def edit_regions(self):
+        view_inst = self.InteractiveView(self)
+        view_inst.setup_view()
+
+        # I suspect this should be the final call of this method, otherwise maybe every figure will be auto
+        #  refreshing which probably would not be a good thing
+        # plt.ioff()
+
+    class InteractiveView:
+        def __init__(self, phot_prod, figsize: Tuple = (7, 7)):
+
+            in_fig = plt.figure(figsize=figsize)
+            self._fig = in_fig
+            self._im_ax = plt.gca()
+
+            self._pick_cid = self._fig.canvas.mpl_connect("pick_event", self._on_region_pick)
+            self._move_cid = self._fig.canvas.mpl_connect("motion_notify_event", self._on_motion)
+            self._rel_cid = self._fig.canvas.mpl_connect("button_release_event", self._on_release)
+            self._undo_cid = self._fig.canvas.mpl_connect("key_press_event", self._key_press)
+            self._click_cid = self._fig.canvas.mpl_connect("button_press_event", self._click_event)
+
+            self._parent_phot_obj = phot_prod
+            self._regions = deepcopy(phot_prod.regions)
+            # self._reg_drawn = np.full(len(self._regions), False)
+
+        def setup_view(self, mask_edges: bool = True, cmap: str = "gnuplot2",
+                       interval: BaseInterval = MinMaxInterval(), stretch: BaseStretch = LogStretch()):
+
+
+            # ax.set_title("TESTING XGA REGION MODIFIER", fontsize=15)
+
+            # TODO Decide whether this should be copying or not
+            plot_data = self._parent_phot_obj.data
+
+            # If we're showing a RateMap, then we're gonna apply an edge mask to remove all the artificially brightened
+            #  pixels that we can - it makes the view look better
+            if type(self._parent_phot_obj) == RateMap and mask_edges:
+                plot_data *= self._parent_phot_obj.edge_mask
+
+            self._im_ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
+            self._im_ax.xaxis.set_ticklabels([])
+            self._im_ax.yaxis.set_ticklabels([])
+
+            norm = ImageNormalize(data=plot_data, interval=interval, stretch=stretch)
+
+            # Adds the actual image to the axis.
+            im_map = self._im_ax.imshow(plot_data, norm=norm, origin="lower", cmap=cmap)
+
+            # plt.colorbar(im_map)
+            # Doesn't seem to sit right with ipympl so commented out for now
+            # plt.tight_layout()
+
+            all_src_loc = plt.axes([0.049, 0.805, 0.075, 0.075])
+            self.all_src_button = Button(all_src_loc, "ALL", color="0.99")
+            self.all_src_button.on_clicked(self.to_all_src)
+            plt.draw()
+
+            ext_src_loc = plt.axes([0.049, 0.725, 0.075, 0.075])
+            self.ext_src_button = Button(ext_src_loc, "EXT")
+            self.ext_src_button.on_clicked(self.to_ext_src)
+
+            pnt_src_loc = plt.axes([0.049, 0.645, 0.075, 0.075])
+            self.pnt_src_button = Button(pnt_src_loc, "PNT")
+            self.pnt_src_button.on_clicked(self.to_pnt_src)
+
+            no_src_loc = plt.axes([0.049, 0.565, 0.075, 0.075])
+            self.no_src_button = Button(no_src_loc, "OFF")
+            self.no_src_button.on_clicked(self.to_no_src)
+
+            new_ext_loc = plt.axes([0.049, 0.191, 0.075, 0.075])
+            self.new_ext_button = Button(new_ext_loc, "NEW EXT")
+            self.new_ext_button.on_clicked(self.new_ext_src)
+
+            new_pnt_loc = plt.axes([0.049, 0.111, 0.075, 0.075])
+            self.new_pnt_button = Button(new_pnt_loc, "NEW PNT")
+            self.new_pnt_button.on_clicked(self.new_pnt_src)
+
+            save_loc = plt.axes([0.9, 0.111, 0.075, 0.075])
+            self.save_button = Button(save_loc, "SAVE")
+            self.save_button.on_clicked(self.save_changes)
+
+            delete_loc = plt.axes([0.9, 0.191, 0.075, 0.075])
+            self.del_button = Button(delete_loc, "DELETE")
+            self.del_button.on_clicked(self.del_reg)
+
+            self.redraw_regions()
+
+            # I THINK that activating this is what turns on automatic refreshing, so should probably go on after
+            plt.ion()
+            # plt.show()
+
+        def redraw_regions(self):
+            for reg in self._regions:
+                # Use the regions module conversion method to go to a matplotlib artist
+                reg_art = reg.as_artist()
+                # Set line thickness and add to the axes
+                reg_art.set_linewidth(1.4)
+                self._im_ax.add_artist(reg_art)
+
+        def to_all_src(self, event):
+            self.cur_reg = "ALL"
+            for artist in self._im_ax.artists:
+                artist.set_linewidth(1.2)
+            if self.all_src_button is not None:
+                self.all_src_button.color = "0.99"
+                self.ext_src_button.color = "0.85"
+                self.pnt_src_button.color = "0.85"
+                self.no_src_button.color = "0.85"
+            plt.draw()
+
+        def to_ext_src(self, event):
+            self.cur_reg = "EXT"
+            for artist in self._im_ax.artists:
+                if artist.get_edgecolor() != (0.0, 0.5019607843137255, 0.0, 1.0):
+                    artist.set_linewidth(0.0)
+                else:
+                    artist.set_linewidth(1.2)
+            if self.all_src_button is not None:
+                self.all_src_button.color = "0.85"
+                self.ext_src_button.color = "0.99"
+                self.pnt_src_button.color = "0.85"
+                self.no_src_button.color = "0.85"
+            plt.draw()
+
+        def to_pnt_src(self, event):
+            self.cur_reg = "PNT"
+            for artist in self._im_ax.artists:
+                if artist.get_edgecolor() != (1.0, 0.0, 0.0, 1.0):
+                    artist.set_linewidth(0.0)
+                else:
+                    artist.set_linewidth(1.2)
+            if self.all_src_button is not None:
+                self.all_src_button.color = "0.85"
+                self.ext_src_button.color = "0.85"
+                self.pnt_src_button.color = "0.99"
+                self.no_src_button.color = "0.85"
+            plt.draw()
+
+        def to_no_src(self, event):
+            print('BELLEND')
+
+            self.cur_reg = "NONE"
+            for artist in self._im_ax.artists:
+                if artist.get_edgecolor() != (1.0, 0.0, 0.0, 1.0) \
+                        or artist.get_edgecolor() != (0.0, 0.5019607843137255, 0.0, 1.0):
+                    artist.set_linewidth(0.0)
+            if self.all_src_button is not None:
+                self.all_src_button.color = "0.85"
+                self.ext_src_button.color = "0.85"
+                self.pnt_src_button.color = "0.85"
+                self.no_src_button.color = "0.99"
+            plt.draw()
+
+        def _new_ext_src(self, event):
+            el_patch = Ellipse(self.last_click, 10, 20)
+            el_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
+            el_patch.set_edgecolor((0.0, 0.5019607843137255, 0.0, 1.0))
+            el_patch.set_picker(True)
+            el_patch.set_linewidth(1.2)
+            self._im_ax.add_artist(el_patch)
+            # Updates shape dictionary
+            for art in self.ax.artists:
+                if art.height == art.width:
+                    self.shape_dict[art] = 'circle'
+                else:
+                    self.shape_dict[art] = 'ellipse'
+            plt.draw()
+
+        def _new_pnt_src(self, event):
+            el_patch = Ellipse(self.last_click, 10, 10)
+            el_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
+            el_patch.set_edgecolor((1.0, 0.0, 0.0, 1.0))
+            el_patch.set_picker(True)
+            el_patch.set_linewidth(1.2)
+            self._im_ax.add_artist(el_patch)
+            # Updates shape dictionary
+            for art in self.ax.artists:
+                if art.height == art.width:
+                    self.shape_dict[art] = 'circle'
+                else:
+                    self.shape_dict[art] = 'ellipse'
+            plt.draw()
+
+        def _on_region_pick(self, event):
+            if self.cur_pick is not None:
+                self.cur_pick.set_linewidth(1.2)
+
+            self.cur_pick = event.artist
+            self.cur_pick.set_linewidth(2.3)
+            self.ghost_art = copy(self.cur_pick)
+            self.ghost_art.set_linestyle('dotted')
+            self.ax.add_artist(self.ghost_art)
+            self.select = True
+            self.history.append([self.cur_pick, self.cur_pick.center])
+
+        def _on_release(self, event):
+            self.select = False
+            try:
+                self.ghost_art.remove()
+                self.cur_pick.figure.canvas.draw()
+            except AttributeError or ValueError:
+                pass
+            self.ghost_art = None
+
+        def _on_motion(self, event):
+            if self.select is False:
+                return
+
+            x0, y0 = self.cur_pick.center
+            dx = (event.xdata - x0)
+            dy = (event.ydata - y0)
+            self.cur_pick.center = (x0 + dx, y0 + dy)
+            self.cur_pick.figure.canvas.draw()
+
+        def _key_press(self, event):
+            if event.key == "ctrl+z":
+                if len(self.history) != 0:
+                    self.history[-1][0].center = self.history[-1][1]
+                    self.history[-1][0].figure.canvas.draw()
+                    self.history.pop(-1)
+
+            if event.key == "w":
+                if self.cur_pick is not None:
+                    if self.shape_dict[self.cur_pick] == 'circle':
+                        self.cur_pick.width += 5
+                    self.cur_pick.height += 5
+                    self.cur_pick.figure.canvas.draw()
+
+            if event.key == "s":
+                if self.cur_pick is not None:
+                    if self.shape_dict[self.cur_pick] == 'circle':
+                        self.cur_pick.width -= 5
+                    self.cur_pick.height -= 5
+                    self.cur_pick.figure.canvas.draw()
+
+            if event.key == "d":
+                if self.cur_pick is not None:
+                    if self.shape_dict[self.cur_pick] == 'circle':
+                        self.cur_pick.height += 5
+                    self.cur_pick.width += 5
+                    self.cur_pick.figure.canvas.draw()
+
+            if event.key == "a":
+                if self.cur_pick is not None:
+                    if self.shape_dict[self.cur_pick] == 'circle':
+                        self.cur_pick.height -= 5
+                    self.cur_pick.width -= 5
+                    self.cur_pick.figure.canvas.draw()
+
+            if event.key == "q":
+                if self.cur_pick is not None:
+                    self.cur_pick.angle += 5
+                    self.cur_pick.figure.canvas.draw()
+
+            if event.key == "e":
+                if self.cur_pick is not None:
+                    self.cur_pick.angle -= 5
+                    self.cur_pick.figure.canvas.draw()
+
+        def _click_event(self, event):
+            if event.inaxes == self.ax:
+                self.last_click = (event.xdata, event.ydata)
 
 class ExpMap(Image):
     """
