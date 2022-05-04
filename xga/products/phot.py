@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2022, 10:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 11:35. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -437,8 +437,8 @@ class Image(BaseProduct):
     @regions.setter
     def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]]]):
         """
-        A setter for regions associated with this object, a region file path is passed, then that file
-        is processed into the required format.
+        A setter for regions associated with this object, a region file path or a list of regions is passed, then
+        that file/set of regions is processed into the required format.
 
         :param str/List[SkyRegion/PixelRegion] new_reg: A new region file path, or a list of region objects.
         """
