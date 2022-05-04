@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 18:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 19:14. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -27,6 +27,8 @@ from ..sourcetools import ang_to_rad
 from ..utils import xmm_sky, xmm_det, find_all_wcs
 
 EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
+plt.rcParams['keymap.save'] = ''
+plt.rcParams['keymap.quit'] = ''
 
 
 class Image(BaseProduct):
@@ -1253,7 +1255,10 @@ class Image(BaseProduct):
 
             self._parent_phot_obj = phot_prod
             self._regions = deepcopy(phot_prod.regions)
+            self._shape_dict = {}
             # self._reg_drawn = np.full(len(self._regions), False)
+            self._cur_pick = None
+            self._last_click = (phot_prod.shape[0]/2, phot_prod.shape[1]/2)
 
         def setup_view(self, mask_edges: bool = True, cmap: str = "gnuplot2",
                        interval: BaseInterval = MinMaxInterval(), stretch: BaseStretch = LogStretch()):
@@ -1301,19 +1306,19 @@ class Image(BaseProduct):
 
             new_ext_loc = plt.axes([0.049, 0.191, 0.075, 0.075])
             self.new_ext_button = Button(new_ext_loc, "NEW EXT")
-            self.new_ext_button.on_clicked(self.new_ext_src)
+            self.new_ext_button.on_clicked(self._new_ext_src)
 
             new_pnt_loc = plt.axes([0.049, 0.111, 0.075, 0.075])
             self.new_pnt_button = Button(new_pnt_loc, "NEW PNT")
-            self.new_pnt_button.on_clicked(self.new_pnt_src)
+            self.new_pnt_button.on_clicked(self._new_pnt_src)
 
-            save_loc = plt.axes([0.9, 0.111, 0.075, 0.075])
-            self.save_button = Button(save_loc, "SAVE")
-            self.save_button.on_clicked(self.save_changes)
-
-            delete_loc = plt.axes([0.9, 0.191, 0.075, 0.075])
-            self.del_button = Button(delete_loc, "DELETE")
-            self.del_button.on_clicked(self.del_reg)
+            # save_loc = plt.axes([0.9, 0.111, 0.075, 0.075])
+            # self.save_button = Button(save_loc, "SAVE")
+            # self.save_button.on_clicked(self._save_changes)
+            #
+            # delete_loc = plt.axes([0.9, 0.191, 0.075, 0.075])
+            # self.del_button = Button(delete_loc, "DELETE")
+            # self.del_button.on_clicked(self._del_reg)
 
             self.redraw_regions()
 
@@ -1369,8 +1374,6 @@ class Image(BaseProduct):
             plt.draw()
 
         def to_no_src(self, event):
-            print('BELLEND')
-
             self.cur_reg = "NONE"
             for artist in self._im_ax.artists:
                 if artist.get_edgecolor() != (1.0, 0.0, 0.0, 1.0) \
@@ -1384,46 +1387,46 @@ class Image(BaseProduct):
             plt.draw()
 
         def _new_ext_src(self, event):
-            el_patch = Ellipse(self.last_click, 10, 20)
+            el_patch = Ellipse(self._last_click, 10, 20)
             el_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
             el_patch.set_edgecolor((0.0, 0.5019607843137255, 0.0, 1.0))
             el_patch.set_picker(True)
             el_patch.set_linewidth(1.2)
             self._im_ax.add_artist(el_patch)
             # Updates shape dictionary
-            for art in self.ax.artists:
+            for art in self._im_ax.artists:
                 if art.height == art.width:
-                    self.shape_dict[art] = 'circle'
+                    self._shape_dict[art] = 'circle'
                 else:
-                    self.shape_dict[art] = 'ellipse'
+                    self._shape_dict[art] = 'ellipse'
             plt.draw()
 
         def _new_pnt_src(self, event):
-            el_patch = Ellipse(self.last_click, 10, 10)
+            el_patch = Ellipse(self._last_click, 10, 10)
             el_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
             el_patch.set_edgecolor((1.0, 0.0, 0.0, 1.0))
             el_patch.set_picker(True)
             el_patch.set_linewidth(1.2)
             self._im_ax.add_artist(el_patch)
             # Updates shape dictionary
-            for art in self.ax.artists:
+            for art in self._im_ax.artists:
                 if art.height == art.width:
-                    self.shape_dict[art] = 'circle'
+                    self._shape_dict[art] = 'circle'
                 else:
-                    self.shape_dict[art] = 'ellipse'
+                    self._shape_dict[art] = 'ellipse'
             plt.draw()
 
         def _on_region_pick(self, event):
-            if self.cur_pick is not None:
-                self.cur_pick.set_linewidth(1.2)
+            if self._cur_pick is not None:
+                self._cur_pick.set_linewidth(1.2)
 
             self.cur_pick = event.artist
             self.cur_pick.set_linewidth(2.3)
-            self.ghost_art = copy(self.cur_pick)
+            self.ghost_art = deepcopy(self.cur_pick)
             self.ghost_art.set_linestyle('dotted')
-            self.ax.add_artist(self.ghost_art)
+            self._im_ax.add_artist(self.ghost_art)
             self.select = True
-            self.history.append([self.cur_pick, self.cur_pick.center])
+            # self.history.append([self.cur_pick, self.cur_pick.center])
 
         def _on_release(self, event):
             self.select = False
@@ -1490,8 +1493,8 @@ class Image(BaseProduct):
                     self.cur_pick.figure.canvas.draw()
 
         def _click_event(self, event):
-            if event.inaxes == self.ax:
-                self.last_click = (event.xdata, event.ydata)
+            if event.inaxes == self._im_ax:
+                self._last_click = (event.xdata, event.ydata)
 
 class ExpMap(Image):
     """
