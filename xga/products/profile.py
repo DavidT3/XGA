@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 10:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 11:27. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -1267,6 +1267,46 @@ class HydrostaticMass(BaseProfile1D):
             raise ValueError("A mass of less than zero has been measured, which is not physical.")
 
         return mass_res, mass_dist
+
+    def annular_mass(self, outer_radius: Quantity, inner_radius: Quantity, conf_level: float = 68.2):
+        """
+        Calculate the hydrostatic mass contained within a specific 3D annulus, bounded by the outer and inner radius
+        supplied to this method. Annular mass is calculated by measuring the mass within the inner and outer
+        radii, and then subtracting the inner from the outer. Also supports calculating multiple annular masses
+        when inner_radius and outer_radius are non-scalar.
+
+        WARNING - THIS METHOD INVOLVES SUBTRACTING TWO MASS DISTRIBUTIONS, WHICH CAN'T NECESSARILY BE APPROXIMATED
+        AS GAUSSIAN DISTRIBUTIONS, AS SUCH RESULTS FROM THIS METHOD SHOULD BE TREATED WITH SOME SUSPICION.
+
+        :param Quantity outer_radius: Astropy containing outer radius (or radii) for the annulus (annuli) within
+            which you wish to measure the mass. If calculating multiple annular masses, the length of outer_radius
+            must be the same as inner_radius.
+        :param Quantity inner_radius: Astropy containing inner radius (or radii) for the annulus (annuli) within
+            which you wish to measure the mass. If calculating multiple annular masses, the length of inner_radius
+            must be the same as outer_radius.
+        :param float conf_level: The confidence level for the mass uncertainties, the default is 68.2% (~1σ).
+        :return: An astropy quantity containing a mass distribution(s). Quantity will become two-dimensional
+            when multiple sets of inner and outer radii are passed by the user.
+        :rtype: Quantity
+        """
+        # Perform some checks to make sure that the user has passed inner and outer radii quantities that are valid
+        #  and won't break any of the calculations that will be happening in this method
+        if outer_radius.isscalar != inner_radius.isscalar:
+            raise ValueError("The outer_radius and inner_radius Quantities must both be scalar, or both "
+                             "be non-scalar.")
+        elif (not inner_radius.isscalar and inner_radius.ndim != 1) or \
+                (not outer_radius.isscalar and outer_radius.ndim != 1):
+            raise ValueError('Non-scalar radius Quantities must have only one dimension')
+        elif not outer_radius.isscalar and not inner_radius.isscalar and outer_radius.shape != inner_radius.shape:
+            raise ValueError('The outer_radius and inner_radius Quantities must be the same shape.')
+
+        # This just measures the masses within two radii, the outer and the inner supplied by the user. The mass()
+        #  method will automatically deal with the input of multiple entries for each radius
+        outer_mass, outer_mass_dist = self.mass(outer_radius, conf_level)
+        inner_mass, inner_mass_dist = self.mass(inner_radius, conf_level)
+
+        # This PROBABLY NOT AT ALL valid because they're just posterior distributions of mass
+        return outer_mass_dist - inner_mass_dist
 
     def view_mass_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8), bins: Union[str, int] = 'auto',
                        colour: str = "lightslategrey"):
