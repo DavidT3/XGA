@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 19:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 19:21. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1259,6 +1259,8 @@ class Image(BaseProduct):
             # self._reg_drawn = np.full(len(self._regions), False)
             self._cur_pick = None
             self._last_click = (phot_prod.shape[0]/2, phot_prod.shape[1]/2)
+            self._ghost_art = None
+            self._select = None
 
         def setup_view(self, mask_edges: bool = True, cmap: str = "gnuplot2",
                        interval: BaseInterval = MinMaxInterval(), stretch: BaseStretch = LogStretch()):
@@ -1420,12 +1422,12 @@ class Image(BaseProduct):
             if self._cur_pick is not None:
                 self._cur_pick.set_linewidth(1.2)
 
-            self.cur_pick = event.artist
-            self.cur_pick.set_linewidth(2.3)
-            self.ghost_art = deepcopy(self.cur_pick)
-            self.ghost_art.set_linestyle('dotted')
-            self._im_ax.add_artist(self.ghost_art)
-            self.select = True
+            self._cur_pick = event.artist
+            self._cur_pick.set_linewidth(2.3)
+            self._ghost_art = deepcopy(self._cur_pick)
+            self._ghost_art.set_linestyle('dotted')
+            self._im_ax.add_artist(self._ghost_art)
+            self._select = True
             # self.history.append([self.cur_pick, self.cur_pick.center])
 
         def _on_release(self, event):
