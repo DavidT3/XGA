@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 11:27. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -425,7 +425,7 @@ class GasDensity3D(BaseProfile1D):
         # The density class has an extra bit of information in the storage key, the method used to generate it
         self._storage_key = "me" + dens_method + extra_info + self._storage_key
 
-    def gas_mass(self, model: str, outer_rad: Quantity, conf_level: float = 68.2,
+    def gas_mass(self, model: str, outer_rad: Quantity, inner_rad: Quantity = None, conf_level: float = 68.2,
                  fit_method: str = 'mcmc') -> Tuple[Quantity, Quantity]:
         """
         A method to calculate and return the gas mass (with uncertainties). This method uses the model to generate
@@ -434,12 +434,22 @@ class GasDensity3D(BaseProfile1D):
 
         :param str model: The name of the model from which to derive the gas mass.
         :param Quantity outer_rad: The radius to measure the gas mass out to.
+        :param Quantity inner_rad: The inner radius within which to measure the gas mass, this enables measuring
+            core-excised gas masses. Default is None, which equates to zero.
         :param float conf_level: The confidence level to use to calculate the mass errors
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
         :return: A Quantity containing three values (mass, -err, +err), and another Quantity containing
             the entire mass distribution from the whole realisation.
         :rtype: Tuple[Quantity, Quantity]
         """
+        # This checks to see if inner radius is None (probably how it will be used most of the time), and if
+        #  it is then creates a Quantity with the same units as outer_radius
+        if inner_rad is None:
+            inner_rad = Quantity(0, outer_rad.unit)
+        elif inner_rad is not None and not inner_rad.unit.is_equivalent(outer_rad):
+            raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
+                                      " as the outer_radius Quantity.")
+
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             raise XGAInvalidModelError("{m} is not a valid model for a gas density profile".format(m=model))
         elif model not in self.good_model_fits:
@@ -456,6 +466,7 @@ class GasDensity3D(BaseProfile1D):
                                       " of this profile ({u})".format(u=self.radii_unit.to_string()))
         else:
             outer_rad = outer_rad.to(self.radii_unit)
+            inner_rad = inner_rad.to(self.radii_unit)
 
         # Doing an extra check to warn the user if the radius they supplied is outside the radii
         #  covered by the data
@@ -466,23 +477,28 @@ class GasDensity3D(BaseProfile1D):
         # Just preparing the way, setting up the storage dictionary
         if str(model_obj) not in self._gas_masses:
             self._gas_masses[str(model_obj)] = {}
+        # The next layer is the outer radius, then finally the result will be stored using the inner radius
+        if outer_rad not in self._gas_masses[str(model_obj)]:
+            self._gas_masses[str(model_obj)][outer_rad] = {}
 
-        if outer_rad not in self._gas_masses[str(model_obj)] and outer_rad != 0:
-            mass_dist = model_obj.volume_integral(outer_rad, use_par_dist=True)
+        # This runs the volume integral on the density profile, using the built in integral method in the model
+        if inner_rad not in self._gas_masses[str(model_obj)][outer_rad] and outer_rad != 0:
+            mass_dist = model_obj.volume_integral(outer_rad, inner_rad, use_par_dist=True)
+            # Converts to an actual mass rather than a total number of particles
             if self._sub_type == 'num_dens':
                 mass_dist *= (MEAN_MOL_WEIGHT*m_p)
-
+            # Converts to solar masses and stores inside the current profile for future reference
             mass_dist = mass_dist.to('Msun')
-            self._gas_masses[str(model_obj)][outer_rad] = mass_dist
+            self._gas_masses[str(model_obj)][outer_rad][inner_rad] = mass_dist
 
         # Obviously the mass contained within a zero radius bin is zero, but the integral can fall over sometimes when
         #  this is requested so I put in this special case
-        elif outer_rad not in self._gas_masses[str(model_obj)] and outer_rad == 0:
+        elif inner_rad not in self._gas_masses[str(model_obj)][outer_rad] and outer_rad == 0:
             mass_dist = Quantity(np.zeros(len(model_obj.par_dists[0])), 'Msun')
-            self._gas_masses[str(model_obj)][outer_rad] = mass_dist
+            self._gas_masses[str(model_obj)][outer_rad][inner_rad] = mass_dist
 
         else:
-            mass_dist = self._gas_masses[str(model_obj)][outer_rad]
+            mass_dist = self._gas_masses[str(model_obj)][outer_rad][inner_rad]
 
         med_mass = np.percentile(mass_dist, 50).value
         upp_mass = np.percentile(mass_dist, 50 + (conf_level/2)).value
@@ -538,7 +554,7 @@ class GasDensity3D(BaseProfile1D):
             raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
                              "arrays of radii are not supported.")
 
-        gas_mass, gas_mass_dist = self.gas_mass(model, outer_rad, conf_level, fit_method)
+        gas_mass, gas_mass_dist = self.gas_mass(model, outer_rad, conf_level=conf_level, fit_method=fit_method)
 
         plt.figure(figsize=figsize)
         ax = plt.gca()
@@ -1229,7 +1245,7 @@ class HydrostaticMass(BaseProfile1D):
             # Here there are no logs in the derivatives, because its easier to take advantage of astropy's quantities
             #  that way.
             mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT*m_p) * G)) * \
-                            ((dens * temp_der) + (temp * dens_der))
+                        ((dens * temp_der) + (temp * dens_der))
 
             # Just converts the mass/masses to the unit we normally use for them
             mass_dist = mass_dist.to('Msun').T
@@ -1251,6 +1267,46 @@ class HydrostaticMass(BaseProfile1D):
             raise ValueError("A mass of less than zero has been measured, which is not physical.")
 
         return mass_res, mass_dist
+
+    def annular_mass(self, outer_radius: Quantity, inner_radius: Quantity, conf_level: float = 68.2):
+        """
+        Calculate the hydrostatic mass contained within a specific 3D annulus, bounded by the outer and inner radius
+        supplied to this method. Annular mass is calculated by measuring the mass within the inner and outer
+        radii, and then subtracting the inner from the outer. Also supports calculating multiple annular masses
+        when inner_radius and outer_radius are non-scalar.
+
+        WARNING - THIS METHOD INVOLVES SUBTRACTING TWO MASS DISTRIBUTIONS, WHICH CAN'T NECESSARILY BE APPROXIMATED
+        AS GAUSSIAN DISTRIBUTIONS, AS SUCH RESULTS FROM THIS METHOD SHOULD BE TREATED WITH SOME SUSPICION.
+
+        :param Quantity outer_radius: Astropy containing outer radius (or radii) for the annulus (annuli) within
+            which you wish to measure the mass. If calculating multiple annular masses, the length of outer_radius
+            must be the same as inner_radius.
+        :param Quantity inner_radius: Astropy containing inner radius (or radii) for the annulus (annuli) within
+            which you wish to measure the mass. If calculating multiple annular masses, the length of inner_radius
+            must be the same as outer_radius.
+        :param float conf_level: The confidence level for the mass uncertainties, the default is 68.2% (~1σ).
+        :return: An astropy quantity containing a mass distribution(s). Quantity will become two-dimensional
+            when multiple sets of inner and outer radii are passed by the user.
+        :rtype: Quantity
+        """
+        # Perform some checks to make sure that the user has passed inner and outer radii quantities that are valid
+        #  and won't break any of the calculations that will be happening in this method
+        if outer_radius.isscalar != inner_radius.isscalar:
+            raise ValueError("The outer_radius and inner_radius Quantities must both be scalar, or both "
+                             "be non-scalar.")
+        elif (not inner_radius.isscalar and inner_radius.ndim != 1) or \
+                (not outer_radius.isscalar and outer_radius.ndim != 1):
+            raise ValueError('Non-scalar radius Quantities must have only one dimension')
+        elif not outer_radius.isscalar and not inner_radius.isscalar and outer_radius.shape != inner_radius.shape:
+            raise ValueError('The outer_radius and inner_radius Quantities must be the same shape.')
+
+        # This just measures the masses within two radii, the outer and the inner supplied by the user. The mass()
+        #  method will automatically deal with the input of multiple entries for each radius
+        outer_mass, outer_mass_dist = self.mass(outer_radius, conf_level)
+        inner_mass, inner_mass_dist = self.mass(inner_radius, conf_level)
+
+        # This PROBABLY NOT AT ALL valid because they're just posterior distributions of mass
+        return outer_mass_dist - inner_mass_dist
 
     def view_mass_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8), bins: Union[str, int] = 'auto',
                        colour: str = "lightslategrey"):
@@ -1320,8 +1376,8 @@ class HydrostaticMass(BaseProfile1D):
 
         # Grab out the hydrostatic mass distribution, and the gas mass distribution
         hy_mass, hy_mass_dist = self.mass(radius, conf_level)
-        gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model.name, radius, conf_level,
-                                                           self._dens_model.fit_method)
+        gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model.name, radius, conf_level=conf_level,
+                                                           fit_method=self._dens_model.fit_method)
 
         # If the distributions don't have the same number of entries (though as far I can recall they always should),
         #  then we just make sure we have two equal length distributions to divide
