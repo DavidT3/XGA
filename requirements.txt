@@ -20,3 +20,4 @@ getdist>=1.1.3
 pytest~=6.2.1
 cycler~=0.10.0
 docutils==0.17
+ipympl>=0.9.1
