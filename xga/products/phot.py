@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 19:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/05/2022, 13:59. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1232,26 +1232,86 @@ class Image(BaseProduct):
         # Wipe the figure
         plt.close("all")
 
-    def edit_regions(self):
-        view_inst = self.InteractiveView(self)
-        view_inst.setup_view()
+    def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2'):
+        view_inst = self._InteractiveView(self, figsize)
+        view_inst.setup_view(cmap)
 
         # I suspect this should be the final call of this method, otherwise maybe every figure will be auto
         #  refreshing which probably would not be a good thing
         # plt.ioff()
 
-    class InteractiveView:
+    class _InteractiveView:
+        """
+        An internal class of the Image class, designed to enable the interactive and dynamic editing of regions
+        for an observation (with the capability of adding completely new regions as well). This is 'private' as
+        I can't really see a use-case where the user would define an instance of this themselves.
+        """
         def __init__(self, phot_prod, figsize: Tuple = (7, 7)):
+            """
+            The init of the _InteractiveView class, which enables dynamic viewing of XGA photometric products.
 
+            :param Image/RateMap/ExpMap phot_prod: The XGA photometric product which we want to interact with.
+            :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this class.
+            """
+
+            # Setting up the figure within which all the axes (data, buttons, etc.) are placed
             in_fig = plt.figure(figsize=figsize)
+            # Storing the figure in an attribute, as well as the image axis (i.e. the axis on which the data
+            #  are displayed) in another attribute, for convenience.
             self._fig = in_fig
             self._im_ax = plt.gca()
 
+            # Setting up the look of the data axis, removing ticks and tick labels because it's an image
+            self._im_ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
+            self._im_ax.xaxis.set_ticklabels([])
+            self._im_ax.yaxis.set_ticklabels([])
+
+            # Setting up some visual stuff that is used in multiple places throughout the class
+            # First the colours of buttons in an active and inactive state (the region toggles)
+            self._but_act_col = "0.85"
+            self._but_inact_col = "0.99"
+
+            # Setting up and storing the connections to events on the matplotlib canvas. These are what
+            #  allow specific methods to be triggered when things like button presses or clicking on the
+            #  figure occur. They are stored in attributes, though I'm not honestly sure that's necessary
+            # Not all uses of this class will make use of all of these connections, but I'm still defining them
+            #  all here anyway
             self._pick_cid = self._fig.canvas.mpl_connect("pick_event", self._on_region_pick)
             self._move_cid = self._fig.canvas.mpl_connect("motion_notify_event", self._on_motion)
             self._rel_cid = self._fig.canvas.mpl_connect("button_release_event", self._on_release)
             self._undo_cid = self._fig.canvas.mpl_connect("key_press_event", self._key_press)
             self._click_cid = self._fig.canvas.mpl_connect("button_press_event", self._click_event)
+
+            # All uses of this class (both editing regions and just having a vaguely interactive view of the
+            #  observation) will have these buttons that allow regions to be turned off and on, so they are
+            #  defined here. All buttons are defined in separate axes.
+            # These buttons act as toggles, they are all active by default and clicking one will turn off the source
+            #  type its associated with. Clicking it again will turn it back on.
+            # This button toggles extended (green) sources.
+            ext_src_loc = plt.axes([0.049, 0.805, 0.075, 0.075])
+            self._ext_src_button = Button(ext_src_loc, "EXT", color=self._but_act_col)
+            self._ext_src_button.on_clicked(self._toggle_ext)
+
+            # This button toggles point (red) sources.
+            pnt_src_loc = plt.axes([0.049, 0.725, 0.075, 0.075])
+            self._pnt_src_button = Button(pnt_src_loc, "PNT", color=self._but_act_col)
+            self._pnt_src_button.on_clicked(self._toggle_pnt)
+
+            # This button toggles types of region other than green or red (mostly valid for XCS XAPA sources).
+            oth_src_loc = plt.axes([0.049, 0.645, 0.075, 0.075])
+            self._oth_src_button = Button(oth_src_loc, "OTHER", color=self._but_act_col)
+            self._oth_src_button.on_clicked(self._toggle_oth)
+
+            # This button toggles custom source regions
+            cust_src_loc = plt.axes([0.049, 0.565, 0.075, 0.075])
+            self._cust_src_button = Button(cust_src_loc, "CUSTOM", color=self._but_act_col)
+            self._cust_src_button.on_clicked(self._toggle_cust)
+
+            # A dictionary describing the current type of regions that are on display
+            self._cur_act_reg_type = {"EXT": True, "PNT": True, "OTH": True, "CUST": True}
+
+
+
 
             self._parent_phot_obj = phot_prod
             self._regions = deepcopy(phot_prod.regions)
@@ -1262,10 +1322,22 @@ class Image(BaseProduct):
             self._ghost_art = None
             self._select = None
             self._history = []
-            self._colour_convert = {}
 
-        def setup_view(self, mask_edges: bool = True, cmap: str = "gnuplot2",
-                       interval: BaseInterval = MinMaxInterval(), stretch: BaseStretch = LogStretch()):
+            # Custom color for edited regions
+            # TODO DECIDE ON THE COLOUR AND HOW TO DEAL WITH THINGS, BECAUSE MANUAL XGA CUSTOM REGIONS ARE WHITE
+            #  RIGHT NOW
+            # self._colour_convert['(1.0, 1.0, 0.0, 1.0)'] = 'yellow'
+
+            self._colour_convert = {(1.0, 0.0, 0.0, 1.0): 'red', (0.0, 0.5019607843137255, 0.0, 1.0): 'green',
+                                    (1.0, 1.0, 1.0, 1.0): 'white'}
+            for region in self._regions:
+                art_reg = region.as_artist()
+                self._colour_convert[art_reg.get_edgecolor()] = region.visual["color"]
+
+            self._inv_colour_convert = {v: k for k, v in self._colour_convert.items()}
+
+        def setup_view(self, cmap: str = "gnuplot2", interval: BaseInterval = MinMaxInterval(),
+                       stretch: BaseStretch = LogStretch()):
 
 
             # ax.set_title("TESTING XGA REGION MODIFIER", fontsize=15)
@@ -1275,12 +1347,10 @@ class Image(BaseProduct):
 
             # If we're showing a RateMap, then we're gonna apply an edge mask to remove all the artificially brightened
             #  pixels that we can - it makes the view look better
-            if type(self._parent_phot_obj) == RateMap and mask_edges:
-                plot_data *= self._parent_phot_obj.edge_mask
+            # if type(self._parent_phot_obj) == RateMap and mask_edges:
+            #     plot_data *= self._parent_phot_obj.edge_mask
 
-            self._im_ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
-            self._im_ax.xaxis.set_ticklabels([])
-            self._im_ax.yaxis.set_ticklabels([])
+
 
             norm = ImageNormalize(data=plot_data, interval=interval, stretch=stretch)
 
@@ -1291,22 +1361,7 @@ class Image(BaseProduct):
             # Doesn't seem to sit right with ipympl so commented out for now
             # plt.tight_layout()
 
-            all_src_loc = plt.axes([0.049, 0.805, 0.075, 0.075])
-            self.all_src_button = Button(all_src_loc, "ALL", color="0.99")
-            self.all_src_button.on_clicked(self.to_all_src)
-            plt.draw()
 
-            ext_src_loc = plt.axes([0.049, 0.725, 0.075, 0.075])
-            self.ext_src_button = Button(ext_src_loc, "EXT")
-            self.ext_src_button.on_clicked(self.to_ext_src)
-
-            pnt_src_loc = plt.axes([0.049, 0.645, 0.075, 0.075])
-            self.pnt_src_button = Button(pnt_src_loc, "PNT")
-            self.pnt_src_button.on_clicked(self.to_pnt_src)
-
-            no_src_loc = plt.axes([0.049, 0.565, 0.075, 0.075])
-            self.no_src_button = Button(no_src_loc, "OFF")
-            self.no_src_button.on_clicked(self.to_no_src)
 
             new_ext_loc = plt.axes([0.049, 0.191, 0.075, 0.075])
             self.new_ext_button = Button(new_ext_loc, "NEW EXT")
@@ -1324,94 +1379,79 @@ class Image(BaseProduct):
             # self.del_button = Button(delete_loc, "DELETE")
             # self.del_button.on_clicked(self._del_reg)
 
-            self.setup_regions()
+            # self.setup_regions()
+            self._draw_regions()
 
             # I THINK that activating this is what turns on automatic refreshing, so should probably go on after
             plt.ion()
-            # plt.show()
+            plt.show()
 
-        def setup_regions(self):
-            # for reg in self._regions:
-            #     # Use the regions module conversion method to go to a matplotlib artist
-            #     reg_art = reg.as_artist()
-            #     # Set line thickness and add to the axes
-            #     reg_art.set_linewidth(1.4)
-            #     self._im_ax.add_artist(reg_art)
+        def _draw_regions(self):
+            # This will trigger in initial cases where there ARE regions associated with the photometric product
+            #  that has spawned this InteractiveView, but they haven't been added as artists yet
+            if len(self._im_ax.artists) == 0 and len(self._regions) != 0:
+                for region in self._regions:
+                    art_reg = region.as_artist()
+                    art_reg.set_picker(True)
+                    art_reg.set_linewidth(1.2)
+                    self._im_ax.add_artist(art_reg)
 
-            for region in self._regions:
-                art_reg = region.as_artist()
-                art_reg.set_picker(True)
-                art_reg.set_linewidth(1.2)
-                self._im_ax.add_artist(art_reg)
-                self._colour_convert[art_reg.get_edgecolor()] = region.visual["color"]
-            self._colour_convert['(1.0, 1.0, 0.0, 1.0)'] = 'yellow'  # Custom color for edited regions
+            # If
+            if all(self._cur_act_reg_type.values()):
+                allowed_colours = list(self._colour_convert.keys())
+            else:
+                allowed_colours = []
+                if self._cur_act_reg_type['EXT']:
+                    allowed_colours.append(self._inv_colour_convert['green'])
+                if self._cur_act_reg_type['PNT']:
+                    allowed_colours.append(self._inv_colour_convert['red'])
+                if self._cur_act_reg_type['CUST']:
+                    allowed_colours.append(self._inv_colour_convert['white'])
+                if self._cur_act_reg_type['OTH']:
+                    allowed_colours += [self._inv_colour_convert[c] for c in self._inv_colour_convert
+                                        if c not in ['green', 'red', 'white']]
 
-            for art in self._im_ax.artists:
-                if art.height == art.width:
-                    self._shape_dict[art] = 'circle'
-                else:
-                    self._shape_dict[art] = 'ellipse'
-
-            if self._cur_reg == "ALL":
-                self.to_all_src("event")
-            elif self._cur_reg == "EXT":
-                self.to_ext_src("event")
-            elif self._cur_reg == "PNT":
-                self.to_pnt_src("event")
-            elif self._cur_reg == "NONE":
-                self.to_no_src("event")
-
-        def to_all_src(self, event):
-            self._cur_reg = "ALL"
             for artist in self._im_ax.artists:
-                artist.set_linewidth(1.2)
-            if self.all_src_button is not None:
-                self.all_src_button.color = "0.99"
-                self.ext_src_button.color = "0.85"
-                self.pnt_src_button.color = "0.85"
-                self.no_src_button.color = "0.85"
-            plt.draw()
-
-        def to_ext_src(self, event):
-            self._cur_reg = "EXT"
-            for artist in self._im_ax.artists:
-                if artist.get_edgecolor() != (0.0, 0.5019607843137255, 0.0, 1.0):
-                    artist.set_linewidth(0.0)
-                else:
+                if artist.get_edgecolor() in allowed_colours:
                     artist.set_linewidth(1.2)
-            if self.all_src_button is not None:
-                self.all_src_button.color = "0.85"
-                self.ext_src_button.color = "0.99"
-                self.pnt_src_button.color = "0.85"
-                self.no_src_button.color = "0.85"
-            plt.draw()
-
-        def to_pnt_src(self, event):
-            self._cur_reg = "PNT"
-            for artist in self._im_ax.artists:
-                if artist.get_edgecolor() != (1.0, 0.0, 0.0, 1.0):
-                    artist.set_linewidth(0.0)
                 else:
-                    artist.set_linewidth(1.2)
-            if self.all_src_button is not None:
-                self.all_src_button.color = "0.85"
-                self.ext_src_button.color = "0.85"
-                self.pnt_src_button.color = "0.99"
-                self.no_src_button.color = "0.85"
-            plt.draw()
+                    artist.set_linewidth(0)
 
-        def to_no_src(self, event):
-            self._cur_reg = "NONE"
-            for artist in self._im_ax.artists:
-                if artist.get_edgecolor() != (1.0, 0.0, 0.0, 1.0) \
-                        or artist.get_edgecolor() != (0.0, 0.5019607843137255, 0.0, 1.0):
-                    artist.set_linewidth(0.0)
-            if self.all_src_button is not None:
-                self.all_src_button.color = "0.85"
-                self.ext_src_button.color = "0.85"
-                self.pnt_src_button.color = "0.85"
-                self.no_src_button.color = "0.99"
-            plt.draw()
+        def _toggle_ext(self, event):
+            self._cur_act_reg_type['EXT'] = np.invert(self._cur_act_reg_type['EXT'])
+            if self._cur_act_reg_type['EXT']:
+                self._ext_src_button.color = self._but_act_col
+            else:
+                self._ext_src_button.color = self._but_inact_col
+
+            self._draw_regions()
+
+        def _toggle_pnt(self, event):
+            self._cur_act_reg_type['PNT'] = np.invert(self._cur_act_reg_type['PNT'])
+            if self._cur_act_reg_type['PNT']:
+                self._pnt_src_button.color = self._but_act_col
+            else:
+                self._pnt_src_button.color = self._but_inact_col
+
+            self._draw_regions()
+
+        def _toggle_oth(self, event):
+            self._cur_act_reg_type['OTH'] = np.invert(self._cur_act_reg_type['OTH'])
+            if self._cur_act_reg_type['OTH']:
+                self._oth_src_button.color = self._but_act_col
+            else:
+                self._oth_src_button.color = self._but_inact_col
+
+            self._draw_regions()
+
+        def _toggle_cust(self, event):
+            self._cur_act_reg_type['CUST'] = np.invert(self._cur_act_reg_type['CUST'])
+            if self._cur_act_reg_type['CUST']:
+                self._cust_src_button.color = self._but_act_col
+            else:
+                self._cust_src_button.color = self._but_inact_col
+
+            self._draw_regions()
 
         def _new_ext_src(self, event):
             el_patch = Ellipse(self._last_click, 10, 20)
@@ -1472,7 +1512,7 @@ class Image(BaseProduct):
             dx = (event.xdata - x0)
             dy = (event.ydata - y0)
             self._cur_pick.center = (x0 + dx, y0 + dy)
-            self._cur_pick.figure.canvas.draw()
+            # self._cur_pick.figure.canvas.draw()
 
         def _key_press(self, event):
             if event.key == "ctrl+z":
