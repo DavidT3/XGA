@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 23:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 23:41. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -9,7 +9,7 @@ from typing import Tuple, List, Union
 import numpy as np
 import pandas as pd
 from astropy import wcs
-from astropy.convolution import Kernel
+from astropy.convolution import Kernel, Gaussian2DKernel, convolve_fft
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError, Unit
 from astropy.visualization import MinMaxInterval, ImageNormalize, BaseStretch, ManualInterval
 from astropy.visualization.stretch import LogStretch, SinhStretch, AsinhStretch, SqrtStretch, SquaredStretch, \
@@ -1433,13 +1433,13 @@ class Image(BaseProduct):
             # This is the bit where we set up the buttons and slider for the smoothing function
             smooth_loc = plt.axes([ax_loc.x1 + 0.005, top_pos, 0.075, 0.075])
             self._smooth_button = Button(smooth_loc, "SMOOTH", color=self._but_inact_col)
-            self._ext_src_button.on_clicked(self._toggle_smooth)
+            self._smooth_button.on_clicked(self._toggle_smooth)
 
             ax_smooth_slid = plt.axes([ax_loc.x1 + 0.02, ax_loc.y0+0.002, 0.05, 0.685], facecolor="white")
             # Hides the ticks to make it look nicer
             ax_smooth_slid.set_xticks([])
             # Define the Slider instance, add and position a label, and connect to the method it activates
-            self._smooth_slider = Slider(ax_smooth_slid, 'KERNEL RADIUS', 0.5, 5, 2, valstep=0.5,
+            self._smooth_slider = Slider(ax_smooth_slid, 'KERNEL RADIUS', 0.5, 5, 1, valstep=0.5,
                                          orientation='vertical')
             # Remove the annoying line representing initial value that is automatically added
             self._smooth_slider.hline.remove()
@@ -1447,7 +1447,11 @@ class Image(BaseProduct):
             self._smooth_slider.label.set_rotation(270)
             self._smooth_slider.label.set_x(0.5)
             self._smooth_slider.label.set_y(0.45)
-            self._vrange_slider.on_changed(self._change_smooth)
+            self._smooth_slider.on_changed(self._change_smooth)
+
+            # We also create an attribute to store the current value of the slider in. Not really necessary as we
+            #  could always fetch the value out of the smooth slider attribute but its neater this way I think
+            self._kernel_rad = self._smooth_slider.val
 
         def dynamic_view(self):
             """
@@ -1644,11 +1648,60 @@ class Image(BaseProduct):
             # And finally replot the data.
             self._replot_data()
 
-        def _toggle_smooth(self, event):
-            pass
+        def _apply_smooth(self):
+            """
+            This very simple function simply sets the internal data to a smooth version, making using of the
+            currently stored information on the kernel radius. The smoothing is with a 2D Gaussian kernel, but
+            the kernel is symmetric.
+            """
+            # Sets up the kernel instance - making use of Astropy because I've used it before
+            the_kernel = Gaussian2DKernel(self._kernel_rad, self._kernel_rad)
+            # Using an FFT convolution for now, I think this should be okay as this is purely for visual
+            #  use and so I don't care much about edge effects
+            self._plot_data = convolve_fft(self._plot_data, the_kernel)
 
-        def _change_smooth(self):
-            pass
+        def _toggle_smooth(self, event):
+            """
+            This method is triggered by toggling the smooth button, and will turn smoothing on or off.
+
+            :param event: The button event that triggered this toggle.
+            """
+            # If the current colour is the active button colour then smoothing is turned on already. Don't
+            #  know why I didn't think of doing it this way before
+            if self._smooth_button.color == self._but_act_col:
+                # Put the button colour back to inactive
+                self._smooth_button.color = self._but_inact_col
+                # Sets the plot data back to the original unchanged version
+                self._plot_data = self._parent_phot_obj.data.copy()
+            else:
+                # Set the button colour to active
+                self._smooth_button.color = self._but_act_col
+                # This runs the symmetric 2D Gaussian smoothing, then stores the result in the data
+                #  attribute of the class
+                self._apply_smooth()
+
+            # Runs re-normalisation on the data and then re-plots it, necessary for either option of the toggle.
+            self._renorm()
+            self._replot_data()
+
+        def _change_smooth(self, new_rad: float):
+            """
+            This method is triggered by a change of the slider, and sets a new smoothing kernel radius
+            from the slider value. This will trigger a change if smoothing is currently turned on.
+
+            :param float new_rad: The new radius for the smoothing kernel.
+            """
+            # Sets the kernel radius attribute to the new value
+            self._kernel_rad = new_rad
+            # But if the smoothing button is the active colour (i.e. smoothing is on), then we update the smooth
+            if self._smooth_button.color == self._but_act_col:
+                # Need to reset the data even though we're still smoothing, otherwise the smoothing will be
+                #  applied on top of other smoothing
+                self._plot_data = self._parent_phot_obj.data.copy()
+                # Same deal as the else part of _toggle_smooth
+                self._apply_smooth()
+                self._renorm()
+                self._replot_data()
 
         def _toggle_ext(self, event):
             """
