@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 16:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 16:44. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1379,19 +1379,26 @@ class Image(BaseProduct):
             # Adds the actual image to the axis.
             im_map = self._im_ax.imshow(self._plot_data, norm=self._norm, origin="lower", cmap=self._cmap)
 
-        def dynamic_view(self, regions_on: bool = True):
-
-            if regions_on:
-                self._draw_regions()
+        def dynamic_view(self):
+            """
+            The simplest view method of this class, enables the turning on and off of regions.
+            """
+            # Draws on any regions associated with this instance
+            self._draw_regions()
 
             # I THINK that activating this is what turns on automatic refreshing
             plt.ion()
             plt.show()
 
         def edit_view(self):
-
+            """
+            An extremely useful view method of this class - allows for direct interaction with and editing of
+            regions, as well as the ability to add new regions.
+            """
+            # This mode we DO want to be able to interact with regions
             self._interacting_on = True
 
+            # Add two buttons to the figure to enable the adding of new elliptical and circular regions
             new_ell_loc = plt.axes([0.049, 0.191, 0.075, 0.075])
             self._new_ell_button = Button(new_ell_loc, "ELL")
             self._new_ell_button.on_clicked(self._new_ell_src)
@@ -1400,6 +1407,7 @@ class Image(BaseProduct):
             self._new_circ_button = Button(new_circ_loc, "CIRC")
             self._new_circ_button.on_clicked(self._new_circ_src)
 
+            # Draws on any regions associated with this instance
             self._draw_regions()
 
             plt.ion()
