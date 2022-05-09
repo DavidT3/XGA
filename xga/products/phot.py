@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 23:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 23:46. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1431,11 +1431,11 @@ class Image(BaseProduct):
                 self._stretch_buttons[stretch_name].on_clicked(self._change_stretch(stretch_name))
 
             # This is the bit where we set up the buttons and slider for the smoothing function
-            smooth_loc = plt.axes([ax_loc.x1 + 0.005, top_pos, 0.075, 0.075])
+            smooth_loc = plt.axes([ax_loc.x1 + 0.005, top_pos, 0.095, 0.075])
             self._smooth_button = Button(smooth_loc, "SMOOTH", color=self._but_inact_col)
             self._smooth_button.on_clicked(self._toggle_smooth)
 
-            ax_smooth_slid = plt.axes([ax_loc.x1 + 0.02, ax_loc.y0+0.002, 0.05, 0.685], facecolor="white")
+            ax_smooth_slid = plt.axes([ax_loc.x1 + 0.03, ax_loc.y0+0.002, 0.05, 0.685], facecolor="white")
             # Hides the ticks to make it look nicer
             ax_smooth_slid.set_xticks([])
             # Define the Slider instance, add and position a label, and connect to the method it activates
