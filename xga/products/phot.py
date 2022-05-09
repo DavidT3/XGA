@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 11:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 11:37. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1437,9 +1437,27 @@ class Image(BaseProduct):
             #  to zero if their colour isn't in the approved list
             for artist in self._im_ax.artists:
                 if artist.get_edgecolor() in allowed_colours:
+                    # If we're here then the region type of this artist is enabled by a button, and thus it should
+                    #  be visible. We also use set_picker to make sure that this artist is allowed to be clicked on.
                     artist.set_linewidth(self._reg_line_width)
+                    artist.set_picker(True)
+
+                    # Slightly ugly nested if statement, but this just checks to see whether the current artist
+                    #  is one that the user has selected. If yes then the line width should be different.
+                    if self._cur_pick is not None and self._cur_pick == artist:
+                        artist.set_linewidth(self._sel_reg_line_width)
+
                 else:
+                    # This part is triggered if the artist colour isn't 'allowed' - the button for that region type
+                    #  hasn't been toggled on. And thus the width is set to 0 and the region becomes invisible
                     artist.set_linewidth(0)
+                    # We turn off 'picker' to make sure that invisible regions can't be selected accidentally
+                    artist.set_picker(False)
+                    # We also make sure that if this artist (which is not currently being displayed) was the one
+                    #  selected by the user, it is de-selected, so they don't accidentally make changes to an invisible
+                    #  region.
+                    if self._cur_pick is not None and self._cur_pick == artist:
+                        self._cur_pick = None
 
         def _toggle_ext(self, event):
             """
@@ -1555,20 +1573,24 @@ class Image(BaseProduct):
             # And adds the artist into the axis. As this is a new artist we don't call _draw_regions for this one.
             self._im_ax.add_artist(new_patch)
 
-        # def _new_pnt_src(self, event):
-        #     el_patch = Ellipse(self._last_click, 10, 10)
-        #     el_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
-        #     el_patch.set_edgecolor((1.0, 0.0, 0.0, 1.0))
-        #     el_patch.set_picker(True)
-        #     el_patch.set_linewidth(1.2)
-        #     self._im_ax.add_artist(el_patch)
-        #     # Updates shape dictionary
-        #     for art in self._im_ax.artists:
-        #         if art.height == art.width:
-        #             self._shape_dict[art] = 'circle'
-        #         else:
-        #             self._shape_dict[art] = 'ellipse'
-        #     plt.draw()
+        def _click_event(self, event):
+            """
+            This method is triggered by clicking somewhere on the data axis.
+
+            :param event: The click event that triggered this method.
+            """
+            # Checks whether the click was 'in axis' - so whether it was actually on the image being displayed
+            #  If it wasn't then we don't care about it
+            if event.inaxes == self._im_ax:
+                # This saves the position that the user clicked as the 'last click', as the user may now which
+                #  to insert a new region there
+                self._last_click = (event.xdata, event.ydata)
+                # This just de-selects whatever region might be currently selected. The call to _draw_regions does
+                #  the accompanying refresh of line width.
+                self._cur_pick = None
+                self._draw_regions()
+
+
 
         def _on_region_pick(self, event):
             if self._cur_pick is not None:
@@ -1646,9 +1668,7 @@ class Image(BaseProduct):
                     self._cur_pick.angle -= 5
                     self._cur_pick.figure.canvas.draw()
 
-        def _click_event(self, event):
-            if event.inaxes == self._im_ax:
-                self._last_click = (event.xdata, event.ydata)
+
 
 
 class ExpMap(Image):
