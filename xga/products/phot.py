@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 20:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 20:20. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1237,8 +1237,8 @@ class Image(BaseProduct):
         plt.close("all")
 
     def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2',
-                     init_interval: BaseInterval = MinMaxInterval(), init_stretch: BaseStretch = LogStretch()):
-        view_inst = self._InteractiveView(self, figsize, cmap, init_interval, init_stretch)
+                     init_interval: BaseInterval = MinMaxInterval()):
+        view_inst = self._InteractiveView(self, figsize, cmap, init_interval)
         view_inst.edit_view()
         # I suspect this should be the final call of this method, otherwise maybe every figure will be auto
         #  refreshing which probably would not be a good thing
@@ -1251,7 +1251,7 @@ class Image(BaseProduct):
         I can't really see a use-case where the user would define an instance of this themselves.
         """
         def __init__(self, phot_prod, figsize: Tuple = (7, 7), cmap: str = "gnuplot2",
-                     init_interval: BaseInterval = MinMaxInterval(), init_stretch: BaseStretch = LogStretch()):
+                     init_interval: BaseInterval = MinMaxInterval()):
             """
             The init of the _InteractiveView class, which enables dynamic viewing of XGA photometric products.
 
@@ -1368,13 +1368,15 @@ class Image(BaseProduct):
             self._select = False
             self._history = []
 
-            # TODO FINALISE ALL THIS
-            self._stretch_buttons = {}
-
             # These store the current settings for colour map, stretch, and scaling
             self._cmap = cmap
-            self._stretch = init_stretch
             self._interval = init_interval
+            self._stretch = stretch_dict['LOG']
+            # This is just a convenient place to store the name that XGA uses for the current stretch - it lets us
+            #  access the current stretch instance from stretch_dict more easily (and accompanying buttons etc.)
+            self._active_stretch_name = 'LOG'
+            # This is used to store all the button instances created for controlling stretch
+            self._stretch_buttons = {}
 
             # Here we define attribute to store the data and normalisation in. I copy the data to make sure that
             #  the original information doesn't get changed when smoothing is applied.
@@ -1387,6 +1389,46 @@ class Image(BaseProduct):
             self._im_plot = None
             # Adds the actual image to the axis.
             self._replot_data(masked=False)
+
+            # This bit is where all the stretch buttons are set up, as well as the slider. All methods should
+            #  be able to use re-stretching so that's why this is all in the init
+            ax_loc = self._im_ax.get_position()
+            ax_slid = plt.axes([ax_loc.x0, 0.885, 0.7771, 0.03], facecolor="white")
+            # stretch_ind = list(self.allowed_stretch.keys()).index(stretch)
+            # self.scale_slide = Slider(ax_slid, "Stretch", 0, len(self.allowed_stretch) - 1, valinit=stretch_ind,
+            #                           valstep=1)
+            # ax_slid.xaxis.set_visible(True)
+            # ax_slid.yaxis.set_visible(False)
+
+            # x_ticks = np.arange(0, len(self.allowed_stretch), 1)
+            ax_slid.set_xticks([])
+            ax_slid.set_yticks([])
+            # ax_slid.set_xticklabels(list(self.allowed_stretch.keys()))
+            # self.scale_slide.valtext.set_text(list(self.allowed_stretch.keys())[stretch_ind])
+            # self.scale_slide.on_changed(self.scale_change)
+
+            # Sets up an initial location for the stretch buttons to iterate over, so I can make this
+            #  as automated as possible. An advantage is that I can just add new stretches to the stretch_dict
+            #  and they should be automatically added here.
+            loc = [ax_loc.x0 - (0.075 + 0.005), 0.92, 0.075, 0.075]
+            # Iterate through the stretches that I chose to store in the stretch_dict
+            for stretch_name, stretch in stretch_dict.items():
+                # Increments the position of the button
+                loc[0] += (0.075 + 0.005)
+                # Sets up an axis for the button we're about to create
+                stretch_loc = plt.axes(loc)
+
+                # Sets the colour for this button. Sort of unnecessary to do it like this because LOG should always
+                #  be the initially active stretch, but better to generalise
+                if stretch_name == self._active_stretch_name:
+                    col = self._but_act_col
+                else:
+                    col = self._but_inact_col
+                # Creates the button for the current stretch
+                self._stretch_buttons[stretch_name] = Button(stretch_loc, stretch_name, color=col)
+
+                # Generates and adds the function for the current stretch button
+                self._stretch_buttons[stretch_name].on_clicked(self._change_stretch(stretch_name))
 
         def dynamic_view(self):
             """
@@ -1415,36 +1457,6 @@ class Image(BaseProduct):
             new_circ_loc = plt.axes([0.049, 0.111, 0.075, 0.075])
             self._new_circ_button = Button(new_circ_loc, "CIRC")
             self._new_circ_button.on_clicked(self._new_circ_src)
-
-            ax_loc = self._im_ax.get_position()
-            ax_slid = plt.axes([ax_loc.x0, 0.885, 0.7771, 0.03], facecolor="white")
-            # stretch_ind = list(self.allowed_stretch.keys()).index(stretch)
-            # self.scale_slide = Slider(ax_slid, "Stretch", 0, len(self.allowed_stretch) - 1, valinit=stretch_ind,
-            #                           valstep=1)
-            # ax_slid.xaxis.set_visible(True)
-            # ax_slid.yaxis.set_visible(False)
-
-            # x_ticks = np.arange(0, len(self.allowed_stretch), 1)
-            ax_slid.set_xticks([])
-            ax_slid.set_yticks([])
-            # ax_slid.set_xticklabels(list(self.allowed_stretch.keys()))
-            # self.scale_slide.valtext.set_text(list(self.allowed_stretch.keys())[stretch_ind])
-            # self.scale_slide.on_changed(self.scale_change)
-
-            # Sets up an initial location for the stretch buttons to iterate over, so I can make this
-            #  as automated as possible. An advantage is that I can just add new stretches to the stretch_dict
-            #  and they should be automatically added here.
-            loc = [ax_loc.x0-(0.075 + 0.005), 0.92, 0.075, 0.075]
-            # Iterate through the stretches that I chose to store in the stretch_dict
-            for stretch_name, stretch in stretch_dict.items():
-                # Increments the position of the button
-                loc[0] += (0.075 + 0.005)
-                # Sets up an axis for the button we're about to create
-                stretch_loc = plt.axes(loc)
-                # Creates the button for the current stretch
-                self._stretch_buttons[stretch_name] = Button(stretch_loc, stretch_name)
-                # Generates and adds the function for the current stretch button
-                self._stretch_buttons[stretch_name].on_clicked(self._change_stretch(stretch_name))
 
             # Draws on any regions associated with this instance
             self._draw_regions()
@@ -1581,9 +1593,11 @@ class Image(BaseProduct):
                 :param event: The event passed by clicking the button associated with this function
                 """
                 # This changes the colours of the buttons so the active button has a different colour
-                # self._stretch_buttons[stretch_name].color = self._but_act_col
-                # And th
-                self._stretch_buttons
+                self._stretch_buttons[stretch_name].color = self._but_act_col
+                # And this sets the previously active stretch button colour back to inactive
+                self._stretch_buttons[self._active_stretch_name].color = self._but_inact_col
+                # Now I change the currently active stretch stored in this class
+                self._active_stretch_name = stretch_name
 
                 # This alters the currently selected stretch stored by this class. Fetches the appropriate stretch
                 #  object by using the stretch name passed when this function was generated.
