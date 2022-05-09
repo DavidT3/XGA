@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 20:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 21:10. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -11,14 +11,14 @@ import pandas as pd
 from astropy import wcs
 from astropy.convolution import Kernel
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError, Unit
-from astropy.visualization import MinMaxInterval, ImageNormalize, BaseStretch, BaseInterval
+from astropy.visualization import MinMaxInterval, ImageNormalize, BaseStretch, ManualInterval
 from astropy.visualization.stretch import LogStretch, SinhStretch, AsinhStretch, SqrtStretch, SquaredStretch, \
     LinearStretch
 from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle, Ellipse
-from matplotlib.widgets import Button
+from matplotlib.widgets import Button, RangeSlider
 from regions import read_ds9, PixelRegion, SkyRegion
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
@@ -1236,9 +1236,8 @@ class Image(BaseProduct):
         # Wipe the figure
         plt.close("all")
 
-    def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2',
-                     init_interval: BaseInterval = MinMaxInterval()):
-        view_inst = self._InteractiveView(self, figsize, cmap, init_interval)
+    def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2'):
+        view_inst = self._InteractiveView(self, figsize, cmap)
         view_inst.edit_view()
         # I suspect this should be the final call of this method, otherwise maybe every figure will be auto
         #  refreshing which probably would not be a good thing
@@ -1250,8 +1249,7 @@ class Image(BaseProduct):
         for an observation (with the capability of adding completely new regions as well). This is 'private' as
         I can't really see a use-case where the user would define an instance of this themselves.
         """
-        def __init__(self, phot_prod, figsize: Tuple = (7, 7), cmap: str = "gnuplot2",
-                     init_interval: BaseInterval = MinMaxInterval()):
+        def __init__(self, phot_prod, figsize: Tuple = (7, 7), cmap: str = "gnuplot2"):
             """
             The init of the _InteractiveView class, which enables dynamic viewing of XGA photometric products.
 
@@ -1370,7 +1368,7 @@ class Image(BaseProduct):
 
             # These store the current settings for colour map, stretch, and scaling
             self._cmap = cmap
-            self._interval = init_interval
+            self._interval = MinMaxInterval()
             self._stretch = stretch_dict['LOG']
             # This is just a convenient place to store the name that XGA uses for the current stretch - it lets us
             #  access the current stretch instance from stretch_dict more easily (and accompanying buttons etc.)
@@ -1394,18 +1392,16 @@ class Image(BaseProduct):
             #  be able to use re-stretching so that's why this is all in the init
             ax_loc = self._im_ax.get_position()
             ax_slid = plt.axes([ax_loc.x0, 0.885, 0.7771, 0.03], facecolor="white")
-            # stretch_ind = list(self.allowed_stretch.keys()).index(stretch)
-            # self.scale_slide = Slider(ax_slid, "Stretch", 0, len(self.allowed_stretch) - 1, valinit=stretch_ind,
-            #                           valstep=1)
-            # ax_slid.xaxis.set_visible(True)
-            # ax_slid.yaxis.set_visible(False)
-
-            # x_ticks = np.arange(0, len(self.allowed_stretch), 1)
+            # Hides the ticks to make it look nicer
             ax_slid.set_xticks([])
             ax_slid.set_yticks([])
-            # ax_slid.set_xticklabels(list(self.allowed_stretch.keys()))
-            # self.scale_slide.valtext.set_text(list(self.allowed_stretch.keys())[stretch_ind])
-            # self.scale_slide.on_changed(self.scale_change)
+            # Use the initial defined MinMaxInterval to get the initial range for the RangeSlider - used both
+            #  as upper and lower boundaries and starting points for the sliders.
+            init_range = self._interval.get_limits(self._plot_data)
+            # Define the RangeSlider instance, set the value text to invisible, and connect to the method it activates
+            self._vrange_slider = RangeSlider(ax_slid, '', *init_range, init_range)
+            self._vrange_slider.valtext.set_visible(False)
+            self._vrange_slider.on_changed(self._change_interval)
 
             # Sets up an initial location for the stretch buttons to iterate over, so I can make this
             #  as automated as possible. An advantage is that I can just add new stretches to the stretch_dict
@@ -1464,7 +1460,7 @@ class Image(BaseProduct):
             plt.ion()
             plt.show()
 
-        def _replot_data(self, masked: bool = False, testo = False):
+        def _replot_data(self, masked: bool = False):
             """
             This method updates the currently plotted data using the relevant class attributes. Such attributes
             are updated and edited by other parts of the class.
@@ -1475,7 +1471,8 @@ class Image(BaseProduct):
             if self._im_plot is not None:
                 self._im_plot.remove()
 
-            # This does the actual plotting bit, saving the output in an attribute, so it can be removed when replotting
+            # This does the actual plotting bit, saving the output in an attribute, so it can be
+            #  removed when re-plotting
             if not masked:
                 self._im_plot = self._im_ax.imshow(self._plot_data, norm=self._norm, origin="lower", cmap=self._cmap)
             else:
@@ -1608,6 +1605,21 @@ class Image(BaseProduct):
                 self._replot_data()
 
             return gen_func
+
+        def _change_interval(self, boundaries: Tuple):
+            """
+            This method is called when a change is made to the RangeSlider that controls the inverval range
+            of the data that is displayed.
+
+            :param Tuple boundaries: The lower and upper boundary currently selected by the RangeSlider
+                controlling the interval.
+            """
+            # Creates a new interval, manually defined this time, with boundaries taken from the RangeSlider
+            self._interval = ManualInterval(*boundaries)
+            # Recalculate the normalisation with this new interval
+            self._norm = self._renorm()
+            # And finally replot the data.
+            self._replot_data()
 
         def _toggle_ext(self, event):
             """
