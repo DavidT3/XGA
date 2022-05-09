@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 11:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 11:20. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1376,12 +1376,12 @@ class Image(BaseProduct):
 
 
             new_ext_loc = plt.axes([0.049, 0.191, 0.075, 0.075])
-            self.new_ext_button = Button(new_ext_loc, "NEW EXT")
+            self.new_ext_button = Button(new_ext_loc, "ELL")
             self.new_ext_button.on_clicked(self._new_ell_src)
 
             new_pnt_loc = plt.axes([0.049, 0.111, 0.075, 0.075])
-            self.new_pnt_button = Button(new_pnt_loc, "NEW PNT")
-            self.new_pnt_button.on_clicked(self._new_pnt_src)
+            self.new_pnt_button = Button(new_pnt_loc, "CIRC")
+            self.new_pnt_button.on_clicked(self._new_circ_src)
 
             # save_loc = plt.axes([0.9, 0.111, 0.075, 0.075])
             # self.save_button = Button(save_loc, "SAVE")
@@ -1511,11 +1511,15 @@ class Image(BaseProduct):
             self._draw_regions()
 
         def _new_ell_src(self, event):
+            """
+            Makes a new elliptical region on the data axis.
 
+            :param event: The matplotlib event passed through from the button press that triggers this method.
+            """
             # This matplotlib patch is what we add as an 'artist' to the data (i.e. image) axis and is the
             #  visual representation of our new region. This creates the matplotlib instance for an extended
             #  source, which is an Ellipse.
-            new_patch = Ellipse(self._last_click, 30, 22)
+            new_patch = Ellipse(self._last_click, 36, 28)
             # Now the face and edge colours are set up. Face colour is completely see through as I want regions
             #  to just be denoted by their edges. The edge colour is set to white, fetching the colour definition
             #  set up in the class init.
@@ -1529,28 +1533,32 @@ class Image(BaseProduct):
             # And adds the artist into the axis. As this is a new artist we don't call _draw_regions for this one.
             self._im_ax.add_artist(new_patch)
 
-        # def _new_src(self, event):
-        #     # This matplotlib patch is what we add as an 'artist' to the data (i.e. image) axis and is the
-        #     #  visual representation of our new region. This creates the instance, a circle in this.
-        #     new_patch = Ellipse(self._last_click, 10, 14)
-        #     # Now the face and edge colours are set up. Face colour is completely see through as I want regions
-        #     #  to just be denoted by their edges. The edge colour is set to white, fetching the colour definition
-        #     #  set up in the class init.
-        #     new_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
-        #     new_patch.set_edgecolor(self._inv_colour_convert['white'])
-        #     # This enables 'picking' of the artist. When enabled picking will trigger an event when the
-        #     #  artist is clicked on
-        #     new_patch.set_picker(True)
-        #     # Setting up the linewidth of the new region
-        #     new_patch.set_linewidth(self._reg_line_width)
-        #     # And adds the artist into the axis. As this is a new artist we don't call _draw_regions for this one.
-        #     self._im_ax.add_artist(new_patch)
+        def _new_circ_src(self, event):
+            """
+            Makes a new circular region on the data axis.
 
+            :param event: The matplotlib event passed through from the button press that triggers this method.
+            """
+            # This matplotlib patch is what we add as an 'artist' to the data (i.e. image) axis and is the
+            #  visual representation of our new region. This creates the instance, a circle in this case.
+            new_patch = Circle(self._last_click, 8)
+            # Now the face and edge colours are set up. Face colour is completely see through as I want regions
+            #  to just be denoted by their edges. The edge colour is set to white, fetching the colour definition
+            #  set up in the class init.
+            new_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
+            new_patch.set_edgecolor(self._inv_colour_convert['white'])
+            # This enables 'picking' of the artist. When enabled picking will trigger an event when the
+            #  artist is clicked on
+            new_patch.set_picker(True)
+            # Setting up the linewidth of the new region
+            new_patch.set_linewidth(self._reg_line_width)
+            # And adds the artist into the axis. As this is a new artist we don't call _draw_regions for this one.
+            self._im_ax.add_artist(new_patch)
 
-        # def _new_ext_src(self, event):
-        #     el_patch = Ellipse(self._last_click, 10, 20)
+        # def _new_pnt_src(self, event):
+        #     el_patch = Ellipse(self._last_click, 10, 10)
         #     el_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
-        #     el_patch.set_edgecolor((0.0, 0.5019607843137255, 0.0, 1.0))
+        #     el_patch.set_edgecolor((1.0, 0.0, 0.0, 1.0))
         #     el_patch.set_picker(True)
         #     el_patch.set_linewidth(1.2)
         #     self._im_ax.add_artist(el_patch)
@@ -1561,21 +1569,6 @@ class Image(BaseProduct):
         #         else:
         #             self._shape_dict[art] = 'ellipse'
         #     plt.draw()
-
-        def _new_pnt_src(self, event):
-            el_patch = Ellipse(self._last_click, 10, 10)
-            el_patch.set_facecolor((0.0, 0.0, 0.0, 0.0))
-            el_patch.set_edgecolor((1.0, 0.0, 0.0, 1.0))
-            el_patch.set_picker(True)
-            el_patch.set_linewidth(1.2)
-            self._im_ax.add_artist(el_patch)
-            # Updates shape dictionary
-            for art in self._im_ax.artists:
-                if art.height == art.width:
-                    self._shape_dict[art] = 'circle'
-                else:
-                    self._shape_dict[art] = 'ellipse'
-            plt.draw()
 
         def _on_region_pick(self, event):
             if self._cur_pick is not None:
