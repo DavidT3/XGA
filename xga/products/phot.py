@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 14:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 16:28. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1232,10 +1232,10 @@ class Image(BaseProduct):
         # Wipe the figure
         plt.close("all")
 
-    def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2'):
-        view_inst = self._InteractiveView(self, figsize)
-        view_inst.setup_view(cmap)
-
+    def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2',
+                     init_interval: BaseInterval = MinMaxInterval(), init_stretch: BaseStretch = LogStretch()):
+        view_inst = self._InteractiveView(self, figsize, cmap, init_interval, init_stretch)
+        view_inst.edit_view()
         # I suspect this should be the final call of this method, otherwise maybe every figure will be auto
         #  refreshing which probably would not be a good thing
         # plt.ioff()
@@ -1246,7 +1246,8 @@ class Image(BaseProduct):
         for an observation (with the capability of adding completely new regions as well). This is 'private' as
         I can't really see a use-case where the user would define an instance of this themselves.
         """
-        def __init__(self, phot_prod, figsize: Tuple = (7, 7)):
+        def __init__(self, phot_prod, figsize: Tuple = (7, 7), cmap: str = "gnuplot2",
+                     init_interval: BaseInterval = MinMaxInterval(), init_stretch: BaseStretch = LogStretch()):
             """
             The init of the _InteractiveView class, which enables dynamic viewing of XGA photometric products.
 
@@ -1318,6 +1319,10 @@ class Image(BaseProduct):
             self._cust_src_button = Button(cust_src_loc, "CUSTOM", color=self._but_act_col)
             self._cust_src_button.on_clicked(self._toggle_cust)
 
+            # These are buttons that can be present depending on the usage of the class
+            self._new_ell_button = None
+            self._new_circ_button = None
+
             # A dictionary describing the current type of regions that are on display
             self._cur_act_reg_type = {"EXT": True, "PNT": True, "OTH": True, "CUST": True}
 
@@ -1347,6 +1352,9 @@ class Image(BaseProduct):
             # This just provides a conversion between name and colour tuple, the inverse of colour_convert
             self._inv_colour_convert = {v: k for k, v in self._colour_convert.items()}
 
+            # This controls whether interacting with regions is allowed - turned off for the dynamic view method
+            #  as that is not meant for editing regions
+            self._interacting_on = False
             # The currently selected region is referenced in this attribute
             self._cur_pick = None
             # The last coordinate ON THE IMAGE that was clicked is stored here. Initial value is set to the centre
@@ -1356,53 +1364,42 @@ class Image(BaseProduct):
             self._select = False
             self._history = []
 
-        def setup_view(self, cmap: str = "gnuplot2", interval: BaseInterval = MinMaxInterval(),
-                       stretch: BaseStretch = LogStretch()):
+            # These store the current settings for colour map, stretch, and scaling
+            self._cmap = cmap
+            self._stretch = init_stretch
+            self._interval = init_interval
 
-
-            # ax.set_title("TESTING XGA REGION MODIFIER", fontsize=15)
-
-            # TODO Decide whether this should be copying or not
-            plot_data = self._parent_phot_obj.data
-
-            # If we're showing a RateMap, then we're gonna apply an edge mask to remove all the artificially brightened
-            #  pixels that we can - it makes the view look better
-            # if type(self._parent_phot_obj) == RateMap and mask_edges:
-            #     plot_data *= self._parent_phot_obj.edge_mask
-
-
-
-            norm = ImageNormalize(data=plot_data, interval=interval, stretch=stretch)
+            # Here we define attribute to store the data and normalisation in. I copy the data to make sure that
+            #  the original information doesn't get changed when smoothing is applied.
+            self._plot_data = self._parent_phot_obj.data.copy()
+            self._norm = ImageNormalize(data=self._plot_data, interval=self._interval, stretch=self._stretch)
 
             # Adds the actual image to the axis.
-            im_map = self._im_ax.imshow(plot_data, norm=norm, origin="lower", cmap=cmap)
+            im_map = self._im_ax.imshow(self._plot_data, norm=self._norm, origin="lower", cmap=self._cmap)
 
-            # plt.colorbar(im_map)
-            # Doesn't seem to sit right with ipympl so commented out for now
-            # plt.tight_layout()
+        def dynamic_view(self, regions_on: bool = True):
 
+            if regions_on:
+                self._draw_regions()
 
+            # I THINK that activating this is what turns on automatic refreshing
+            plt.ion()
+            plt.show()
 
-            new_ext_loc = plt.axes([0.049, 0.191, 0.075, 0.075])
-            self.new_ext_button = Button(new_ext_loc, "ELL")
-            self.new_ext_button.on_clicked(self._new_ell_src)
+        def edit_view(self):
 
-            new_pnt_loc = plt.axes([0.049, 0.111, 0.075, 0.075])
-            self.new_pnt_button = Button(new_pnt_loc, "CIRC")
-            self.new_pnt_button.on_clicked(self._new_circ_src)
+            self._interacting_on = True
 
-            # save_loc = plt.axes([0.9, 0.111, 0.075, 0.075])
-            # self.save_button = Button(save_loc, "SAVE")
-            # self.save_button.on_clicked(self._save_changes)
-            #
-            # delete_loc = plt.axes([0.9, 0.191, 0.075, 0.075])
-            # self.del_button = Button(delete_loc, "DELETE")
-            # self.del_button.on_clicked(self._del_reg)
+            new_ell_loc = plt.axes([0.049, 0.191, 0.075, 0.075])
+            self._new_ell_button = Button(new_ell_loc, "ELL")
+            self._new_ell_button.on_clicked(self._new_ell_src)
 
-            # self.setup_regions()
+            new_circ_loc = plt.axes([0.049, 0.111, 0.075, 0.075])
+            self._new_circ_button = Button(new_circ_loc, "CIRC")
+            self._new_circ_button.on_clicked(self._new_circ_src)
+
             self._draw_regions()
 
-            # I THINK that activating this is what turns on automatic refreshing, so should probably go on after
             plt.ion()
             plt.show()
 
@@ -1618,13 +1615,16 @@ class Image(BaseProduct):
             :param event: The event triggered on 'picking' an artist. Contains information about which artist
                 triggered the event, location, etc.
             """
+            if not self._interacting_on:
+                return
+
             # The _cur_pick attribute references which artist is currently selected, which we can grab from the
             #  artist picker event that triggered this method
             self._cur_pick = event.artist
             # Makes sure the instance knows a region is selected right now, set to False again when the click ends
             self._select = True
             # Stores the current position of the current pick
-            self._history.append([self._cur_pick, self._cur_pick.center])
+            # self._history.append([self._cur_pick, self._cur_pick.center])
 
             # Redraws the regions so that thicker lines are applied to the newly selected region
             self._draw_regions()
@@ -1654,6 +1654,12 @@ class Image(BaseProduct):
             self._cur_pick.center = (event.xdata, event.ydata)
 
         def _key_press(self, event):
+            """
+            A method triggered by the press of a key (or combination of keys) on the keyboard. For most keys
+            this method does absolutely nothing, but it does enable the resizing and rotation of regions.
+
+            :param event: The keyboard press event that triggers this method.
+            """
             # if event.key == "ctrl+z":
             #     if len(self._history) != 0:
             #         self._history[-1][0].center = self._history[-1][1]
