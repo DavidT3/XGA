@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 16:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 20:04. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -11,7 +11,9 @@ import pandas as pd
 from astropy import wcs
 from astropy.convolution import Kernel
 from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError, Unit
-from astropy.visualization import LogStretch, MinMaxInterval, ImageNormalize, BaseStretch, BaseInterval
+from astropy.visualization import MinMaxInterval, ImageNormalize, BaseStretch, BaseInterval
+from astropy.visualization.stretch import LogStretch, SinhStretch, AsinhStretch, SqrtStretch, SquaredStretch, \
+    LinearStretch
 from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
@@ -29,6 +31,8 @@ from ..utils import xmm_sky, xmm_det, find_all_wcs
 EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
 plt.rcParams['keymap.save'] = ''
 plt.rcParams['keymap.quit'] = ''
+stretch_dict = {'LOG': LogStretch(), 'SINH': SinhStretch(), 'ASINH': AsinhStretch(), 'SQRT': SqrtStretch(),
+                'SQRD': SquaredStretch(), 'LIN': LinearStretch()}
 
 
 class Image(BaseProduct):
@@ -1364,6 +1368,9 @@ class Image(BaseProduct):
             self._select = False
             self._history = []
 
+            # TODO FINALISE ALL THIS
+            self._stretch_buttons = {}
+
             # These store the current settings for colour map, stretch, and scaling
             self._cmap = cmap
             self._stretch = init_stretch
@@ -1376,8 +1383,10 @@ class Image(BaseProduct):
             # It's also possible to mask and display the data, and the current mask is stored in this attribute
             self._plot_mask = np.ones(self._plot_data.shape)
 
+            # The output of the imshow command lives in here
+            self._im_plot = None
             # Adds the actual image to the axis.
-            im_map = self._im_ax.imshow(self._plot_data, norm=self._norm, origin="lower", cmap=self._cmap)
+            self._replot_data(masked=False)
 
         def dynamic_view(self):
             """
@@ -1407,11 +1416,80 @@ class Image(BaseProduct):
             self._new_circ_button = Button(new_circ_loc, "CIRC")
             self._new_circ_button.on_clicked(self._new_circ_src)
 
+            ax_loc = self._im_ax.get_position()
+            ax_slid = plt.axes([ax_loc.x0, 0.885, 0.7771, 0.03], facecolor="white")
+            # stretch_ind = list(self.allowed_stretch.keys()).index(stretch)
+            # self.scale_slide = Slider(ax_slid, "Stretch", 0, len(self.allowed_stretch) - 1, valinit=stretch_ind,
+            #                           valstep=1)
+            # ax_slid.xaxis.set_visible(True)
+            # ax_slid.yaxis.set_visible(False)
+
+            # x_ticks = np.arange(0, len(self.allowed_stretch), 1)
+            ax_slid.set_xticks([])
+            ax_slid.set_yticks([])
+            # ax_slid.set_xticklabels(list(self.allowed_stretch.keys()))
+            # self.scale_slide.valtext.set_text(list(self.allowed_stretch.keys())[stretch_ind])
+            # self.scale_slide.on_changed(self.scale_change)
+
+            # Sets up an initial location for the stretch buttons to iterate over, so I can make this
+            #  as automated as possible. An advantage is that I can just add new stretches to the stretch_dict
+            #  and they should be automatically added here.
+            loc = [ax_loc.x0-(0.075 + 0.005), 0.92, 0.075, 0.075]
+            # Iterate through the stretches that I chose to store in the stretch_dict
+            for stretch_name, stretch in stretch_dict.items():
+                # Increments the position of the button
+                loc[0] += (0.075 + 0.005)
+                # Sets up an axis for the button we're about to create
+                stretch_loc = plt.axes(loc)
+                # Creates the button for the current stretch
+                self._stretch_buttons[stretch_name] = Button(stretch_loc, stretch_name)
+                # Generates and adds the function for the current stretch button
+                self._stretch_buttons[stretch_name].on_clicked(self._change_stretch(stretch_name))
+
             # Draws on any regions associated with this instance
             self._draw_regions()
 
             plt.ion()
             plt.show()
+
+        def _replot_data(self, masked: bool = False, testo = False):
+            """
+            This method updates the currently plotted data using the relevant class attributes. Such attributes
+            are updated and edited by other parts of the class.
+
+            :param bool masked: Whether the data should be replotted with the plot mask applied or not.
+            """
+            # This removes the existing image data without removing the region artists
+            if self._im_plot is not None:
+                self._im_plot.remove()
+
+            # This does the actual plotting bit, saving the output in an attribute, so it can be removed when replotting
+            if not masked:
+                self._im_plot = self._im_ax.imshow(self._plot_data, norm=self._norm, origin="lower", cmap=self._cmap)
+            else:
+                # TODO Should this be made to recalculate the norm with the mask automatically
+                self._im_plot = self._im_ax.imshow(self._plot_data*self._plot_mask, norm=self._norm, origin="lower",
+                                                   cmap=self._cmap)
+
+        def _renorm(self, masked: bool = False) -> ImageNormalize:
+            """
+            Re-calculates the normalisation of the plot data with current interval and stretch settings. Takes into
+            account the mask if applied.
+
+            :param bool masked: Whether the normalisation recalculation should be performed with the mask
+                applied to the data or not.
+            :return: The normalisation object.
+            :rtype: ImageNormalize
+            """
+            # If masked then the normalisation should be recalculated with the current plot mask applied to the data
+            if masked:
+                norm = ImageNormalize(data=self._plot_data*self._plot_mask, interval=self._interval,
+                                      stretch=self._stretch)
+            # If not then it should just use the current data, interval, and stretch.
+            else:
+                norm = ImageNormalize(data=self._plot_data, interval=self._interval, stretch=self._stretch)
+
+            return norm
 
         def _draw_regions(self):
             """
@@ -1487,25 +1565,35 @@ class Image(BaseProduct):
                     if self._cur_pick is not None and self._cur_pick == artist:
                         self._cur_pick = None
 
-        def _renorm(self, masked: bool = False) -> ImageNormalize:
+        def _change_stretch(self, stretch_name: str):
             """
-            Re-calculates the normalisation of the plot data with current interval and stretch settings. Takes into
-            account the mask if applied.
+            Triggered when any of the stretch change buttons are pressed - acts as a generator for the response
+            functions that are actually triggered when the separate buttons are pressed. Written this way to
+            allow me to just write one of these functions rather than one function for each stretch.
 
-            :param bool masked: Whether the normalisation recalculation should be performed with the mask
-                applied to the data or not.
-            :return: The normalisation object.
-            :rtype: ImageNormalize
+            :param str stretch_name: The name of the stretch associated with a specific button.
+            :return: A function matching the input stretch_name that will change the stretch applied to the data.
             """
-            # If masked then the normalisation should be recalculated with the current plot mask applied to the data
-            if masked:
-                norm = ImageNormalize(data=self._plot_data*self._plot_mask, interval=self._interval,
-                                      stretch=self._stretch)
-            # If not then it should just use the current data, interval, and stretch.
-            else:
-                norm = ImageNormalize(data=self._plot_data, interval=self._interval, stretch=self._stretch)
+            def gen_func(event):
+                """
+                A generated function to change the data stretch.
 
-            return norm
+                :param event: The event passed by clicking the button associated with this function
+                """
+                # This changes the colours of the buttons so the active button has a different colour
+                # self._stretch_buttons[stretch_name].color = self._but_act_col
+                # And th
+                self._stretch_buttons
+
+                # This alters the currently selected stretch stored by this class. Fetches the appropriate stretch
+                #  object by using the stretch name passed when this function was generated.
+                self._stretch = stretch_dict[stretch_name]
+                # Performs the renormalisation that takes into account the newly selected stretch
+                self._norm = self._renorm()
+                # Performs the actual re-plotting that takes into account the newly calculated normalisation
+                self._replot_data()
+
+            return gen_func
 
         def _toggle_ext(self, event):
             """
