@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 16:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 16:39. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1372,7 +1372,9 @@ class Image(BaseProduct):
             # Here we define attribute to store the data and normalisation in. I copy the data to make sure that
             #  the original information doesn't get changed when smoothing is applied.
             self._plot_data = self._parent_phot_obj.data.copy()
-            self._norm = ImageNormalize(data=self._plot_data, interval=self._interval, stretch=self._stretch)
+            self._norm = self._renorm(masked=False)
+            # It's also possible to mask and display the data, and the current mask is stored in this attribute
+            self._plot_mask = np.ones(self._plot_data.shape)
 
             # Adds the actual image to the axis.
             im_map = self._im_ax.imshow(self._plot_data, norm=self._norm, origin="lower", cmap=self._cmap)
@@ -1476,6 +1478,26 @@ class Image(BaseProduct):
                     #  region.
                     if self._cur_pick is not None and self._cur_pick == artist:
                         self._cur_pick = None
+
+        def _renorm(self, masked: bool = False) -> ImageNormalize:
+            """
+            Re-calculates the normalisation of the plot data with current interval and stretch settings. Takes into
+            account the mask if applied.
+
+            :param bool masked: Whether the normalisation recalculation should be performed with the mask
+                applied to the data or not.
+            :return: The normalisation object.
+            :rtype: ImageNormalize
+            """
+            # If masked then the normalisation should be recalculated with the current plot mask applied to the data
+            if masked:
+                norm = ImageNormalize(data=self._plot_data*self._plot_mask, interval=self._interval,
+                                      stretch=self._stretch)
+            # If not then it should just use the current data, interval, and stretch.
+            else:
+                norm = ImageNormalize(data=self._plot_data, interval=self._interval, stretch=self._stretch)
+
+            return norm
 
         def _toggle_ext(self, event):
             """
