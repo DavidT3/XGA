@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 13:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 14:01. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1663,13 +1663,24 @@ class Image(BaseProduct):
             if event.key == "w" and self._cur_pick is not None:
                 if type(self._cur_pick) == Circle:
                     self._cur_pick.radius += self._size_step
+                # It is possible for actual artist type to be an Ellipse but for the region to be circular when
+                #  it was taken from the parent Image of this instance, and in that case we still want it to behave
+                #  like a circle for resizing.
+                elif self._shape_dict[self._cur_pick] == 'circle':
+                    self._cur_pick.height += self._size_step
+                    self._cur_pick.width += self._size_step
                 else:
                     self._cur_pick.height += self._size_step
                 self._cur_pick.figure.canvas.draw()
 
+            # For comments for the rest of these, see the event key 'w' one, they're the same but either shrinking
+            #  or growing different axes
             if event.key == "s" and self._cur_pick is not None:
                 if type(self._cur_pick) == Circle:
                     self._cur_pick.radius -= self._size_step
+                elif self._shape_dict[self._cur_pick] == 'circle':
+                    self._cur_pick.height -= self._size_step
+                    self._cur_pick.width -= self._size_step
                 else:
                     self._cur_pick.height -= self._size_step
                 self._cur_pick.figure.canvas.draw()
@@ -1677,6 +1688,9 @@ class Image(BaseProduct):
             if event.key == "d" and self._cur_pick is not None:
                 if type(self._cur_pick) == Circle:
                     self._cur_pick.radius += self._size_step
+                elif self._shape_dict[self._cur_pick] == 'circle':
+                    self._cur_pick.height += self._size_step
+                    self._cur_pick.width += self._size_step
                 else:
                     self._cur_pick.width += self._size_step
                 self._cur_pick.figure.canvas.draw()
@@ -1684,6 +1698,9 @@ class Image(BaseProduct):
             if event.key == "a" and self._cur_pick is not None:
                 if type(self._cur_pick) == Circle:
                     self._cur_pick.radius -= self._size_step
+                elif self._shape_dict[self._cur_pick] == 'circle':
+                    self._cur_pick.height -= self._size_step
+                    self._cur_pick.width -= self._size_step
                 else:
                     self._cur_pick.width -= self._size_step
                 self._cur_pick.figure.canvas.draw()
