@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 10:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 10:35. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1396,6 +1396,11 @@ class Image(BaseProduct):
             plt.show()
 
         def _draw_regions(self):
+            """
+            This method is called by an _InteractiveView instance when regions need to be drawn on top of the
+            data view axis (i.e. the image/ratemap). Either for the first time or as an update due to a button
+            click, region changing, or new region being added.
+            """
             # This will trigger in initial cases where there ARE regions associated with the photometric product
             #  that has spawned this InteractiveView, but they haven't been added as artists yet
             if len(self._im_ax.artists) == 0 and len(self._regions) != 0:
@@ -1434,15 +1439,34 @@ class Image(BaseProduct):
                     artist.set_linewidth(0)
 
         def _toggle_ext(self, event):
+            """
+            Method triggered by the extended source toggle button, either causes extended sources to be displayed
+            or not, depending on the existing state.
+
+            :param event: The matplotlib event passed through from the button press that triggers this method.
+            """
+            # Need to save the new state of this type of region being displayed in the dictionary thats used
+            #  to keep track of such things. The invert function just switches whatever entry was already there
+            #  (True or False) to the opposite (False or True).
             self._cur_act_reg_type['EXT'] = np.invert(self._cur_act_reg_type['EXT'])
+
+            # Then the colour of the button is switched to indicate whether its toggled on or not
             if self._cur_act_reg_type['EXT']:
                 self._ext_src_button.color = self._but_act_col
             else:
                 self._ext_src_button.color = self._but_inact_col
 
+            # Then the currently displayed regions are updated with this method
             self._draw_regions()
 
         def _toggle_pnt(self, event):
+            """
+            Method triggered by the point source toggle button, either causes point sources to be displayed
+            or not, depending on the existing state.
+
+            :param event: The matplotlib event passed through from the button press that triggers this method.
+            """
+            # See the _toggle_ext method for comments explaining
             self._cur_act_reg_type['PNT'] = np.invert(self._cur_act_reg_type['PNT'])
             if self._cur_act_reg_type['PNT']:
                 self._pnt_src_button.color = self._but_act_col
@@ -1452,6 +1476,13 @@ class Image(BaseProduct):
             self._draw_regions()
 
         def _toggle_oth(self, event):
+            """
+            Method triggered by the other source toggle button, either causes other (i.e. not extended,
+            point, or custom) sources to be displayed or not, depending on the existing state.
+
+            :param event: The matplotlib event passed through from the button press that triggers this method.
+            """
+            # See the _toggle_ext method for comments explaining
             self._cur_act_reg_type['OTH'] = np.invert(self._cur_act_reg_type['OTH'])
             if self._cur_act_reg_type['OTH']:
                 self._oth_src_button.color = self._but_act_col
@@ -1461,6 +1492,13 @@ class Image(BaseProduct):
             self._draw_regions()
 
         def _toggle_cust(self, event):
+            """
+            Method triggered by the custom source toggle button, either causes custom sources to be displayed
+            or not, depending on the existing state.
+
+            :param event: The matplotlib event passed through from the button press that triggers this method.
+            """
+            # See the _toggle_ext method for comments explaining
             self._cur_act_reg_type['CUST'] = np.invert(self._cur_act_reg_type['CUST'])
             if self._cur_act_reg_type['CUST']:
                 self._cust_src_button.color = self._but_act_col
