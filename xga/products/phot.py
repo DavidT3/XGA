@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 12:10. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1585,12 +1585,6 @@ class Image(BaseProduct):
                 # This saves the position that the user clicked as the 'last click', as the user may now which
                 #  to insert a new region there
                 self._last_click = (event.xdata, event.ydata)
-                # This just de-selects whatever region might be currently selected. The call to _draw_regions does
-                #  the accompanying refresh of line width.
-                self._cur_pick = None
-                self._draw_regions()
-
-
 
         def _on_region_pick(self, event):
             if self._cur_pick is not None:
