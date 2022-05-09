@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 21:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 22:23. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1267,6 +1267,7 @@ class Image(BaseProduct):
             #  are displayed) in another attribute, for convenience.
             self._fig = in_fig
             self._im_ax = plt.gca()
+            ax_loc = self._im_ax.get_position()
 
             # Setting up the look of the data axis, removing ticks and tick labels because it's an image
             self._im_ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
@@ -1302,23 +1303,24 @@ class Image(BaseProduct):
             # These buttons act as toggles, they are all active by default and clicking one will turn off the source
             #  type its associated with. Clicking it again will turn it back on.
             # This button toggles extended (green) sources.
-            ext_src_loc = plt.axes([0.049, 0.805, 0.075, 0.075])
+            top_pos = ax_loc.y1-0.0771
+            ext_src_loc = plt.axes([0.045, top_pos, 0.075, 0.075])
             self._ext_src_button = Button(ext_src_loc, "EXT", color=self._but_act_col)
             self._ext_src_button.on_clicked(self._toggle_ext)
 
             # This button toggles point (red) sources.
-            pnt_src_loc = plt.axes([0.049, 0.725, 0.075, 0.075])
+            pnt_src_loc = plt.axes([0.045, top_pos-(0.075 + 0.005), 0.075, 0.075])
             self._pnt_src_button = Button(pnt_src_loc, "PNT", color=self._but_act_col)
             self._pnt_src_button.on_clicked(self._toggle_pnt)
 
             # This button toggles types of region other than green or red (mostly valid for XCS XAPA sources).
-            oth_src_loc = plt.axes([0.049, 0.645, 0.075, 0.075])
+            oth_src_loc = plt.axes([0.045, top_pos-2*(0.075 + 0.005), 0.075, 0.075])
             self._oth_src_button = Button(oth_src_loc, "OTHER", color=self._but_act_col)
             self._oth_src_button.on_clicked(self._toggle_oth)
 
             # This button toggles custom source regions
-            cust_src_loc = plt.axes([0.049, 0.565, 0.075, 0.075])
-            self._cust_src_button = Button(cust_src_loc, "CUSTOM", color=self._but_act_col)
+            cust_src_loc = plt.axes([0.045, top_pos-3*(0.075 + 0.005), 0.075, 0.075])
+            self._cust_src_button = Button(cust_src_loc, "CUST", color=self._but_act_col)
             self._cust_src_button.on_clicked(self._toggle_cust)
 
             # These are buttons that can be present depending on the usage of the class
@@ -1390,7 +1392,6 @@ class Image(BaseProduct):
 
             # This bit is where all the stretch buttons are set up, as well as the slider. All methods should
             #  be able to use re-stretching so that's why this is all in the init
-            ax_loc = self._im_ax.get_position()
             ax_slid = plt.axes([ax_loc.x0, 0.885, 0.7771, 0.03], facecolor="white")
             # Hides the ticks to make it look nicer
             ax_slid.set_xticks([])
@@ -1399,7 +1400,10 @@ class Image(BaseProduct):
             #  as upper and lower boundaries and starting points for the sliders.
             init_range = self._interval.get_limits(self._plot_data)
             # Define the RangeSlider instance, set the value text to invisible, and connect to the method it activates
-            self._vrange_slider = RangeSlider(ax_slid, '', *init_range, init_range)
+            self._vrange_slider = RangeSlider(ax_slid, 'DATA INTERVAL', *init_range, init_range)
+            # We move the RangeSlider label so that is sits within the bar
+            self._vrange_slider.label.set_x(0.6)
+            self._vrange_slider.label.set_y(0.45)
             self._vrange_slider.valtext.set_visible(False)
             self._vrange_slider.on_changed(self._change_interval)
 
@@ -1426,6 +1430,11 @@ class Image(BaseProduct):
                 # Generates and adds the function for the current stretch button
                 self._stretch_buttons[stretch_name].on_clicked(self._change_stretch(stretch_name))
 
+            # This is the bit where we set up the buttons and slider for the smoothing function
+            ext_src_loc = plt.axes([ax_loc.x1 + 0.005, top_pos, 0.075, 0.075])
+            self._ext_src_button = Button(ext_src_loc, "SMOOTH", color=self._but_inact_col)
+            # self._ext_src_button.on_clicked(self._toggle_ext)
+
         def dynamic_view(self):
             """
             The simplest view method of this class, enables the turning on and off of regions.
@@ -1446,11 +1455,11 @@ class Image(BaseProduct):
             self._interacting_on = True
 
             # Add two buttons to the figure to enable the adding of new elliptical and circular regions
-            new_ell_loc = plt.axes([0.049, 0.191, 0.075, 0.075])
+            new_ell_loc = plt.axes([0.045, 0.191, 0.075, 0.075])
             self._new_ell_button = Button(new_ell_loc, "ELL")
             self._new_ell_button.on_clicked(self._new_ell_src)
 
-            new_circ_loc = plt.axes([0.049, 0.111, 0.075, 0.075])
+            new_circ_loc = plt.axes([0.045, 0.111, 0.075, 0.075])
             self._new_circ_button = Button(new_circ_loc, "CIRC")
             self._new_circ_button.on_clicked(self._new_circ_src)
 
