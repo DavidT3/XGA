@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 13:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 13:50. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1338,6 +1338,12 @@ class Image(BaseProduct):
                 art_reg = region.as_artist()
                 self._colour_convert[art_reg.get_edgecolor()] = region.visual["color"]
 
+            # Unfortunately I cannot rely on regions being of an appropriate type (Ellipse/Circle) for what they
+            #  are. For instance XAPA point source regions are still ellipses, just with the height and width
+            #  set equal. So this dictionary is an independent reference point for the shape, with entries for the
+            #  original regions made in the first part of _draw_regions, and otherwise set when a new region is added.
+            self._shape_dict = {}
+
             # This just provides a conversion between name and colour tuple, the inverse of colour_convert
             self._inv_colour_convert = {v: k for k, v in self._colour_convert.items()}
 
@@ -1345,7 +1351,9 @@ class Image(BaseProduct):
             self._cur_pick = None
             # The last coordinate ON THE IMAGE that was clicked is stored here. Initial value is set to the centre
             self._last_click = (phot_prod.shape[0] / 2, phot_prod.shape[1] / 2)
-            self._select = None
+            # This describes whether the artist stored in _cur_pick (if there is one) is right now being clicked
+            #  and held - this is used for enabling clicking and dragging so the method knows when to stop.
+            self._select = False
             self._history = []
 
         def setup_view(self, cmap: str = "gnuplot2", interval: BaseInterval = MinMaxInterval(),
@@ -1408,10 +1416,23 @@ class Image(BaseProduct):
             #  that has spawned this InteractiveView, but they haven't been added as artists yet
             if len(self._im_ax.artists) == 0 and len(self._regions) != 0:
                 for region in self._regions:
+                    # Uses the region module's convenience function to turn the region into a matplotlib artist
                     art_reg = region.as_artist()
+                    # Makes sure that the region can be 'picked', which enables selecting regions to modify
                     art_reg.set_picker(True)
+                    # Sets the standard linewidth
                     art_reg.set_linewidth(self._reg_line_width)
+                    # And actually adds the artist to the data axis
                     self._im_ax.add_artist(art_reg)
+                    # Adds an entry to the shape dictionary. If a region from the parent Image is elliptical but
+                    #  has the same height and width then I define it as a circle.
+                    if type(art_reg) == Circle or (type(art_reg) == Ellipse and art_reg.height == art_reg.width):
+                        self._shape_dict[art_reg] = 'circle'
+                    elif type(art_reg) == Ellipse:
+                        self._shape_dict[art_reg] = 'ellipse'
+                    else:
+                        raise NotImplementedError("This method does not currently support regions other than circles "
+                                                  "or ellipses, but please get in touch to discuss this further.")
 
             # This chunk controls which regions will be drawn when this method is called. The _cur_act_reg_type
             #  dictionary has keys representing the four toggle buttons, and their values are True or False. This
@@ -1550,6 +1571,8 @@ class Image(BaseProduct):
             new_patch.set_linewidth(self._reg_line_width)
             # And adds the artist into the axis. As this is a new artist we don't call _draw_regions for this one.
             self._im_ax.add_artist(new_patch)
+            # Updates the shape dictionary
+            self._shape_dict[new_patch] = 'ellipse'
 
         def _new_circ_src(self, event):
             """
@@ -1572,6 +1595,8 @@ class Image(BaseProduct):
             new_patch.set_linewidth(self._reg_line_width)
             # And adds the artist into the axis. As this is a new artist we don't call _draw_regions for this one.
             self._im_ax.add_artist(new_patch)
+            # Updates the shape dictionary
+            self._shape_dict[new_patch] = 'circle'
 
         def _click_event(self, event):
             """
