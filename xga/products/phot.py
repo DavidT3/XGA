@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 22:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 22:56. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -18,7 +18,7 @@ from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle, Ellipse
-from matplotlib.widgets import Button, RangeSlider
+from matplotlib.widgets import Button, RangeSlider, Slider
 from regions import read_ds9, PixelRegion, SkyRegion
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
@@ -1431,9 +1431,25 @@ class Image(BaseProduct):
                 self._stretch_buttons[stretch_name].on_clicked(self._change_stretch(stretch_name))
 
             # This is the bit where we set up the buttons and slider for the smoothing function
-            ext_src_loc = plt.axes([ax_loc.x1 + 0.005, top_pos, 0.075, 0.075])
-            self._ext_src_button = Button(ext_src_loc, "SMOOTH", color=self._but_inact_col)
+            smooth_loc = plt.axes([ax_loc.x1 + 0.005, top_pos, 0.075, 0.075])
+            self._smooth_button = Button(smooth_loc, "SMOOTH", color=self._but_inact_col)
             # self._ext_src_button.on_clicked(self._toggle_ext)
+
+            ax_smooth_slid = plt.axes([ax_loc.x1 + 0.02, ax_loc.y0+0.002, 0.05, 0.685], facecolor="white")
+            # Hides the ticks to make it look nicer
+            ax_smooth_slid.set_xticks([])
+            # ax_smooth_slid.set_yticks([])
+            # Use the initial defined MinMaxInterval to get the initial range for the Slider - used both
+            #  as upper and lower boundaries and starting points for the sliders.
+            # Define the Slider instance, set the value text to invisible, and connect to the method it activates
+            self._smooth_slider = Slider(ax_smooth_slid, 'KERNEL RADIUS', 0.5, 5, 2, valstep=0.5,
+                                         orientation='vertical')
+            # We move the Slider label so that is sits within the bar
+            # print(dir(self._smooth_slider.label))
+            self._smooth_slider.label.set_rotation(270)
+            self._smooth_slider.label.set_x(0.5)
+            self._smooth_slider.label.set_y(0.45)
+            # self._vrange_slider.on_changed(self._change_interval)
 
         def dynamic_view(self):
             """
