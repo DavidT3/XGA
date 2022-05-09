@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 12:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 13:32. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1253,7 +1253,6 @@ class Image(BaseProduct):
             :param Image/RateMap/ExpMap phot_prod: The XGA photometric product which we want to interact with.
             :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this class.
             """
-
             # Just saving a reference to the photometric object that declared this instance of this class, and
             #  then making a copy of whatever regions are associated with it
             self._parent_phot_obj = phot_prod
@@ -1278,6 +1277,10 @@ class Image(BaseProduct):
             # Now the standard line widths used both for all regions, and for the region that is currently selected
             self._reg_line_width = 1.2
             self._sel_reg_line_width = 2.3
+            # These are the increments when adjusting the regions by pressing wasd and qe. So for the size and
+            #  angle of the selected region.
+            self._size_step = 2
+            self._rot_step = 10
 
             # Setting up and storing the connections to events on the matplotlib canvas. These are what
             #  allow specific methods to be triggered when things like button presses or clicking on the
@@ -1318,8 +1321,6 @@ class Image(BaseProduct):
             # A dictionary describing the current type of regions that are on display
             self._cur_act_reg_type = {"EXT": True, "PNT": True, "OTH": True, "CUST": True}
 
-            self._shape_dict = {}
-
             # Custom color for edited regions
             # TODO DECIDE ON THE COLOUR AND HOW TO DEAL WITH THINGS, BECAUSE MANUAL XGA CUSTOM REGIONS ARE WHITE
             #  RIGHT NOW
@@ -1344,7 +1345,6 @@ class Image(BaseProduct):
             self._cur_pick = None
             # The last coordinate ON THE IMAGE that was clicked is stored here. Initial value is set to the centre
             self._last_click = (phot_prod.shape[0] / 2, phot_prod.shape[1] / 2)
-            self._ghost_art = None
             self._select = None
             self._history = []
 
@@ -1629,51 +1629,49 @@ class Image(BaseProduct):
             self._cur_pick.center = (event.xdata, event.ydata)
 
         def _key_press(self, event):
-            if event.key == "ctrl+z":
-                if len(self._history) != 0:
-                    self._history[-1][0].center = self._history[-1][1]
-                    self._history[-1][0].figure.canvas.draw()
-                    self._history.pop(-1)
+            # if event.key == "ctrl+z":
+            #     if len(self._history) != 0:
+            #         self._history[-1][0].center = self._history[-1][1]
+            #         self._history[-1][0].figure.canvas.draw()
+            #         self._history.pop(-1)
 
-            if event.key == "w":
-                if self._cur_pick is not None:
-                    if self._shape_dict[self._cur_pick] == 'circle':
-                        self._cur_pick.width += 5
-                    self._cur_pick.height += 5
-                    self._cur_pick.figure.canvas.draw()
+            if event.key == "w" and self._cur_pick is not None:
+                if type(self._cur_pick) == Circle:
+                    self._cur_pick.radius += self._size_step
+                else:
+                    self._cur_pick.height += self._size_step
+                self._cur_pick.figure.canvas.draw()
 
-            if event.key == "s":
-                if self._cur_pick is not None:
-                    if self._shape_dict[self._cur_pick] == 'circle':
-                        self._cur_pick.width -= 5
-                    self._cur_pick.height -= 5
-                    self._cur_pick.figure.canvas.draw()
+            if event.key == "s" and self._cur_pick is not None:
+                if type(self._cur_pick) == Circle:
+                    self._cur_pick.radius -= self._size_step
+                else:
+                    self._cur_pick.height -= self._size_step
+                self._cur_pick.figure.canvas.draw()
 
-            if event.key == "d":
-                if self._cur_pick is not None:
-                    if self._shape_dict[self._cur_pick] == 'circle':
-                        self._cur_pick.height += 5
-                    self._cur_pick.width += 5
-                    self._cur_pick.figure.canvas.draw()
+            if event.key == "d" and self._cur_pick is not None:
+                if type(self._cur_pick) == Circle:
+                    self._cur_pick.radius += self._size_step
+                else:
+                    self._cur_pick.width += self._size_step
+                self._cur_pick.figure.canvas.draw()
 
-            if event.key == "a":
-                if self._cur_pick is not None:
-                    if self._shape_dict[self._cur_pick] == 'circle':
-                        self._cur_pick.height -= 5
-                    self._cur_pick.width -= 5
-                    self._cur_pick.figure.canvas.draw()
+            if event.key == "a" and self._cur_pick is not None:
+                if type(self._cur_pick) == Circle:
+                    self._cur_pick.radius -= self._size_step
+                else:
+                    self._cur_pick.width -= self._size_step
+                self._cur_pick.figure.canvas.draw()
 
             if event.key == "q":
                 if self._cur_pick is not None:
-                    self._cur_pick.angle += 5
+                    self._cur_pick.angle += self._rot_step
                     self._cur_pick.figure.canvas.draw()
 
             if event.key == "e":
                 if self._cur_pick is not None:
-                    self._cur_pick.angle -= 5
+                    self._cur_pick.angle -= self._rot_step
                     self._cur_pick.figure.canvas.draw()
-
-
 
 
 class ExpMap(Image):
