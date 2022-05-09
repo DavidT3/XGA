@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 12:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 12:54. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1587,35 +1587,46 @@ class Image(BaseProduct):
                 self._last_click = (event.xdata, event.ydata)
 
         def _on_region_pick(self, event):
-            if self._cur_pick is not None:
-                self._cur_pick.set_linewidth(1.2)
+            """
+            This is triggered by selecting a region
 
+            :param event: The event triggered on 'picking' an artist. Contains information about which artist
+                triggered the event, location, etc.
+            """
+            # The _cur_pick attribute references which artist is currently selected, which we can grab from the
+            #  artist picker event that triggered this method
             self._cur_pick = event.artist
-            self._cur_pick.set_linewidth(2.3)
-            self._ghost_art = deepcopy(self._cur_pick)
-            self._ghost_art.set_linestyle('dotted')
-            self._im_ax.add_artist(self._ghost_art)
+            # Makes sure the instance knows a region is selected right now, set to False again when the click ends
             self._select = True
+            # Stores the current position of the current pick
             self._history.append([self._cur_pick, self._cur_pick.center])
 
+            # Redraws the regions so that thicker lines are applied to the newly selected region
+            self._draw_regions()
+
         def _on_release(self, event):
+            """
+            Method triggered when button released.
+
+            :param event: Event triggered by releasing a button click.
+            """
+            # This method's one purpose is to set this to False, meaning that the currently picked artist
+            #  (as referenced in self._cur_pick) isn't currently being clicked and held on
             self._select = False
-            try:
-                self._ghost_art.remove()
-                self._cur_pick.figure.canvas.draw()
-            except AttributeError or ValueError:
-                pass
-            self._ghost_art = None
 
         def _on_motion(self, event):
+            """
+            This is triggered when someone clicks and holds an artist, and then drags it around.
+
+            :param event: Event triggered by motion of the mouse.
+            """
+            # Makes sure that an artist is actually clicked and held on, to make sure something should be
+            #  being moved around right now
             if self._select is False:
                 return
 
-            x0, y0 = self._cur_pick.center
-            dx = (event.xdata - x0)
-            dy = (event.ydata - y0)
-            self._cur_pick.center = (x0 + dx, y0 + dy)
-            # self._cur_pick.figure.canvas.draw()
+            # Set the new position of the currently picked artist to the new position of the event
+            self._cur_pick.center = (event.xdata, event.ydata)
 
         def _key_press(self, event):
             if event.key == "ctrl+z":
