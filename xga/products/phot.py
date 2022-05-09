@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/05/2022, 13:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 10:20. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1254,6 +1254,11 @@ class Image(BaseProduct):
             :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this class.
             """
 
+            # Just saving a reference to the photometric object that declared this instance of this class, and
+            #  then making a copy of whatever regions are associated with it
+            self._parent_phot_obj = phot_prod
+            self._regions = deepcopy(phot_prod.regions)
+
             # Setting up the figure within which all the axes (data, buttons, etc.) are placed
             in_fig = plt.figure(figsize=figsize)
             # Storing the figure in an attribute, as well as the image axis (i.e. the axis on which the data
@@ -1310,31 +1315,35 @@ class Image(BaseProduct):
             # A dictionary describing the current type of regions that are on display
             self._cur_act_reg_type = {"EXT": True, "PNT": True, "OTH": True, "CUST": True}
 
-
-
-
-            self._parent_phot_obj = phot_prod
-            self._regions = deepcopy(phot_prod.regions)
             self._shape_dict = {}
-            # self._reg_drawn = np.full(len(self._regions), False)
-            self._cur_pick = None
-            self._last_click = (phot_prod.shape[0]/2, phot_prod.shape[1]/2)
-            self._ghost_art = None
-            self._select = None
-            self._history = []
 
             # Custom color for edited regions
             # TODO DECIDE ON THE COLOUR AND HOW TO DEAL WITH THINGS, BECAUSE MANUAL XGA CUSTOM REGIONS ARE WHITE
             #  RIGHT NOW
             # self._colour_convert['(1.0, 1.0, 0.0, 1.0)'] = 'yellow'
 
+            # These set up the default colours, red for point, green for extended, and white for custom. I already
+            #  know these colour codes because this is what the regions module colours translate into in matplotlib
+            # Maybe I should automate this rather than hard coding
             self._colour_convert = {(1.0, 0.0, 0.0, 1.0): 'red', (0.0, 0.5019607843137255, 0.0, 1.0): 'green',
                                     (1.0, 1.0, 1.0, 1.0): 'white'}
+            # There can be other coloured regions though, XAPA for instance has lots of subclasses of region. This
+            #  loop goes through the regions and finds their colour name / matplotlib colour code and adds it to the
+            #  dictionary for reference
             for region in self._regions:
                 art_reg = region.as_artist()
                 self._colour_convert[art_reg.get_edgecolor()] = region.visual["color"]
 
+            # This just provides a conversion between name and colour tuple, the inverse of colour_convert
             self._inv_colour_convert = {v: k for k, v in self._colour_convert.items()}
+
+            # The currently selected region is referenced in this attribute
+            self._cur_pick = None
+            # The last coordinate ON THE IMAGE that was clicked is stored here. Initial value is set to the centre
+            self._last_click = (phot_prod.shape[0] / 2, phot_prod.shape[1] / 2)
+            self._ghost_art = None
+            self._select = None
+            self._history = []
 
         def setup_view(self, cmap: str = "gnuplot2", interval: BaseInterval = MinMaxInterval(),
                        stretch: BaseStretch = LogStretch()):
@@ -1396,9 +1405,14 @@ class Image(BaseProduct):
                     art_reg.set_linewidth(1.2)
                     self._im_ax.add_artist(art_reg)
 
-            # If
+            # This chunk controls which regions will be drawn when this method is called. The _cur_act_reg_type
+            #  dictionary has keys representing the four toggle buttons, and their values are True or False. This
+            #  first option is triggered if all entries are True and thus draws all regions
             if all(self._cur_act_reg_type.values()):
                 allowed_colours = list(self._colour_convert.keys())
+            # This checks individual entries in the dictionary, and adds allowed colours to the colour checking
+            #  list which the method uses to identify the regions its allowed to draw for a particular call of this
+            #  method.
             else:
                 allowed_colours = []
                 if self._cur_act_reg_type['EXT']:
@@ -1411,6 +1425,8 @@ class Image(BaseProduct):
                     allowed_colours += [self._inv_colour_convert[c] for c in self._inv_colour_convert
                                         if c not in ['green', 'red', 'white']]
 
+            # This iterates through all the artists currently added to the data axis, setting their linewidth
+            #  to zero if their colour isn't in the approved list
             for artist in self._im_ax.artists:
                 if artist.get_edgecolor() in allowed_colours:
                     artist.set_linewidth(1.2)
