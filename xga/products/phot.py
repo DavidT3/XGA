@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/05/2022, 23:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2022, 11:53. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1347,14 +1347,20 @@ class Image(BaseProduct):
                 art_reg = region.as_artist()
                 self._colour_convert[art_reg.get_edgecolor()] = region.visual["color"]
 
+            # This just provides a conversion between name and colour tuple, the inverse of colour_convert
+            self._inv_colour_convert = {v: k for k, v in self._colour_convert.items()}
+
             # Unfortunately I cannot rely on regions being of an appropriate type (Ellipse/Circle) for what they
             #  are. For instance XAPA point source regions are still ellipses, just with the height and width
             #  set equal. So this dictionary is an independent reference point for the shape, with entries for the
             #  original regions made in the first part of _draw_regions, and otherwise set when a new region is added.
             self._shape_dict = {}
 
-            # This just provides a conversion between name and colour tuple, the inverse of colour_convert
-            self._inv_colour_convert = {v: k for k, v in self._colour_convert.items()}
+            # I also wish to keep track of whether a particular region has been edited or not, for reference when
+            #  outputting the final edited region list (if it is requested). I plan to do this with a similar approach
+            #  to the shape_dict, have a dictionary with artists as keys, but then have a boolean as a value. Will
+            #  also be initially populated in the first part of _draw_regions.
+            self._edited_dict = {}
 
             # This controls whether interacting with regions is allowed - turned off for the dynamic view method
             #  as that is not meant for editing regions
@@ -1408,7 +1414,7 @@ class Image(BaseProduct):
             self._vrange_slider.on_changed(self._change_interval)
 
             # Sets up an initial location for the stretch buttons to iterate over, so I can make this
-            #  as automated as possible. An advantage is that I can just add new stretches to the stretch_dict
+            #  as automated as possible. An advantage is that I can just add new stretches to the stretch_dict,
             #  and they should be automatically added here.
             loc = [ax_loc.x0 - (0.075 + 0.005), 0.92, 0.075, 0.075]
             # Iterate through the stretches that I chose to store in the stretch_dict
@@ -1554,6 +1560,9 @@ class Image(BaseProduct):
                     else:
                         raise NotImplementedError("This method does not currently support regions other than circles "
                                                   "or ellipses, but please get in touch to discuss this further.")
+                    # Add entries in the dictionary that keeps track of whether a region has been edited or
+                    #  not. All entries start out being False of course.
+                    self._edited_dict[art_reg] = False
 
             # This chunk controls which regions will be drawn when this method is called. The _cur_act_reg_type
             #  dictionary has keys representing the four toggle buttons, and their values are True or False. This
@@ -1796,6 +1805,9 @@ class Image(BaseProduct):
             self._im_ax.add_artist(new_patch)
             # Updates the shape dictionary
             self._shape_dict[new_patch] = 'ellipse'
+            # Adds an entry to the dictionary that keeps track of whether regions have been modified or not. In
+            #  this case the region in question is brand new so the entry will always be True.
+            self._edited_dict[new_patch] = True
 
         def _new_circ_src(self, event):
             """
@@ -1820,6 +1832,9 @@ class Image(BaseProduct):
             self._im_ax.add_artist(new_patch)
             # Updates the shape dictionary
             self._shape_dict[new_patch] = 'circle'
+            # Adds an entry to the dictionary that keeps track of whether regions have been modified or not. In
+            #  this case the region in question is brand new so the entry will always be True.
+            self._edited_dict[new_patch] = True
 
         def _click_event(self, event):
             """
@@ -1879,6 +1894,9 @@ class Image(BaseProduct):
             # Set the new position of the currently picked artist to the new position of the event
             self._cur_pick.center = (event.xdata, event.ydata)
 
+            # Changes the entry in the edited dictionary to True, as the region in question has been moved
+            self._edited_dict[self._cur_pick] = True
+
         def _key_press(self, event):
             """
             A method triggered by the press of a key (or combination of keys) on the keyboard. For most keys
@@ -1904,6 +1922,8 @@ class Image(BaseProduct):
                 else:
                     self._cur_pick.height += self._size_step
                 self._cur_pick.figure.canvas.draw()
+                # The region has had its size changed, thus we make sure the class knows the region has been edited
+                self._edited_dict[self._cur_pick] = True
 
             # For comments for the rest of these, see the event key 'w' one, they're the same but either shrinking
             #  or growing different axes
@@ -1916,6 +1936,8 @@ class Image(BaseProduct):
                 else:
                     self._cur_pick.height -= self._size_step
                 self._cur_pick.figure.canvas.draw()
+                # The region has had its size changed, thus we make sure the class knows the region has been edited
+                self._edited_dict[self._cur_pick] = True
 
             if event.key == "d" and self._cur_pick is not None:
                 if type(self._cur_pick) == Circle:
@@ -1926,6 +1948,8 @@ class Image(BaseProduct):
                 else:
                     self._cur_pick.width += self._size_step
                 self._cur_pick.figure.canvas.draw()
+                # The region has had its size changed, thus we make sure the class knows the region has been edited
+                self._edited_dict[self._cur_pick] = True
 
             if event.key == "a" and self._cur_pick is not None:
                 if type(self._cur_pick) == Circle:
@@ -1936,16 +1960,23 @@ class Image(BaseProduct):
                 else:
                     self._cur_pick.width -= self._size_step
                 self._cur_pick.figure.canvas.draw()
+                # The region has had its size changed, thus we make sure the class knows the region has been edited
+                self._edited_dict[self._cur_pick] = True
 
-            if event.key == "q":
-                if self._cur_pick is not None:
-                    self._cur_pick.angle += self._rot_step
-                    self._cur_pick.figure.canvas.draw()
+            if event.key == "q" and self._cur_pick is not None:
+                self._cur_pick.angle += self._rot_step
+                self._cur_pick.figure.canvas.draw()
+                # The region has had its size changed, thus we make sure the class knows the region has been edited
+                self._edited_dict[self._cur_pick] = True
 
-            if event.key == "e":
-                if self._cur_pick is not None:
-                    self._cur_pick.angle -= self._rot_step
-                    self._cur_pick.figure.canvas.draw()
+            if event.key == "e" and self._cur_pick is not None:
+                self._cur_pick.angle -= self._rot_step
+                self._cur_pick.figure.canvas.draw()
+                # The region has had its size changed, thus we make sure the class knows the region has been edited
+                self._edited_dict[self._cur_pick] = True
+
+        def _output_regions(self):
+            pass
 
 
 class ExpMap(Image):
