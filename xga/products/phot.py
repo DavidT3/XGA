@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/05/2022, 11:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/05/2022, 15:30. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle, Ellipse
 from matplotlib.widgets import Button, RangeSlider, Slider
-from regions import read_ds9, PixelRegion, SkyRegion
+from regions import read_ds9, PixelRegion, SkyRegion, EllipsePixelRegion, CirclePixelRegion, PixCoord
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
@@ -1239,9 +1239,7 @@ class Image(BaseProduct):
     def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2'):
         view_inst = self._InteractiveView(self, figsize, cmap)
         view_inst.edit_view()
-        # I suspect this should be the final call of this method, otherwise maybe every figure will be auto
-        #  refreshing which probably would not be a good thing
-        # plt.ioff()
+        # view_inst.output_regions()
 
     class _InteractiveView:
         """
@@ -1329,11 +1327,6 @@ class Image(BaseProduct):
 
             # A dictionary describing the current type of regions that are on display
             self._cur_act_reg_type = {"EXT": True, "PNT": True, "OTH": True, "CUST": True}
-
-            # Custom color for edited regions
-            # TODO DECIDE ON THE COLOUR AND HOW TO DEAL WITH THINGS, BECAUSE MANUAL XGA CUSTOM REGIONS ARE WHITE
-            #  RIGHT NOW
-            # self._colour_convert['(1.0, 1.0, 0.0, 1.0)'] = 'yellow'
 
             # These set up the default colours, red for point, green for extended, and white for custom. I already
             #  know these colour codes because this is what the regions module colours translate into in matplotlib
@@ -1491,7 +1484,9 @@ class Image(BaseProduct):
             self._draw_regions()
 
             plt.ion()
-            plt.show()
+            plt.show(block=True)
+
+            self._update_reg_list()
 
         def _replot_data(self, masked: bool = False):
             """
@@ -1975,8 +1970,57 @@ class Image(BaseProduct):
                 # The region has had its size changed, thus we make sure the class knows the region has been edited
                 self._edited_dict[self._cur_pick] = True
 
-        def _output_regions(self):
-            pass
+        def _update_reg_list(self) -> List[PixelRegion]:
+            """
+            This method goes through the current artists, checks whether any represent new or updated regions, and
+            generates a new list of region objects from them.
+
+            :return: The updated region list.
+            :rtype: List[PixelRegions]
+            """
+            # Here we use the edited dictionary to note that there have been changes to regions
+            if any(self._edited_dict.values()):
+                new_reg_list = []
+                # I am assuming (and I did do some testing and I'm 99% sure I'm right) that iterating through
+                #  the artists brings them out in the same order as the original region list. As in the Nth
+                #  entry in self._im_ax.artists is the artist that corresponds to the Nth original region.
+                for art_ind, artist in enumerate(self._im_ax.artists):
+                    # Fetches the boolean variable that describes if the region was edited
+                    altered = self._edited_dict[artist]
+                    # The altered variable is True if an existing region has changed or if a new artist exists
+                    if altered and type(artist) == Ellipse:
+                        # As instances of this class are always declared internally by an Image class, and I know
+                        #  the image class always turns SkyRegions into PixelRegions, we know that its valid to
+                        #  output PixelRegions here
+                        cen = PixCoord(x=artist.center[0], y=artist.center[1])
+                        # Creating the equivalent region object from the artist
+                        new_reg = EllipsePixelRegion(cen, artist.width, artist.height, Quantity(artist.angle, 'deg'))
+                        # Fetches and sets the colour of the region, converting from matplotlib colour
+                        new_reg.visual['color'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg_list.append(new_reg)
+                    elif altered and type(artist) == Circle:
+                        cen = PixCoord(x=artist.center[0], y=artist.center[1])
+                        # Creating the equivalent region object from the artist
+                        new_reg = CirclePixelRegion(cen, artist.radius)
+                        # Fetches and sets the colour of the region, converting from matplotlib colour
+                        new_reg.visual['color'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg_list.append(new_reg)
+                    else:
+                        # If new artists have been added then art_ind CAN go out of bounds in self._regions, but
+                        #  as all new artists are marked as altered that case should never occur here.
+                        # We don't want to make a new region for a region that hasn't changed, so we just append
+                        #  the existing one to the new region list.
+                        new_reg_list.append(self._regions[art_ind])
+            # In this case none of the entries in the dictionary that stores whether regions have been
+            #  edited (or added) is True, so the new region list is exactly the same as the old one
+            else:
+                new_reg_list = self._regions
+
+            return new_reg_list
+
+        def save_region_file(self):
+            final_regions = []
+            print(self._regions)
 
 
 class ExpMap(Image):
