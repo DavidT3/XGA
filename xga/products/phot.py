@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/05/2022, 15:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/05/2022, 17:13. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle, Ellipse
 from matplotlib.widgets import Button, RangeSlider, Slider
-from regions import read_ds9, PixelRegion, SkyRegion, EllipsePixelRegion, CirclePixelRegion, PixCoord
+from regions import read_ds9, PixelRegion, SkyRegion, EllipsePixelRegion, CirclePixelRegion, PixCoord, write_ds9
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
@@ -1236,8 +1236,8 @@ class Image(BaseProduct):
         # Wipe the figure
         plt.close("all")
 
-    def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2'):
-        view_inst = self._InteractiveView(self, figsize, cmap)
+    def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2', reg_save_path: str = None):
+        view_inst = self._InteractiveView(self, figsize, cmap, reg_save_path)
         view_inst.edit_view()
         # view_inst.output_regions()
 
@@ -1247,17 +1247,23 @@ class Image(BaseProduct):
         for an observation (with the capability of adding completely new regions as well). This is 'private' as
         I can't really see a use-case where the user would define an instance of this themselves.
         """
-        def __init__(self, phot_prod, figsize: Tuple = (7, 7), cmap: str = "gnuplot2"):
+        def __init__(self, phot_prod, figsize: Tuple = (7, 7), cmap: str = "gnuplot2", reg_save_path: str = None):
             """
             The init of the _InteractiveView class, which enables dynamic viewing of XGA photometric products.
 
             :param Image/RateMap/ExpMap phot_prod: The XGA photometric product which we want to interact with.
             :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this class.
+            :param str cmap: The colour map to use for displaying the image. Default is gnuplot2.
+            :param str reg_save_path: The path to which an updated region file will be saved, if that
+                feature is activated by the user. Default is None, in which case saving will be disabled.
             """
             # Just saving a reference to the photometric object that declared this instance of this class, and
             #  then making a copy of whatever regions are associated with it
             self._parent_phot_obj = phot_prod
             self._regions = deepcopy(phot_prod.regions)
+
+            # Store the passed-in save path for regions in an attribute for later
+            self._reg_save_path = reg_save_path
 
             # Setting up the figure within which all the axes (data, buttons, etc.) are placed
             in_fig = plt.figure(figsize=figsize)
@@ -1452,6 +1458,9 @@ class Image(BaseProduct):
             #  could always fetch the value out of the smooth slider attribute but its neater this way I think
             self._kernel_rad = self._smooth_slider.val
 
+            # This is a definition for a save button that is used in edit_view
+            self._save_button = None
+
         def dynamic_view(self):
             """
             The simplest view method of this class, enables the turning on and off of regions.
@@ -1480,13 +1489,20 @@ class Image(BaseProduct):
             self._new_circ_button = Button(new_circ_loc, "CIRC")
             self._new_circ_button.on_clicked(self._new_circ_src)
 
+            # This sets up a button that saves an updated region list to a file path that was passed in on the
+            #  declaration of this instance of the class. If no path was passed, then the button doesn't
+            #  even appear.
+            if self._reg_save_path is not None:
+                ax_loc = self._im_ax.get_position()
+                save_loc = plt.axes([ax_loc.x0, ax_loc.y0 - 0.08, 0.075, 0.075])
+                self._save_button = Button(save_loc, "SAVE", color=self._but_act_col)
+                self._save_button.on_clicked(self._save_region_file)
+
             # Draws on any regions associated with this instance
             self._draw_regions()
 
             plt.ion()
             plt.show(block=True)
-
-            self._update_reg_list()
 
         def _replot_data(self, masked: bool = False):
             """
@@ -2018,9 +2034,17 @@ class Image(BaseProduct):
 
             return new_reg_list
 
-        def save_region_file(self):
-            final_regions = []
-            print(self._regions)
+        def _save_region_file(self, event=None):
+            """
+            This just creates the updated region list from any modifications, converts it to a region file,
+             and then saves it to disk.
+
+            :param event: If triggered by a button, this is the event passed.
+            """
+            # Runs the method that updates the list of regions with any alterations that the user has made
+            final_regions = self._update_reg_list()
+            # This function is a part of the regions module, and will write out a region file
+            write_ds9(final_regions, self._reg_save_path, 'image', radunit='')
 
 
 class ExpMap(Image):
