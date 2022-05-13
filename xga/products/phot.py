@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2022, 15:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2022, 16:50. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1284,8 +1284,9 @@ class Image(BaseProduct):
             :param Image/RateMap/ExpMap phot_prod: The XGA photometric product which we want to interact with.
             :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this class.
             :param str cmap: The colour map to use for displaying the image. Default is gnuplot2.
-            :param str reg_save_path: The path to which an updated region file will be saved, if that
-                feature is activated by the user. Default is None, in which case saving will be disabled.
+            :param str reg_save_path: A string that will have ObsID values added before '.reg' to construct
+                save paths for the output region lists (if that feature is activated by the user). Default is
+                None, in which case saving will be disabled.
             """
             # Just saving a reference to the photometric object that declared this instance of this class, and
             #  then making a copy of whatever regions are associated with it
@@ -1293,13 +1294,22 @@ class Image(BaseProduct):
             self._regions = deepcopy(phot_prod.regions)
 
             # Store the passed-in save path for regions in an attribute for later
-            self._reg_save_path = reg_save_path
+            if reg_save_path is not None and reg_save_path[-4:] == '.reg':
+                self._reg_save_path = reg_save_path
+            elif reg_save_path is not None and reg_save_path[-4:] != '.reg':
+                raise ValueError("The last four characters of the save path must be '.reg', as extra strings "
+                                 "will be inserted into the save path to account for different region files for "
+                                 "different ObsIDs.")
+            else:
+                self._reg_save_path = None
 
             # This is for storing references to artists with an ObsID key, so we know which artist belongs
             #  to which ObsID. Populated in the first part of _draw_regions. We also construct the reverse so that
             #  an artist instance can be easily used to lookup the ObsID it belongs to
             self._obsid_artists = {o: [] for o in self._parent_phot_obj.obs_ids}
             self._artist_obsids = {}
+            # In the same vein I setup a lookup dictionary for artist to region
+            self._artist_region = {}
 
             # Setting up the figure within which all the axes (data, buttons, etc.) are placed
             in_fig = plt.figure(figsize=figsize)
@@ -1532,7 +1542,7 @@ class Image(BaseProduct):
                 ax_loc = self._im_ax.get_position()
                 save_loc = plt.axes([ax_loc.x0, ax_loc.y0 - 0.08, 0.075, 0.075])
                 self._save_button = Button(save_loc, "SAVE", color=self._but_act_col)
-                self._save_button.on_clicked(self._save_region_file)
+                self._save_button.on_clicked(self._save_region_files)
 
             # Draws on any regions associated with this instance
             self._draw_regions()
@@ -1615,6 +1625,8 @@ class Image(BaseProduct):
                         # Here we save the knowledge of which artists belong to which ObsID, and vice versa
                         self._obsid_artists[o].append(art_reg)
                         self._artist_obsids[art_reg] = o
+                        # This allows us to lookup the original regions from their artist
+                        self._artist_region[art_reg] = region
 
             # This chunk controls which regions will be drawn when this method is called. The _cur_act_reg_type
             #  dictionary has keys representing the four toggle buttons, and their values are True or False. This
@@ -2027,17 +2039,22 @@ class Image(BaseProduct):
                 # The region has had its size changed, thus we make sure the class knows the region has been edited
                 self._edited_dict[self._cur_pick] = True
 
-        def _update_reg_list(self) -> List[PixelRegion]:
+        def _update_reg_list(self) -> Dict:
             """
             This method goes through the current artists, checks whether any represent new or updated regions, and
             generates a new list of region objects from them.
 
-            :return: The updated region list.
-            :rtype: List[PixelRegions]
+            :return: The updated region dictionary.
+            :rtype: Dict
             """
             # Here we use the edited dictionary to note that there have been changes to regions
             if any(self._edited_dict.values()):
-                new_reg_list = []
+                # Setting up the dictionary to store the altered regions in. We include keys for each of the ObsIDs
+                #  associated with the parent product, and then another list with the key 'new'; for regions
+                #  that have been added during the editing.
+                new_reg_dict = {o: [] for o in self._parent_phot_obj.obs_ids}
+                new_reg_dict['new'] = []
+
                 # I am assuming (and I did do some testing and I'm 99% sure I'm right) that iterating through
                 #  the artists brings them out in the same order as the original region list. As in the Nth
                 #  entry in self._im_ax.artists is the artist that corresponds to the Nth original region.
@@ -2054,38 +2071,50 @@ class Image(BaseProduct):
                         new_reg = EllipsePixelRegion(cen, artist.width, artist.height, Quantity(artist.angle, 'deg'))
                         # Fetches and sets the colour of the region, converting from matplotlib colour
                         new_reg.visual['color'] = self._colour_convert[artist.get_edgecolor()]
-                        new_reg_list.append(new_reg)
                     elif altered and type(artist) == Circle:
                         cen = PixCoord(x=artist.center[0], y=artist.center[1])
                         # Creating the equivalent region object from the artist
                         new_reg = CirclePixelRegion(cen, artist.radius)
                         # Fetches and sets the colour of the region, converting from matplotlib colour
                         new_reg.visual['color'] = self._colour_convert[artist.get_edgecolor()]
-                        new_reg_list.append(new_reg)
                     else:
-                        # If new artists have been added then art_ind CAN go out of bounds in self._regions, but
-                        #  as all new artists are marked as altered that case should never occur here.
-                        # We don't want to make a new region for a region that hasn't changed, so we just append
-                        #  the existing one to the new region list.
-                        new_reg_list.append(self._regions[art_ind])
+                        # Looking up the region because if we get to this point we know its an original region that
+                        #  hasn't been altered
+                        # Note that in this case its not actually a new reg, its just called that
+                        new_reg = self._artist_region[artist]
+
+                    # Checks to see whether it's an artist that has been modified or a new one
+                    if artist in self._artist_obsids:
+                        new_reg_dict[self._artist_obsids[artist]].append(new_reg)
+                    else:
+                        new_reg_dict['new'].append(new_reg)
+
             # In this case none of the entries in the dictionary that stores whether regions have been
             #  edited (or added) is True, so the new region list is exactly the same as the old one
             else:
-                new_reg_list = self._regions
+                new_reg_dict = self._regions
 
-            return new_reg_list
+            return new_reg_dict
 
-        def _save_region_file(self, event=None):
+        def _save_region_files(self, event=None):
             """
-            This just creates the updated region list from any modifications, converts it to a region file,
-             and then saves it to disk.
+            This just creates the updated region dictionary from any modifications, converts the separate ObsID
+            entries to individual region files, and then saves them to disk.
 
             :param event: If triggered by a button, this is the event passed.
             """
-            # Runs the method that updates the list of regions with any alterations that the user has made
-            final_regions = self._update_reg_list()
-            # This function is a part of the regions module, and will write out a region file
-            write_ds9(final_regions, self._reg_save_path, 'image', radunit='')
+            if self._reg_save_path is not None:
+                # Runs the method that updates the list of regions with any alterations that the user has made
+                final_regions = self._update_reg_list()
+                for o in final_regions:
+                    # Read out the regions for the current ObsID
+                    rel_regs = final_regions[o]
+                    # Construct a save_path
+                    rel_save_path = self._reg_save_path.replace('.reg', '_{o}.reg'.format(o=o))
+                    # This function is a part of the regions module, and will write out a region file
+                    write_ds9(rel_regs, rel_save_path, 'image', radunit='')
+            else:
+                raise ValueError('No save path was passed, so region files cannot be output.')
 
 
 class ExpMap(Image):
