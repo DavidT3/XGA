@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2022, 16:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2022, 17:03. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1267,9 +1267,32 @@ class Image(BaseProduct):
         plt.close("all")
 
     def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2', reg_save_path: str = None):
+        """
+        This allows for displaying, interacting with, editing, and adding new regions to an image. These can
+        then be saved as a new region file. It also allows for the dynamic adjustment of which regions
+        are displayed, the scaling of the image, and smoothing, in order to make placing new regions as
+        simple as possible.
+
+        :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this class.
+        :param str cmap: The colour map to use for displaying the image. Default is gnuplot2.
+        :param str reg_save_path: A string that will have ObsID values added before '.reg' to construct
+            save paths for the output region lists (if that feature is activated by the user). Default is
+            None, in which case saving will be disabled.
+        """
+        # TODO UPDATE THE DOCSTRING WHEN I HAVE INTEGRATED THIS WITH THE REST OF XGA
         view_inst = self._InteractiveView(self, figsize, cmap, reg_save_path)
         view_inst.edit_view()
-        # view_inst.output_regions()
+
+    def dynamic_view(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2'):
+        """
+        This allows for displaying regions on an image. It also allows for the dynamic adjustment of which regions
+        are displayed, the scaling of the image, and smoothing.
+
+        :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this class.
+        :param str cmap: The colour map to use for displaying the image. Default is gnuplot2.
+        """
+        view_inst = self._InteractiveView(self, figsize, cmap, None)
+        view_inst.dynamic_view()
 
     class _InteractiveView:
         """
