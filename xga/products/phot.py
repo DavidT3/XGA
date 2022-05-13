@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2022, 14:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2022, 15:08. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1295,6 +1295,12 @@ class Image(BaseProduct):
             # Store the passed-in save path for regions in an attribute for later
             self._reg_save_path = reg_save_path
 
+            # This is for storing references to artists with an ObsID key, so we know which artist belongs
+            #  to which ObsID. Populated in the first part of _draw_regions. We also construct the reverse so that
+            #  an artist instance can be easily used to lookup the ObsID it belongs to
+            self._obsid_artists = {o: [] for o in self._parent_phot_obj.obs_ids}
+            self._artist_obsids = {}
+
             # Setting up the figure within which all the axes (data, buttons, etc.) are placed
             in_fig = plt.figure(figsize=figsize)
             # Storing the figure in an attribute, as well as the image axis (i.e. the axis on which the data
@@ -1372,7 +1378,7 @@ class Image(BaseProduct):
             # There can be other coloured regions though, XAPA for instance has lots of subclasses of region. This
             #  loop goes through the regions and finds their colour name / matplotlib colour code and adds it to the
             #  dictionary for reference
-            for region in self._regions:
+            for region in [r for o, rl in self._regions.items() for r in rl]:
                 art_reg = region.as_artist()
                 self._colour_convert[art_reg.get_edgecolor()] = region.visual["color"]
 
@@ -1582,28 +1588,33 @@ class Image(BaseProduct):
             """
             # This will trigger in initial cases where there ARE regions associated with the photometric product
             #  that has spawned this InteractiveView, but they haven't been added as artists yet
-            if len(self._im_ax.artists) == 0 and len(self._regions) != 0:
-                for region in self._regions:
-                    # Uses the region module's convenience function to turn the region into a matplotlib artist
-                    art_reg = region.as_artist()
-                    # Makes sure that the region can be 'picked', which enables selecting regions to modify
-                    art_reg.set_picker(True)
-                    # Sets the standard linewidth
-                    art_reg.set_linewidth(self._reg_line_width)
-                    # And actually adds the artist to the data axis
-                    self._im_ax.add_artist(art_reg)
-                    # Adds an entry to the shape dictionary. If a region from the parent Image is elliptical but
-                    #  has the same height and width then I define it as a circle.
-                    if type(art_reg) == Circle or (type(art_reg) == Ellipse and art_reg.height == art_reg.width):
-                        self._shape_dict[art_reg] = 'circle'
-                    elif type(art_reg) == Ellipse:
-                        self._shape_dict[art_reg] = 'ellipse'
-                    else:
-                        raise NotImplementedError("This method does not currently support regions other than circles "
-                                                  "or ellipses, but please get in touch to discuss this further.")
-                    # Add entries in the dictionary that keeps track of whether a region has been edited or
-                    #  not. All entries start out being False of course.
-                    self._edited_dict[art_reg] = False
+            if len(self._im_ax.artists) == 0 and len([r for o, rl in self._regions.items() for r in rl]) != 0:
+                for o in self._regions:
+                    for region in self._regions[o]:
+                        # Uses the region module's convenience function to turn the region into a matplotlib artist
+                        art_reg = region.as_artist()
+                        # Makes sure that the region can be 'picked', which enables selecting regions to modify
+                        art_reg.set_picker(True)
+                        # Sets the standard linewidth
+                        art_reg.set_linewidth(self._reg_line_width)
+                        # And actually adds the artist to the data axis
+                        self._im_ax.add_artist(art_reg)
+                        # Adds an entry to the shape dictionary. If a region from the parent Image is elliptical but
+                        #  has the same height and width then I define it as a circle.
+                        if type(art_reg) == Circle or (type(art_reg) == Ellipse and art_reg.height == art_reg.width):
+                            self._shape_dict[art_reg] = 'circle'
+                        elif type(art_reg) == Ellipse:
+                            self._shape_dict[art_reg] = 'ellipse'
+                        else:
+                            raise NotImplementedError("This method does not currently support regions other than "
+                                                      "circles or ellipses, but please get in touch to discuss "
+                                                      "this further.")
+                        # Add entries in the dictionary that keeps track of whether a region has been edited or
+                        #  not. All entries start out being False of course.
+                        self._edited_dict[art_reg] = False
+                        # Here we save the knowledge of which artists belong to which ObsID, and vice versa
+                        self._obsid_artists[o].append(art_reg)
+                        self._artist_obsids[art_reg] = o
 
             # This chunk controls which regions will be drawn when this method is called. The _cur_act_reg_type
             #  dictionary has keys representing the four toggle buttons, and their values are True or False. This
