@@ -1,10 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/05/2022, 17:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2022, 14:25. Copyright (c) The Contributors
 
 import os
 import warnings
 from copy import deepcopy
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Dict
 
 import numpy as np
 import pandas as pd
@@ -92,10 +92,10 @@ class Image(BaseProduct):
             self._reg_file_path = reg_file_path
         elif reg_file_path != '' and not os.path.exists(reg_file_path):
             warnings.warn("That region file path does not exist")
-            self._regions = []
+            self._regions = {}
             self._reg_file_path = reg_file_path
         else:
-            self._regions = []
+            self._regions = {}
             self._reg_file_path = ''
 
         self._smoothed = smoothed
@@ -213,39 +213,57 @@ class Image(BaseProduct):
             raise FailedProductError("SAS has generated this image without a WCS capable of "
                                      "going from pixels to RA-DEC.")
 
-    def _process_regions(self, path: str = None, reg_list: List[Union[PixelRegion, SkyRegion]] = None) \
-            -> List[PixelRegion]:
+    def _process_regions(self, path: str = None, reg_objs: Union[List[Union[PixelRegion, SkyRegion]], dict] = None) \
+            -> dict:
         """
         This internal function just takes the path to a region file and processes it into a form that
         this object requires for viewing.
 
         :param str path: The path of a region file to be processed, can be None but only if the
             other argument is given.
-        :param List[PixelRegion/SkyRegion] reg_list: A list of region objects to be processed, default is None.
-        :return: A list of pixel regions.
-        :rtype: List[PixelRegion]
+        :param Union[List[PixelRegion/SkyRegion]/dict] reg_objs: A list or dictionary of region objects to be
+            processed, default is None.
+        :return: A dictionary of lists of pixel regions, with dictionary keys being ObsIDs.
+        :rtype: Dict
         """
         # This method can deal with either an input of a region file path or of a list of region objects, but
         #  firstly we need to check that at least one of the inputs isn't None
-        if all([path is None, reg_list is None]):
+        if all([path is None, reg_objs is None]):
             raise ValueError("Either a path or a list of region objects must be passed, you have passed neither")
-        elif all([path is not None, reg_list is not None]):
+        elif all([path is not None, reg_objs is not None]):
             raise ValueError("You have passed both a path and a list of regions, pass one or the other.")
 
         # The behaviour here depends on whether regions or a path have been passed
         if path is not None:
             ds9_regs = read_ds9(path)
         else:
-            ds9_regs = deepcopy(reg_list)
+            ds9_regs = deepcopy(reg_objs)
+
+        # As we now support passing either a dictionary or a list of region objects, some preprocessing is needed
+        if type(ds9_regs) == list:
+            ds9_regs = {self._obs_id: ds9_regs}
+        elif type(ds9_regs) == dict:
+            obs_keys = ds9_regs.keys()
+            # Checks whether all the ObsIDs present in the XGA product are represented in the region dictionary
+            check = [o in obs_keys for o in self.obs_ids]
+            if not all(check):
+                missing = np.array(self.obs_ids)[~np.array(check)]
+                raise KeyError("The passed region dictionary does not have an ObsID entry for every ObsID "
+                               "associated with this object, the following are "
+                               "missing; {a}.".format(a=','.join(missing)))
 
         # Checking what kind of regions there are, as that changes whether they need to be converted or not
-        final_regs = []
-        for reg in ds9_regs:
-            if isinstance(reg, PixelRegion):
-                final_regs.append(reg)
-            else:
-                # Regions in sky coordinates need to be in pixels for overlaying on the image
-                final_regs.append(reg.to_pixel(self._wcs_radec))
+        final_regs = {}
+        # Top level of iteration is through the ObsID keys
+        for o in ds9_regs:
+            # Setting up an entry in the output dictionary for that ObsID
+            final_regs[o] = []
+            for reg in ds9_regs[o]:
+                if isinstance(reg, PixelRegion):
+                    final_regs[o].append(reg)
+                else:
+                    # Regions in sky coordinates need to be in pixels for overlaying on the image
+                    final_regs[o].append(reg.to_pixel(self._wcs_radec))
 
         return final_regs
 
@@ -432,37 +450,48 @@ class Image(BaseProduct):
         return new_line
 
     @property
-    def regions(self) -> List[PixelRegion]:
+    def regions(self) -> Dict:
         """
         Property getter for regions associated with this image.
 
         :return: Returns a list of regions, if they have been associated with this object.
-        :rtype: List[PixelRegion]
+        :rtype: Dict[PixelRegion]
         """
         return self._regions
 
     @regions.setter
-    def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]]]):
+    def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
         """
         A setter for regions associated with this object, a region file path or a list of regions is passed, then
-        that file/set of regions is processed into the required format.
+        that file/set of regions is processed into the required format. If a list of regions is passed, it will
+        be assumed that they are for the ObsID of the image. In the case of passing a dictionary of regions to a
+        combined image we require that each ObsID that goes into the image has an entry in the dictionary.
 
-        :param str/List[SkyRegion/PixelRegion] new_reg: A new region file path, or a list of region objects.
+        :param str/List[SkyRegion/PixelRegion]/dict new_reg: A new region file path, a list of region objects, or a
+            dictionary of region lists with ObsIDs as dictionary keys.
         """
-        if not isinstance(new_reg, (str, list)):
-            raise TypeError("Please pass either a path to a region file or a list of "
-                            "SkyRegion/PixelRegion objects.")
+        if not isinstance(new_reg, (str, list, dict)):
+            raise TypeError("Please pass either a path to a region file, a list of "
+                            "SkyRegion/PixelRegion objects, or a dictionary of lists of SkyRegion/PixelRegion objects "
+                            "with ObsIDs as keys.")
 
+        # Checks to make sure that a region file path exists, if passed, then processes the file
         if isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
             self._reg_file_path = new_reg
             self._regions = self._process_regions(new_reg)
+        # Possible for an empty string to be passed in which case nothing happens
         elif isinstance(new_reg, str) and new_reg == '':
             pass
         elif isinstance(new_reg, str):
             warnings.warn("That region file path does not exist")
+        # If an existing list of regions are passed then we just process them and assign them to regions attribute
         elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
             self._reg_file_path = ""
-            self._regions = self._process_regions(reg_list=new_reg)
+            self._regions = self._process_regions(reg_objs=new_reg)
+        elif isinstance(new_reg, dict) and all([all([isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
+                                                for o, rl in new_reg.items()]):
+            self._reg_file_path = ""
+            self._regions = self._process_regions(reg_objs=new_reg)
         else:
             raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
                              "a list of SkyRegion/PixelRegion objects")
@@ -1088,7 +1117,8 @@ class Image(BaseProduct):
         if view_regions:
             # We can just loop through the _regions attribute because its default is an empty
             #  list, so no need to check
-            for reg in self._regions:
+            flattened_reg = [r for o, rl in self._regions.items() for r in rl]
+            for reg in flattened_reg:
                 # Use the regions module conversion method to go to a matplotlib artist
                 reg_art = reg.as_artist()
                 # Set line thickness and add to the axes
