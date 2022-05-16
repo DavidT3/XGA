@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 13:21. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1266,7 +1266,9 @@ class Image(BaseProduct):
         # Wipe the figure
         plt.close("all")
 
-    def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2', reg_save_path: str = None):
+    def edit_regions(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2', reg_save_path: str = None,
+                     cross_hair: Quantity = None, radial_bins_pix: Quantity = Quantity(np.array([]), 'pix'),
+                     back_bin_pix: Quantity = None):
         """
         This allows for displaying, interacting with, editing, and adding new regions to an image. These can
         then be saved as a new region file. It also allows for the dynamic adjustment of which regions
@@ -1278,20 +1280,39 @@ class Image(BaseProduct):
         :param str reg_save_path: A string that will have ObsID values added before '.reg' to construct
             save paths for the output region lists (if that feature is activated by the user). Default is
             None, in which case saving will be disabled.
+        :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
+            the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
+            passing two, each row of a quantity is considered to be a separate coordinate pair.
+        :param Quantity radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
+            only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
+        :param Quantity back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
+            the background value for a given profile, will only be triggered if a cross_hair coordinate is
+            also specified and contains only one coordinate.
         """
         # TODO UPDATE THE DOCSTRING WHEN I HAVE INTEGRATED THIS WITH THE REST OF XGA
-        view_inst = self._InteractiveView(self, figsize, cmap, reg_save_path)
+        view_inst = self._InteractiveView(self, figsize, cmap, reg_save_path, cross_hair, radial_bins_pix,
+                                          back_bin_pix)
         view_inst.edit_view()
 
-    def dynamic_view(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2'):
+    def dynamic_view(self, figsize: Tuple = (7, 7), cmap: str = 'gnuplot2', cross_hair: Quantity = None,
+                     radial_bins_pix: Quantity = Quantity(np.array([]), 'pix'),
+                     back_bin_pix: Quantity = None):
         """
         This allows for displaying regions on an image. It also allows for the dynamic adjustment of which regions
         are displayed, the scaling of the image, and smoothing.
 
         :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this class.
         :param str cmap: The colour map to use for displaying the image. Default is gnuplot2.
+        :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
+            the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
+            passing two, each row of a quantity is considered to be a separate coordinate pair.
+        :param Quantity radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
+            only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
+        :param Quantity back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
+            the background value for a given profile, will only be triggered if a cross_hair coordinate is
+            also specified and contains only one coordinate.
         """
-        view_inst = self._InteractiveView(self, figsize, cmap, None)
+        view_inst = self._InteractiveView(self, figsize, cmap, None, cross_hair, radial_bins_pix, back_bin_pix)
         view_inst.dynamic_view()
 
     class _InteractiveView:
@@ -1300,7 +1321,9 @@ class Image(BaseProduct):
         for an observation (with the capability of adding completely new regions as well). This is 'private' as
         I can't really see a use-case where the user would define an instance of this themselves.
         """
-        def __init__(self, phot_prod, figsize: Tuple = (7, 7), cmap: str = "gnuplot2", reg_save_path: str = None):
+        def __init__(self, phot_prod, figsize: Tuple = (7, 7), cmap: str = "gnuplot2", reg_save_path: str = None,
+                     cross_hair: Quantity = None, radial_bins_pix: Quantity = Quantity(np.array([]), 'pix'),
+                     back_bin_pix: Quantity = None):
             """
             The init of the _InteractiveView class, which enables dynamic viewing of XGA photometric products.
 
@@ -1310,6 +1333,14 @@ class Image(BaseProduct):
             :param str reg_save_path: A string that will have ObsID values added before '.reg' to construct
                 save paths for the output region lists (if that feature is activated by the user). Default is
                 None, in which case saving will be disabled.
+            :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
+                the coordinates. Up to two cross-hairs can be plotted, as any more can be visually confusing. If
+                passing two, each row of a quantity is considered to be a separate coordinate pair.
+            :param Quantity radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
+                only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
+            :param Quantity back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
+                the background value for a given profile, will only be triggered if a cross_hair coordinate is
+                also specified and contains only one coordinate.
             """
             # Just saving a reference to the photometric object that declared this instance of this class, and
             #  then making a copy of whatever regions are associated with it
@@ -1536,6 +1567,73 @@ class Image(BaseProduct):
             self._mask_button = Button(mask_loc, "MASK", color=self._but_inact_col)
             self._mask_button.on_clicked(self._toggle_mask)
 
+            # This next part allows for the over-plotting of annuli to indicate analysis regions, this can be
+            #  very useful to give context when manually editing regions. The only way I know of to do this is
+            #  with artists, but unfortunately artists (and iterating through the artist property of the image axis)
+            #  is the way a lot of stuff in this class works. So here I'm going to make a new class attribute
+            #  that stores which artists are added to visualise analysis areas and therefore shouldn't be touched.
+            self._ignore_arts = []
+            # As this was largely copied from the get_view method of Image, I am just going to define this
+            #  variable here for ease of testing
+            ch_thickness = 0.8
+            # If we want a cross-hair, then we put one on here
+            if cross_hair is not None:
+                # For the case of a single coordinate
+                if cross_hair.shape == (2,):
+                    # Converts from whatever input coordinate to pixels
+                    pix_coord = self._parent_phot_obj.coord_conv(cross_hair, pix).value
+                    # Drawing the horizontal and vertical lines
+                    self._im_ax.axvline(pix_coord[0], color="white", linewidth=ch_thickness)
+                    self._im_ax.axhline(pix_coord[1], color="white", linewidth=ch_thickness)
+
+                # For the case of two coordinate pairs
+                elif cross_hair.shape == (2, 2):
+                    # Converts from whatever input coordinate to pixels
+                    pix_coord = self._parent_phot_obj.coord_conv(cross_hair, pix).value
+
+                    # This draws the first crosshair
+                    self._im_ax.axvline(pix_coord[0, 0], color="white", linewidth=ch_thickness)
+                    self._im_ax.axhline(pix_coord[0, 1], color="white", linewidth=ch_thickness)
+
+                    # And this the second
+                    self._im_ax.axvline(pix_coord[1, 0], color="white", linewidth=ch_thickness, linestyle='dashed')
+                    self._im_ax.axhline(pix_coord[1, 1], color="white", linewidth=ch_thickness, linestyle='dashed')
+
+                    # Here I reset the pix_coord variable, so it ONLY contains the first entry. This is for the benefit
+                    #  of the annulus-drawing part of the code that comes after
+                    pix_coord = pix_coord[0, :]
+
+                else:
+                    # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
+                    #  it isn't essential, so I'll just display a warning
+                    warnings.warn("You have passed a cross_hair quantity that has more than two coordinate "
+                                  "pairs in it, or is otherwise the wrong shape.")
+                    # Just in case annuli were also passed, I set the coordinate to None so that it knows something is
+                    # wrong
+                    pix_coord = None
+
+                if pix_coord is not None:
+                    # Drawing annular radii on the image, if they are enabled and passed. If multiple coordinates have
+                    #  been passed then I assume that they want to centre on the first entry
+                    for ann_rad in radial_bins_pix:
+                        artist = Circle(pix_coord, ann_rad.value, fill=False, ec='white', linewidth=1.5)
+                        artist.set_picker(False)
+                        self._ignore_arts.append(artist)
+                        self._im_ax.add_artist(artist)
+
+                    # This draws the background region on as well, if present
+                    if back_bin_pix is not None:
+                        inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white', linewidth=1.6,
+                                            linestyle='dashed')
+                        out_artist = Circle(pix_coord, back_bin_pix[1].value, fill=False, ec='white', linewidth=1.6,
+                                            linestyle='dashed')
+                        inn_artist.set_picker(False)
+                        out_artist.set_picker(False)
+                        self._im_ax.add_artist(inn_artist)
+                        self._ignore_arts.append(inn_artist)
+                        self._im_ax.add_artist(out_artist)
+                        self._ignore_arts.append(out_artist)
+
         def dynamic_view(self):
             """
             The simplest view method of this class, enables the turning on and off of regions.
@@ -1616,7 +1714,9 @@ class Image(BaseProduct):
             click, region changing, or new region being added.
             """
             # This will trigger in initial cases where there ARE regions associated with the photometric product
-            #  that has spawned this InteractiveView, but they haven't been added as artists yet
+            #  that has spawned this InteractiveView, but they haven't been added as artists yet. ALSO, this will
+            #  always run prior to any artists being added that are just there to indicate analysis regions, see
+            #  toward the end of the __init__ for what I mean.
             if len(self._im_ax.artists) == 0 and len([r for o, rl in self._regions.items() for r in rl]) != 0:
                 for o in self._regions:
                     for region in self._regions[o]:
@@ -1667,9 +1767,14 @@ class Image(BaseProduct):
                     allowed_colours += [self._inv_colour_convert[c] for c in self._inv_colour_convert
                                         if c not in ['green', 'red', 'white']]
 
+            # These artists are the ones that represent regions, the ones in self._ignore_arts are there
+            #  just for visualisation (for instance showing an analysis/background region) and can't be
+            #  turned on or off, can't be edited, and shouldn't be saved.
+            rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+
             # This iterates through all the artists currently added to the data axis, setting their linewidth
             #  to zero if their colour isn't in the approved list
-            for artist in self._im_ax.artists:
+            for artist in rel_artists:
                 if artist.get_edgecolor() in allowed_colours:
                     # If we're here then the region type of this artist is enabled by a button, and thus it should
                     #  be visible. We also use set_picker to make sure that this artist is allowed to be clicked on.
@@ -1990,7 +2095,9 @@ class Image(BaseProduct):
             :param event: The event triggered on 'picking' an artist. Contains information about which artist
                 triggered the event, location, etc.
             """
-            if not self._interacting_on:
+            # If interacting is turned off then we don't want this to do anything, likewise if a region that
+            #  is just there for visualisation is clicked ons
+            if not self._interacting_on or event.artist in self._ignore_arts:
                 return
 
             # The _cur_pick attribute references which artist is currently selected, which we can grab from the
@@ -2125,10 +2232,12 @@ class Image(BaseProduct):
                 new_reg_dict = {o: [] for o in self._parent_phot_obj.obs_ids}
                 new_reg_dict['new'] = []
 
-                # I am assuming (and I did do some testing and I'm 99% sure I'm right) that iterating through
-                #  the artists brings them out in the same order as the original region list. As in the Nth
-                #  entry in self._im_ax.artists is the artist that corresponds to the Nth original region.
-                for art_ind, artist in enumerate(self._im_ax.artists):
+                # These artists are the ones that represent regions, the ones in self._ignore_arts are there
+                #  just for visualisation (for instance showing an analysis/background region) and can't be
+                #  turned on or off, can't be edited, and shouldn't be saved.
+                rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+
+                for artist in rel_artists:
                     # Fetches the boolean variable that describes if the region was edited
                     altered = self._edited_dict[artist]
                     # The altered variable is True if an existing region has changed or if a new artist exists
