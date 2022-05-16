@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 13:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 13:33. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1616,20 +1616,28 @@ class Image(BaseProduct):
                     # Drawing annular radii on the image, if they are enabled and passed. If multiple coordinates have
                     #  been passed then I assume that they want to centre on the first entry
                     for ann_rad in radial_bins_pix:
+                        # Creates the artist for the current annular region
                         artist = Circle(pix_coord, ann_rad.value, fill=False, ec='white',
-                                        linewidth=self._reg_line_width)
+                                        linewidth=ch_thickness)
+                        # Means it can't be interacted with
                         artist.set_picker(False)
+                        # Adds it to the list that lets the class know it needs to not treat it as a region
+                        #  found by a source detector
                         self._ignore_arts.append(artist)
+                        # And adds the artist to axis
                         self._im_ax.add_artist(artist)
 
                     # This draws the background region on as well, if present
                     if back_bin_pix is not None:
+                        # The background annulus is guarenteed to only have two entries, inner and outer
                         inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white',
-                                            linewidth=self._reg_line_width, linestyle='dashed')
+                                            linewidth=ch_thickness, linestyle='dashed')
                         out_artist = Circle(pix_coord, back_bin_pix[1].value, fill=False, ec='white',
-                                            linewidth=self._reg_line_width, linestyle='dashed')
+                                            linewidth=ch_thickness, linestyle='dashed')
+                        # Make sure neither region can be interacted with
                         inn_artist.set_picker(False)
                         out_artist.set_picker(False)
+                        # Add to the ignore list and to the axis
                         self._im_ax.add_artist(inn_artist)
                         self._ignore_arts.append(inn_artist)
                         self._im_ax.add_artist(out_artist)
