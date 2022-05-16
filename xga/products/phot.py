@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 13:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 13:29. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1616,17 +1616,18 @@ class Image(BaseProduct):
                     # Drawing annular radii on the image, if they are enabled and passed. If multiple coordinates have
                     #  been passed then I assume that they want to centre on the first entry
                     for ann_rad in radial_bins_pix:
-                        artist = Circle(pix_coord, ann_rad.value, fill=False, ec='white', linewidth=1.5)
+                        artist = Circle(pix_coord, ann_rad.value, fill=False, ec='white',
+                                        linewidth=self._reg_line_width)
                         artist.set_picker(False)
                         self._ignore_arts.append(artist)
                         self._im_ax.add_artist(artist)
 
                     # This draws the background region on as well, if present
                     if back_bin_pix is not None:
-                        inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white', linewidth=1.6,
-                                            linestyle='dashed')
-                        out_artist = Circle(pix_coord, back_bin_pix[1].value, fill=False, ec='white', linewidth=1.6,
-                                            linestyle='dashed')
+                        inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white',
+                                            linewidth=self._reg_line_width, linestyle='dashed')
+                        out_artist = Circle(pix_coord, back_bin_pix[1].value, fill=False, ec='white',
+                                            linewidth=self._reg_line_width, linestyle='dashed')
                         inn_artist.set_picker(False)
                         out_artist.set_picker(False)
                         self._im_ax.add_artist(inn_artist)
@@ -1713,11 +1714,16 @@ class Image(BaseProduct):
             data view axis (i.e. the image/ratemap). Either for the first time or as an update due to a button
             click, region changing, or new region being added.
             """
+            # These artists are the ones that represent regions, the ones in self._ignore_arts are there
+            #  just for visualisation (for instance showing an analysis/background region) and can't be
+            #  turned on or off, can't be edited, and shouldn't be saved.
+            rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+
             # This will trigger in initial cases where there ARE regions associated with the photometric product
             #  that has spawned this InteractiveView, but they haven't been added as artists yet. ALSO, this will
             #  always run prior to any artists being added that are just there to indicate analysis regions, see
             #  toward the end of the __init__ for what I mean.
-            if len(self._im_ax.artists) == 0 and len([r for o, rl in self._regions.items() for r in rl]) != 0:
+            if len(rel_artists) == 0 and len([r for o, rl in self._regions.items() for r in rl]) != 0:
                 for o in self._regions:
                     for region in self._regions[o]:
                         # Uses the region module's convenience function to turn the region into a matplotlib artist
@@ -1747,11 +1753,15 @@ class Image(BaseProduct):
                         # This allows us to lookup the original regions from their artist
                         self._artist_region[art_reg] = region
 
+                # Need to update this in this case
+                rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+
             # This chunk controls which regions will be drawn when this method is called. The _cur_act_reg_type
             #  dictionary has keys representing the four toggle buttons, and their values are True or False. This
             #  first option is triggered if all entries are True and thus draws all regions
             if all(self._cur_act_reg_type.values()):
                 allowed_colours = list(self._colour_convert.keys())
+
             # This checks individual entries in the dictionary, and adds allowed colours to the colour checking
             #  list which the method uses to identify the regions its allowed to draw for a particular call of this
             #  method.
@@ -1766,11 +1776,6 @@ class Image(BaseProduct):
                 if self._cur_act_reg_type['OTH']:
                     allowed_colours += [self._inv_colour_convert[c] for c in self._inv_colour_convert
                                         if c not in ['green', 'red', 'white']]
-
-            # These artists are the ones that represent regions, the ones in self._ignore_arts are there
-            #  just for visualisation (for instance showing an analysis/background region) and can't be
-            #  turned on or off, can't be edited, and shouldn't be saved.
-            rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
 
             # This iterates through all the artists currently added to the data axis, setting their linewidth
             #  to zero if their colour isn't in the approved list
