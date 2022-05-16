@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2022, 17:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 11:33. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1340,7 +1340,7 @@ class Image(BaseProduct):
             #  are displayed) in another attribute, for convenience.
             self._fig = in_fig
             self._im_ax = plt.gca()
-            ax_loc = self._im_ax.get_position()
+            self._ax_loc = self._im_ax.get_position()
 
             # Setting up the look of the data axis, removing ticks and tick labels because it's an image
             self._im_ax.tick_params(axis='both', direction='in', which='both', top=False, right=False)
@@ -1376,7 +1376,7 @@ class Image(BaseProduct):
             # These buttons act as toggles, they are all active by default and clicking one will turn off the source
             #  type its associated with. Clicking it again will turn it back on.
             # This button toggles extended (green) sources.
-            top_pos = ax_loc.y1-0.0771
+            top_pos = self._ax_loc.y1-0.0771
             ext_src_loc = plt.axes([0.045, top_pos, 0.075, 0.075])
             self._ext_src_button = Button(ext_src_loc, "EXT", color=self._but_act_col)
             self._ext_src_button.on_clicked(self._toggle_ext)
@@ -1455,18 +1455,18 @@ class Image(BaseProduct):
             # Here we define attribute to store the data and normalisation in. I copy the data to make sure that
             #  the original information doesn't get changed when smoothing is applied.
             self._plot_data = self._parent_phot_obj.data.copy()
-            self._norm = self._renorm(masked=False)
             # It's also possible to mask and display the data, and the current mask is stored in this attribute
             self._plot_mask = np.ones(self._plot_data.shape)
+            self._norm = self._renorm()
 
             # The output of the imshow command lives in here
             self._im_plot = None
             # Adds the actual image to the axis.
-            self._replot_data(masked=False)
+            self._replot_data()
 
             # This bit is where all the stretch buttons are set up, as well as the slider. All methods should
             #  be able to use re-stretching so that's why this is all in the init
-            ax_slid = plt.axes([ax_loc.x0, 0.885, 0.7771, 0.03], facecolor="white")
+            ax_slid = plt.axes([self._ax_loc.x0, 0.885, 0.7771, 0.03], facecolor="white")
             # Hides the ticks to make it look nicer
             ax_slid.set_xticks([])
             ax_slid.set_yticks([])
@@ -1484,7 +1484,7 @@ class Image(BaseProduct):
             # Sets up an initial location for the stretch buttons to iterate over, so I can make this
             #  as automated as possible. An advantage is that I can just add new stretches to the stretch_dict,
             #  and they should be automatically added here.
-            loc = [ax_loc.x0 - (0.075 + 0.005), 0.92, 0.075, 0.075]
+            loc = [self._ax_loc.x0 - (0.075 + 0.005), 0.92, 0.075, 0.075]
             # Iterate through the stretches that I chose to store in the stretch_dict
             for stretch_name, stretch in stretch_dict.items():
                 # Increments the position of the button
@@ -1505,11 +1505,11 @@ class Image(BaseProduct):
                 self._stretch_buttons[stretch_name].on_clicked(self._change_stretch(stretch_name))
 
             # This is the bit where we set up the buttons and slider for the smoothing function
-            smooth_loc = plt.axes([ax_loc.x1 + 0.005, top_pos, 0.095, 0.075])
+            smooth_loc = plt.axes([self._ax_loc.x1 + 0.005, top_pos, 0.095, 0.075])
             self._smooth_button = Button(smooth_loc, "SMOOTH", color=self._but_inact_col)
             self._smooth_button.on_clicked(self._toggle_smooth)
 
-            ax_smooth_slid = plt.axes([ax_loc.x1 + 0.03, ax_loc.y0+0.002, 0.05, 0.685], facecolor="white")
+            ax_smooth_slid = plt.axes([self._ax_loc.x1 + 0.03, self._ax_loc.y0+0.002, 0.05, 0.685], facecolor="white")
             # Hides the ticks to make it look nicer
             ax_smooth_slid.set_xticks([])
             # Define the Slider instance, add and position a label, and connect to the method it activates
@@ -1529,6 +1529,12 @@ class Image(BaseProduct):
 
             # This is a definition for a save button that is used in edit_view
             self._save_button = None
+
+            # Adding a button to apply a mask generated from the regions, largely to help see if any emission
+            #  from an object isn't being properly removed.
+            mask_loc = plt.axes([self._ax_loc.x0 + (0.075 + 0.005), self._ax_loc.y0 - 0.08, 0.075, 0.075])
+            self._mask_button = Button(mask_loc, "MASK", color=self._but_inact_col)
+            self._mask_button.on_clicked(self._toggle_mask)
 
         def dynamic_view(self):
             """
@@ -1562,9 +1568,8 @@ class Image(BaseProduct):
             #  declaration of this instance of the class. If no path was passed, then the button doesn't
             #  even appear.
             if self._reg_save_path is not None:
-                ax_loc = self._im_ax.get_position()
-                save_loc = plt.axes([ax_loc.x0, ax_loc.y0 - 0.08, 0.075, 0.075])
-                self._save_button = Button(save_loc, "SAVE", color=self._but_act_col)
+                save_loc = plt.axes([self._ax_loc.x0, self._ax_loc.y0 - 0.08, 0.075, 0.075])
+                self._save_button = Button(save_loc, "SAVE", color=self._but_inact_col)
                 self._save_button.on_clicked(self._save_region_files)
 
             # Draws on any regions associated with this instance
@@ -1573,12 +1578,11 @@ class Image(BaseProduct):
             plt.ion()
             plt.show(block=True)
 
-        def _replot_data(self, masked: bool = False):
+        def _replot_data(self):
             """
             This method updates the currently plotted data using the relevant class attributes. Such attributes
-            are updated and edited by other parts of the class.
-
-            :param bool masked: Whether the data should be replotted with the plot mask applied or not.
+            are updated and edited by other parts of the class. The plot mask is always applied to data, but when
+            not turned on by the relevant button it will be all ones so will make no difference.
             """
             # This removes the existing image data without removing the region artists
             if self._im_plot is not None:
@@ -1586,30 +1590,22 @@ class Image(BaseProduct):
 
             # This does the actual plotting bit, saving the output in an attribute, so it can be
             #  removed when re-plotting
-            if not masked:
-                self._im_plot = self._im_ax.imshow(self._plot_data, norm=self._norm, origin="lower", cmap=self._cmap)
-            else:
-                # TODO Should this be made to recalculate the norm with the mask automatically
-                self._im_plot = self._im_ax.imshow(self._plot_data*self._plot_mask, norm=self._norm, origin="lower",
-                                                   cmap=self._cmap)
+            self._im_plot = self._im_ax.imshow(self._plot_data*self._plot_mask, norm=self._norm, origin="lower",
+                                               cmap=self._cmap)
 
-        def _renorm(self, masked: bool = False) -> ImageNormalize:
+        def _renorm(self) -> ImageNormalize:
             """
             Re-calculates the normalisation of the plot data with current interval and stretch settings. Takes into
-            account the mask if applied.
+            account the mask if applied. The plot mask is always applied to data, but when not turned on by the
+            relevant button it will be all ones so will make no difference.
 
-            :param bool masked: Whether the normalisation recalculation should be performed with the mask
-                applied to the data or not.
             :return: The normalisation object.
             :rtype: ImageNormalize
             """
-            # If masked then the normalisation should be recalculated with the current plot mask applied to the data
-            if masked:
-                norm = ImageNormalize(data=self._plot_data*self._plot_mask, interval=self._interval,
-                                      stretch=self._stretch)
-            # If not then it should just use the current data, interval, and stretch.
-            else:
-                norm = ImageNormalize(data=self._plot_data, interval=self._interval, stretch=self._stretch)
+            # We calculate the normalisation using masked data, but mask will be all ones if that
+            #  feature is not currently turned on
+            norm = ImageNormalize(data=self._plot_data*self._plot_mask, interval=self._interval,
+                                  stretch=self._stretch)
 
             return norm
 
@@ -1798,6 +1794,57 @@ class Image(BaseProduct):
                 self._apply_smooth()
                 self._renorm()
                 self._replot_data()
+
+        def _toggle_mask(self, event):
+            """
+            A method triggered by a button press that toggles whether the currently displayed image is
+            masked or not.
+
+            :param event: The event passed by the button that triggers this toggle method.
+            """
+            # In this case we know that masking is already applied because the button is the active colour and
+            #  we set about to return everything to non-masked
+            if self._mask_button.color == self._but_act_col:
+                # Set the button colour to inactive
+                self._mask_button.color = self._but_inact_col
+                # Reset the plot mask to just ones, meaning nothing is masked
+                self._plot_mask = np.ones(self._parent_phot_obj.shape)
+            else:
+                # Set the button colour to active
+                self._mask_button.color = self._but_act_col
+                # Generate a mask from the current regions
+                self._plot_mask = self._gen_cur_mask()
+
+            # Run renorm and replot, which will both now apply the current mask, whether it's been set to all ones
+            #  or one generated from the current regions
+            self._renorm()
+            self._replot_data()
+
+        def _gen_cur_mask(self):
+            """
+            Uses the current region list to generate a mask for the parent image that can be applied to the data.
+
+            :return: The current mask.
+            :rtype: np.ndarray
+            """
+            masks = []
+            # Because the user might have added regions, we have to generate an updated region dictionary. However,
+            #  we don't want to save the updated region list in the existing _regions attribute as that
+            #  might break things
+            cur_regs = self._update_reg_list()
+            # Iterating through the flattened region dictionary
+            for r in [r for o, rl in cur_regs.items() for r in rl]:
+                # If the rotation angle is zero then the conversion to mask by the regions module will be upset,
+                #  so I perturb the angle by 0.1 degrees
+                if isinstance(r, EllipsePixelRegion) and r.angle.value == 0:
+                    r.angle += Quantity(0.1, 'deg')
+                masks.append(r.to_mask().to_image(self._parent_phot_obj.shape))
+
+            interlopers = sum([m for m in masks if m is not None])
+            mask = np.ones(self._parent_phot_obj.shape)
+            mask[interlopers != 0] = 0
+
+            return mask
 
         def _toggle_ext(self, event):
             """
