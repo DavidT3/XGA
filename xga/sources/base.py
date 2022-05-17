@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/03/2022, 09:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 11:33. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1469,6 +1469,33 @@ class BaseSource:
 
         return reg_within
 
+    def get_interloper_regions(self, flattened: bool = False) -> Union[List, Dict]:
+        """
+        This get method provides a way to access the regions that have been designated as interlopers (i.e.
+        not the source region that a particular Source has been designated to investigate) for all observations.
+        They can either be retrieved in a dictionary with ObsIDs as the keys, or a flattened single list with no
+        ObsID context.
+
+        :param bool flattened: If true then the regions are returned as a single list of region objects. Otherwise
+            they are returned as a dictionary with ObsIDs as keys. Default is False.
+        :return: Either a list of region objects, or a dictionary with ObsIDs as keys.
+        :rtype: Union[List,Dict]
+        """
+        if type(self) == BaseSource:
+            raise TypeError("BaseSource objects don't have enough information to know which sources "
+                            "are interlopers.")
+
+        # If flattened then a list is returned rather than the original dictionary with
+        if not flattened:
+            ret_reg = self._other_regions
+        else:
+            # Iterate through the ObsIDs in the dictionary and add the resulting lists together
+            ret_reg = []
+            for o in self._other_regions:
+                ret_reg += self._other_regions[o]
+
+        return ret_reg
+
     def get_source_mask(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
             -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -1489,7 +1516,6 @@ class BaseSource:
         # Don't need to do a bunch of checks, because the method I call to make the
         #  mask does all the checks anyway
         src_reg, bck_reg = self.source_back_regions(reg_type, obs_id, central_coord)
-
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:
