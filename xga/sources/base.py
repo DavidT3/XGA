@@ -1,11 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/05/2022, 14:21. Copyright (c) The Contributors
 
 import os
 import pickle
 import warnings
 from copy import deepcopy
 from itertools import product
+from shutil import copyfile
 from typing import Tuple, List, Dict, Union
 
 import numpy as np
@@ -324,6 +325,9 @@ class BaseSource:
                 continue
             evt_key = "clean_{}_evts".format(inst)
             evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=obs_id)
+            # This is the path to the region file specified in the configuration file, but the next step is that
+            #  we make a local copy (if the original file exists) and then make use of that so that any modifications
+            #  don't harm the original file.
             reg_file = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
 
             # Attitude file is a special case of data product, only SAS should ever need it, so it doesn't
@@ -339,9 +343,18 @@ class BaseSource:
                 # Dictionary updated with derived product names
                 map_ret = map(read_default_products, en_comb)
                 obs_dict[obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
-                if os.path.exists(reg_file):
-                    # Regions dictionary updated with path to region file, if it exists
-                    reg_dict[obs_id] = reg_file
+
+                # As mentioned above, we make a local copy of the region file if the original file path exists
+                #  and if a local copy DOESN'T already exist
+                reg_copy_path = OUTPUT+"/{o}/{o}_xga_copy.reg".format(o=obs_id)
+                if os.path.exists(reg_file) and not os.path.exists(reg_copy_path):
+                    # A local copy of the region file is made and used
+                    copyfile(reg_file, reg_copy_path)
+                    # Regions dictionary updated with path to local region file, if it exists
+                    reg_dict[obs_id] = reg_copy_path
+                # In the case where there is already a local copy of the region file
+                elif os.path.exists(reg_copy_path):
+                    reg_dict[obs_id] = reg_copy_path
                 else:
                     reg_dict[obs_id] = None
 
