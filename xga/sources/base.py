@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/05/2022, 14:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/05/2022, 16:36. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -346,7 +346,7 @@ class BaseSource:
 
                 # As mentioned above, we make a local copy of the region file if the original file path exists
                 #  and if a local copy DOESN'T already exist
-                reg_copy_path = OUTPUT+"/{o}/{o}_xga_copy.reg".format(o=obs_id)
+                reg_copy_path = OUTPUT+"{o}/{o}_xga_copy.reg".format(o=obs_id)
                 if os.path.exists(reg_file) and not os.path.exists(reg_copy_path):
                     # A local copy of the region file is made and used
                     copyfile(reg_file, reg_copy_path)
@@ -1148,8 +1148,15 @@ class BaseSource:
                 reg_dict[obs_id] = np.array([None])
 
             # Here we add the custom sources to the source list, we know they are sky regions as we have
-            #  already enforced it
-            reg_dict[obs_id] = np.append(reg_dict[obs_id], custom_regs)
+            #  already enforced it. If there was no region list for a particular ObsID (detected by the first
+            #  entry in the reg dict being None) and there IS a custom region, we just replace the None with the
+            #  custom region
+            if reg_dict[obs_id][0] is not None:
+                reg_dict[obs_id] = np.append(reg_dict[obs_id], custom_regs)
+            elif reg_dict[obs_id][0] is None and len(custom_regs) != 0:
+                reg_dict[obs_id] = custom_regs
+            else:
+                reg_dict[obs_id] = np.array([None])
 
             # I'm going to ensure that all regions are elliptical, I don't want to hunt through every place in XGA
             #  where I made that assumption
@@ -1163,7 +1170,7 @@ class BaseSource:
                     reg_dict[obs_id][reg_ind] = new_reg
 
             # Hopefully this bodge doesn't have any unforeseen consequences
-            if reg_dict[obs_id][0] is not None:
+            if reg_dict[obs_id][0] is not None and len(reg_dict[obs_id]) > 1:
                 # Quickly calculating distance between source and center of regions, then sorting
                 # and getting indices. Thus I only match to the closest 5 regions.
                 diff_sort = np.array([dist_from_source(r) for r in reg_dict[obs_id]]).argsort()
@@ -1178,6 +1185,12 @@ class BaseSource:
                 # Expands it so it can be used as a mask on the whole set of regions for this observation
                 within = np.pad(within, [0, len(diff_sort) - len(within)])
                 match_dict[obs_id] = within
+            # In the case of only one region being in the list, we simplify the above expression
+            elif reg_dict[obs_id][0] is not None and len(reg_dict[obs_id]) == 1:
+                if reg_dict[obs_id][0].contains(SkyCoord(*self._ra_dec, unit='deg'), w):
+                    match_dict[obs_id] = np.array([True])
+                else:
+                    match_dict[obs_id] = np.array([False])
             else:
                 match_dict[obs_id] = np.array([False])
 
@@ -1321,14 +1334,27 @@ class BaseSource:
         #  with missing ObsIDs
         for obs in self.obs_ids:
             if obs in self._initial_regions:
-                # If there are no matches then the returned result is just None
-                if len(self._initial_regions[obs][self._initial_region_matches[obs]]) == 0:
+                # This sets up an array of matched regions, accounting for the problems that can occur when
+                #  there is only one region in the region list (numpy's indexing gets very angry). The array
+                #  of matched region(s) set up here is used in this method.
+                if len(self._initial_regions[obs]) == 1 and not self._initial_region_matches[obs][0]:
+                    init_region_matches = np.array([])
+                elif len(self._initial_regions[obs]) == 1 and self._initial_region_matches[obs][0]:
+                    init_region_matches = self._initial_regions[obs]
+                elif len(self._initial_regions[obs][self._initial_region_matches[obs]]) == 0:
+                    init_region_matches = np.array([])
+                else:
+                    init_region_matches = self._initial_regions[obs][self._initial_region_matches[obs]]
+
+                # If there are no matches then the returned result is just None.
+                if len(init_region_matches) == 0:
                     results_dict[obs] = None
                 else:
                     interim_reg = []
                     # The only solution I could think of is to go by the XCS standard of region files, so green
                     #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
-                    for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
+                    # for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
+                    for entry in init_region_matches:
                         if entry.visual["color"] in allowed_colours:
                             interim_reg.append(entry)
 
@@ -1355,8 +1381,7 @@ class BaseSource:
                                                  "for extended sources.".format(o=obs, n=self.name))
 
                 # Alt match is used for when there is a secondary match to a point source
-                alt_match_reg = [entry for entry in self._initial_regions[obs][self._initial_region_matches[obs]]
-                                 if entry != results_dict[obs]]
+                alt_match_reg = [entry for entry in init_region_matches if entry != results_dict[obs]]
                 alt_match_dict[obs] = alt_match_reg
 
                 # These are all the sources that aren't a match, and so should be removed from any analysis
