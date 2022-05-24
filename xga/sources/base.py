@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/05/2022, 16:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:41. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1409,6 +1409,16 @@ class BaseSource:
                              "context needed to define if the source is detected or not.")
         else:
             return self._detected
+
+    @property
+    def matched_regions(self) -> dict:
+        """
+        Property getter for the matched regions associated with this particular source.
+
+        :return: A dictionary of matching regions, or None if such a match has not been performed.
+        :rtype: dict
+        """
+        return self._regions
 
     def source_back_regions(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
             -> Tuple[SkyRegion, SkyRegion]:
