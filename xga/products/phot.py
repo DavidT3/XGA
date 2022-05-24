@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 13:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 16:10. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1273,7 +1273,8 @@ class Image(BaseProduct):
         This allows for displaying, interacting with, editing, and adding new regions to an image. These can
         then be saved as a new region file. It also allows for the dynamic adjustment of which regions
         are displayed, the scaling of the image, and smoothing, in order to make placing new regions as
-        simple as possible.
+        simple as possible. If a save path for region files is passed, then it will be possible to save
+        new region files in RA-Dec coordinates.
 
         :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this class.
         :param str cmap: The colour map to use for displaying the image. Default is gnuplot2.
@@ -1629,7 +1630,7 @@ class Image(BaseProduct):
 
                     # This draws the background region on as well, if present
                     if back_bin_pix is not None:
-                        # The background annulus is guarenteed to only have two entries, inner and outer
+                        # The background annulus is guaranteed to only have two entries, inner and outer
                         inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white',
                                             linewidth=ch_thickness, linestyle='dashed')
                         out_artist = Circle(pix_coord, back_bin_pix[1].value, fill=False, ec='white',
@@ -1657,7 +1658,8 @@ class Image(BaseProduct):
         def edit_view(self):
             """
             An extremely useful view method of this class - allows for direct interaction with and editing of
-            regions, as well as the ability to add new regions.
+            regions, as well as the ability to add new regions. If a save path for region files was passed on
+            declaration of this object, then it will be possible to save new region files in RA-Dec coordinates.
             """
             # This mode we DO want to be able to interact with regions
             self._interacting_on = True
@@ -2291,7 +2293,8 @@ class Image(BaseProduct):
         def _save_region_files(self, event=None):
             """
             This just creates the updated region dictionary from any modifications, converts the separate ObsID
-            entries to individual region files, and then saves them to disk.
+            entries to individual region files, and then saves them to disk. All region files are output in RA-Dec
+            coordinates, making use of the parent photometric objects WCS information.
 
             :param event: If triggered by a button, this is the event passed.
             """
@@ -2303,8 +2306,10 @@ class Image(BaseProduct):
                     rel_regs = final_regions[o]
                     # Construct a save_path
                     rel_save_path = self._reg_save_path.replace('.reg', '_{o}.reg'.format(o=o))
-                    # This function is a part of the regions module, and will write out a region file
-                    write_ds9(rel_regs, rel_save_path, 'image', radunit='')
+                    # write_ds9(rel_regs, rel_save_path, 'image', radunit='')
+                    # This function is a part of the regions module, and will write out a region file.
+                    #  Specifically RA-Dec coordinate system in units of degrees.
+                    write_ds9(rel_regs, rel_save_path)
             else:
                 raise ValueError('No save path was passed, so region files cannot be output.')
 
