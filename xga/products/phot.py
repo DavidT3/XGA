@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 21:54. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -53,7 +53,9 @@ class Image(BaseProduct):
         dictionary of region lists with ObsIDs as dictionary keys.
     :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
         that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
-        supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys. Default is None.
+        supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
+        if there is no match. Such a dictionary can be retrieved from a source using the 'matched_regions'
+        property. Default is None.
     :param bool smoothed: Has this image been smoothed, default is False. This information can also be
         set after the instantiation of an image.
     :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
@@ -288,7 +290,8 @@ class Image(BaseProduct):
 
         :param SkyRegion/PixelRegion/dict matched_reg_input: A region that has been designated as 'matched', i.e.
             is the subject of a current analysis. This should either be supplied as a single region object, or as
-            a dictionary of region objects with ObsIDs as keys.
+            a dictionary of region objects with ObsIDs as keys, or None values if there is no match. Such a
+            dictionary can be retrieved from a source using the 'matched_regions' property.
         :return: A dictionary with ObsIDs as keys, and matching regions as values. If a single region is passed then
             the ObsID key it is paired with is set to the current ObsID of this object.
         :rtype: dict
@@ -296,8 +299,8 @@ class Image(BaseProduct):
         # It is possible to set this to None, in which case no information is recorded.
         if matched_reg_input is None:
             matched_reg_input = {}
-        # This is triggered when a dictionary is passed, and all of its values are regions
-        elif isinstance(matched_reg_input, dict) and all([isinstance(r, (SkyRegion, PixelRegion))
+        # This is triggered when a dictionary is passed, and all of its values are regions or None (indicating no match)
+        elif isinstance(matched_reg_input, dict) and all([r is None or isinstance(r, (SkyRegion, PixelRegion))
                                                           for o, r in matched_reg_input.items()]):
             obs_keys = matched_reg_input.keys()
             # Checks whether all the ObsIDs present in the XGA product are represented in the region dictionary
@@ -308,7 +311,7 @@ class Image(BaseProduct):
                                "associated with this object, the following are "
                                "missing; {a}.".format(a=','.join(missing)))
         # This is triggered when a dictionary is passed but not all of its values are regions
-        elif isinstance(matched_reg_input, dict) and not all([isinstance(r, (SkyRegion, PixelRegion))
+        elif isinstance(matched_reg_input, dict) and not all([r is None or isinstance(r, (SkyRegion, PixelRegion))
                                                               for o, r in matched_reg_input.items()]):
             raise TypeError('The input matched region dictionary has entries that are not a SkyRegion or PixelRegion.')
         # If one single region is passed, it's put in a dictionary with the current ObsID of the object as the key
@@ -321,7 +324,7 @@ class Image(BaseProduct):
         # Finally we run through any matched regions that made it this far, and make sure that they
         #  are all in pixel coordinates (it makes it easier for plotting etc. later)
         for obs_id, matched_reg in matched_reg_input.items():
-            if not isinstance(matched_reg, PixelRegion):
+            if matched_reg is not None and not isinstance(matched_reg, PixelRegion):
                 matched_reg_input[obs_id] = matched_reg.to_pixel(self._wcs_radec)
 
         return matched_reg_input
@@ -2477,9 +2480,17 @@ class RateMap(Image):
 
     :param Image xga_image: The image component of the RateMap.
     :param ExpMap xga_expmap: The exposure map component of the RateMap.
-    :param str regs: A path to a region file that you might wish to overlay on views of this product.
+    :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
+        dictionary of region lists with ObsIDs as dictionary keys.
+    :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
+        that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
+        supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
+        if there is no match. Such a dictionary can be retrieved from a source using the 'matched_regions'
+        property. Default is None.
     """
-    def __init__(self, xga_image: Image, xga_expmap: ExpMap, regs: str = ''):
+    def __init__(self, xga_image: Image, xga_expmap: ExpMap,
+                 regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
+                 matched_regs: Union[SkyRegion, PixelRegion, dict] = None):
         """
         This initialises a RateMap instance, where a count-rate image is divided by an exposure map, to create a map
         of X-ray counts.
@@ -2524,6 +2535,7 @@ class RateMap(Image):
 
         # Don't have to do any checks, they'll be done for me in the image object.
         self._im_obj.regions = regs
+        self._im_obj.matched_regions = matched_regs
 
     def _construct_on_demand(self):
         """
