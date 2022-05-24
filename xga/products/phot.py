@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:15. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -283,7 +283,8 @@ class Image(BaseProduct):
     def _process_matched_regions(self, matched_reg_input: Union[SkyRegion, PixelRegion, dict]):
         """
         This processes input matched region information, making sure that it is in an acceptable format, and then
-        returning a dictionary in the form expected by this class.
+        returning a dictionary in the form expected by this class. Also makes sure that all matched regions are
+        converted to pixel coordinates.
 
         :param SkyRegion/PixelRegion/dict matched_reg_input: A region that has been designated as 'matched', i.e.
             is the subject of a current analysis. This should either be supplied as a single region object, or as
@@ -316,6 +317,12 @@ class Image(BaseProduct):
         else:
             raise TypeError("The input matched region is not a dictionary of regions, nor is it a single "
                             "PixelRegion or SkyRegion instance.")
+
+        # Finally we run through any matched regions that made it this far, and make sure that they
+        #  are all in pixel coordinates (it makes it easier for plotting etc. later)
+        for obs_id, matched_reg in matched_reg_input.items():
+            if not isinstance(matched_reg, PixelRegion):
+                matched_reg_input[obs_id] = matched_reg.to_pixel(self._wcs_radec)
 
         return matched_reg_input
 
@@ -506,7 +513,7 @@ class Image(BaseProduct):
         """
         Property getter for regions associated with this image.
 
-        :return: Returns a list of regions, if they have been associated with this object.
+        :return: Returns a dictionary of regions, if they have been associated with this object.
         :rtype: Dict[PixelRegion]
         """
         return self._regions
@@ -514,7 +521,7 @@ class Image(BaseProduct):
     @regions.setter
     def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
         """
-        A setter for regions associated with this object, a region file path or a list of regions is passed, then
+        A setter for regions associated with this object, a region file path or a list/dict of regions is passed, then
         that file/set of regions is processed into the required format. If a list of regions is passed, it will
         be assumed that they are for the ObsID of the image. In the case of passing a dictionary of regions to a
         combined image we require that each ObsID that goes into the image has an entry in the dictionary.
@@ -547,6 +554,35 @@ class Image(BaseProduct):
         else:
             raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
                              "a list/dictionary of SkyRegion/PixelRegion objects")
+
+    @property
+    def matched_regions(self) -> Dict:
+        """
+        Property getter for any regions which have been designated a 'match' in the current analysis, if
+        they have been set.
+
+        :return: Returns a dictionary of matched regions, if they have been associated with this object.
+        :rtype: Dict[PixelRegion]
+        """
+        return self._matched_regions
+
+    @matched_regions.setter
+    def matched_regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
+        """
+        A setter for matched regions associated with this object, with a new single matched region or dictionary of
+        matched regions (with keys being ObsIDs and one entry for each ObsID associated with this object) being passed.
+        If a single region is passed then it will be assumed that it is associated with the current ObsID of this
+        object.
+
+        :param dict/SkyRegion/PixelRegion new_reg: A region that has been designated as 'matched', i.e. is the
+            subject of a current analysis. This should either be supplied as a single region object, or as a
+            dictionary of region objects with ObsIDs as keys.
+        """
+        if not isinstance(new_reg, (PixelRegion, SkyRegion, dict)):
+            raise TypeError("Please pass either a dictionary of SkyRegion/PixelRegion objects with ObsIDs as "
+                            "keys, or a single SkyRegion/PixelRegion object.")
+
+        self._matched_regions = self._process_matched_regions(new_reg)
 
     @property
     def shape(self) -> Tuple[int, int]:
