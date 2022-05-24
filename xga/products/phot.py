@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:05. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -53,7 +53,7 @@ class Image(BaseProduct):
         dictionary of region lists with ObsIDs as dictionary keys.
     :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
         that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
-        supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys.
+        supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys. Default is None.
     :param bool smoothed: Has this image been smoothed, default is False. This information can also be
         set after the instantiation of an image.
     :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
@@ -109,7 +109,7 @@ class Image(BaseProduct):
 
         # This uses an internal function to process and return matched regions in a standard form, which is what
         #  I really should have done for the chunk above but oh well!
-        self._matched_regions = self._process_matched_regions()
+        self._matched_regions = self._process_matched_regions(matched_regs)
 
         self._smoothed = smoothed
         # If the user says at this point that the image has been smoothed, then we try and parse the smoothing info
