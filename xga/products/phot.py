@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 16:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:00. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -49,7 +49,11 @@ class Image(BaseProduct):
     :param str gen_cmd: The command used to generate the product.
     :param Quantity lo_en: The lower energy bound used to generate this product.
     :param Quantity hi_en: The upper energy bound used to generate this product.
-    :param str reg_file_path: Path to a region file for this image.
+    :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
+        dictionary of region lists with ObsIDs as dictionary keys.
+    :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
+        that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
+        supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys.
     :param bool smoothed: Has this image been smoothed, default is False. This information can also be
         set after the instantiation of an image.
     :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
@@ -60,7 +64,8 @@ class Image(BaseProduct):
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 lo_en: Quantity, hi_en: Quantity, reg_file_path: str = '', smoothed: bool = False,
+                 lo_en: Quantity, hi_en: Quantity, regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
+                 matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
                  smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None):
         """
         The initialisation method for the Image class.
@@ -86,17 +91,25 @@ class Image(BaseProduct):
         self._psf_num_iterations = None
         self._psf_model = None
 
-        # This checks whether a region file has been passed, and if it has then processes it
-        if reg_file_path != '' and os.path.exists(reg_file_path):
-            self._regions = self._process_regions(reg_file_path)
-            self._reg_file_path = reg_file_path
-        elif reg_file_path != '' and not os.path.exists(reg_file_path):
+        # This checks whether a region file has been passed, and if it has then processes it. If a list or dictionary
+        #  of regions has been passed instead (as is allowed) then the behaviour is modified slightly.
+        if isinstance(regs, str) and regs != '' and os.path.exists(regs):
+            self._regions = self._process_regions(regs)
+            self._reg_file_path = regs
+        elif isinstance(regs, str) and regs != '' and not os.path.exists(regs):
             warnings.warn("That region file path does not exist")
             self._regions = {}
-            self._reg_file_path = reg_file_path
+            self._reg_file_path = regs
+        elif isinstance(regs, (list, dict)):
+            self._regions = self._process_regions(reg_objs=regs)
+            self._reg_file_path = ''
         else:
             self._regions = {}
             self._reg_file_path = ''
+
+        # This uses an internal function to process and return matched regions in a standard form, which is what
+        #  I really should have done for the chunk above but oh well!
+        self._matched_regions = self._process_matched_regions()
 
         self._smoothed = smoothed
         # If the user says at this point that the image has been smoothed, then we try and parse the smoothing info
@@ -266,6 +279,45 @@ class Image(BaseProduct):
                     final_regs[o].append(reg.to_pixel(self._wcs_radec))
 
         return final_regs
+
+    def _process_matched_regions(self, matched_reg_input: Union[SkyRegion, PixelRegion, dict]):
+        """
+        This processes input matched region information, making sure that it is in an acceptable format, and then
+        returning a dictionary in the form expected by this class.
+
+        :param SkyRegion/PixelRegion/dict matched_reg_input: A region that has been designated as 'matched', i.e.
+            is the subject of a current analysis. This should either be supplied as a single region object, or as
+            a dictionary of region objects with ObsIDs as keys.
+        :return: A dictionary with ObsIDs as keys, and matching regions as values. If a single region is passed then
+            the ObsID key it is paired with is set to the current ObsID of this object.
+        :rtype: dict
+        """
+        # It is possible to set this to None, in which case no information is recorded.
+        if matched_reg_input is None:
+            matched_reg_input = {}
+        # This is triggered when a dictionary is passed, and all of its values are regions
+        elif isinstance(matched_reg_input, dict) and all([isinstance(r, (SkyRegion, PixelRegion))
+                                                          for o, r in matched_reg_input.items()]):
+            obs_keys = matched_reg_input.keys()
+            # Checks whether all the ObsIDs present in the XGA product are represented in the region dictionary
+            check = [o in obs_keys for o in self.obs_ids]
+            if not all(check):
+                missing = np.array(self.obs_ids)[~np.array(check)]
+                raise KeyError("The passed matched region dictionary does not have an ObsID entry for every ObsID "
+                               "associated with this object, the following are "
+                               "missing; {a}.".format(a=','.join(missing)))
+        # This is triggered when a dictionary is passed but not all of its values are regions
+        elif isinstance(matched_reg_input, dict) and not all([isinstance(r, (SkyRegion, PixelRegion))
+                                                              for o, r in matched_reg_input.items()]):
+            raise TypeError('The input matched region dictionary has entries that are not a SkyRegion or PixelRegion.')
+        # If one single region is passed, it's put in a dictionary with the current ObsID of the object as the key
+        elif isinstance(matched_reg_input, (PixelRegion, SkyRegion)):
+            matched_reg_input = {self._obs_id: matched_reg_input}
+        else:
+            raise TypeError("The input matched region is not a dictionary of regions, nor is it a single "
+                            "PixelRegion or SkyRegion instance.")
+
+        return matched_reg_input
 
     @staticmethod
     def parse_smoothing(info: Union[dict, Kernel]) -> Tuple[str, dict]:
@@ -494,7 +546,7 @@ class Image(BaseProduct):
             self._regions = self._process_regions(reg_objs=new_reg)
         else:
             raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
-                             "a list of SkyRegion/PixelRegion objects")
+                             "a list/dictionary of SkyRegion/PixelRegion objects")
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -2389,9 +2441,9 @@ class RateMap(Image):
 
     :param Image xga_image: The image component of the RateMap.
     :param ExpMap xga_expmap: The exposure map component of the RateMap.
-    :param str reg_file_path: A path to a region file that you might wish to overlay on views of this product.
+    :param str regs: A path to a region file that you might wish to overlay on views of this product.
     """
-    def __init__(self, xga_image: Image, xga_expmap: ExpMap, reg_file_path: str = ''):
+    def __init__(self, xga_image: Image, xga_expmap: ExpMap, regs: str = ''):
         """
         This initialises a RateMap instance, where a count-rate image is divided by an exposure map, to create a map
         of X-ray counts.
@@ -2435,7 +2487,7 @@ class RateMap(Image):
         self._on_sensor_mask = None
 
         # Don't have to do any checks, they'll be done for me in the image object.
-        self._im_obj.regions = reg_file_path
+        self._im_obj.regions = regs
 
     def _construct_on_demand(self):
         """
