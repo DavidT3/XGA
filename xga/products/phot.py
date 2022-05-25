@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2022, 11:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2022, 12:10. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3031,6 +3031,94 @@ class RateMap(Image):
         :rtype: ExpMap
         """
         return self._ex_obj
+
+    @property
+    def regions(self) -> Dict:
+        """
+        Property getter for regions associated with this ratemap.
+
+        :return: Returns a dictionary of regions, if they have been associated with this object.
+        :rtype: Dict[PixelRegion]
+        """
+        return self._regions
+
+    @regions.setter
+    def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
+        """
+        A setter for regions associated with this object, a region file path or a list/dict of regions is passed, then
+        that file/set of regions is processed into the required format. If a list of regions is passed, it will
+        be assumed that they are for the ObsID of the image. In the case of passing a dictionary of regions to a
+        combined image we require that each ObsID that goes into the image has an entry in the dictionary.
+
+        :param str/List[SkyRegion/PixelRegion]/dict new_reg: A new region file path, a list of region objects, or a
+            dictionary of region lists with ObsIDs as dictionary keys.
+        """
+        if not isinstance(new_reg, (str, list, dict)):
+            raise TypeError("Please pass either a path to a region file, a list of "
+                            "SkyRegion/PixelRegion objects, or a dictionary of lists of SkyRegion/PixelRegion objects "
+                            "with ObsIDs as keys.")
+
+        # Checks to make sure that a region file path exists, if passed, then processes the file
+        if isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
+            self._reg_file_path = new_reg
+            self._regions = self._process_regions(new_reg)
+        # Possible for an empty string to be passed in which case nothing happens
+        elif isinstance(new_reg, str) and new_reg == '':
+            pass
+        elif isinstance(new_reg, str):
+            warnings.warn("That region file path does not exist")
+        # If an existing list of regions are passed then we just process them and assign them to regions attribute
+        elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
+            self._reg_file_path = ""
+            self._regions = self._process_regions(reg_objs=new_reg)
+        elif isinstance(new_reg, dict) and all([all([isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
+                                                for o, rl in new_reg.items()]):
+            self._reg_file_path = ""
+            self._regions = self._process_regions(reg_objs=new_reg)
+        else:
+            raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
+                             "a list/dictionary of SkyRegion/PixelRegion objects")
+
+        # This is the only part that's different from the implementation in the superclass. Here we make sure that
+        #  the same attribute is set for the Image, so if the user were to access the image from the RateMap
+        #  they would still see any regions that have been added. No doubt there is a more elegant solution but this
+        #  is what you're getting right now because I am exhausted
+        self._im_obj.regions = new_reg
+
+    @property
+    def matched_regions(self) -> Dict:
+        """
+        Property getter for any regions which have been designated a 'match' in the current analysis, if
+        they have been set.
+
+        :return: Returns a dictionary of matched regions, if they have been associated with this object.
+        :rtype: Dict[PixelRegion]
+        """
+        return self._matched_regions
+
+    @matched_regions.setter
+    def matched_regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
+        """
+        A setter for matched regions associated with this object, with a new single matched region or dictionary of
+        matched regions (with keys being ObsIDs and one entry for each ObsID associated with this object) being passed.
+        If a single region is passed then it will be assumed that it is associated with the current ObsID of this
+        object.
+
+        :param dict/SkyRegion/PixelRegion new_reg: A region that has been designated as 'matched', i.e. is the
+            subject of a current analysis. This should either be supplied as a single region object, or as a
+            dictionary of region objects with ObsIDs as keys.
+        """
+        if new_reg is not None and not isinstance(new_reg, (PixelRegion, SkyRegion, dict)):
+            raise TypeError("Please pass either a dictionary of SkyRegion/PixelRegion objects with ObsIDs as "
+                            "keys, or a single SkyRegion/PixelRegion object. Alternatively pass None for no match.")
+
+        self._matched_regions = self._process_matched_regions(new_reg)
+
+        # This is the only part that's different from the implementation in the superclass. Here we make sure that
+        #  the same attribute is set for the Image, so if the user were to access the image from the RateMap
+        #  they would still see any regions that have been added. No doubt there is a more elegant solution but this
+        #  is what you're getting right now because I am exhausted
+        self._im_obj.matched_regions = new_reg
 
 
 class PSF(Image):
