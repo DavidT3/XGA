@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2022, 12:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2022, 13:02. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2410,17 +2410,26 @@ class Image(BaseProduct):
             :param event: If triggered by a button, this is the event passed.
             """
             if self._reg_save_path is not None:
+                # If the event is not the default None then this function has been triggered by the save button
+                if event is not None:
+                    # In the case of this button being successfully clicked I want it to turn green. Really I wanted
+                    #  it to just flash green, but that doesn't seem to be working so turning green will be fine
+                    self._save_button.color = 'green'
+
                 # Runs the method that updates the list of regions with any alterations that the user has made
                 final_regions = self._update_reg_list()
                 for o in final_regions:
                     # Read out the regions for the current ObsID
                     rel_regs = final_regions[o]
+                    # Convert them to degrees
+                    rel_regs = [r.to_sky(self._parent_phot_obj.radec_wcs) for r in rel_regs]
                     # Construct a save_path
                     rel_save_path = self._reg_save_path.replace('.reg', '_{o}.reg'.format(o=o))
                     # write_ds9(rel_regs, rel_save_path, 'image', radunit='')
                     # This function is a part of the regions module, and will write out a region file.
                     #  Specifically RA-Dec coordinate system in units of degrees.
                     write_ds9(rel_regs, rel_save_path)
+
             else:
                 raise ValueError('No save path was passed, so region files cannot be output.')
 
