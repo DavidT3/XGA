@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/05/2022, 13:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2022, 13:02. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -49,7 +49,13 @@ class Image(BaseProduct):
     :param str gen_cmd: The command used to generate the product.
     :param Quantity lo_en: The lower energy bound used to generate this product.
     :param Quantity hi_en: The upper energy bound used to generate this product.
-    :param str reg_file_path: Path to a region file for this image.
+    :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
+        dictionary of region lists with ObsIDs as dictionary keys.
+    :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
+        that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
+        supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
+        if there is no match. Such a dictionary can be retrieved from a source using the 'matched_regions'
+        property. Default is None.
     :param bool smoothed: Has this image been smoothed, default is False. This information can also be
         set after the instantiation of an image.
     :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
@@ -60,7 +66,8 @@ class Image(BaseProduct):
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 lo_en: Quantity, hi_en: Quantity, reg_file_path: str = '', smoothed: bool = False,
+                 lo_en: Quantity, hi_en: Quantity, regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
+                 matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
                  smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None):
         """
         The initialisation method for the Image class.
@@ -86,17 +93,25 @@ class Image(BaseProduct):
         self._psf_num_iterations = None
         self._psf_model = None
 
-        # This checks whether a region file has been passed, and if it has then processes it
-        if reg_file_path != '' and os.path.exists(reg_file_path):
-            self._regions = self._process_regions(reg_file_path)
-            self._reg_file_path = reg_file_path
-        elif reg_file_path != '' and not os.path.exists(reg_file_path):
+        # This checks whether a region file has been passed, and if it has then processes it. If a list or dictionary
+        #  of regions has been passed instead (as is allowed) then the behaviour is modified slightly.
+        if isinstance(regs, str) and regs != '' and os.path.exists(regs):
+            self._regions = self._process_regions(regs)
+            self._reg_file_path = regs
+        elif isinstance(regs, str) and regs != '' and not os.path.exists(regs):
             warnings.warn("That region file path does not exist")
             self._regions = {}
-            self._reg_file_path = reg_file_path
+            self._reg_file_path = regs
+        elif isinstance(regs, (list, dict)):
+            self._regions = self._process_regions(reg_objs=regs)
+            self._reg_file_path = ''
         else:
             self._regions = {}
             self._reg_file_path = ''
+
+        # This uses an internal function to process and return matched regions in a standard form, which is what
+        #  I really should have done for the chunk above but oh well!
+        self._matched_regions = self._process_matched_regions(matched_regs)
 
         self._smoothed = smoothed
         # If the user says at this point that the image has been smoothed, then we try and parse the smoothing info
@@ -266,6 +281,53 @@ class Image(BaseProduct):
                     final_regs[o].append(reg.to_pixel(self._wcs_radec))
 
         return final_regs
+
+    def _process_matched_regions(self, matched_reg_input: Union[SkyRegion, PixelRegion, dict]):
+        """
+        This processes input matched region information, making sure that it is in an acceptable format, and then
+        returning a dictionary in the form expected by this class. Also makes sure that all matched regions are
+        converted to pixel coordinates.
+
+        :param SkyRegion/PixelRegion/dict matched_reg_input: A region that has been designated as 'matched', i.e.
+            is the subject of a current analysis. This should either be supplied as a single region object, or as
+            a dictionary of region objects with ObsIDs as keys, or None values if there is no match. Such a
+            dictionary can be retrieved from a source using the 'matched_regions' property.
+        :return: A dictionary with ObsIDs as keys, and matching regions as values. If a single region is passed then
+            the ObsID key it is paired with is set to the current ObsID of this object.
+        :rtype: dict
+        """
+        # It is possible to set this to None, in which case no information is recorded.
+        if matched_reg_input is None:
+            matched_reg_input = {}
+        # This is triggered when a dictionary is passed, and all of its values are regions or None (indicating no match)
+        elif isinstance(matched_reg_input, dict) and all([r is None or isinstance(r, (SkyRegion, PixelRegion))
+                                                          for o, r in matched_reg_input.items()]):
+            obs_keys = matched_reg_input.keys()
+            # Checks whether all the ObsIDs present in the XGA product are represented in the region dictionary
+            check = [o in obs_keys for o in self.obs_ids]
+            if not all(check):
+                missing = np.array(self.obs_ids)[~np.array(check)]
+                raise KeyError("The passed matched region dictionary does not have an ObsID entry for every ObsID "
+                               "associated with this object, the following are "
+                               "missing; {a}.".format(a=','.join(missing)))
+        # This is triggered when a dictionary is passed but not all of its values are regions
+        elif isinstance(matched_reg_input, dict) and not all([r is None or isinstance(r, (SkyRegion, PixelRegion))
+                                                              for o, r in matched_reg_input.items()]):
+            raise TypeError('The input matched region dictionary has entries that are not a SkyRegion or PixelRegion.')
+        # If one single region is passed, it's put in a dictionary with the current ObsID of the object as the key
+        elif isinstance(matched_reg_input, (PixelRegion, SkyRegion)):
+            matched_reg_input = {self._obs_id: matched_reg_input}
+        else:
+            raise TypeError("The input matched region is not a dictionary of regions, nor is it a single "
+                            "PixelRegion or SkyRegion instance.")
+
+        # Finally we run through any matched regions that made it this far, and make sure that they
+        #  are all in pixel coordinates (it makes it easier for plotting etc. later)
+        for obs_id, matched_reg in matched_reg_input.items():
+            if matched_reg is not None and not isinstance(matched_reg, PixelRegion):
+                matched_reg_input[obs_id] = matched_reg.to_pixel(self._wcs_radec)
+
+        return matched_reg_input
 
     @staticmethod
     def parse_smoothing(info: Union[dict, Kernel]) -> Tuple[str, dict]:
@@ -454,7 +516,7 @@ class Image(BaseProduct):
         """
         Property getter for regions associated with this image.
 
-        :return: Returns a list of regions, if they have been associated with this object.
+        :return: Returns a dictionary of regions, if they have been associated with this object.
         :rtype: Dict[PixelRegion]
         """
         return self._regions
@@ -462,7 +524,7 @@ class Image(BaseProduct):
     @regions.setter
     def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
         """
-        A setter for regions associated with this object, a region file path or a list of regions is passed, then
+        A setter for regions associated with this object, a region file path or a list/dict of regions is passed, then
         that file/set of regions is processed into the required format. If a list of regions is passed, it will
         be assumed that they are for the ObsID of the image. In the case of passing a dictionary of regions to a
         combined image we require that each ObsID that goes into the image has an entry in the dictionary.
@@ -494,7 +556,36 @@ class Image(BaseProduct):
             self._regions = self._process_regions(reg_objs=new_reg)
         else:
             raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
-                             "a list of SkyRegion/PixelRegion objects")
+                             "a list/dictionary of SkyRegion/PixelRegion objects")
+
+    @property
+    def matched_regions(self) -> Dict:
+        """
+        Property getter for any regions which have been designated a 'match' in the current analysis, if
+        they have been set.
+
+        :return: Returns a dictionary of matched regions, if they have been associated with this object.
+        :rtype: Dict[PixelRegion]
+        """
+        return self._matched_regions
+
+    @matched_regions.setter
+    def matched_regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
+        """
+        A setter for matched regions associated with this object, with a new single matched region or dictionary of
+        matched regions (with keys being ObsIDs and one entry for each ObsID associated with this object) being passed.
+        If a single region is passed then it will be assumed that it is associated with the current ObsID of this
+        object.
+
+        :param dict/SkyRegion/PixelRegion new_reg: A region that has been designated as 'matched', i.e. is the
+            subject of a current analysis. This should either be supplied as a single region object, or as a
+            dictionary of region objects with ObsIDs as keys.
+        """
+        if new_reg is not None and not isinstance(new_reg, (PixelRegion, SkyRegion, dict)):
+            raise TypeError("Please pass either a dictionary of SkyRegion/PixelRegion objects with ObsIDs as "
+                            "keys, or a single SkyRegion/PixelRegion object. Alternatively pass None for no match.")
+
+        self._matched_regions = self._process_matched_regions(new_reg)
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -1273,7 +1364,8 @@ class Image(BaseProduct):
         This allows for displaying, interacting with, editing, and adding new regions to an image. These can
         then be saved as a new region file. It also allows for the dynamic adjustment of which regions
         are displayed, the scaling of the image, and smoothing, in order to make placing new regions as
-        simple as possible.
+        simple as possible. If a save path for region files is passed, then it will be possible to save
+        new region files in RA-Dec coordinates.
 
         :param Tuple figsize: Allows the user to pass a custom size for the figure produced by this class.
         :param str cmap: The colour map to use for displaying the image. Default is gnuplot2.
@@ -1629,7 +1721,7 @@ class Image(BaseProduct):
 
                     # This draws the background region on as well, if present
                     if back_bin_pix is not None:
-                        # The background annulus is guarenteed to only have two entries, inner and outer
+                        # The background annulus is guaranteed to only have two entries, inner and outer
                         inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white',
                                             linewidth=ch_thickness, linestyle='dashed')
                         out_artist = Circle(pix_coord, back_bin_pix[1].value, fill=False, ec='white',
@@ -1642,6 +1734,26 @@ class Image(BaseProduct):
                         self._ignore_arts.append(inn_artist)
                         self._im_ax.add_artist(out_artist)
                         self._ignore_arts.append(out_artist)
+
+            # This chunk checks to see if there were any matched regions associated with the parent
+            #  photometric object, and if so it adds them to the image and makes sure that they
+            #  cannot be interacted with
+            for obs_id, match_reg in self._parent_phot_obj.matched_regions.items():
+                if match_reg is not None:
+                    art_reg = match_reg.as_artist()
+                    # Setting the style for these regions, to make it obvious that they are different from
+                    #  any other regions that might be displayed
+                    art_reg.set_linestyle('dotted')
+
+                    # Makes sure that the region cannot be 'picked'
+                    art_reg.set_picker(False)
+                    # Sets the standard linewidth
+                    art_reg.set_linewidth(self._sel_reg_line_width)
+                    # And actually adds the artist to the data axis
+                    self._im_ax.add_artist(art_reg)
+                    # Also makes sure this artist is on the ignore list, as it's a constant and shouldn't be redrawn
+                    #  or be able to be modified
+                    self._ignore_arts.append(art_reg)
 
         def dynamic_view(self):
             """
@@ -1657,7 +1769,8 @@ class Image(BaseProduct):
         def edit_view(self):
             """
             An extremely useful view method of this class - allows for direct interaction with and editing of
-            regions, as well as the ability to add new regions.
+            regions, as well as the ability to add new regions. If a save path for region files was passed on
+            declaration of this object, then it will be possible to save new region files in RA-Dec coordinates.
             """
             # This mode we DO want to be able to interact with regions
             self._interacting_on = True
@@ -2291,20 +2404,32 @@ class Image(BaseProduct):
         def _save_region_files(self, event=None):
             """
             This just creates the updated region dictionary from any modifications, converts the separate ObsID
-            entries to individual region files, and then saves them to disk.
+            entries to individual region files, and then saves them to disk. All region files are output in RA-Dec
+            coordinates, making use of the parent photometric objects WCS information.
 
             :param event: If triggered by a button, this is the event passed.
             """
             if self._reg_save_path is not None:
+                # If the event is not the default None then this function has been triggered by the save button
+                if event is not None:
+                    # In the case of this button being successfully clicked I want it to turn green. Really I wanted
+                    #  it to just flash green, but that doesn't seem to be working so turning green will be fine
+                    self._save_button.color = 'green'
+
                 # Runs the method that updates the list of regions with any alterations that the user has made
                 final_regions = self._update_reg_list()
                 for o in final_regions:
                     # Read out the regions for the current ObsID
                     rel_regs = final_regions[o]
+                    # Convert them to degrees
+                    rel_regs = [r.to_sky(self._parent_phot_obj.radec_wcs) for r in rel_regs]
                     # Construct a save_path
                     rel_save_path = self._reg_save_path.replace('.reg', '_{o}.reg'.format(o=o))
-                    # This function is a part of the regions module, and will write out a region file
-                    write_ds9(rel_regs, rel_save_path, 'image', radunit='')
+                    # write_ds9(rel_regs, rel_save_path, 'image', radunit='')
+                    # This function is a part of the regions module, and will write out a region file.
+                    #  Specifically RA-Dec coordinate system in units of degrees.
+                    write_ds9(rel_regs, rel_save_path)
+
             else:
                 raise ValueError('No save path was passed, so region files cannot be output.')
 
@@ -2384,9 +2509,17 @@ class RateMap(Image):
 
     :param Image xga_image: The image component of the RateMap.
     :param ExpMap xga_expmap: The exposure map component of the RateMap.
-    :param str reg_file_path: A path to a region file that you might wish to overlay on views of this product.
+    :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
+        dictionary of region lists with ObsIDs as dictionary keys.
+    :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
+        that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
+        supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
+        if there is no match. Such a dictionary can be retrieved from a source using the 'matched_regions'
+        property. Default is None.
     """
-    def __init__(self, xga_image: Image, xga_expmap: ExpMap, reg_file_path: str = ''):
+    def __init__(self, xga_image: Image, xga_expmap: ExpMap,
+                 regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
+                 matched_regs: Union[SkyRegion, PixelRegion, dict] = None):
         """
         This initialises a RateMap instance, where a count-rate image is divided by an exposure map, to create a map
         of X-ray counts.
@@ -2430,7 +2563,8 @@ class RateMap(Image):
         self._on_sensor_mask = None
 
         # Don't have to do any checks, they'll be done for me in the image object.
-        self._im_obj.regions = reg_file_path
+        self._im_obj.regions = regs
+        self._im_obj.matched_regions = matched_regs
 
     def _construct_on_demand(self):
         """
@@ -2906,6 +3040,94 @@ class RateMap(Image):
         :rtype: ExpMap
         """
         return self._ex_obj
+
+    @property
+    def regions(self) -> Dict:
+        """
+        Property getter for regions associated with this ratemap.
+
+        :return: Returns a dictionary of regions, if they have been associated with this object.
+        :rtype: Dict[PixelRegion]
+        """
+        return self._regions
+
+    @regions.setter
+    def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
+        """
+        A setter for regions associated with this object, a region file path or a list/dict of regions is passed, then
+        that file/set of regions is processed into the required format. If a list of regions is passed, it will
+        be assumed that they are for the ObsID of the image. In the case of passing a dictionary of regions to a
+        combined image we require that each ObsID that goes into the image has an entry in the dictionary.
+
+        :param str/List[SkyRegion/PixelRegion]/dict new_reg: A new region file path, a list of region objects, or a
+            dictionary of region lists with ObsIDs as dictionary keys.
+        """
+        if not isinstance(new_reg, (str, list, dict)):
+            raise TypeError("Please pass either a path to a region file, a list of "
+                            "SkyRegion/PixelRegion objects, or a dictionary of lists of SkyRegion/PixelRegion objects "
+                            "with ObsIDs as keys.")
+
+        # Checks to make sure that a region file path exists, if passed, then processes the file
+        if isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
+            self._reg_file_path = new_reg
+            self._regions = self._process_regions(new_reg)
+        # Possible for an empty string to be passed in which case nothing happens
+        elif isinstance(new_reg, str) and new_reg == '':
+            pass
+        elif isinstance(new_reg, str):
+            warnings.warn("That region file path does not exist")
+        # If an existing list of regions are passed then we just process them and assign them to regions attribute
+        elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
+            self._reg_file_path = ""
+            self._regions = self._process_regions(reg_objs=new_reg)
+        elif isinstance(new_reg, dict) and all([all([isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
+                                                for o, rl in new_reg.items()]):
+            self._reg_file_path = ""
+            self._regions = self._process_regions(reg_objs=new_reg)
+        else:
+            raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
+                             "a list/dictionary of SkyRegion/PixelRegion objects")
+
+        # This is the only part that's different from the implementation in the superclass. Here we make sure that
+        #  the same attribute is set for the Image, so if the user were to access the image from the RateMap
+        #  they would still see any regions that have been added. No doubt there is a more elegant solution but this
+        #  is what you're getting right now because I am exhausted
+        self._im_obj.regions = new_reg
+
+    @property
+    def matched_regions(self) -> Dict:
+        """
+        Property getter for any regions which have been designated a 'match' in the current analysis, if
+        they have been set.
+
+        :return: Returns a dictionary of matched regions, if they have been associated with this object.
+        :rtype: Dict[PixelRegion]
+        """
+        return self._matched_regions
+
+    @matched_regions.setter
+    def matched_regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
+        """
+        A setter for matched regions associated with this object, with a new single matched region or dictionary of
+        matched regions (with keys being ObsIDs and one entry for each ObsID associated with this object) being passed.
+        If a single region is passed then it will be assumed that it is associated with the current ObsID of this
+        object.
+
+        :param dict/SkyRegion/PixelRegion new_reg: A region that has been designated as 'matched', i.e. is the
+            subject of a current analysis. This should either be supplied as a single region object, or as a
+            dictionary of region objects with ObsIDs as keys.
+        """
+        if new_reg is not None and not isinstance(new_reg, (PixelRegion, SkyRegion, dict)):
+            raise TypeError("Please pass either a dictionary of SkyRegion/PixelRegion objects with ObsIDs as "
+                            "keys, or a single SkyRegion/PixelRegion object. Alternatively pass None for no match.")
+
+        self._matched_regions = self._process_matched_regions(new_reg)
+
+        # This is the only part that's different from the implementation in the superclass. Here we make sure that
+        #  the same attribute is set for the Image, so if the user were to access the image from the RateMap
+        #  they would still see any regions that have been added. No doubt there is a more elegant solution but this
+        #  is what you're getting right now because I am exhausted
+        self._im_obj.matched_regions = new_reg
 
 
 class PSF(Image):
