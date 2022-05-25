@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2022, 10:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2022, 11:50. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1734,6 +1734,26 @@ class Image(BaseProduct):
                         self._ignore_arts.append(inn_artist)
                         self._im_ax.add_artist(out_artist)
                         self._ignore_arts.append(out_artist)
+
+            # This chunk checks to see if there were any matched regions associated with the parent
+            #  photometric object, and if so it adds them to the image and makes sure that they
+            #  cannot be interacted with
+            for obs_id, match_reg in self._parent_phot_obj.matched_regions.items():
+                if match_reg is not None:
+                    art_reg = match_reg.as_artist()
+                    # Setting the style for these regions, to make it obvious that they are different from
+                    #  any other regions that might be displayed
+                    art_reg.set_linestyle('dotted')
+
+                    # Makes sure that the region cannot be 'picked'
+                    art_reg.set_picker(False)
+                    # Sets the standard linewidth
+                    art_reg.set_linewidth(self._sel_reg_line_width)
+                    # And actually adds the artist to the data axis
+                    self._im_ax.add_artist(art_reg)
+                    # Also makes sure this artist is on the ignore list, as it's a constant and shouldn't be redrawn
+                    #  or be able to be modified
+                    self._ignore_arts.append(art_reg)
 
         def dynamic_view(self):
             """
