@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 21:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2022, 10:40. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -581,9 +581,9 @@ class Image(BaseProduct):
             subject of a current analysis. This should either be supplied as a single region object, or as a
             dictionary of region objects with ObsIDs as keys.
         """
-        if not isinstance(new_reg, (PixelRegion, SkyRegion, dict)):
+        if new_reg is not None and not isinstance(new_reg, (PixelRegion, SkyRegion, dict)):
             raise TypeError("Please pass either a dictionary of SkyRegion/PixelRegion objects with ObsIDs as "
-                            "keys, or a single SkyRegion/PixelRegion object.")
+                            "keys, or a single SkyRegion/PixelRegion object. Alternatively pass None for no match.")
 
         self._matched_regions = self._process_matched_regions(new_reg)
 
