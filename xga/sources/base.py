@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 18:36. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -21,7 +21,7 @@ from numpy import ndarray
 from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
 from regions import read_ds9, PixelRegion
 
-from .. import xga_conf
+from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.misc import pix_deg_scale
@@ -88,20 +88,76 @@ class BaseSource:
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
-        matches = simple_xmm_match(ra, dec)
+        matches, excluded = simple_xmm_match(ra, dec)
+
+        # This will store information on the observations that were never included in analysis (so it's distinct from
+        #  the disassociated_obs information) - I don't know if this is the solution I'll stick with, but it'll do
+        blacklisted_obs = {}
+        for row_ind, row in excluded.iterrows():
+            # Just blacklist all instruments because for an ObsID to be in the excluded return
+            #  from simple_xmm_match this has to be the case
+            blacklisted_obs[row['ObsID']] = ['pn', 'mos1', 'mos2']
+
+        # This checks that the observations have at least one usable instrument
         obs = matches["ObsID"].values
         instruments = {o: [] for o in obs}
         for o in obs:
-            if matches[matches["ObsID"] == o]["USE_PN"].values[0]:
-                instruments[o].append("pn")
-            if matches[matches["ObsID"] == o]["USE_MOS1"].values[0]:
-                instruments[o].append("mos1")
-            if matches[matches["ObsID"] == o]["USE_MOS2"].values[0]:
-                instruments[o].append("mos2")
+            # As the simple_xmm_match will only tell us about observations in which EVERY instrument is
+            #  blacklisted, I have to check in the blacklist to see whether some individual instruments
+            #  have to be excluded
+            excl_pn = False
+            excl_mos1 = False
+            excl_mos2 = False
+            if o in BLACKLIST['ObsID'].values:
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_PN'].values[0] == 'T':
+                    excl_pn = True
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_MOS1'].values[0] == 'T':
+                    excl_mos1 = True
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_MOS2'].values[0] == 'T':
+                    excl_mos2 = True
 
-        # This checks that the observations have at least one usable instrument
+            # Here we see if PN is allowed by the census (things like CalClosed observations are excluded in
+            #  the census) and if PN is allowed by the blacklist (individual instruments can be blacklisted).
+            if matches[matches["ObsID"] == o]["USE_PN"].values[0] and not excl_pn:
+                instruments[o].append("pn")
+            # If excluded by the blacklist, then that needs
+            elif excl_pn:
+                # The behaviour writing PN to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["pn"]
+                else:
+                    blacklisted_obs[o] += ['pn']
+
+            # Now we repeat the same process for MOS1 and 2 - its quite clunky and there's probably a more
+            #  elegant way that I could write this, but ah well
+            if matches[matches["ObsID"] == o]["USE_MOS1"].values[0] and not excl_mos1:
+                instruments[o].append("mos1")
+            # If excluded by the blacklist, then that needs
+            elif excl_mos1:
+                # The behaviour writing MOS1 to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["mos1"]
+                else:
+                    blacklisted_obs[o] += ['mos1']
+
+            if matches[matches["ObsID"] == o]["USE_MOS2"].values[0] and not excl_mos2:
+                instruments[o].append("mos2")
+            # If excluded by the blacklist, then that needs
+            elif excl_mos2:
+                # The behaviour writing MOS2 to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["mos2"]
+                else:
+                    blacklisted_obs[o] += ['mos2']
+
+        # Information about which ObsIDs/instruments are available, and which have been blacklisted, is stored
+        #  in class attributes here.
         self._obs = [o for o in obs if len(instruments[o]) > 0]
         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+        self._blacklisted_obs = blacklisted_obs
 
         # self._obs can be empty after this cleaning step, so do quick check and raise error if so.
         if len(self._obs) == 0:
@@ -121,7 +177,7 @@ class BaseSource:
 
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
-            on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))["ObsID"].values
+            on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))[0]["ObsID"].values
         except NoMatchFoundError:
             on_axis_match = np.array([])
         self._onaxis = list(np.array(self._obs)[np.isin(self._obs, on_axis_match)])
@@ -1292,6 +1348,17 @@ class BaseSource:
         :rtype: List[str]
         """
         return self._obs
+
+    @property
+    def blacklisted(self) -> Dict:
+        """
+        A property getter that returns the dictionary of ObsIDs and their instruments which have been
+        blacklisted, and thus not considered for use in any analysis of this source.
+
+        :return: The dictionary (with ObsIDs as keys) of blacklisted data.
+        :rtype: Dict
+        """
+        return self._blacklisted_obs
 
     def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
         """
