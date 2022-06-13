@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/03/2022, 10:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 11:53. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
@@ -18,9 +18,9 @@ def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, flo
     """
     Internal function used to multithread the simple XMM match function.
 
-    :param float ra: The right-ascension around which to search for observations.
-    :param float dec: The declination around which to search for observations.
-    :param float search_rad: The radius in which to search for observations.
+    :param float ra: The right-ascension around which to search for observations, as a float in units of degrees.
+    :param float dec: The declination around which to search for observations, as a float in units of degrees.
+    :param float search_rad: The radius in which to search for observations, as a float in units of degrees.
     :return: The input RA, input dec, and ObsID match dataframe.
     :rtype: Tuple[float, float, DataFrame]
     """

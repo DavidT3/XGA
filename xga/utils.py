@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 11:53. Copyright (c) The Contributors
 
 import json
 import os
@@ -148,6 +148,7 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
         # Adds the three new columns, all with a default value of True. So any ObsID already in the blacklist
         #  will have the same behaviour as before, all instruments for the ObsID are excluded
         blacklist[["EXCLUDE_PN", "EXCLUDE_MOS1", "EXCLUDE_MOS2"]] = 'T'
+        # If we have even gotten to this stage then the actual blacklist file needs re-writing, so I do
         blacklist.to_csv(BLACKLIST_FILE, index=False)
 
     # Need to find out which observations are available, crude way of making sure they are ObsID directories
