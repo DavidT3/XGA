@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 11:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 12:16. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
@@ -27,13 +27,24 @@ def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, flo
     # Making a copy of the census because I add a distance-from-coords column - don't want to do that for the
     #  original census especially when this is being multi-threaded
     local_census = CENSUS.copy()
+    local_blacklist = BLACKLIST.copy()
     local_census["dist"] = np.sqrt((local_census["RA_PNT"] - ra) ** 2
                                    + (local_census["DEC_PNT"] - dec) ** 2)
     # Select any ObsIDs within (or at) the search radius input to the function
     matches = local_census[local_census["dist"] <= search_rad]
-    # Remove any ObsID dataframe entries that are in the blacklist
-    matches = matches[~matches["ObsID"].isin(BLACKLIST["ObsID"])]
+    # Locate any ObsIDs that are in the blacklist, then test to see whether ALL the instruments are to be excluded
+    in_bl = local_blacklist[
+        local_blacklist['ObsID'].isin(matches[matches["ObsID"].isin(local_blacklist["ObsID"])]['ObsID'])]
+    # This will find relevant blacklist entries that have specifically ALL instruments excluded. In that case
+    #  the ObsID shouldn't be returned
+    all_excl = in_bl[(in_bl['EXCLUDE_PN'] == 'T') & (in_bl['EXCLUDE_MOS1'] == 'T') & (in_bl['EXCLUDE_MOS2'] == 'T')]
+
+    # These are the observations that a) match (within our criteria) to the supplied coordinates, and b) have at
+    #  least some usable data.
+    matches = matches[~matches["ObsID"].isin(all_excl["ObsID"])]
+
     del local_census
+    del local_blacklist
     return ra, dec, matches
 
 
