@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 12:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 13:39. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
@@ -14,15 +14,16 @@ from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT
 from ..exceptions import NoMatchFoundError, NoValidObservationsError
 
 
-def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, float, DataFrame]:
+def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, float, DataFrame, DataFrame]:
     """
     Internal function used to multithread the simple XMM match function.
 
     :param float ra: The right-ascension around which to search for observations, as a float in units of degrees.
     :param float dec: The declination around which to search for observations, as a float in units of degrees.
     :param float search_rad: The radius in which to search for observations, as a float in units of degrees.
-    :return: The input RA, input dec, and ObsID match dataframe.
-    :rtype: Tuple[float, float, DataFrame]
+    :return: The input RA, input dec, ObsID match dataframe, and the completely blacklisted array (ObsIDs that
+        were relevant but have ALL instruments blacklisted).
+    :rtype: Tuple[float, float, DataFrame, DataFrame]
     """
     # Making a copy of the census because I add a distance-from-coords column - don't want to do that for the
     #  original census especially when this is being multi-threaded
@@ -45,7 +46,7 @@ def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, flo
 
     del local_census
     del local_blacklist
-    return ra, dec, matches
+    return ra, dec, matches, all_excl
 
 
 def _on_obs_id(ra: float, dec: float, obs_id: Union[str, list, np.ndarray]) -> Tuple[float, float, np.ndarray]:
@@ -72,7 +73,7 @@ def _on_obs_id(ra: float, dec: float, obs_id: Union[str, list, np.ndarray]) -> T
     # Less convinced I actually need to do this here, as I don't modify the census dataframe
     local_census = CENSUS.copy()
 
-    # Set oup a list to store detection information
+    # Set up a list to store detection information
     det = []
     # We loop through the ObsID(s) - if just one was passed it'll only loop once (I made sure that ObsID was a list
     #  a few lines above this)
@@ -123,7 +124,8 @@ def _on_obs_id(ra: float, dec: float, obs_id: Union[str, list, np.ndarray]) -> T
 
 def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                      distance: Quantity = Quantity(30.0, 'arcmin'),
-                     num_cores: int = NUM_CORES) -> Union[DataFrame, List[DataFrame]]:
+                     num_cores: int = NUM_CORES) -> Tuple[Union[DataFrame, List[DataFrame]],
+                                                          Union[DataFrame, List[DataFrame]]]:
     """
     Returns ObsIDs within a given distance from the input ra and dec values.
 
@@ -136,7 +138,7 @@ def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     :param int num_cores: The number of cores to use, default is set to 90% of system cores. This is only relevant
         if multiple coordinate pairs are passed.
     :return: The ObsID, RA_PNT, and DEC_PNT of matching XMM observations.
-    :rtype: Union[DataFrame, List[DataFrame]]
+    :rtype: Tuple[Union[DataFrame, List[DataFrame]], Union[DataFrame, List[DataFrame]]]
     """
 
     # Extract the search distance as a float, specifically in degrees
@@ -164,6 +166,10 @@ def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
     # The dictionary stores match dataframe information, with the keys comprised of the str(ra)+str(dec)
     c_matches = {}
+    # This dictionary stores any ObsIDs that were COMPLETELY blacklisted (i.e. all instruments were excluded) for
+    #  a given coordinate. So they were initially found as being nearby, but then completely removed
+    fully_blacklisted = {}
+
     # This helps keep track of the original coordinate order, so we can return information in the same order it
     #  was passed in
     order_list = []
@@ -177,7 +183,9 @@ def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
             #  results in the dictionary
             for ra_ind, r in enumerate(src_ra):
                 d = src_dec[ra_ind]
-                c_matches[repr(r)+repr(d)] = _simple_search(r, d, rad)[2]
+                search_results = _simple_search(r, d, rad)
+                c_matches[repr(r) + repr(d)] = search_results[2]
+                fully_blacklisted[repr(r) + repr(d)] = search_results[3]
                 order_list.append(repr(r)+repr(d))
                 onwards.update(1)
     else:
@@ -188,6 +196,8 @@ def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
                 nonlocal onwards  # The progress bar will need updating
                 nonlocal c_matches
                 c_matches[repr(match_info[0]) + repr(match_info[1])] = match_info[2]
+                fully_blacklisted[repr(match_info[0]) + repr(match_info[1])] = match_info[3]
+
                 onwards.update(1)
 
             for ra_ind, r in enumerate(src_ra):
@@ -200,12 +210,15 @@ def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
     # Changes the order of the results to the original pass in order and stores them in a list
     results = [c_matches[n] for n in order_list]
+    bl_results = [fully_blacklisted[n] for n in order_list]
     del c_matches
+    del fully_blacklisted
 
     # Result length of one means one coordinate was passed in, so we should pass back out a single dataframe
     #  rather than a single dataframe in a list
     if len(results) == 1:
         results = results[0]
+        bl_results = bl_results[0]
 
         # Checks whether the dataframe inside the single result is length zero, if so then there are no relevant ObsIDs
         if len(results) == 0:
@@ -216,7 +229,7 @@ def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     elif all([len(r) == 0 for r in results]):
         raise NoMatchFoundError("No XMM observation found within {a} of any input coordinate pairs".format(a=distance))
 
-    return results
+    return results, bl_results
 
 
 def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray], num_cores: int = NUM_CORES):
@@ -258,7 +271,7 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
 
     # This is the initial call to the simple_xmm_match function. This gives us knowledge of which coordinates are
     #  worth checking further, and which ObsIDs should be checked for those coordinates.
-    init_res = simple_xmm_match(src_ra, src_dec, num_cores=num_cores)
+    init_res, init_bl = simple_xmm_match(src_ra, src_dec, num_cores=num_cores)
     # If only one coordinate was passed, the return from simple_xmm_match will just be a dataframe, and I want
     #  a list of dataframes because its iterable and easier to deal with more generally
     if isinstance(init_res, pd.DataFrame):
