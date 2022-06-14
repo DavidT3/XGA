@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 18:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/06/2022, 11:17. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -185,6 +185,10 @@ class BaseSource:
         # nhlookup returns average and weighted average values, so just take the first
         self._nH = nh_lookup(self.ra_dec)[0]
         self._redshift = redshift
+        # This method uses the instruments attribute to check and see whether a particular ObsID-Instrument
+        #  combination is allowed for this source. As that attribute was constructed using the blacklist information
+        #  we can be sure that every ObsID-Instrument combination loaded in here is allowed to be here. The only
+        #  other way for them to change is through using the dissociate observation capability
         self._products, region_dict, self._att_files = self._initial_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
