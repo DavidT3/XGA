@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/06/2022, 11:45. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -21,7 +21,7 @@ from numpy import ndarray
 from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
 from regions import read_ds9, PixelRegion
 
-from .. import xga_conf
+from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.misc import pix_deg_scale
@@ -88,20 +88,76 @@ class BaseSource:
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
-        matches = simple_xmm_match(ra, dec)
+        matches, excluded = simple_xmm_match(ra, dec)
+
+        # This will store information on the observations that were never included in analysis (so it's distinct from
+        #  the disassociated_obs information) - I don't know if this is the solution I'll stick with, but it'll do
+        blacklisted_obs = {}
+        for row_ind, row in excluded.iterrows():
+            # Just blacklist all instruments because for an ObsID to be in the excluded return
+            #  from simple_xmm_match this has to be the case
+            blacklisted_obs[row['ObsID']] = ['pn', 'mos1', 'mos2']
+
+        # This checks that the observations have at least one usable instrument
         obs = matches["ObsID"].values
         instruments = {o: [] for o in obs}
         for o in obs:
-            if matches[matches["ObsID"] == o]["USE_PN"].values[0]:
-                instruments[o].append("pn")
-            if matches[matches["ObsID"] == o]["USE_MOS1"].values[0]:
-                instruments[o].append("mos1")
-            if matches[matches["ObsID"] == o]["USE_MOS2"].values[0]:
-                instruments[o].append("mos2")
+            # As the simple_xmm_match will only tell us about observations in which EVERY instrument is
+            #  blacklisted, I have to check in the blacklist to see whether some individual instruments
+            #  have to be excluded
+            excl_pn = False
+            excl_mos1 = False
+            excl_mos2 = False
+            if o in BLACKLIST['ObsID'].values:
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_PN'].values[0] == 'T':
+                    excl_pn = True
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_MOS1'].values[0] == 'T':
+                    excl_mos1 = True
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_MOS2'].values[0] == 'T':
+                    excl_mos2 = True
 
-        # This checks that the observations have at least one usable instrument
+            # Here we see if PN is allowed by the census (things like CalClosed observations are excluded in
+            #  the census) and if PN is allowed by the blacklist (individual instruments can be blacklisted).
+            if matches[matches["ObsID"] == o]["USE_PN"].values[0] and not excl_pn:
+                instruments[o].append("pn")
+            # If excluded by the blacklist, then that needs
+            elif excl_pn:
+                # The behaviour writing PN to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["pn"]
+                else:
+                    blacklisted_obs[o] += ['pn']
+
+            # Now we repeat the same process for MOS1 and 2 - its quite clunky and there's probably a more
+            #  elegant way that I could write this, but ah well
+            if matches[matches["ObsID"] == o]["USE_MOS1"].values[0] and not excl_mos1:
+                instruments[o].append("mos1")
+            # If excluded by the blacklist, then that needs
+            elif excl_mos1:
+                # The behaviour writing MOS1 to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["mos1"]
+                else:
+                    blacklisted_obs[o] += ['mos1']
+
+            if matches[matches["ObsID"] == o]["USE_MOS2"].values[0] and not excl_mos2:
+                instruments[o].append("mos2")
+            # If excluded by the blacklist, then that needs
+            elif excl_mos2:
+                # The behaviour writing MOS2 to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["mos2"]
+                else:
+                    blacklisted_obs[o] += ['mos2']
+
+        # Information about which ObsIDs/instruments are available, and which have been blacklisted, is stored
+        #  in class attributes here.
         self._obs = [o for o in obs if len(instruments[o]) > 0]
         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+        self._blacklisted_obs = blacklisted_obs
 
         # self._obs can be empty after this cleaning step, so do quick check and raise error if so.
         if len(self._obs) == 0:
@@ -121,7 +177,7 @@ class BaseSource:
 
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
-            on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))["ObsID"].values
+            on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))[0]["ObsID"].values
         except NoMatchFoundError:
             on_axis_match = np.array([])
         self._onaxis = list(np.array(self._obs)[np.isin(self._obs, on_axis_match)])
@@ -129,6 +185,10 @@ class BaseSource:
         # nhlookup returns average and weighted average values, so just take the first
         self._nH = nh_lookup(self.ra_dec)[0]
         self._redshift = redshift
+        # This method uses the instruments attribute to check and see whether a particular ObsID-Instrument
+        #  combination is allowed for this source. As that attribute was constructed using the blacklist information
+        #  we can be sure that every ObsID-Instrument combination loaded in here is allowed to be here. The only
+        #  other way for them to change is through using the dissociate observation capability
         self._products, region_dict, self._att_files = self._initial_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
@@ -1293,6 +1353,17 @@ class BaseSource:
         """
         return self._obs
 
+    @property
+    def blacklisted(self) -> Dict:
+        """
+        A property getter that returns the dictionary of ObsIDs and their instruments which have been
+        blacklisted, and thus not considered for use in any analysis of this source.
+
+        :return: The dictionary (with ObsIDs as keys) of blacklisted data.
+        :rtype: Dict
+        """
+        return self._blacklisted_obs
+
     def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
         """
         A method that looks for matches not just based on position, but also on the type of source
@@ -2433,8 +2504,24 @@ class BaseSource:
         #  that the rest of the function requires
         if isinstance(to_remove, str):
             to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
+        # Here is where they have just passed a list of ObsIDs, and we need to fill in the blanks with the instruments
+        #  currently loaded for those ObsIDs
         elif isinstance(to_remove, list):
             to_remove = {o: deepcopy(self.instruments[o]) for o in to_remove}
+        # Here deals with when someone might have passed a dictionary where there is a single instrument, and
+        #  they haven't put it in a list; e.g. {'0201903501': 'pn'}. This detects instances like that and then
+        #  puts the individual instrument in a list as is expected by the rest of the function
+        elif isinstance(to_remove, dict) and not all([isinstance(v, list) for v in to_remove.values()]):
+            new_to_remove = {}
+            for o in to_remove:
+                if not isinstance(to_remove[o], list):
+                    new_to_remove[o] = [deepcopy(to_remove[o])]
+                else:
+                    new_to_remove[o] = deepcopy(to_remove[o])
+
+            # I use deepcopy again because there have been issues with this function still pointing to old memory
+            #  addresses, so I'm quite paranoid in this bit of code
+            to_remove = deepcopy(new_to_remove)
 
         # We also check to make sure that the data we're being asked to remove actually is associated with the
         #  source. We shall be forgiving if it isn't, and just issue a warning to let the user know that they are
