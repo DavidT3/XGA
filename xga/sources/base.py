@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/06/2022, 11:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/06/2022, 11:45. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2504,8 +2504,24 @@ class BaseSource:
         #  that the rest of the function requires
         if isinstance(to_remove, str):
             to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
+        # Here is where they have just passed a list of ObsIDs, and we need to fill in the blanks with the instruments
+        #  currently loaded for those ObsIDs
         elif isinstance(to_remove, list):
             to_remove = {o: deepcopy(self.instruments[o]) for o in to_remove}
+        # Here deals with when someone might have passed a dictionary where there is a single instrument, and
+        #  they haven't put it in a list; e.g. {'0201903501': 'pn'}. This detects instances like that and then
+        #  puts the individual instrument in a list as is expected by the rest of the function
+        elif isinstance(to_remove, dict) and not all([isinstance(v, list) for v in to_remove.values()]):
+            new_to_remove = {}
+            for o in to_remove:
+                if not isinstance(to_remove[o], list):
+                    new_to_remove[o] = [deepcopy(to_remove[o])]
+                else:
+                    new_to_remove[o] = deepcopy(to_remove[o])
+
+            # I use deepcopy again because there have been issues with this function still pointing to old memory
+            #  addresses, so I'm quite paranoid in this bit of code
+            to_remove = deepcopy(new_to_remove)
 
         # We also check to make sure that the data we're being asked to remove actually is associated with the
         #  source. We shall be forgiving if it isn't, and just issue a warning to let the user know that they are
