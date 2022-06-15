@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2022, 17:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2022, 17:28. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -714,7 +714,7 @@ class ClusterSample(BaseSample):
                 #  has to do this the long way around.
                 if isinstance(mass_profs, list):
                     raise ValueError("There are multiple matching hydrostatic mass profiles associated with {}, "
-                                     "you will have to retrieve profiles manually and calculate radii "
+                                     "you will have to retrieve profiles and calculate radii "
                                      "manually.".format(gcs.name))
 
                 try:
