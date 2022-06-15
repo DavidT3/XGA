@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 04/05/2022, 11:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2022, 14:45. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -1464,6 +1464,118 @@ class HydrostaticMass(BaseProfile1D):
         return BaryonFraction(self.radii, frac, self.centre, self.src_name, self.obs_id, self.instrument,
                               self.radii_err, frac_err, self.set_ident, self.associated_set_storage_key,
                               self.deg_radii)
+
+    def overdensity_radius(self, delta: int, redshift: float, cosmo, init_lo_rad: Quantity = Quantity(100, 'kpc'),
+                           init_hi_rad: Quantity = Quantity(3500, 'kpc'), init_step: Quantity = Quantity(100, 'kpc'),
+                           out_unit: Union[Unit, str] = Unit('kpc')) -> Quantity:
+        """
+        This method uses the mass profile to find the radius that corresponds to the user-supplied
+        overdensity - common choices for cluster analysis are Δ=2500, 500, and 200. Overdensity radii are
+        defined as the radius at which the density is Δ times the critical density of the Universe at the
+        cluster redshift.
+
+        This method takes a numerical approach to the location of the requested radius. Though we have calculated
+        analytical hydrostatic mass models for common choices of temperature and density profile models, there are
+        no analytical solutions for R.
+
+        When an overdensity radius is being calculated, we initially measure masses for a range of radii between
+        init_lo_rad - init_hi_rad in steps of init_step. From this we find the two radii that bracket the radius where
+        average density - Delta*critical density = 0. Between those two radii we perform the same test with another
+        range of radii (in steps of 1 kpc this time), finding the radius that corresponds to the minimum
+        density difference value.
+
+        :param int delta: The overdensity factor for which a radius is to be calculated.
+        :param float redshift: The redshift of the cluster.
+        :param cosmo: The cosmology in which to calculate the overdensity. Should be an astropy cosmology instance.
+        :param Quantity init_lo_rad: The lower radius bound for the first radii array generated to find the wide
+            brackets around the requested overdensity radius. Default value is 100 kpc.
+        :param Quantity init_hi_rad: The upper radius bound for the first radii array generated to find the wide
+            brackets around the requested overdensity radius. Default value is 3500 kpc.
+        :param Quantity init_step: The step size for the first radii array generated to find the wide brackets
+            around the requested overdensity radius. Default value is 100 kpc, recommend that you don't set it
+            smaller than 10 kpc.
+        :param Unit/str out_unit: The unit that this method should output the radius with.
+        :return: The calculated overdensity radius.
+        :rtype: Quantity
+        """
+        def turning_point(brackets: Quantity, step_size: Quantity) -> Quantity:
+            """
+            This is the meat of the overdensity_radius method. It goes looking for radii that bracket the
+            requested overdensity radius. This works by calculating an array of masses, calculating densities
+            from them and the radius array, then calculating the difference between Delta*critical density at
+            source redshift. Where the difference array flips from being positive to negative is where the
+            bracketing radii are.
+
+            :param Quantity brackets: The brackets within which to generate our array of radii.
+            :param Quantity step_size: The step size for the array of radii
+            :return: The bracketing radii for the requested overdensity for this search.
+            :rtype: Quantity
+            """
+            # Just makes sure that the step size is definitely in the same unit as the bracket
+            #  variable, as I take the value of step_size later
+            step_size = step_size.to(brackets.unit)
+
+            # This sets up a range of radii within which to calculate masses, which in turn are used to find the
+            #  closest value to the Delta*critical density we're looking for
+            rads = Quantity(np.arange(*brackets.value, step_size.value), 'kpc')
+            # The masses contained within the test radii, the transpose is just there because the array output
+            #  by that function is weirdly ordered - there is an issue open that will remind to eventually change that
+            rad_masses = self.mass(rads)[0].T
+            # Calculating the density from those masses - uses the radii that the masses were measured within
+            rad_dens = rad_masses[:, 0] / (4 * np.pi * (rads ** 3) / 3)
+            # Finds the difference between the density array calculated above and the requested
+            #  overdensity (i.e. Delta * the critical density of the Universe at the source redshift).
+            rad_dens_diffs = rad_dens - (delta * z_crit_dens)
+
+            if np.all(rad_dens_diffs.value > 0) or np.all(rad_dens_diffs.value < 0):
+                raise ValueError("The passed lower ({l}) and upper ({u}) radii don't appear to bracket the "
+                                 "requested overdensity (Delta={d}) radius.".format(l=brackets[0], u=brackets[1],
+                                                                                    d=delta))
+
+            # This finds the index of the radius where the turnover between the density difference being
+            #  positive and negative happens. The radius of that index, and the index before it, bracket
+            #  the requested overdensity.
+            turnover = np.where(rad_dens_diffs.value < 0, rad_dens_diffs.value, -np.inf).argmax()
+            brackets = rads[[turnover - 1, turnover]]
+
+            return brackets
+
+        # First perform some sanity checks to make sure that the user hasn't passed anything silly
+        # Check that the overdensity is a positive, non-zero (because that wouldn't make sense) integer.
+        if not type(delta) == int or delta <= 0:
+            raise ValueError("The overdensity must be a positive, non-zero, integer.")
+
+        # The user is allowed to pass either a unit instance or a string, we make sure the out_unit is consistently
+        #  a unit instance for the benefit of the rest of this method.
+        if isinstance(out_unit, str):
+            out_unit = Unit(out_unit)
+        elif not isinstance(out_unit, Unit):
+            raise ValueError("The out_unit argument must be either an astropy Unit instance, or a string "
+                             "representing an astropy unit.")
+
+        # We know that if we have arrived here then the out_unit variable is a Unit instance, so we just check
+        #  that it's a distance unit that makes sense. I haven't allowed degrees, arcmins etc. because it would
+        #  entail a little extra work, and I don't care enough right now.
+        if not out_unit.is_equivalent('kpc'):
+            raise UnitConversionError("The out_unit argument must be supplied with a unit that is convertible "
+                                      "to kpc. Angular units such as deg are not currently supported.")
+
+        # Obviously redshift can't be negative, and I won't allow zero redshift because it doesn't
+        #  make sense for clusters and completely changes how distance calculations are done.
+        if redshift <= 0:
+            raise ValueError("Redshift cannot be less than or equal to zero.")
+
+        # This is the critical density of the Universe at the cluster redshift - this is what we compare the
+        #  cluster density too to figure out the requested overdensity radius.
+        z_crit_dens = cosmo.critical_density(redshift)
+
+        wide_bracket = turning_point(Quantity([init_lo_rad, init_hi_rad]), init_step)
+        if init_step != Quantity(1, 'kpc'):
+            tight_bracket = turning_point(wide_bracket, Quantity(1, 'kpc'))
+        else:
+            tight_bracket = wide_bracket
+
+        return ((tight_bracket[0]+tight_bracket[1])/2).to(out_unit)
 
     @property
     def temperature_profile(self) -> GasTemperature3D:
