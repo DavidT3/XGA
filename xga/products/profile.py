@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2022, 14:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2022, 14:45. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -1526,6 +1526,12 @@ class HydrostaticMass(BaseProfile1D):
             # Finds the difference between the density array calculated above and the requested
             #  overdensity (i.e. Delta * the critical density of the Universe at the source redshift).
             rad_dens_diffs = rad_dens - (delta * z_crit_dens)
+
+            if np.all(rad_dens_diffs.value > 0) or np.all(rad_dens_diffs.value < 0):
+                raise ValueError("The passed lower ({l}) and upper ({u}) radii don't appear to bracket the "
+                                 "requested overdensity (Delta={d}) radius.".format(l=brackets[0], u=brackets[1],
+                                                                                    d=delta))
+
             # This finds the index of the radius where the turnover between the density difference being
             #  positive and negative happens. The radius of that index, and the index before it, bracket
             #  the requested overdensity.
