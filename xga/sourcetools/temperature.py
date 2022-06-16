@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2022, 12:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2022, 14:24. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -21,6 +21,85 @@ from ..xspec.fit import single_temp_apec_profile
 ALLOWED_ANN_METHODS = ['min_snr', 'growth']
 
 
+def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity, lo_en: Quantity, hi_en: Quantity,
+                    obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+                    psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15):
+    """
+    This method just sets up radii, masks, etc. for annular binning functions in this file. The operations in
+    this function are shared by multiple other binning functions, hence they have been put in a function of their
+    own to minimise duplication.
+
+    :param BaseSource source: The source object to generate annuli for.
+    :param Quantity outer_rad: The outermost radius of the source region we will generate annuli within.
+    :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and avoid
+        PSF effects.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
+    :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculations. Default is None, which
+            means the combined ratemap will be used. Please note that inst must also be set to use this option.
+    :param str inst: The instrument of a specific ratemap to use for the SNR calculations. Default is None, which
+        means the combined ratemap will be used.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+    :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+    :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+        side in the PSF grid.
+    :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+    :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :return: The various variables that this function sets up
+    :rtype:
+    """
+    # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
+    if all([obs_id is None, inst is None]):
+        # Here the user hasn't set ObsID or instrument, so we use the combined data
+        rt = source.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+        interloper_mask = source.get_interloper_mask()
+    elif all([obs_id is not None, inst is not None]):
+        # Both ObsID and instrument have been set by the user
+        rt = source.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+        interloper_mask = source.get_interloper_mask(obs_id)
+
+    # Just making sure our relevant distances are in the same units, so that we can convert to pixels
+    outer_rad = source.convert_radius(outer_rad, 'deg')
+    min_width = source.convert_radius(min_width, 'deg')
+
+    # Using the ratemap to get a conversion factor from pixels to degrees, though we will use it
+    #  the other way around
+    pix_to_deg = pix_deg_scale(source.default_coord, rt.radec_wcs)
+
+    # Making sure to go up to the whole number, pixels have to be integer of course, and I think it's
+    #  better to err on the side of caution here and make things slightly wider than requested
+    outer_rad = int(np.ceil(outer_rad / pix_to_deg).value)
+    min_width = int(np.ceil(min_width / pix_to_deg).value)
+
+    # The maximum possible number of annuli, based on the input outer radius and minimum width
+    # We have already made sure that the outer radius and minimum width allowed are integers by using
+    #  np.ceil, so we know max_ann is going to be a whole number of annuli
+    max_ann = int(outer_rad / min_width)
+
+    # These are the initial bins, with imposed minimum width, I have to add one to max_ann because linspace wants the
+    #  total number of values to generate, and while there are max_ann annuli, there are max_ann+1 radial boundaries
+    init_rads = np.linspace(0, outer_rad, max_ann + 1).astype(int)
+    # Converts the source's default analysis coordinates to pixels
+    pix_centre = rt.coord_conv(source.default_coord, 'pix')
+    # Sets up a mask to correct for interlopers and weird edge effects
+    corr_mask = interloper_mask * rt.edge_mask
+
+    # Setting up our own background region
+    back_inn_rad = np.array([np.ceil(source.background_radius_factors[0] * outer_rad)]).astype(int)
+    back_out_rad = np.array([np.ceil(source.background_radius_factors[1] * outer_rad)]).astype(int)
+
+    # Using my annular mask function to make a nice background region, which will be corrected for instrumental
+    #  stuff and interlopers in a second
+    back_mask = annular_mask(pix_centre, back_inn_rad, back_out_rad, rt.shape) * corr_mask
+
+    # Generates the requested annular masks, making sure to apply the correcting mask
+    ann_masks = annular_mask(pix_centre, init_rads[:-1], init_rads[1:], rt.shape) * corr_mask[..., None]
+
+    cur_rads = init_rads.copy()
+
+    return rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, pix_to_deg
+
+
 def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width: Quantity, lo_en: Quantity,
               hi_en: Quantity, obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
               psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
@@ -29,7 +108,7 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     An internal function that will find the radii required to create annuli with a certain minimum signal to noise
     and minimum annulus width.
 
-    :param BaseSource source: The source object which needs annuli generating for it.
+    :param BaseSource source: The source object to generate annuli for.
     :param Quantity outer_rad: The outermost radius of the source region we will generate annuli within.
     :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and avoid
@@ -55,54 +134,12 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
         based on min_width.
     :rtype: Tuple[Quantity, np.ndarray, int]
     """
-    # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
-    if all([obs_id is None, inst is None]):
-        # Here the user hasn't set ObsID or instrument, so we use the combined data
-        rt = source.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-        interloper_mask = source.get_interloper_mask()
-    elif all([obs_id is not None, inst is not None]):
-        # Both ObsID and instrument have been set by the user
-        rt = source.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-        interloper_mask = source.get_interloper_mask(obs_id)
 
-    # Just making sure our relevant distances are in the same units, so that we can convert to pixels
-    outer_rad = source.convert_radius(outer_rad, 'deg')
-    min_width = source.convert_radius(min_width, 'deg')
+    # This calls a function that just sets things up for this (and other annular binning) function
+    rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, \
+        pix_to_deg = _ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, psf_model,
+                                     psf_bins, psf_algo, psf_iter)
 
-    # Using the ratemap to get a conversion factor from pixels to degrees, though we will use it
-    #  the other way around
-    pix_to_deg = pix_deg_scale(source.default_coord, rt.radec_wcs)
-
-    # Making sure to go up to the whole number, pixels have to be integer of course and I think its
-    #  better to err on the side of caution here and make things slightly wider than requested
-    outer_rad = int(np.ceil(outer_rad/pix_to_deg).value)
-    min_width = int(np.ceil(min_width/pix_to_deg).value)
-
-    # The maximum possible number of annuli, based on the input outer radius and minimum width
-    # We have already made sure that the outer radius and minimum width allowed are integers by using
-    #  np.ceil, so we know max_ann is going to be a whole number of annuli
-    max_ann = int(outer_rad/min_width)
-
-    # These are the initial bins, with imposed minimum width, I have to add one to max_ann because linspace wants the
-    #  total number of values to generate, and while there are max_ann annuli, there are max_ann+1 radial boundaries
-    init_rads = np.linspace(0, outer_rad, max_ann+1).astype(int)
-    # Converts the source's default analysis coordinates to pixels
-    pix_centre = rt.coord_conv(source.default_coord, 'pix')
-    # Sets up a mask to correct for interlopers and weird edge effects
-    corr_mask = interloper_mask*rt.edge_mask
-
-    # Setting up our own background region
-    back_inn_rad = np.array([np.ceil(source.background_radius_factors[0] * outer_rad)]).astype(int)
-    back_out_rad = np.array([np.ceil(source.background_radius_factors[1] * outer_rad)]).astype(int)
-
-    # Using my annular mask function to make a nice background region, which will be corrected for instrumental
-    #  stuff and interlopers in a second
-    back_mask = annular_mask(pix_centre, back_inn_rad, back_out_rad, rt.shape) * corr_mask
-
-    # Generates the requested annular masks, making sure to apply the correcting mask
-    ann_masks = annular_mask(pix_centre, init_rads[:-1], init_rads[1:], rt.shape)*corr_mask[..., None]
-
-    cur_rads = init_rads.copy()
     if max_ann > 4:
         # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
         acceptable = False
@@ -140,7 +177,103 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
             acceptable = True
         # We work from the outside of the bad list inwards, and if the outermost bad bin is the one right on the
         #  end of the SNR profile, then we merge that leftwards into the N-1th annuli
-        elif len(bad_snrs) != 0 and bad_snrs[-1] == cur_num_ann-1:
+        elif len(bad_snrs) != 0 and bad_snrs[-1] == cur_num_ann - 1:
+            cur_rads = np.delete(cur_rads, -2)
+            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+        # Otherwise if the outermost bad annulus is NOT right at the end of the profile, we merge to the right
+        else:
+            cur_rads = np.delete(cur_rads, bad_snrs[-1])
+            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+
+        if ann_masks.shape[2] == 4 and not acceptable:
+            warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
+                 "of four annuli will be returned".format(s=source.name))
+            break
+
+    # Now of course, pixels must become a more useful unit again
+    final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg).to("arcsec")
+
+    return final_rads, snrs, max_ann
+
+
+def _mincnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quantity],
+                 min_width: Quantity, lo_en: Quantity, hi_en: Quantity, obs_id: str = None, inst: str = None,
+                 psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                 psf_iter: int = 15, allow_negative: bool = False) -> Tuple[Quantity, np.ndarray, int]:
+    """
+    DOUBLE CHECK ALL PARAMETER DOCSTRINGS, THEN WRITE NEW DOCSTRING DESCRIPTION FOR FUNCTION HERE
+
+
+    :param BaseSource source: The source object to generate annuli for.
+    :param Quantity outer_rad: The outermost radius of the source region we will generate annuli within.
+    :param float min_cnt: The minimum number of counts which are allowable in a given annulus.
+    :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and avoid
+        PSF effects.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
+    :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculations. Default is None, which
+            means the combined ratemap will be used. Please note that inst must also be set to use this option.
+    :param str inst: The instrument of a specific ratemap to use for the SNR calculations. Default is None, which
+        means the combined ratemap will be used.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+    :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+    :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+        side in the PSF grid.
+    :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+    :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
+        zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+    :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+            recommend that this be true for combined observations, as exposure time could change quite dramatically
+            across the combined product.
+    :return: The radii of the requested annuli, the final snr values, and the original maximum number
+        based on min_width.
+    :rtype: Tuple[Quantity, np.ndarray, int]
+    """
+    rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, \
+        pix_to_deg = _ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, psf_model,
+                                     psf_bins, psf_algo, psf_iter)
+
+    raise NotImplementedError('This function is still under construction and does not do anything yet.')
+
+    if max_ann > 4:
+        # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
+        acceptable = False
+    else:
+        # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
+        #  as they are, while also issuing a warning
+        acceptable = True
+        warn("The min_width combined with the outer radius of the source means that there are only {} initial"
+             " annuli, normally four is the minimum number I will allow, so I will do no re-binning.".format(max_ann))
+        cur_num_ann = ann_masks.shape[2]
+        snrs = []
+        for i in range(cur_num_ann):
+            # We're calling the signal to noise calculation method of the ratemap for all of our annuli
+            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative))
+        # Becomes a numpy array because they're nicer to work with
+        snrs = np.array(snrs)
+
+    while not acceptable:
+        # How many annuli are there at this point in the loop?
+        cur_num_ann = ann_masks.shape[2]
+
+        # Just a list for the snrs to live in
+        snrs = []
+        for i in range(cur_num_ann):
+            # We're calling the signal to noise calculation method of the ratemap for all of our annuli
+            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative))
+        # Becomes a numpy array because they're nicer to work with
+        snrs = np.array(snrs)
+        # We find any indices of the array (== annuli) where the signal to noise is not above our minimum
+        bad_snrs = np.where(snrs < min_snr)[0]
+
+        # If there are no annuli below our signal to noise threshold then all is good and joyous and we accept
+        #  the current radii
+        if len(bad_snrs) == 0:
+            acceptable = True
+        # We work from the outside of the bad list inwards, and if the outermost bad bin is the one right on the
+        #  end of the SNR profile, then we merge that leftwards into the N-1th annuli
+        elif len(bad_snrs) != 0 and bad_snrs[-1] == cur_num_ann - 1:
             cur_rads = np.delete(cur_rads, -2)
             ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
         # Otherwise if the outermost bad annulus is NOT right at the end of the profile, we merge to the right
@@ -275,9 +408,9 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
 
 
 def _grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii: Union[Quantity, List[Quantity]],
-                            growth_factor: float = 1.3, start_radius: Quantity = Quantity(20, 'arcsec'),
-                            num_ann: int = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                            over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES):
+                             growth_factor: float = 1.3, start_radius: Quantity = Quantity(20, 'arcsec'),
+                             num_ann: int = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                             over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES):
     """
     This is a convenience function that allows you to quickly and easily start measuring projected temperature
     profiles of galaxy clusters where the outer radius of each annulus is some factor larger than that of the
@@ -336,11 +469,11 @@ def _grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii
                                       / np.log(growth_factor)))
             cur_growth_factor = growth_factor
         else:
-            cur_growth_factor = np.power(out_rad_vals[src_ind].to('arcsec').value / cur_start.value, 1/num_ann)
+            cur_growth_factor = np.power(out_rad_vals[src_ind].to('arcsec').value / cur_start.value, 1 / num_ann)
             cur_num_ann = num_ann
 
         rads = [cur_start.value]
-        rads += [cur_start.value*ann_ind*cur_growth_factor for ann_ind in range(1, cur_num_ann+1)]
+        rads += [cur_start.value * ann_ind * cur_growth_factor for ann_ind in range(1, cur_num_ann + 1)]
         print(Quantity(rads, 'arcsec'))
         print('')
 
@@ -482,8 +615,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             vol_intersects = shell_ann_vol_intersect(cur_rads, cur_rads)
 
             # Then its a simple inverse problem to recover the 3D temperatures
-            temp_3d = (np.linalg.inv(vol_intersects.T)@(proj_temp.values*em_prof.values)) / (np.linalg.inv(
-                vol_intersects.T)@em_prof.values)
+            temp_3d = (np.linalg.inv(vol_intersects.T) @ (proj_temp.values * em_prof.values)) / (np.linalg.inv(
+                vol_intersects.T) @ em_prof.values)
 
             # I generate random realisations of the projected temperature profile and the emission measure profile
             #  to help me with error propagation
@@ -495,12 +628,12 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             temp_3d_reals = Quantity(np.zeros(proj_temp_reals.shape), proj_temp_reals.unit)
             for i in range(0, num_data_real):
                 # Calculate and store the 3D temperature profile realisations
-                interim = (np.linalg.inv(vol_intersects.T)@(proj_temp_reals[i, :]*em_reals[i, :])) / (np.linalg.inv(
-                    vol_intersects.T)@em_reals[i, :])
+                interim = (np.linalg.inv(vol_intersects.T) @ (proj_temp_reals[i, :] * em_reals[i, :])) / (np.linalg.inv(
+                    vol_intersects.T) @ em_reals[i, :])
                 temp_3d_reals[i, :] = interim
 
             # Calculate a standard deviation for each bin to use as the uncertainty
-            temp_3d_sigma = np.std(temp_3d_reals, axis=0)*sigma
+            temp_3d_sigma = np.std(temp_3d_reals, axis=0) * sigma
 
             # And finally actually set up a 3D temperature profile
             temp_3d_prof = GasTemperature3D(proj_temp.radii, temp_3d, proj_temp.centre, src.name, obs_id, inst,
@@ -514,6 +647,3 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             all_3d_temp_profs.append(None)
 
     return all_3d_temp_profs
-
-
-
