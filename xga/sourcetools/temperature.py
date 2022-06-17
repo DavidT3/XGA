@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 16/06/2022, 14:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2022, 11:52. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -196,10 +196,10 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     return final_rads, snrs, max_ann
 
 
-def _mincnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quantity],
-                 min_width: Quantity, lo_en: Quantity, hi_en: Quantity, obs_id: str = None, inst: str = None,
-                 psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                 psf_iter: int = 15, allow_negative: bool = False) -> Tuple[Quantity, np.ndarray, int]:
+def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quantity],
+              min_width: Quantity, lo_en: Quantity, hi_en: Quantity, obs_id: str = None, inst: str = None,
+              psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+              psf_iter: int = 15, allow_negative: bool = False) -> Tuple[Quantity, np.ndarray, int]:
     """
     DOUBLE CHECK ALL PARAMETER DOCSTRINGS, THEN WRITE NEW DOCSTRING DESCRIPTION FOR FUNCTION HERE
 
@@ -230,11 +230,17 @@ def _mincnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Qu
         based on min_width.
     :rtype: Tuple[Quantity, np.ndarray, int]
     """
+
+    # This just makes sure that the min_cnt variable is the astropy quantity that we expect it to be, otherwise
+    #  some of the comparisons made between it and the values returned by background_subtracted_counts will fail
+    if type(min_cnt) == int:
+        min_cnt = Quantity(min_cnt, 'ct')
+    elif (type(min_cnt) == Quantity and not min_cnt.unit.is_equivalent('ct')) or not type(min_cnt) == Quantity:
+        raise TypeError("The min_cnt argument must be either an integer, or an astropy Quantity in units of 'ct'.")
+
     rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, \
         pix_to_deg = _ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, psf_model,
                                      psf_bins, psf_algo, psf_iter)
-
-    raise NotImplementedError('This function is still under construction and does not do anything yet.')
 
     if max_ann > 4:
         # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
@@ -246,39 +252,39 @@ def _mincnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Qu
         warn("The min_width combined with the outer radius of the source means that there are only {} initial"
              " annuli, normally four is the minimum number I will allow, so I will do no re-binning.".format(max_ann))
         cur_num_ann = ann_masks.shape[2]
-        snrs = []
+        cnts = []
         for i in range(cur_num_ann):
-            # We're calling the signal to noise calculation method of the ratemap for all of our annuli
-            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative))
-        # Becomes a numpy array because they're nicer to work with
-        snrs = np.array(snrs)
+            # We're calling the background subtracted counts calculation method of the ratemap for all of our annuli
+            cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask))
+        # Becomes an astropy quantity (and so behaves like a numpy array) because they're nicer to work with
+        cnts = Quantity(cnts)
 
     while not acceptable:
         # How many annuli are there at this point in the loop?
         cur_num_ann = ann_masks.shape[2]
 
-        # Just a list for the snrs to live in
-        snrs = []
+        # Just a list for the counts to live in
+        cnts = []
         for i in range(cur_num_ann):
             # We're calling the signal to noise calculation method of the ratemap for all of our annuli
-            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative))
+            cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask))
         # Becomes a numpy array because they're nicer to work with
-        snrs = np.array(snrs)
+        cnts = Quantity(cnts)
         # We find any indices of the array (== annuli) where the signal to noise is not above our minimum
-        bad_snrs = np.where(snrs < min_snr)[0]
+        bad_cnts = np.where(cnts < min_cnt)[0]
 
         # If there are no annuli below our signal to noise threshold then all is good and joyous and we accept
         #  the current radii
-        if len(bad_snrs) == 0:
+        if len(bad_cnts) == 0:
             acceptable = True
         # We work from the outside of the bad list inwards, and if the outermost bad bin is the one right on the
         #  end of the SNR profile, then we merge that leftwards into the N-1th annuli
-        elif len(bad_snrs) != 0 and bad_snrs[-1] == cur_num_ann - 1:
+        elif len(bad_cnts) != 0 and bad_cnts[-1] == cur_num_ann - 1:
             cur_rads = np.delete(cur_rads, -2)
             ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
         # Otherwise if the outermost bad annulus is NOT right at the end of the profile, we merge to the right
         else:
-            cur_rads = np.delete(cur_rads, bad_snrs[-1])
+            cur_rads = np.delete(cur_rads, bad_cnts[-1])
             ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
 
         if ann_masks.shape[2] == 4 and not acceptable:
@@ -289,7 +295,7 @@ def _mincnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Qu
     # Now of course, pixels must become a more useful unit again
     final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg).to("arcsec")
 
-    return final_rads, snrs, max_ann
+    return final_rads, cnts, max_ann
 
 
 def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
