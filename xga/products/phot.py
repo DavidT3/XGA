@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2022, 09:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2022, 10:24. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2986,12 +2986,19 @@ class RateMap(Image):
 
         return sn
 
-    def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray):
+    def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray) -> Quantity:
         """
+        This method uses a user-supplied source and background mask (alongside knowledge of the sensor layout
+        drawn from the exposure map) to calculate the number of background-subtracted counts within the source
+        region of the image used to construct this RateMap.
 
-        :param np.ndarray source_mask:
-        :param np.ndarray back_mask:
-        :return:
+        The exposure map is used to construct a sensor mask, so that we know where the chip gaps are and take
+        them into account when calculating the ratio of areas of the source region to the background region. This
+        is why this method is built into the RateMap rather than Image class.
+
+        :param np.ndarray source_mask: The mask which defines the source region, ideally with interlopers removed.
+        :param np.ndarray back_mask: The mask which defines the background region, ideally with interlopers removed.
+        :return: The background subtracted counts in the source region.
         :rtype: Quantity
         """
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
@@ -3014,11 +3021,13 @@ class RateMap(Image):
         # Calculate an area normalisation so the background counts can be scaled to the source counts properly
         area_norm = src_area / back_area
         # Find the total counts within the source area
-        tot_cnt = (self.data * source_mask).sum()
+        tot_cnt = (self.image.data * source_mask).sum()
         # Find the total counts within the background area
-        bck_cnt = (self.data * back_mask).sum()
+        bck_cnt = (self.image.data * back_mask).sum()
 
-        cnts = tot_cnt - (bck_cnt*area_norm)
+        # Simple calculation, re-normalising the background counts with the area ratio and subtracting background
+        #  from the source. Then storing it in an astropy quantity
+        cnts = Quantity(tot_cnt - (bck_cnt*area_norm), 'ct')
 
         return cnts
 
