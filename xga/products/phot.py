@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/05/2022, 13:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2022, 09:45. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2985,6 +2985,42 @@ class RateMap(Image):
             sn = (tot_cnt - bck_cnt*area_norm) / np.sqrt(tot_cnt)
 
         return sn
+
+    def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray):
+        """
+
+        :param np.ndarray source_mask:
+        :param np.ndarray back_mask:
+        :return:
+        :rtype: Quantity
+        """
+        # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
+        if source_mask.shape != self.shape:
+            raise ValueError("The source mask shape {sm} is not the same as the ratemap shape "
+                             "{rt}!".format(sm=source_mask.shape, rt=self.shape))
+        elif not (source_mask >= 0).all() or not (source_mask <= 1).all():
+            raise ValueError("The source mask has illegal values in it, there should only be ones and zeros.")
+        elif back_mask.shape != self.shape:
+            raise ValueError("The background mask shape {bm} is not the same as the ratemap shape "
+                             "{rt}!".format(bm=back_mask.shape, rt=self.shape))
+        elif not (back_mask >= 0).all() or not (back_mask <= 1).all():
+            raise ValueError("The background mask has illegal values in it, there should only be ones and zeros.")
+
+        # Find the total mask areas. As the mask is just an array of ones and zeros we can just sum the
+        #  whole thing to find the total pixel area covered.
+        src_area = (source_mask * self.sensor_mask).sum()
+        back_area = (back_mask * self.sensor_mask).sum()
+
+        # Calculate an area normalisation so the background counts can be scaled to the source counts properly
+        area_norm = src_area / back_area
+        # Find the total counts within the source area
+        tot_cnt = (self.data * source_mask).sum()
+        # Find the total counts within the background area
+        bck_cnt = (self.data * back_mask).sum()
+
+        cnts = tot_cnt - (bck_cnt*area_norm)
+
+        return cnts
 
     @property
     def edge_mask(self) -> np.ndarray:
