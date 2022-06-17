@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2022, 11:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2022, 13:19. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -199,36 +199,34 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
 def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quantity],
               min_width: Quantity, lo_en: Quantity, hi_en: Quantity, obs_id: str = None, inst: str = None,
               psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-              psf_iter: int = 15, allow_negative: bool = False) -> Tuple[Quantity, np.ndarray, int]:
+              psf_iter: int = 15) -> Tuple[Quantity, Quantity, int]:
     """
-    DOUBLE CHECK ALL PARAMETER DOCSTRINGS, THEN WRITE NEW DOCSTRING DESCRIPTION FOR FUNCTION HERE
-
+    An internal function that will find the radii required to create annuli with a certain minimum number of counts
+    and minimum annulus width.
 
     :param BaseSource source: The source object to generate annuli for.
     :param Quantity outer_rad: The outermost radius of the source region we will generate annuli within.
     :param float min_cnt: The minimum number of counts which are allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and avoid
         PSF effects.
-    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
-    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
-    :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculations. Default is None, which
-            means the combined ratemap will be used. Please note that inst must also be set to use this option.
-    :param str inst: The instrument of a specific ratemap to use for the SNR calculations. Default is None, which
-        means the combined ratemap will be used.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the background subtracted count
+        calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the background subtracted count
+        calculations.
+    :param str obs_id: An ObsID of a specific ratemap to use for the background subtracted count
+        calculations. Default is None, which means the combined ratemap will be used. Please note that inst
+        must also be set to use this option.
+    :param str inst: The instrument of a specific ratemap to use for the background subtracted count
+        calculations. Default is None, which means the combined ratemap will be used.
     :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
     :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
     :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
         side in the PSF grid.
     :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
-    :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
-        zero, which results in a lower signal to noise (and can result in a negative signal to noise).
-    :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
-            recommend that this be true for combined observations, as exposure time could change quite dramatically
-            across the combined product.
-    :return: The radii of the requested annuli, the final snr values, and the original maximum number
+    :return: The radii of the requested annuli, the final count values, and the original maximum number
         based on min_width.
-    :rtype: Tuple[Quantity, np.ndarray, int]
+    :rtype: Tuple[Quantity, Quantity, int]
     """
 
     # This just makes sure that the min_cnt variable is the astropy quantity that we expect it to be, otherwise
@@ -238,6 +236,7 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
     elif (type(min_cnt) == Quantity and not min_cnt.unit.is_equivalent('ct')) or not type(min_cnt) == Quantity:
         raise TypeError("The min_cnt argument must be either an integer, or an astropy Quantity in units of 'ct'.")
 
+    # Run the setup function for these functions that create different annular bins
     rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, \
         pix_to_deg = _ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, psf_model,
                                      psf_bins, psf_algo, psf_iter)
@@ -266,19 +265,20 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
         # Just a list for the counts to live in
         cnts = []
         for i in range(cur_num_ann):
-            # We're calling the signal to noise calculation method of the ratemap for all of our annuli
+            # We're calling the background subtracted count calculation method of the ratemap
+            #  for all of our annuli
             cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask))
-        # Becomes a numpy array because they're nicer to work with
+        # Becomes an astropy Quantity (behaves like a numpy array) because they're nicer to work with
         cnts = Quantity(cnts)
-        # We find any indices of the array (== annuli) where the signal to noise is not above our minimum
+        # We find any indices of the array (== annuli) where the counts are not above our minimum
         bad_cnts = np.where(cnts < min_cnt)[0]
 
-        # If there are no annuli below our signal to noise threshold then all is good and joyous and we accept
-        #  the current radii
+        # If there are no annuli below our count threshold then all is good and joyous, and we
+        #  accept the current radii
         if len(bad_cnts) == 0:
             acceptable = True
         # We work from the outside of the bad list inwards, and if the outermost bad bin is the one right on the
-        #  end of the SNR profile, then we merge that leftwards into the N-1th annuli
+        #  end of the count profile, then we merge that leftwards into the N-1th annuli
         elif len(bad_cnts) != 0 and bad_cnts[-1] == cur_num_ann - 1:
             cur_rads = np.delete(cur_rads, -2)
             ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
