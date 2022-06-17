@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 14/06/2022, 11:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2022, 17:50. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1870,6 +1870,68 @@ class BaseSource:
 
         return sn
 
+    def get_counts(self, outer_radius: Union[Quantity, str], central_coord: Quantity = None, lo_en: Quantity = None,
+                   hi_en: Quantity = None, obs_id: str = None, inst: str = None, psf_corr: bool = False,
+                   psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15) -> Quantity:
+        """
+        This takes a region type and central coordinate and calculates the background subtracted X-ray counts.
+        The background region is constructed using the back_inn_rad_factor and back_out_rad_factor
+        values, the defaults of which are 1.05*radius and 1.5*radius respectively.
+
+        :param Quantity/str outer_radius: The radius that counts should be calculated within, this can either be a
+            named radius such as r500, or an astropy Quantity.
+        :param Quantity central_coord: The central coordinate of the region.
+        :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the lower energy bound for peak finding will be used (default is 0.5keV).
+        :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the upper energy bound for peak finding will be used (default is 2.0keV).
+        :param str obs_id: An ObsID of a specific ratemap to use for the counts calculation. Default is None, which
+            means the combined ratemap will be used. Please note that inst must also be set to use this option.
+        :param str inst: The instrument of a specific ratemap to use for the counts calculation. Default is None, which
+            means the combined ratemap will be used.
+        :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+        :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+        :return: The background subtracted counts.
+        :rtype: Quantity
+        """
+        # Checking if the user passed any energy limits of their own
+        if lo_en is None:
+            lo_en = self._peak_lo_en
+        if hi_en is None:
+            hi_en = self._peak_hi_en
+
+        # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
+        if all([obs_id is None, inst is None]):
+            # Here the user hasn't set ObsID or instrument, so we use the combined data
+            rt = self.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+
+        elif all([obs_id is not None, inst is not None]):
+            # Both ObsID and instrument have been set by the user
+            rt = self.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+        else:
+            raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
+                             " pass both obs_id and inst.".format(s=self.name))
+
+        if isinstance(outer_radius, str):
+            # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
+            #  method understands that means it should return the mask for the combined data
+            src_mask, bck_mask = self.get_mask(outer_radius, obs_id, central_coord)
+        else:
+            # Here we have the case where the user has passed a custom outer radius, so we need to generate a
+            #  custom mask for it
+            src_mask = self.get_custom_mask(outer_radius, obs_id=obs_id, central_coord=central_coord)
+            bck_mask = self.get_custom_mask(outer_radius*self._back_out_factor, outer_radius*self._back_inn_factor,
+                                            obs_id=obs_id, central_coord=central_coord)
+
+        # We use the ratemap's built in background subtracted counts calculation method
+        cnts = rt.background_subtracted_counts(src_mask, bck_mask)
+
+        return cnts
+
     def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity, deg_central_coord: Quantity,
                              regions_to_search: Union[np.ndarray, list] = None) -> np.ndarray:
         """
@@ -3344,6 +3406,45 @@ class BaseSource:
 
         # And return our ordered dictionaries
         return obs_inst, snrs
+
+    def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
+                      hi_en: Quantity = None) -> Tuple[np.ndarray, Quantity]:
+        """
+        This method generates a list of ObsID-Instrument pairs, ordered by the counts measured for the
+        given region, with element zero being the lowest counts, and element N being the highest.
+
+        :param Quantity/str outer_radius: The radius that counts should be calculated within, this can either be a
+            named radius such as r500, or an astropy Quantity.
+        :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the lower energy bound for peak finding will be used (default is 0.5keV).
+        :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the upper energy bound for peak finding will be used (default is 2.0keV).
+        :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
+            of ascending counts, then an array containing the order counts ratios.
+        :rtype: Tuple[np.ndarray, Quantity]
+        """
+        # Set up some lists for the ObsID-Instrument combos and their cnts respectively
+        obs_inst = []
+        cnts = []
+        # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+        for obs_id in self.instruments:
+            for inst in self.instruments[obs_id]:
+                cnts.append(self.get_counts(outer_radius, self.default_coord, lo_en, hi_en, obs_id, inst))
+                obs_inst.append([obs_id, inst])
+
+        # Make our storage lists into arrays, easier to work with that way
+        obs_inst = np.array(obs_inst)
+        cnts = Quantity(cnts)
+
+        # We want to order the output by counts, with the lowest being first and the highest being last, so we
+        #  use a numpy function to output the index order needed to re-order our two arrays
+        reorder_cnts = np.argsort(cnts)
+        # Then we use that to re-order them
+        cnts = cnts[reorder_cnts]
+        obs_inst = obs_inst[reorder_cnts]
+
+        # And return our ordered dictionaries'
+        return obs_inst, cnts
 
     def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
         """
