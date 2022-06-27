@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/04/2022, 12:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/06/2022, 12:28. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -61,11 +61,14 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                              temp_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]], global_radius: Quantity,
                              fit_method: str = "mcmc", num_walkers: int = 20, num_steps: int = 20000,
                              sb_pix_step: int = 1, sb_min_snr: Union[int, float] = 0.0, inv_abel_method: str = None,
-                             temp_min_snr: float = 20, freeze_met: bool = True, abund_table: str = "angr",
+                             temp_annulus_method: str = 'min_snr', temp_min_snr: float = 30,
+                             temp_min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
+                             temp_min_width: Quantity = Quantity(20, 'arcsec'), temp_use_combined: bool = True,
+                             temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = "angr",
                              temp_lo_en: Quantity = Quantity(0.3, 'keV'), temp_hi_en: Quantity = Quantity(7.9, 'keV'),
                              group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
-                             over_sample: float = None,
-                             num_cores: int = NUM_CORES, show_warn: bool = True) -> List[HydrostaticMass]:
+                             over_sample: float = None, num_cores: int = NUM_CORES,
+                             show_warn: bool = True) -> List[HydrostaticMass]:
     """
     A convenience function that should allow the user to easily measure hydrostatic masses of a sample of galaxy
     clusters, elegantly dealing with any sources that have inadequate data or aren't fit properly. For the sake
@@ -108,7 +111,21 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
         is fitted to the surface brightness profile. This overrides the default method for the model, which is either
         'analytical' for models with an analytical solution to the inverse abel transform, or 'direct' for
         models which don't have an analytical solution. Default is None.
-    :param int/float temp_min_snr: The minimum signal to noise for a temperature measurement annulus, default is 30.
+    :param str temp_annulus_method: The method by which the temperature profile annuli are designated, this can
+        be 'min_snr' (which will use the min_snr_proj_temp_prof function), or 'min_cnt' (which will use the
+        min_cnt_proj_temp_prof function).
+    :param int/float temp_min_snr: The minimum signal-to-noise for a temperature measurement annulus, default is 30.
+    :param int/Quantity temp_min_cnt: The minimum background subtracted counts which are allowable in a given
+        temperature annulus, used if temp_annulus_method is set to 'min_cnt'.
+    :param Quantity temp_min_width: The minimum allowable width of a temperature annulus. The default is set to
+        20 arcseconds to try and avoid PSF effects.
+    :param bool temp_use_combined: If True (and temp_annulus_method is set to 'min_snr') then the combined
+        RateMap will be used for signal-to-noise annulus calculations, this is overridden by temp_use_worst. If
+        True (and temp_annulus_method is set to 'min_cnt') then combined RateMaps will be used for temperature
+        annulus count calculations, if False then the median observation (in terms of counts) will be used.
+    :param bool temp_use_worst: If True then the worst observation of the cluster (ranked by global signal-to-noise)
+        will be used for signal-to-noise temperature annulus calculations. Used if temp_annulus_method is set
+        to 'min_snr'.
     :param bool freeze_met: Whether the metallicity parameter in the fits to annuli in XSPEC should be frozen.
     :param str abund_table: The abundance table to use for fitting, and the conversion factor required during density
         calculations.
@@ -151,10 +168,12 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
         raise ValueError("No sources have a successful global temperature measurement.")
 
     # Attempt to measure their 3D temperature profiles
-    temp_profs = onion_deproj_temp_prof(cut_sources, cut_rads, min_snr=temp_min_snr, min_counts=spec_min_counts,
+    temp_profs = onion_deproj_temp_prof(cut_sources, cut_rads, temp_annulus_method, temp_min_snr, temp_min_cnt,
+                                        temp_min_width, temp_use_combined, temp_use_worst, min_counts=spec_min_counts,
                                         min_sn=spec_min_sn, over_sample=over_sample, abund_table=abund_table,
                                         num_cores=num_cores, freeze_met=freeze_met, temp_lo_en=temp_lo_en,
                                         temp_hi_en=temp_hi_en)
+
     # This just allows us to quickly lookup the temperature profile we need later
     temp_prof_dict = {str(cut_sources[p_ind]): p for p_ind, p in enumerate(temp_profs)}
 
