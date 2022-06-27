@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2022, 18:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/06/2022, 10:45. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -425,9 +425,9 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using X-ray count measurements
-    from photometric products. This function calls single_temp_apec_profile, but doesn't expose all of the more
-    in depth variables, so if you want more control then use single_temp_apec_profile directly. The projected
-    temperature profiles which are generated are added to their source's storage structure.
+    from photometric products. This function calls single_temp_apec_profile, but doesn't necessarily expose
+    all of single_temp_apec_profile's variables, so if you want more control, then use single_temp_apec_profile
+    directly. The projected temperature profiles which are generated are added to their source's storage structure.
 
     :param GalaxyCluster/ClusterSample sources: An individual or sample of sources to measure projected
         temperature profiles for.
@@ -439,8 +439,8 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
         and avoid PSF effects.
     :param bool use_combined: If True then the combined RateMap will be used for count annulus calculations.
-        Default is True, if False then the median ObsID-Instrument combo (in terms of counts within outer_radii)
-        will be used to generate the annuli.
+        Default is True, if False then the median ObsID-Instrument combo (in terms of background-subtracted counts
+        within outer_radii) will be used to generate the annuli.
     :param Quantity lo_en: The lower energy bound of the ratemap to use for the count calculations.
     :param Quantity hi_en: The upper energy bound of the ratemap to use for the count calculations.
     :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
@@ -475,45 +475,49 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     else:
         raise NotImplementedError("I don't currently support fitting region spectra")
 
-    # if all([use_combined, use_worst]):
-    #     warn("You have passed both use_combined and use_worst as True. use_worst overrides use_combined, so the "
-    #          "worst observation for each source will be used to decide on the annuli.")
-    #     use_combined = False
-    # elif all([not use_combined, not use_worst]):
-    #     warn("You have passed both use_combined and use_worst as False. One of them must be True, so here we default"
-    #          " to using the combined data to decide on the annuli.")
-    #     use_combined = True
-
     if abund_table not in ABUND_TABLES:
         avail_abund = ", ".join(ABUND_TABLES)
         raise ValueError("{a} is not a valid abundance table choice, please use one of the "
                          "following; {av}".format(a=abund_table, av=avail_abund))
 
+    # Makes sure that sources is iterable, even if its just a single source - makes writing the rest of this
+    #  function a bit neater.
     if isinstance(sources, BaseSource):
         sources = [sources]
 
     all_rads = []
     for src_ind, src in enumerate(sources):
-        cnt_rnk, cnts = src.count_ranking(out_rad_vals[src_ind], lo_en, hi_en)
-        # print(np.where(cnts == np.median(cnts)))
-        med_obs_ind = np.argwhere(cnts == np.percentile(cnts, 50, interpolation='nearest'))[0]
-        med_obs_id = cnt_rnk[med_obs_ind, 0][0]
-        med_obs_inst = cnt_rnk[med_obs_ind, 1][0]
-
         if use_combined:
             # This is the simplest option, we just use the combined ratemap to decide on the annuli with minimum counts
             rads, cnts, ma = _cnt_bins(src, out_rad_vals[src_ind], min_cnt, min_width, lo_en, hi_en, psf_corr=psf_corr,
                                        psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo, psf_iter=psf_iter)
         else:
+            # Use the source's built in count ranking method (which in turn uses some RateMap class methods) to rank
+            #  the individual observations (cnt_rnk is ObsID, Instrument combinations in order of ascending counts).
+            # We then use the counts measured for each ObsID-Instrument combo (which are returned and stored in cnts)
+            #  to decide upon the median observation.
+            cnt_rnk, cnts = src.count_ranking(out_rad_vals[src_ind], lo_en, hi_en)
+            # Obviously the median counts will not necessarily line up with any particular ObsID-instrument, but we
+            #  can use the interpolation feature of numpy percentile to find the nearest existing counts to the
+            #  median counts.
+            med_obs_ind = np.argwhere(cnts == np.percentile(cnts, 50, interpolation='nearest'))[0]
+            # This pulls out the ObsID and instrument that we have chosen to base the annular bins on.
+            med_obs_id = cnt_rnk[med_obs_ind, 0][0]
+            med_obs_inst = cnt_rnk[med_obs_ind, 1][0]
+
+            # In this instance though, we use the median (in terms of background subtracted counts)
+            #  individual (as in individual instrument too) observation to construct the annuli.
             rads, cnts, ma = _cnt_bins(src, out_rad_vals[src_ind], min_cnt, min_width, lo_en, hi_en, med_obs_id,
                                        med_obs_inst, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
 
         # Shoves the annuli we've decided upon into a list for single_temp_apec_profile to use
         all_rads.append(rads)
 
+    # Reverses a bodge employed at the beginning of this function
     if len(sources) == 1:
         sources = sources[0]
 
+    # This runs the fitting (and generation, if that has not already occurred) of the annular spectra.
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                              over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, abund_table=abund_table,
                              lo_en=temp_lo_en, hi_en=temp_hi_en, freeze_met=freeze_met)
