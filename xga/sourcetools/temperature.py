@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/06/2022, 10:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/06/2022, 11:06. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -18,7 +18,7 @@ from ..sas import region_setup
 from ..sources import BaseSource, GalaxyCluster
 from ..xspec.fit import single_temp_apec_profile
 
-ALLOWED_ANN_METHODS = ['min_snr', 'growth']
+ALLOWED_ANN_METHODS = ['min_snr', 'min_cnt']
 
 
 def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity, lo_en: Quantity, hi_en: Quantity,
@@ -601,6 +601,7 @@ def _grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii
 
 def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
                            annulus_method: str = 'min_snr', min_snr: float = 30,
+                           min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
                            min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
                            use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
@@ -627,24 +628,31 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
         generating for multiple sources then you can also pass a Quantity with one entry per source.
     :param str annulus_method: The method by which the annuli are designated, this can be 'min_snr' (which will use
-        the min_snr_proj_temp_prof function), or 'growth' (which will use the grow_ann_proj_temp_prof function).
-    :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
+        the min_snr_proj_temp_prof function), or 'min_cnt' (which will use the min_cnt_proj_temp_prof function).
+    :param float min_snr: The minimum signal-to-noise which is allowable in a given annulus, used if annulus_method
+        is set to 'min_snr'.
+    :param int/Quantity min_cnt: The minimum background subtracted counts which are allowable in a given annulus, used
+        if annulus_method is set to 'min_cnt'.
     :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
         and avoid PSF effects.
-    :param bool use_combined: If True then the combined RateMap will be used for signal to noise annulus
-        calculations, this is overridden by use_worst.
-    :param bool use_worst: If True then the worst observation of the cluster (ranked by global signal to noise) will
-        be used for signal to noise annulus calculations.
-    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
-    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
-    :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
-    :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
-    :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+    :param bool use_combined: If True (and annulus_method is set to 'min_snr') then the combined RateMap will be
+        used for signal-to-noise annulus calculations, this is overridden by use_worst. If True (and annulus_method
+        is set to 'min_cnt') then combined RateMaps will be used for annulus count calculations, if False then
+        the median observation (in terms of counts) will be used.
+    :param bool use_worst: If True then the worst observation of the cluster (ranked by global signal-to-noise) will
+        be used for signal-to-noise annulus calculations. Used if annulus_method is set to 'min_snr'.
+    :param Quantity lo_en: The lower energy bound of the RateMap to use for the signal-to-noise or background
+        subtracted count calculations.
+    :param Quantity hi_en: The upper energy bound of the RateMap to use for the signal-to-noise or background
+        subtracted count calculations.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected RateMap or not.
+    :param str psf_model: If the RateMap you want to use is PSF corrected, this is the PSF model used.
+    :param int psf_bins: If the RateMap you want to use is PSF corrected, this is the number of PSFs per
         side in the PSF grid.
-    :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
-    :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :param str psf_algo: If the RateMap you want to use is PSF corrected, this is the algorithm used.
+    :param int psf_iter: If the RateMap you want to use is PSF corrected, this is the number of iterations.
     :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
-        zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+        zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
     :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
@@ -681,6 +689,12 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                           hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
                                           exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, freeze_met,
                                           abund_table, temp_lo_en, temp_hi_en, num_cores)
+    elif annulus_method == 'min_cnt':
+        # This returns the boundary radii for the annuli, based on a minimum number of counts per annulus
+        ann_rads = min_cnt_proj_temp_prof(sources, outer_radii, min_cnt, min_width, use_combined, lo_en, hi_en,
+                                          psf_corr, psf_model, psf_bins, psf_algo, psf_iter, group_spec, min_counts,
+                                          min_sn, over_sample, one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
+                                          num_cores)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
