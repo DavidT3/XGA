@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 11:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 27/06/2022, 11:32. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -11,7 +11,7 @@ from astropy.units import Quantity, kpc
 from tqdm import tqdm
 
 from .misc import model_check
-from .temperature import min_snr_proj_temp_prof, ALLOWED_ANN_METHODS
+from .temperature import min_snr_proj_temp_prof, min_cnt_proj_temp_prof, ALLOWED_ANN_METHODS
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.profile import radial_brightness
 from ..models import BaseModel1D
@@ -539,7 +539,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
 
 
 def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
-                          num_dens: bool = True, annulus_method: str = 'min_snr', min_snr: float = 20,
+                          num_dens: bool = True, annulus_method: str = 'min_snr', min_snr: float = 30,
+                          min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
                           min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
                           use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
                           hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
@@ -565,32 +566,39 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
     :param bool num_dens: If True then a number density profile will be generated, otherwise a mass density profile
         will be generated.
     :param str annulus_method: The method by which the annuli are designated, this can be 'min_snr' (which will use
-        the min_snr_proj_temp_prof function), or 'growth' (which will use the grow_ann_proj_temp_prof function).
-    :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
+        the min_snr_proj_temp_prof function), or 'min_cnt' (which will use the min_cnt_proj_temp_prof function).
+    :param float min_snr: The minimum signal-to-noise which is allowable in a given annulus, used if annulus_method
+        is set to 'min_snr'.
+    :param int/Quantity min_cnt: The minimum background subtracted counts which are allowable in a given annulus, used
+        if annulus_method is set to 'min_cnt'.
     :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
         and avoid PSF effects.
-    :param bool use_combined: If True then the combined RateMap will be used for signal to noise annulus
-        calculations, this is overridden by use_worst.
-    :param bool use_worst: If True then the worst observation of the cluster (ranked by global signal to noise) will
-        be used for signal to noise annulus calculations.
-    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
-    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
-    :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
-    :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
-    :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+    :param bool use_combined: If True (and annulus_method is set to 'min_snr') then the combined RateMap will be
+        used for signal-to-noise annulus calculations, this is overridden by use_worst. If True (and annulus_method
+        is set to 'min_cnt') then combined RateMaps will be used for annulus count calculations, if False then
+        the median observation (in terms of counts) will be used.
+    :param bool use_worst: If True then the worst observation of the cluster (ranked by global signal-to-noise) will
+        be used for signal-to-noise annulus calculations. Used if annulus_method is set to 'min_snr'.
+    :param Quantity lo_en: The lower energy bound of the RateMap to use for the signal-to-noise or background
+        subtracted count calculations.
+    :param Quantity hi_en: The upper energy bound of the RateMap to use for the signal-to-noise or background
+        subtracted count calculations.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected RateMap or not.
+    :param str psf_model: If the RateMap you want to use is PSF corrected, this is the PSF model used.
+    :param int psf_bins: If the RateMap you want to use is PSF corrected, this is the number of PSFs per
         side in the PSF grid.
-    :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
-    :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :param str psf_algo: If the RateMap you want to use is PSF corrected, this is the algorithm used.
+    :param int psf_iter: If the RateMap you want to use is PSF corrected, this is the number of iterations.
     :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
-        zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+        zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
     :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -619,6 +627,12 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
                                           hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
                                           exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, freeze_met,
                                           abund_table, temp_lo_en, temp_hi_en, num_cores)
+    elif annulus_method == 'min_cnt':
+        # This returns the boundary radii for the annuli, based on a minimum number of counts per annulus
+        ann_rads = min_cnt_proj_temp_prof(sources, outer_radii, min_cnt, min_width, use_combined, lo_en, hi_en,
+                                          psf_corr, psf_model, psf_bins, psf_algo, psf_iter, group_spec, min_counts,
+                                          min_sn, over_sample, one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
+                                          num_cores)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
