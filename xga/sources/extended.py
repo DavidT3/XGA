@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2022, 13:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2022, 13:17. Copyright (c) The Contributors
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -302,7 +302,10 @@ class GalaxyCluster(ExtendedSource):
 
         :param Quantity new_value:
         """
+        # This checks that the input is a Quantity, then converts to kpc and to degrees
         new_value_kpc, new_value_deg = self._new_rad_checks(new_value)
+        # For some reason these have to be set separately, stupid design on my part, but they are in different units
+        #  so I guess I must have had some plan
         self._r200 = new_value_kpc
         self._radii['r200'] = new_value_deg
 
@@ -316,6 +319,21 @@ class GalaxyCluster(ExtendedSource):
         """
         return self._r500
 
+    @r500.setter
+    def r500(self, new_value: Quantity):
+        """
+        The getter for the R500 property of the GalaxyCluster source class. This checks to make sure that the
+        new value is an astropy Quantity, converts it to kpc, then updates all relevant attributes of this class.
+
+        :param Quantity new_value:
+        """
+        # This checks that the input is a Quantity, then converts to kpc and to degrees
+        new_value_kpc, new_value_deg = self._new_rad_checks(new_value)
+        # For some reason these have to be set separately, stupid design on my part, but they are in different units
+        #  so I guess I must have had some plan
+        self._r500 = new_value_kpc
+        self._radii['r500'] = new_value_deg
+
     @property
     def r2500(self) -> Quantity:
         """
@@ -325,6 +343,21 @@ class GalaxyCluster(ExtendedSource):
         :rtype: Quantity
         """
         return self._r2500
+
+    @r2500.setter
+    def r2500(self, new_value: Quantity):
+        """
+        The getter for the R2500 property of the GalaxyCluster source class. This checks to make sure that the
+        new value is an astropy Quantity, converts it to kpc, then updates all relevant attributes of this class.
+
+        :param Quantity new_value:
+        """
+        # This checks that the input is a Quantity, then converts to kpc and to degrees
+        new_value_kpc, new_value_deg = self._new_rad_checks(new_value)
+        # For some reason these have to be set separately, stupid design on my part, but they are in different units
+        #  so I guess I must have had some plan
+        self._r2500 = new_value_kpc
+        self._radii['r2500'] = new_value_deg
 
     # Property getters for other observables I've allowed to be passed in.
     @property
