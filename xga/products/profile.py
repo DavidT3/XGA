@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2022, 14:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2022, 14:44. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -1571,7 +1571,11 @@ class HydrostaticMass(BaseProfile1D):
 
         wide_bracket = turning_point(Quantity([init_lo_rad, init_hi_rad]), init_step)
         if init_step != Quantity(1, 'kpc'):
-            tight_bracket = turning_point(wide_bracket, Quantity(1, 'kpc'))
+            # In this case I buffer the wide bracket (subtract 5 kpc from the lower bracket and add 5 kpc to the upper
+            #  bracket) - this is a fix to help avoid errors when the turning point is equal to the upper or lower
+            #  bracket
+            buffered_wide_bracket = wide_bracket + Quantity([-5, 5], 'kpc')
+            tight_bracket = turning_point(buffered_wide_bracket, Quantity(1, 'kpc'))
         else:
             tight_bracket = wide_bracket
 
