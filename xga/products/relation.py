@@ -1,7 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/07/2022, 14:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/07/2022, 14:45. Copyright (c) The Contributors
 
 import inspect
+from copy import deepcopy
 from datetime import date
 from typing import List, Union
 from warnings import warn
@@ -499,7 +500,7 @@ class ScalingRelation:
         elif cust_par_names is not None and len(cust_par_names) != len(self._par_names):
             raise ValueError("cust_par_names must have one entry per parameter of the scaling relation model.")
         else:
-            par_names = self._par_names
+            par_names = deepcopy(self._par_names)
 
         if self._chains is None:
             raise ValueError('No chains are available for this scaling relation')
