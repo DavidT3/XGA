@@ -1,9 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/07/2022, 10:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/07/2022, 14:35. Copyright (c) The Contributors
 
 import inspect
 from datetime import date
-from typing import List
+from typing import List, Union
 from warnings import warn
 
 import numpy as np
@@ -341,6 +341,17 @@ class ScalingRelation:
         """
         return self._author
 
+    @author.setter
+    def author(self, new_val: str):
+        """
+        Property setter for the author of the relation.
+
+        :param str new_val: The new author string.
+        """
+        if not isinstance(new_val, str):
+            raise TypeError('You must set the author property with a string.')
+        self._author = new_val
+
     @property
     def year(self) -> str:
         """
@@ -352,6 +363,20 @@ class ScalingRelation:
         """
         return self._year
 
+    @year.setter
+    def year(self, new_val: Union[int, str]):
+        """
+        The property setter for the year related with a particular scaling relation.
+
+        :param int/str new_val: The new value for the year of the relation, either an integer year that can be
+            converted to a string, or a string representing a year.
+        """
+        if type(new_val) != int and type(new_val) != str:
+            raise TypeError('You must set the year property with an integer or string.')
+        elif type(new_val) == int:
+            new_val = str(new_val)
+        self._year = new_val
+
     @property
     def doi(self) -> str:
         """
@@ -362,6 +387,18 @@ class ScalingRelation:
         :rtype: str
         """
         return self._doi
+
+    @doi.setter
+    def doi(self, new_val: str):
+        """
+        The property setter for the DOI of the work related with the relation.
+
+        :param str new_val: The new value of the doi.
+        """
+        if not isinstance(new_val, str):
+            raise TypeError("You must set the doi property with a string.")
+
+        self._doi = new_val
 
     @property
     def scatter_par(self) -> np.ndarray:
