@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/07/2022, 10:24. Copyright (c) The Contributors
 
 import inspect
 from datetime import date
@@ -404,11 +404,12 @@ class ScalingRelation:
         """
         return self._par_names
 
-    def view_chains(self, figsize: tuple = None):
+    def view_chains(self, figsize: tuple = None, colour: str = 'tab:gray'):
         """
         Simple view method to quickly look at the MCMC chains for a scaling relation fit.
 
         :param tuple figsize: Desired size of the figure, if None will be set automatically.
+        :param str colour: The colour that the chains should be in the plot.
         """
         if self._chains is None:
             raise ValueError('No chains are available for this scaling relation')
@@ -425,14 +426,14 @@ class ScalingRelation:
         # Now we iterate through the parameters and plot their chains
         for i in range(len(self._fit_pars)):
             ax = axes[i]
-            ax.plot(self._chains[:, i], "k", alpha=0.5)
+            ax.plot(self._chains[:, i], colour, alpha=0.7)
             ax.set_xlim(0, self._chains.shape[0])
             ax.set_ylabel(self._par_names[i])
             ax.yaxis.set_label_coords(-0.1, 0.5)
 
         if num_ch > len(self._fit_pars):
             ax = axes[-1]
-            ax.plot(self._scatter_chain, "k", alpha=0.5)
+            ax.plot(self._scatter_chain, colour, alpha=0.7)
             ax.set_xlim(0, len(self._scatter_chain))
             ax.set_ylabel(r'$\sigma$')
             ax.yaxis.set_label_coords(-0.1, 0.5)
