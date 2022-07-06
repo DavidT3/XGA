@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 05/07/2022, 14:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 10:42. Copyright (c) The Contributors
 
 import inspect
 from copy import deepcopy
@@ -872,7 +872,7 @@ class AggregateScalingRelation:
         elif len(par_names) != 1:
             raise ValueError('Not all scaling relations have the same model parameter names, cannot view aggregate'
                              ' corner plot.')
-        elif len(contour_colours) != len(self._relations):
+        elif contour_colours is not None and len(contour_colours) != len(self._relations):
             raise ValueError("If you pass a list of contour colours, there must be one entry per scaling relation.")
 
         # The number of non-scatter parameters in the scaling relation models
