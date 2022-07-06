@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 13:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 14:05. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1024,8 +1024,13 @@ class AggregateScalingRelation:
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
 
-        # Set up the colour cycle
-        if colour_list is None:
+        # Grabs the colours that may have been set for each relation
+        set_mod_cols = list(set([r.model_colour for r in self._relations]))
+        # Set up the colour cycle, if the user hasn't passed a colour list we'll try to use colours set for the
+        #  individual relations, but if they haven't all been set then we'll use the predefined colour cycle
+        if colour_list is None and len(set_mod_cols) == len(self._relations):
+            colour_list = set_mod_cols
+        elif colour_list is None and len(set_mod_cols) != len(self._relations):
             colour_list = PRETTY_COLOUR_CYCLE
         new_col_cycle = cycler(color=colour_list)
 
