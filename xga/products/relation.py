@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 10:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 11:50. Copyright (c) The Contributors
 
 import inspect
 from copy import deepcopy
@@ -672,9 +672,9 @@ class ScalingRelation:
 
         # Dimensionless quantities can be fitted too, and this make the axis label look nicer by not having empty
         #  square brackets
-        if x_unit == r"$\left[\\mathrm{}\right]$":
+        if x_unit == r"$\left[\\mathrm{}\right]$" or x_unit == r'$\left[\mathrm{}\right]$':
             x_unit = ''
-        if y_unit == r"$\left[\\mathrm{}\right]$":
+        if y_unit == r"$\left[\\mathrm{}\right]$" or y_unit == r'$\left[\mathrm{}\right]$':
             y_unit = ''
 
         # The scaling relation object knows what its x and y axes are called, though the user may pass
