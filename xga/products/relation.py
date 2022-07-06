@@ -1,7 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 11:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 13:06. Copyright (c) The Contributors
 
 import inspect
+import pickle
 from copy import deepcopy
 from datetime import date
 from typing import List, Union
@@ -752,6 +753,19 @@ class ScalingRelation:
             plt.savefig(save_path)
 
         plt.show()
+
+    def save(self, save_path: str):
+        """
+        This method pickles and saves the scaling relation object. The save file is a pickled version of this object.
+
+        :param str save_path: The path where this relation should be saved.
+        """
+        # if '/' in save_path and not os.path.exists('/'.join(save_path.split('/')[:-1])):
+        #     raise FileNotFoundError('The path before your file name does not seem to exist.')
+
+        # Pickles and saves this ScalingRelation instance.
+        with open(save_path, 'wb') as picklo:
+            pickle.dump(self, picklo)
 
     def __add__(self, other):
         to_combine = [self]
