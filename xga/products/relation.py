@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 13:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 13:43. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -532,7 +532,7 @@ class ScalingRelation:
         :param List[str] cust_par_names: A list of custom parameter names. If the names include LaTeX code do not
             include $$ math environment symbols - you may also need to pass a string literal (e.g. r"\sigma"). Do
             not include an entry for a scatter parameter.
-        :param List[str] colour: Colour for the contours,  Default is None in which case the value of the
+        :param List[str] colour: Colour for the contours. Default is None in which case the value of the
             model_colour property of the relation is used.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
@@ -603,7 +603,7 @@ class ScalingRelation:
         return predicted_y
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
-             data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90,
+             data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
              save_path: str = None):
@@ -617,7 +617,8 @@ class ScalingRelation:
         :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
         :param tuple figsize: A custom figure size for the plot, default is (8, 8).
         :param str data_colour: The colour to use for the data points in the plot, default is black.
-        :param str model_colour: The colour to use for the model in the plot, default is grey.
+        :param str model_colour: The colour to use for the model in the plot. Default is None in which case
+            the value of the model_colour property of the relation is used.
         :param bool grid_on: If True then a grid will be included on the plot. Default is True.
         :param int conf_level: The confidence level to use when plotting the model.
         :param str custom_x_label: Passing a string to this variable will override the x axis label
@@ -655,6 +656,10 @@ class ScalingRelation:
                       1.1*(self._x_data[max_x_ind].value + self._x_err[max_x_ind].value)]
         elif x_lims is None and len(self._x_data) == 0:
             raise ValueError('There is no data available to infer suitable axis limits from, please pass x limits.')
+
+        # Just grabs the model colour from the property if the user doesn't set a value for model_colour
+        if model_colour is None:
+            model_colour = self.model_colour
 
         # Setting up the matplotlib figure
         fig = plt.figure(figsize=figsize)
