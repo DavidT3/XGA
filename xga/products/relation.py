@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 13:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 13:38. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -524,7 +524,7 @@ class ScalingRelation:
         plt.show()
 
     def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
-                    colour: str = 'tab:gray', save_path: str = None):
+                    colour: str = None, save_path: str = None):
         """
         A convenient view method to examine the corner plot of the parameter posterior distributions.
 
@@ -532,10 +532,14 @@ class ScalingRelation:
         :param List[str] cust_par_names: A list of custom parameter names. If the names include LaTeX code do not
             include $$ math environment symbols - you may also need to pass a string literal (e.g. r"\sigma"). Do
             not include an entry for a scatter parameter.
-        :param List[str] colour: Colour for the contours, the default is tab:gray.
+        :param List[str] colour: Colour for the contours,  Default is None in which case the value of the
+            model_colour property of the relation is used.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
         """
+        # If the colour is None then we fetch the model colour property
+        if colour is None:
+            colour = self.model_colour
 
         # Checks whether custom parameter names were passed, and if they were it checks whether there are the right
         #  number
