@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 13:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 13:33. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -8,6 +8,7 @@ from datetime import date
 from typing import List, Union
 from warnings import warn
 
+import matplotlib.colors as mcolors
 import numpy as np
 import scipy.odr as odr
 from astropy.units import Quantity, Unit, UnitConversionError
@@ -68,13 +69,16 @@ class ScalingRelation:
     :param np.ndarray scatter_par: A parameter describing the intrinsic scatter of y|x. Optional as many fits don't
         include this.
     :param np.ndarray scatter_chain: A corresponding MCMC chain for the scatter parameter. Optional.
+    :param str model_colour: This variable can be used to set the colour that the fit should be displayed in
+        when plotting. Setting it at definition or setting the property means that the colour doesn't have
+        to be set for every view method, and it will be remembered when multiple relations are viewed together.
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, fit_method: str = 'unknown', x_data: Quantity = None,
                  y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None, x_lims: Quantity = None,
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
                  relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = '',
-                 scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None):
+                 scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None, model_colour: str = None):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -184,6 +188,10 @@ class ScalingRelation:
             raise ValueError("There must be the same number of steps in any scatter and parameter chains passed "
                              "to this relation.")
         self._scatter_chain = scatter_chain
+
+        # This sets an internal colour attribute so the default plotting colour is always the one that the
+        #  user defined
+        self._model_colour = model_colour
 
     @property
     def pars(self) -> np.ndarray:
@@ -443,13 +451,48 @@ class ScalingRelation:
         """
         return self._par_names
 
-    def view_chains(self, figsize: tuple = None, colour: str = 'tab:gray'):
+    @property
+    def model_colour(self) -> str:
+        """
+        Property getter for the model colour assigned to this relation. If it wasn't set at definition or set
+        via the property setter then it defaults to 'tab:gray'.
+
+        :return: The currently set model colour. If one wasn't set on definition then we default to tab:gray.
+        :rtype: str
+        """
+        if self._model_colour is not None:
+            return self._model_colour
+        else:
+            return 'tab:gray'
+
+    @model_colour.setter
+    def model_colour(self, new_colour: str):
+        """
+        Property setter for the model colour attribute, which controls the colour used in plots for the fit
+         of this relation. New colours are checked against matplotlibs list of named colours.
+
+        :param str new_colour: The new matplotlib colour.
+        """
+        all_col = list(mcolors.TABLEAU_COLORS.keys())+list(mcolors.CSS4_COLORS.keys())+list(mcolors.BASE_COLORS.keys())
+        if new_colour not in all_col:
+            all_names = ', '.join(all_col)
+            raise ValueError("{c} is not a named matplotlib colour, please use one of the "
+                             "following; {cn}".format(c=new_colour, cn=all_names))
+        else:
+            self._model_colour = new_colour
+
+    def view_chains(self, figsize: tuple = None, colour: str = None):
         """
         Simple view method to quickly look at the MCMC chains for a scaling relation fit.
 
         :param tuple figsize: Desired size of the figure, if None will be set automatically.
-        :param str colour: The colour that the chains should be in the plot.
+        :param str colour: The colour that the chains should be in the plot. Default is None in which case
+            the value of the model_colour property of the relation is used.
         """
+        # If the colour is None then we fetch the model colour property
+        if colour is None:
+            colour = self.model_colour
+
         if self._chains is None:
             raise ValueError('No chains are available for this scaling relation')
 
