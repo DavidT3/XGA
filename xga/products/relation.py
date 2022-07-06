@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 13:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 13:55. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -940,6 +940,15 @@ class AggregateScalingRelation:
                              ' corner plot.')
         elif contour_colours is not None and len(contour_colours) != len(self._relations):
             raise ValueError("If you pass a list of contour colours, there must be one entry per scaling relation.")
+
+        # This draws the colours from the model_colour parameters of the various relations, but only if each
+        #  has a unique colour
+        if contour_colours is None:
+            all_rel_cols = list(set([r.model_colour for r in self._relations]))
+            # If there are N unique colours for N relations, then we'll use those colours, otherwise matplotlib
+            #  can choose whatever colours it likes
+            if len(all_rel_cols) == len(self._relations):
+                contour_colours = all_rel_cols
 
         # The number of non-scatter parameters in the scaling relation models
         num_pars = len(self._relations[0].par_names)
