@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 14:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2022, 11:12. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -944,11 +944,16 @@ class AggregateScalingRelation:
         # This draws the colours from the model_colour parameters of the various relations, but only if each
         #  has a unique colour
         if contour_colours is None:
+            # Use a set to check for duplicate colours, they are not allowed. This is primarily to catch
+            #  instances where the model_colour property has not been set for all the relations, as then all
+            #  the colours would be grey
             all_rel_cols = list(set([r.model_colour for r in self._relations]))
             # If there are N unique colours for N relations, then we'll use those colours, otherwise matplotlib
             #  can choose whatever colours it likes
             if len(all_rel_cols) == len(self._relations):
-                contour_colours = all_rel_cols
+                # Don't use the all_rel_cols variable here is it is inherently unordered as a set() was used
+                #  in its construction.
+                contour_colours = [r.model_colour for r in self._relations]
 
         # The number of non-scatter parameters in the scaling relation models
         num_pars = len(self._relations[0].par_names)
@@ -1024,12 +1029,14 @@ class AggregateScalingRelation:
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
 
-        # Grabs the colours that may have been set for each relation
+        # Grabs the colours that may have been set for each relation, uses a set to check that there are
+        #  no duplicates
         set_mod_cols = list(set([r.model_colour for r in self._relations]))
         # Set up the colour cycle, if the user hasn't passed a colour list we'll try to use colours set for the
         #  individual relations, but if they haven't all been set then we'll use the predefined colour cycle
         if colour_list is None and len(set_mod_cols) == len(self._relations):
-            colour_list = set_mod_cols
+            # Don't use the set_mod_cols variable as its unordered due to the use of set
+            colour_list = [r.model_colour for r in self._relations]
         elif colour_list is None and len(set_mod_cols) != len(self._relations):
             colour_list = PRETTY_COLOUR_CYCLE
         new_col_cycle = cycler(color=colour_list)
