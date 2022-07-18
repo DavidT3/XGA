@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/07/2022, 13:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/07/2022, 15:23. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1732,6 +1732,59 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label)
+
+        # plt.tight_layout()
+        plt.show()
+
+        # Wipe the figure
+        plt.close("all")
+
+    def save_view(self, save_path: str, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
+                  back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
+                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
+                  y_label: str = None):
+        """
+        A method that allows us to save a view of the current profile, as well as any models that have been
+        fitted to it, and their residuals. The models are plotted by generating random model realisations from
+        the parameter distributions, then plotting the median values, with 1sigma confidence limits.
+
+        This method will not display a figure, just save it at the supplied save_path.
+
+        :param str save_path: The path (including file name) where you wish to save the profile view.
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param str models: Should the fitted models to this profile be plotted, default is True
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool just_models: Should ONLY the fitted models be plotted? Default is False
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+            the dictionary key they are stored under is what they will be labelled.
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}
+        :param bool x_norm: Controls whether the x-axis of the profile is normalised by another value, the default is
+            False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
+            internal normalisation value (which can be set with the x_norm property), and if a quantity is passed it
+            will attempt to normalise using that.
+        :param bool y_norm: Controls whether the y-axis of the profile is normalised by another value, the default is
+            False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
+            internal normalisation value (which can be set with the y_norm property), and if a quantity is passed it
+            will attempt to normalise using that.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        """
+        # Setting up figure for the plot
+        fig = plt.figure(figsize=figsize)
+        # Grabbing the axis object and making sure the ticks are set up how we want
+        main_ax = plt.gca()
+
+        main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
+                                        custom_title, draw_rads, x_norm, y_norm, x_label, y_label)
+
+        plt.savefig(save_path)
 
         # plt.tight_layout()
         plt.show()
