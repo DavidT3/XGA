@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/07/2022, 13:58. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -15,6 +15,8 @@ import numpy as np
 from astropy.units import Quantity, UnitConversionError, Unit, deg
 from getdist import plots, MCSamples
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
 from tabulate import tabulate
@@ -1436,16 +1438,17 @@ class BaseProfile1D:
 
         return realisations
 
-    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
-             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
-             x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-             y_label: str = None, save_path: str = None):
+    def get_view(self, fig: Figure, main_ax: Axes, xscale="log", yscale="log", xlim=None, ylim=None, models=True,
+                 back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
+                 x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
+                 y_label: str = None):
         """
-        A method that allows us to view the current profile, as well as any models that have been fitted to it,
-        and their residuals. The models are plotted by generating random model realisations from the parameter
-        distributions, then plotting the median values, with 1sigma confidence limits.
+        A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
+        is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
+        the profile plot in concert with other views.
 
-        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param Figure fig: The figure which has been set up for this profile plot.
+        :param Axes main_ax: The matplotlib axes on which to show the image.
         :param str xscale: The scaling to be applied to the x axis, default is log.
         :param str yscale: The scaling to be applied to the y axis, default is log.
         :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
@@ -1469,9 +1472,8 @@ class BaseProfile1D:
             will attempt to normalise using that.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
-        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
-            which case the figure will not be saved.
         """
+
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
         if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
@@ -1505,10 +1507,6 @@ class BaseProfile1D:
         elif isinstance(y_norm, bool) and not y_norm:
             y_norm = Quantity(1, '')
 
-        # Setting up figure for the plot
-        fig = plt.figure(figsize=figsize)
-        # Grabbing the axis object and making sure the ticks are set up how we want
-        main_ax = plt.gca()
         main_ax.minorticks_on()
         if models:
             # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
@@ -1577,21 +1575,21 @@ class BaseProfile1D:
                     lower_model = np.percentile(mod_reals, 15.9, axis=1)
 
                     mod_lab = model_obj.publication_name + " - {}".format(self._nice_fit_methods[method])
-                    mod_line = main_ax.plot(mod_rads.value/x_norm.value, median_model.value/y_norm,
+                    mod_line = main_ax.plot(mod_rads.value / x_norm.value, median_model.value / y_norm,
                                             label=mod_lab)
                     model_colour = mod_line[0].get_color()
 
-                    main_ax.fill_between(mod_rads.value/x_norm.value, lower_model.value/y_norm.value,
-                                         upper_model.value/y_norm.value, alpha=0.7, interpolate=True,
+                    main_ax.fill_between(mod_rads.value / x_norm.value, lower_model.value / y_norm.value,
+                                         upper_model.value / y_norm.value, alpha=0.7, interpolate=True,
                                          where=upper_model.value >= lower_model.value, facecolor=model_colour)
-                    main_ax.plot(mod_rads.value/x_norm.value, lower_model.value/y_norm.value, color=model_colour,
+                    main_ax.plot(mod_rads.value / x_norm.value, lower_model.value / y_norm.value, color=model_colour,
                                  linestyle="dashed")
-                    main_ax.plot(mod_rads.value/x_norm.value, upper_model.value/y_norm.value, color=model_colour,
+                    main_ax.plot(mod_rads.value / x_norm.value, upper_model.value / y_norm.value, color=model_colour,
                                  linestyle="dashed")
 
                     # This calculates and plots the residuals between the model and the data on the extra
                     #  axis we added near the beginning of this method
-                    res = np.percentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) - (plot_y_vals*y_norm)
+                    res = np.percentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) - (plot_y_vals * y_norm)
                     res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
@@ -1688,12 +1686,58 @@ class BaseProfile1D:
         elif max(y_axis_lims) < 100 and min(y_axis_lims) <= 0.1:
             main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
-        # If the user passed a save_path value, then we assume they want to save the figure
-        if save_path is not None:
-            plt.savefig(save_path)
+        if models:
+            return main_ax, res_ax
+        else:
+            return main_ax, None
 
-        # And of course actually showing it
+    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
+             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
+             x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
+             y_label: str = None):
+        """
+        A method that allows us to view the current profile, as well as any models that have been fitted to it,
+        and their residuals. The models are plotted by generating random model realisations from the parameter
+        distributions, then plotting the median values, with 1sigma confidence limits.
+
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param str models: Should the fitted models to this profile be plotted, default is True
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool just_models: Should ONLY the fitted models be plotted? Default is False
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+            the dictionary key they are stored under is what they will be labelled.
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}
+        :param bool x_norm: Controls whether the x-axis of the profile is normalised by another value, the default is
+            False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
+            internal normalisation value (which can be set with the x_norm property), and if a quantity is passed it
+            will attempt to normalise using that.
+        :param bool y_norm: Controls whether the y-axis of the profile is normalised by another value, the default is
+            False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
+            internal normalisation value (which can be set with the y_norm property), and if a quantity is passed it
+            will attempt to normalise using that.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        """
+        # Setting up figure for the plot
+        fig = plt.figure(figsize=figsize)
+        # Grabbing the axis object and making sure the ticks are set up how we want
+        main_ax = plt.gca()
+
+        main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
+                                        custom_title, draw_rads, x_norm, y_norm, x_label, y_label)
+
+        # plt.tight_layout()
         plt.show()
+
+        # Wipe the figure
+        plt.close("all")
 
     def save(self, save_path: str = None):
         """
