@@ -1,11 +1,14 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2022, 11:12. Copyright (c) The Contributors
 
 import inspect
+import pickle
+from copy import deepcopy
 from datetime import date
-from typing import List
+from typing import List, Union
 from warnings import warn
 
+import matplotlib.colors as mcolors
 import numpy as np
 import scipy.odr as odr
 from astropy.units import Quantity, Unit, UnitConversionError
@@ -66,13 +69,16 @@ class ScalingRelation:
     :param np.ndarray scatter_par: A parameter describing the intrinsic scatter of y|x. Optional as many fits don't
         include this.
     :param np.ndarray scatter_chain: A corresponding MCMC chain for the scatter parameter. Optional.
+    :param str model_colour: This variable can be used to set the colour that the fit should be displayed in
+        when plotting. Setting it at definition or setting the property means that the colour doesn't have
+        to be set for every view method, and it will be remembered when multiple relations are viewed together.
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, fit_method: str = 'unknown', x_data: Quantity = None,
                  y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None, x_lims: Quantity = None,
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
                  relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = '',
-                 scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None):
+                 scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None, model_colour: str = None):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -182,6 +188,10 @@ class ScalingRelation:
             raise ValueError("There must be the same number of steps in any scatter and parameter chains passed "
                              "to this relation.")
         self._scatter_chain = scatter_chain
+
+        # This sets an internal colour attribute so the default plotting colour is always the one that the
+        #  user defined
+        self._model_colour = model_colour
 
     @property
     def pars(self) -> np.ndarray:
@@ -341,6 +351,17 @@ class ScalingRelation:
         """
         return self._author
 
+    @author.setter
+    def author(self, new_val: str):
+        """
+        Property setter for the author of the relation.
+
+        :param str new_val: The new author string.
+        """
+        if not isinstance(new_val, str):
+            raise TypeError('You must set the author property with a string.')
+        self._author = new_val
+
     @property
     def year(self) -> str:
         """
@@ -352,6 +373,20 @@ class ScalingRelation:
         """
         return self._year
 
+    @year.setter
+    def year(self, new_val: Union[int, str]):
+        """
+        The property setter for the year related with a particular scaling relation.
+
+        :param int/str new_val: The new value for the year of the relation, either an integer year that can be
+            converted to a string, or a string representing a year.
+        """
+        if type(new_val) != int and type(new_val) != str:
+            raise TypeError('You must set the year property with an integer or string.')
+        elif type(new_val) == int:
+            new_val = str(new_val)
+        self._year = new_val
+
     @property
     def doi(self) -> str:
         """
@@ -362,6 +397,18 @@ class ScalingRelation:
         :rtype: str
         """
         return self._doi
+
+    @doi.setter
+    def doi(self, new_val: str):
+        """
+        The property setter for the DOI of the work related with the relation.
+
+        :param str new_val: The new value of the doi.
+        """
+        if not isinstance(new_val, str):
+            raise TypeError("You must set the doi property with a string.")
+
+        self._doi = new_val
 
     @property
     def scatter_par(self) -> np.ndarray:
@@ -404,12 +451,48 @@ class ScalingRelation:
         """
         return self._par_names
 
-    def view_chains(self, figsize: tuple = None):
+    @property
+    def model_colour(self) -> str:
+        """
+        Property getter for the model colour assigned to this relation. If it wasn't set at definition or set
+        via the property setter then it defaults to 'tab:gray'.
+
+        :return: The currently set model colour. If one wasn't set on definition then we default to tab:gray.
+        :rtype: str
+        """
+        if self._model_colour is not None:
+            return self._model_colour
+        else:
+            return 'tab:gray'
+
+    @model_colour.setter
+    def model_colour(self, new_colour: str):
+        """
+        Property setter for the model colour attribute, which controls the colour used in plots for the fit
+         of this relation. New colours are checked against matplotlibs list of named colours.
+
+        :param str new_colour: The new matplotlib colour.
+        """
+        all_col = list(mcolors.TABLEAU_COLORS.keys())+list(mcolors.CSS4_COLORS.keys())+list(mcolors.BASE_COLORS.keys())
+        if new_colour not in all_col:
+            all_names = ', '.join(all_col)
+            raise ValueError("{c} is not a named matplotlib colour, please use one of the "
+                             "following; {cn}".format(c=new_colour, cn=all_names))
+        else:
+            self._model_colour = new_colour
+
+    def view_chains(self, figsize: tuple = None, colour: str = None):
         """
         Simple view method to quickly look at the MCMC chains for a scaling relation fit.
 
         :param tuple figsize: Desired size of the figure, if None will be set automatically.
+        :param str colour: The colour that the chains should be in the plot. Default is None in which case
+            the value of the model_colour property of the relation is used.
         """
+        # If the colour is None then we fetch the model colour property
+        if colour is None:
+            colour = self.model_colour
+
         if self._chains is None:
             raise ValueError('No chains are available for this scaling relation')
 
@@ -425,14 +508,14 @@ class ScalingRelation:
         # Now we iterate through the parameters and plot their chains
         for i in range(len(self._fit_pars)):
             ax = axes[i]
-            ax.plot(self._chains[:, i], "k", alpha=0.5)
+            ax.plot(self._chains[:, i], colour, alpha=0.7)
             ax.set_xlim(0, self._chains.shape[0])
             ax.set_ylabel(self._par_names[i])
             ax.yaxis.set_label_coords(-0.1, 0.5)
 
         if num_ch > len(self._fit_pars):
             ax = axes[-1]
-            ax.plot(self._scatter_chain, "k", alpha=0.5)
+            ax.plot(self._scatter_chain, colour, alpha=0.7)
             ax.set_xlim(0, len(self._scatter_chain))
             ax.set_ylabel(r'$\sigma$')
             ax.yaxis.set_label_coords(-0.1, 0.5)
@@ -441,7 +524,7 @@ class ScalingRelation:
         plt.show()
 
     def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
-                    colour: str = 'tab:gray', save_path: str = None):
+                    colour: str = None, save_path: str = None):
         """
         A convenient view method to examine the corner plot of the parameter posterior distributions.
 
@@ -449,10 +532,14 @@ class ScalingRelation:
         :param List[str] cust_par_names: A list of custom parameter names. If the names include LaTeX code do not
             include $$ math environment symbols - you may also need to pass a string literal (e.g. r"\sigma"). Do
             not include an entry for a scatter parameter.
-        :param List[str] colour: Colour for the contours, the default is tab:gray.
+        :param List[str] colour: Colour for the contours. Default is None in which case the value of the
+            model_colour property of the relation is used.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
         """
+        # If the colour is None then we fetch the model colour property
+        if colour is None:
+            colour = self.model_colour
 
         # Checks whether custom parameter names were passed, and if they were it checks whether there are the right
         #  number
@@ -461,7 +548,7 @@ class ScalingRelation:
         elif cust_par_names is not None and len(cust_par_names) != len(self._par_names):
             raise ValueError("cust_par_names must have one entry per parameter of the scaling relation model.")
         else:
-            par_names = self._par_names
+            par_names = deepcopy(self._par_names)
 
         if self._chains is None:
             raise ValueError('No chains are available for this scaling relation')
@@ -516,7 +603,7 @@ class ScalingRelation:
         return predicted_y
 
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
-             data_colour: str = 'black', model_colour: str = 'grey', grid_on: bool = False, conf_level: int = 90,
+             data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
              save_path: str = None):
@@ -530,7 +617,8 @@ class ScalingRelation:
         :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
         :param tuple figsize: A custom figure size for the plot, default is (8, 8).
         :param str data_colour: The colour to use for the data points in the plot, default is black.
-        :param str model_colour: The colour to use for the model in the plot, default is grey.
+        :param str model_colour: The colour to use for the model in the plot. Default is None in which case
+            the value of the model_colour property of the relation is used.
         :param bool grid_on: If True then a grid will be included on the plot. Default is True.
         :param int conf_level: The confidence level to use when plotting the model.
         :param str custom_x_label: Passing a string to this variable will override the x axis label
@@ -568,6 +656,10 @@ class ScalingRelation:
                       1.1*(self._x_data[max_x_ind].value + self._x_err[max_x_ind].value)]
         elif x_lims is None and len(self._x_data) == 0:
             raise ValueError('There is no data available to infer suitable axis limits from, please pass x limits.')
+
+        # Just grabs the model colour from the property if the user doesn't set a value for model_colour
+        if model_colour is None:
+            model_colour = self.model_colour
 
         # Setting up the matplotlib figure
         fig = plt.figure(figsize=figsize)
@@ -633,9 +725,9 @@ class ScalingRelation:
 
         # Dimensionless quantities can be fitted too, and this make the axis label look nicer by not having empty
         #  square brackets
-        if x_unit == r"$\left[\\mathrm{}\right]$":
+        if x_unit == r"$\left[\\mathrm{}\right]$" or x_unit == r'$\left[\mathrm{}\right]$':
             x_unit = ''
-        if y_unit == r"$\left[\\mathrm{}\right]$":
+        if y_unit == r"$\left[\\mathrm{}\right]$" or y_unit == r'$\left[\mathrm{}\right]$':
             y_unit = ''
 
         # The scaling relation object knows what its x and y axes are called, though the user may pass
@@ -713,6 +805,19 @@ class ScalingRelation:
             plt.savefig(save_path)
 
         plt.show()
+
+    def save(self, save_path: str):
+        """
+        This method pickles and saves the scaling relation object. The save file is a pickled version of this object.
+
+        :param str save_path: The path where this relation should be saved.
+        """
+        # if '/' in save_path and not os.path.exists('/'.join(save_path.split('/')[:-1])):
+        #     raise FileNotFoundError('The path before your file name does not seem to exist.')
+
+        # Pickles and saves this ScalingRelation instance.
+        with open(save_path, 'wb') as picklo:
+            pickle.dump(self, picklo)
 
     def __add__(self, other):
         to_combine = [self]
@@ -833,8 +938,22 @@ class AggregateScalingRelation:
         elif len(par_names) != 1:
             raise ValueError('Not all scaling relations have the same model parameter names, cannot view aggregate'
                              ' corner plot.')
-        elif len(contour_colours) != len(self._relations):
+        elif contour_colours is not None and len(contour_colours) != len(self._relations):
             raise ValueError("If you pass a list of contour colours, there must be one entry per scaling relation.")
+
+        # This draws the colours from the model_colour parameters of the various relations, but only if each
+        #  has a unique colour
+        if contour_colours is None:
+            # Use a set to check for duplicate colours, they are not allowed. This is primarily to catch
+            #  instances where the model_colour property has not been set for all the relations, as then all
+            #  the colours would be grey
+            all_rel_cols = list(set([r.model_colour for r in self._relations]))
+            # If there are N unique colours for N relations, then we'll use those colours, otherwise matplotlib
+            #  can choose whatever colours it likes
+            if len(all_rel_cols) == len(self._relations):
+                # Don't use the all_rel_cols variable here is it is inherently unordered as a set() was used
+                #  in its construction.
+                contour_colours = [r.model_colour for r in self._relations]
 
         # The number of non-scatter parameters in the scaling relation models
         num_pars = len(self._relations[0].par_names)
@@ -910,8 +1029,15 @@ class AggregateScalingRelation:
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
 
-        # Set up the colour cycle
-        if colour_list is None:
+        # Grabs the colours that may have been set for each relation, uses a set to check that there are
+        #  no duplicates
+        set_mod_cols = list(set([r.model_colour for r in self._relations]))
+        # Set up the colour cycle, if the user hasn't passed a colour list we'll try to use colours set for the
+        #  individual relations, but if they haven't all been set then we'll use the predefined colour cycle
+        if colour_list is None and len(set_mod_cols) == len(self._relations):
+            # Don't use the set_mod_cols variable as its unordered due to the use of set
+            colour_list = [r.model_colour for r in self._relations]
+        elif colour_list is None and len(set_mod_cols) != len(self._relations):
             colour_list = PRETTY_COLOUR_CYCLE
         new_col_cycle = cycler(color=colour_list)
 
@@ -1021,9 +1147,9 @@ class AggregateScalingRelation:
 
         # Dimensionless quantities can be fitted too, and this make the axis label look nicer by not having empty
         #  square brackets
-        if x_unit == r"$\left[\\mathrm{}\right]$":
+        if x_unit == r"$\left[\\mathrm{}\right]$" or x_unit == r'$\left[\mathrm{}\right]$':
             x_unit = ''
-        if y_unit == r"$\left[\\mathrm{}\right]$":
+        if y_unit == r"$\left[\\mathrm{}\right]$" or y_unit == r'$\left[\mathrm{}\right]$':
             y_unit = ''
 
         # The scaling relation object knows what its x and y axes are called
