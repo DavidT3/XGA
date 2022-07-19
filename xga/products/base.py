@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 18/07/2022, 15:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 13:48. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1441,7 +1441,8 @@ class BaseProfile1D:
     def get_view(self, fig: Figure, main_ax: Axes, xscale="log", yscale="log", xlim=None, ylim=None, models=True,
                  back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-                 y_label: str = None):
+                 y_label: str = None, data_colour: str = 'black', model_colour: str = 'indigo',
+                 show_legend: bool = True):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
@@ -1472,6 +1473,9 @@ class BaseProfile1D:
             will attempt to normalise using that.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param str data_colour: Used to set the colour of the data points.
+        :param str model_colour: Used to set the colour of a model fit.
+        :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -1536,18 +1540,18 @@ class BaseProfile1D:
         if self.radii_err is not None and self.values_err is None:
             x_errs = (self.radii_err.copy() / x_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
-                                    label=leg_label)
+                                    label=leg_label, color=data_colour)
         elif self.radii_err is None and self.values_err is not None:
             y_errs = (self.values_err.copy() / y_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
-                                    label=leg_label)
+                                    label=leg_label, color=data_colour)
         elif self.radii_err is not None and self.values_err is not None:
             x_errs = (self.radii_err.copy() / x_norm).value
             y_errs = (self.values_err.copy() / y_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
-                                    label=leg_label)
+                                    label=leg_label, color=data_colour)
         else:
-            line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
+            line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label, color=data_colour)
 
         if just_models and models:
             line[0].set_visible(False)
@@ -1575,9 +1579,8 @@ class BaseProfile1D:
                     lower_model = np.percentile(mod_reals, 15.9, axis=1)
 
                     mod_lab = model_obj.publication_name + " - {}".format(self._nice_fit_methods[method])
-                    mod_line = main_ax.plot(mod_rads.value / x_norm.value, median_model.value / y_norm,
-                                            label=mod_lab)
-                    model_colour = mod_line[0].get_color()
+                    main_ax.plot(mod_rads.value / x_norm.value, median_model.value / y_norm, label=mod_lab,
+                                 color=model_colour)
 
                     main_ax.fill_between(mod_rads.value / x_norm.value, lower_model.value / y_norm.value,
                                          upper_model.value / y_norm.value, alpha=0.7, interpolate=True,
@@ -1616,10 +1619,12 @@ class BaseProfile1D:
         elif y_label is not None:
             main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
 
-        main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
-        # This makes sure legend keys are shown, even if the data is hidden
-        for leg_key in main_leg.legendHandles:
-            leg_key.set_visible(True)
+        # If the user wants a legend to be shown, then we create one
+        if show_legend:
+            main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+            # This makes sure legend keys are shown, even if the data is hidden
+            for leg_key in main_leg.legendHandles:
+                leg_key.set_visible(True)
 
         # If the user has manually set limits then we can use them, only on the main axis because
         #  we grab those limits from the axes object for the residual axis later
