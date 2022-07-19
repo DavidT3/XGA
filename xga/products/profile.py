@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 20:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 20:12. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -1692,23 +1692,67 @@ class HydrostaticMass(BaseProfile1D):
 
     def diagnostic_view(self, src=None, figsize: tuple = None):
         """
-        This method produces a
+        This method produces a figure with the most important products that went into the creation of this
+        HydrostaticMass profile, for the purposes of quickly checking that everything looks sensible. The
+        maximum number of plots included is five; mass profile, temperature profile, density profile,
+        surface brightness profile, and ratemap. The RateMap will only be included if the source that this profile
+        was generated from is passed.
 
-        :param GalaxyCluster src:
-        :param figsize:
+        :param GalaxyCluster src: The GalaxyCluster source that this HydrostaticMass profile was generated from.
+        :param tuple figsize: A tuple that sets the size of the diagnostic plot, default is None in which case
+            it is set automatically.
         """
 
+        # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
+        #  some common sense checks if a source has been passed.
         num_plots, rt, sb = self._diag_view_prep(src)
+
+        # Calculate a sensible figsize if the user didn't pass one
         if figsize is None:
             figsize = (7.2*num_plots, 7)
 
+        # Set up the figure
         fig = plt.figure(figsize=figsize)
-        self._gen_diag_view(fig, src, num_plots, rt, sb)
+        # Set up and populate the axes with plots
+        ax_arr = self._gen_diag_view(fig, src, num_plots, rt, sb)
 
+        # And show the figure
         plt.tight_layout()
         plt.show()
 
-    # def save_diagnostic_view(self):
+        plt.close('all')
+
+    def save_diagnostic_view(self, save_path: str, src=None, figsize: tuple = None):
+        """
+        This method saves a figure (without displaying) with the most important products that went into the creation
+        of this HydrostaticMass profile, for the purposes of quickly checking that everything looks sensible. The
+        maximum number of plots included is five; mass profile, temperature profile, density profile, surface
+        brightness profile, and ratemap. The RateMap will only be included if the source that this profile
+        was generated from is passed.
+
+        :param str save_path: The path and filename where the diagnostic figure should be saved.
+        :param GalaxyCluster src: The GalaxyCluster source that this HydrostaticMass profile was generated from.
+        :param tuple figsize: A tuple that sets the size of the diagnostic plot, default is None in which case
+            it is set automatically.
+        """
+        # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
+        #  some common sense checks if a source has been passed.
+        num_plots, rt, sb = self._diag_view_prep(src)
+
+        # Calculate a sensible figsize if the user didn't pass one
+        if figsize is None:
+            figsize = (7.2*num_plots, 7)
+
+        # Set up the figure
+        fig = plt.figure(figsize=figsize)
+        # Set up and populate the axes with plots
+        ax_arr = self._gen_diag_view(fig, src, num_plots, rt, sb)
+
+        # And show the figure
+        plt.tight_layout()
+        plt.savefig(save_path)
+
+        plt.close('all')
 
 
     @property
