@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 29/06/2022, 14:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 20:12. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -8,6 +8,7 @@ import numpy as np
 from astropy.constants import k_B, G, m_p
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
 
 from .. import NHC, ABUND_TABLES, MEAN_MOL_WEIGHT
 from ..exceptions import ModelNotAssociatedError, XGAInvalidModelError, XGAFitError
@@ -1580,6 +1581,179 @@ class HydrostaticMass(BaseProfile1D):
             tight_bracket = wide_bracket
 
         return ((tight_bracket[0]+tight_bracket[1])/2).to(out_unit)
+
+    def _diag_view_prep(self, src) -> Tuple[int, RateMap, SurfaceBrightness1D]:
+        """
+        This internal function just serves to grab the relevant photometric products (if available) and check to
+        see how many plots will be in the diagnostic view. The maximum is five; mass profile, temperature profile,
+        density profile, surface brightness profile, and ratemap.
+
+        :param GalaxyCluster src: The source object for which this hydrostatic mass profile was created
+        :return: The number of plots, a RateMap (if src was pass, otherwise None), and a SB profile (if the
+            density profile was created with the SB method, otherwise None).
+        :rtype: Tuple[int, RateMap, SurfaceBrightness1D]
+        """
+
+        # This checks to make sure that the source is a galaxy cluster, I do it this way (with strings) to avoid
+        #  annoying circular import errors. The source MUST be a galaxy cluster because you can only calculate
+        #  hydrostatic mass profiles for galaxy clusters.
+        if src is not None and type(src).__name__ != 'GalaxyCluster':
+            raise TypeError("The src argument must be a GalaxyCluster object.")
+
+        # This just checks to make sure that the name of the passed source is the same as the stored source name
+        #  of this profile. Maybe in the future this won't be necessary because a reference to the source
+        #  will be stored IN the profile.
+        if src is not None and src.name != self.src_name:
+            raise ValueError("The passed source has a different name to the source that was used to generate"
+                             " this HydrostaticMass profile.")
+
+        # If the hydrostatic mass profile was created using combined data then I grab a combined image
+        if self.obs_id == 'combined' and src is not None:
+            rt = src.get_combined_ratemaps(src.peak_lo_en, src.peak_hi_en)
+        # Otherwise we grab the specific relevant image
+        elif self.obs_id != 'combined' and src is not None:
+            rt = src.get_ratemaps(self.obs_id, self.instrument, src.peak_lo_en, src.peak_hi_en)
+        # If there is no source passed, then we don't get a ratemap
+        else:
+            rt = None
+
+        # Checks to see whether the generation profile of the density profile is a surface brightness
+        #  profile. The other option is that it's an apec normalisation profile if generated from the spectra method
+        if type(self.density_profile.generation_profile) == SurfaceBrightness1D:
+            sb = self.density_profile.generation_profile
+        # Otherwise there is no SB profile
+        else:
+            sb = None
+
+        # Maximum number of plots is five, this just figures out how many there are going to be based on what the
+        #  ratemap and surface  brightness profile values are
+        num_plots = 5 - sum([rt is None, sb is None])
+
+        return num_plots, rt, sb
+
+    def _gen_diag_view(self, fig: Figure, src, num_plots: int, rt: RateMap, sb: SurfaceBrightness1D):
+        """
+        This populates the diagnostic plot figure, grabbing axes from various classes of profile product.
+
+        :param Figure fig: The figure instance being populated.
+        :param GalaxyCluster src: The galaxy cluster source that this hydrostatic mass profile was created for.
+        :param int num_plots: The number of plots in this diagnostic view.
+        :param RateMap rt: A RateMap to add to this diagnostic view.
+        :param SurfaceBrightness1D sb: A surface brightness profile to add to this diagnostic view.
+        :return: The axes array of this diagnostic view.
+        :rtype: np.ndarray([Axes])
+        """
+        from ..imagetools.misc import physical_rad_to_pix
+
+        # The preparation method has already figured out how many plots there will be, so we create those subplots
+        ax_arr = fig.subplots(nrows=1, ncols=num_plots)
+
+        # If a RateMap has been passed then we need to get the view, calculate some things, and then add it to our
+        #  diagnostic plot
+        if rt is not None:
+            # As the RateMap is the first plot, and is not guaranteed to be present, I use the offset parameter
+            #  later in this function to shift the other plots across by 1 if it is present.
+            offset = 1
+            # If the source was setup to use a peak coordinate, then we want to include that in the ratemap display
+            if src.use_peak:
+                ch = Quantity([src.peak, src.ra_dec])
+                # I also grab the annulus boundaries from the temperature profile used to create this
+                #  HydrostaticMass profile, then convert to pixels. That does depend on there being a source, but
+                #  we know that we wouldn't have a RateMap at this point if the user hadn't passed a source
+                pix_rads = physical_rad_to_pix(rt, self.temperature_profile.annulus_bounds, src.peak, src.redshift,
+                                               src.cosmo)
+
+            else:
+                # No peak means we just use the original user-passed RA-Dec
+                ch = src.ra_dec
+                pix_rads = physical_rad_to_pix(rt, self.temperature_profile.annulus_bounds, src.ra_dec, src.redshift,
+                                               src.cosmo)
+
+            # This gets the nicely setup view from the RateMap object and adds it to our array of matplotlib axes
+            ax_arr[0] = rt.get_view(ax_arr[0], ch, radial_bins_pix=pix_rads.value)
+        else:
+            # In this case there is no RateMap to add, so I don't need to shift the other plots across
+            offset = 0
+
+        # These simply plot the mass, temperature, and density profiles with legends turned off, residuals turned
+        #  off, and no title
+        ax_arr[0+offset] = self.get_view(fig, ax_arr[0+offset], show_legend=False, custom_title='',
+                                         show_residual_ax=False)[0]
+        ax_arr[1+offset] = self.temperature_profile.get_view(fig, ax_arr[1+offset], show_legend=False, custom_title='',
+                                                             show_residual_ax=False)[0]
+        ax_arr[2+offset] = self.density_profile.get_view(fig, ax_arr[2+offset], show_legend=False, custom_title='',
+                                                         show_residual_ax=False)[0]
+        # Then if there is a surface brightness profile thats added too
+        if sb is not None:
+            ax_arr[3+offset] = sb.get_view(fig, ax_arr[3+offset], show_legend=False, custom_title='',
+                                           show_residual_ax=False)[0]
+
+        return ax_arr
+
+    def diagnostic_view(self, src=None, figsize: tuple = None):
+        """
+        This method produces a figure with the most important products that went into the creation of this
+        HydrostaticMass profile, for the purposes of quickly checking that everything looks sensible. The
+        maximum number of plots included is five; mass profile, temperature profile, density profile,
+        surface brightness profile, and ratemap. The RateMap will only be included if the source that this profile
+        was generated from is passed.
+
+        :param GalaxyCluster src: The GalaxyCluster source that this HydrostaticMass profile was generated from.
+        :param tuple figsize: A tuple that sets the size of the diagnostic plot, default is None in which case
+            it is set automatically.
+        """
+
+        # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
+        #  some common sense checks if a source has been passed.
+        num_plots, rt, sb = self._diag_view_prep(src)
+
+        # Calculate a sensible figsize if the user didn't pass one
+        if figsize is None:
+            figsize = (7.2*num_plots, 7)
+
+        # Set up the figure
+        fig = plt.figure(figsize=figsize)
+        # Set up and populate the axes with plots
+        ax_arr = self._gen_diag_view(fig, src, num_plots, rt, sb)
+
+        # And show the figure
+        plt.tight_layout()
+        plt.show()
+
+        plt.close('all')
+
+    def save_diagnostic_view(self, save_path: str, src=None, figsize: tuple = None):
+        """
+        This method saves a figure (without displaying) with the most important products that went into the creation
+        of this HydrostaticMass profile, for the purposes of quickly checking that everything looks sensible. The
+        maximum number of plots included is five; mass profile, temperature profile, density profile, surface
+        brightness profile, and ratemap. The RateMap will only be included if the source that this profile
+        was generated from is passed.
+
+        :param str save_path: The path and filename where the diagnostic figure should be saved.
+        :param GalaxyCluster src: The GalaxyCluster source that this HydrostaticMass profile was generated from.
+        :param tuple figsize: A tuple that sets the size of the diagnostic plot, default is None in which case
+            it is set automatically.
+        """
+        # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
+        #  some common sense checks if a source has been passed.
+        num_plots, rt, sb = self._diag_view_prep(src)
+
+        # Calculate a sensible figsize if the user didn't pass one
+        if figsize is None:
+            figsize = (7.2*num_plots, 7)
+
+        # Set up the figure
+        fig = plt.figure(figsize=figsize)
+        # Set up and populate the axes with plots
+        ax_arr = self._gen_diag_view(fig, src, num_plots, rt, sb)
+
+        # And show the figure
+        plt.tight_layout()
+        plt.savefig(save_path)
+
+        plt.close('all')
+
 
     @property
     def temperature_profile(self) -> GasTemperature3D:
