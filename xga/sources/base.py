@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 17/06/2022, 17:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 11:01. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3467,6 +3467,26 @@ class BaseSource:
 
         # Return the converted separation
         return conv_sep
+
+    @property
+    def peak_lo_en(self) -> Quantity:
+        """
+        This property returns the lower energy bound of the image used for peak finding.
+
+        :return: A quantity containing the lower energy limit used for peak finding.
+        :rtype: Quantity
+        """
+        return self._peak_lo_en
+
+    @property
+    def peak_hi_en(self) -> Quantity:
+        """
+        This property returns the upper energy bound of the image used for peak finding.
+
+        :return: A quantity containing the upper energy limit used for peak finding.
+        :rtype: Quantity
+        """
+        return self._peak_hi_en
 
     def info(self):
         """
