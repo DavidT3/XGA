@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 19:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 20:04. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -8,6 +8,7 @@ import numpy as np
 from astropy.constants import k_B, G, m_p
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
 
 from .. import NHC, ABUND_TABLES, MEAN_MOL_WEIGHT
 from ..exceptions import ModelNotAssociatedError, XGAInvalidModelError, XGAFitError
@@ -1630,38 +1631,64 @@ class HydrostaticMass(BaseProfile1D):
 
         return num_plots, rt, sb
 
-    def _gen_diag_view(self, fig, src, num_plots: int, rt: RateMap, sb: SurfaceBrightness1D):
-        from ..sources import GalaxyCluster
+    def _gen_diag_view(self, fig: Figure, src, num_plots: int, rt: RateMap, sb: SurfaceBrightness1D):
+        """
+        This populates the diagnostic plot figure, grabbing axes from various classes of profile product.
+
+        :param Figure fig: The figure instance being populated.
+        :param GalaxyCluster src: The galaxy cluster source that this hydrostatic mass profile was created for.
+        :param int num_plots: The number of plots in this diagnostic view.
+        :param RateMap rt: A RateMap to add to this diagnostic view.
+        :param SurfaceBrightness1D sb: A surface brightness profile to add to this diagnostic view.
+        :return: The axes array of this diagnostic view.
+        :rtype: np.ndarray([Axes])
+        """
         from ..imagetools.misc import physical_rad_to_pix
 
-        src: GalaxyCluster
-
+        # The preparation method has already figured out how many plots there will be, so we create those subplots
         ax_arr = fig.subplots(nrows=1, ncols=num_plots)
+
+        # If a RateMap has been passed then we need to get the view, calculate some things, and then add it to our
+        #  diagnostic plot
         if rt is not None:
+            # As the RateMap is the first plot, and is not guaranteed to be present, I use the offset parameter
+            #  later in this function to shift the other plots across by 1 if it is present.
             offset = 1
+            # If the source was setup to use a peak coordinate, then we want to include that in the ratemap display
             if src.use_peak:
                 ch = Quantity([src.peak, src.ra_dec])
+                # I also grab the annulus boundaries from the temperature profile used to create this
+                #  HydrostaticMass profile, then convert to pixels. That does depend on there being a source, but
+                #  we know that we wouldn't have a RateMap at this point if the user hadn't passed a source
                 pix_rads = physical_rad_to_pix(rt, self.temperature_profile.annulus_bounds, src.peak, src.redshift,
                                                src.cosmo)
 
             else:
+                # No peak means we just use the original user-passed RA-Dec
                 ch = src.ra_dec
                 pix_rads = physical_rad_to_pix(rt, self.temperature_profile.annulus_bounds, src.ra_dec, src.redshift,
                                                src.cosmo)
 
+            # This gets the nicely setup view from the RateMap object and adds it to our array of matplotlib axes
             ax_arr[0] = rt.get_view(ax_arr[0], ch, radial_bins_pix=pix_rads.value)
         else:
+            # In this case there is no RateMap to add, so I don't need to shift the other plots across
             offset = 0
 
+        # These simply plot the mass, temperature, and density profiles with legends turned off, residuals turned
+        #  off, and no title
         ax_arr[0+offset] = self.get_view(fig, ax_arr[0+offset], show_legend=False, custom_title='',
-                                         show_residual_ax=False)
+                                         show_residual_ax=False)[0]
         ax_arr[1+offset] = self.temperature_profile.get_view(fig, ax_arr[1+offset], show_legend=False, custom_title='',
-                                                             show_residual_ax=False)
+                                                             show_residual_ax=False)[0]
         ax_arr[2+offset] = self.density_profile.get_view(fig, ax_arr[2+offset], show_legend=False, custom_title='',
-                                                         show_residual_ax=False)
+                                                         show_residual_ax=False)[0]
+        # Then if there is a surface brightness profile thats added too
         if sb is not None:
             ax_arr[3+offset] = sb.get_view(fig, ax_arr[3+offset], show_legend=False, custom_title='',
-                                           show_residual_ax=False)
+                                           show_residual_ax=False)[0]
+
+        return ax_arr
 
     def diagnostic_view(self, src=None, figsize: tuple = None):
         """
