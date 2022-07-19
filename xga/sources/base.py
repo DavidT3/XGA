@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 11:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 12:13. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -262,6 +262,9 @@ class BaseSource:
 
         self._peak_lo_en = Quantity(0.5, 'keV')
         self._peak_hi_en = Quantity(2.0, 'keV')
+        # Peaks don't really have any meaning for the BaseSource class, so even though this is a boolean variable
+        #  when populated properly I set it to None here
+        self._use_peak = None
 
         # These attributes pertain to the cleaning of observations (as in disassociating them from the source if
         #  they don't include enough of the object we care about).
@@ -3487,6 +3490,17 @@ class BaseSource:
         :rtype: Quantity
         """
         return self._peak_hi_en
+
+    @property
+    def use_peak(self) -> bool:
+        """
+        This property shows whether a particular XGA source object has been setup to use peak coordinates
+        or not. The property is either True, False, or None (if its a BaseSource).
+
+        :return: If the source is set to use peaks, True, otherwise False.
+        :rtype: bool
+        """
+        return self._use_peak
 
     def info(self):
         """
