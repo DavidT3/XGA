@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 13:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 13:54. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1441,7 +1441,7 @@ class BaseProfile1D:
     def get_view(self, fig: Figure, main_ax: Axes, xscale="log", yscale="log", xlim=None, ylim=None, models=True,
                  back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-                 y_label: str = None, data_colour: str = 'black', model_colour: str = 'indigo',
+                 y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
                  show_legend: bool = True):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
@@ -1699,7 +1699,7 @@ class BaseProfile1D:
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
              x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-             y_label: str = None, data_colour: str = 'black', model_colour: str = 'indigo', show_legend: bool = True):
+             y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen', show_legend: bool = True):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1751,7 +1751,7 @@ class BaseProfile1D:
     def save_view(self, save_path: str, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
                   back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                   x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'indigo',
+                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
                   show_legend: bool = True):
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
