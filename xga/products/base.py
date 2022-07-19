@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 13:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 14:52. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1442,7 +1442,7 @@ class BaseProfile1D:
                  back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
-                 show_legend: bool = True):
+                 show_legend: bool = True, show_residual_ax: bool = True):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
@@ -1476,6 +1476,8 @@ class BaseProfile1D:
         :param str data_colour: Used to set the colour of the data points.
         :param str model_colour: Used to set the colour of a model fit.
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -1512,7 +1514,7 @@ class BaseProfile1D:
             y_norm = Quantity(1, '')
 
         main_ax.minorticks_on()
-        if models:
+        if models and show_residual_ax:
             # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
             res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
             res_ax.minorticks_on()
@@ -1590,10 +1592,15 @@ class BaseProfile1D:
                     main_ax.plot(mod_rads.value / x_norm.value, upper_model.value / y_norm.value, color=model_colour,
                                  linestyle="dashed")
 
-                    # This calculates and plots the residuals between the model and the data on the extra
-                    #  axis we added near the beginning of this method
-                    res = np.percentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) - (plot_y_vals * y_norm)
-                    res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
+                    # I only want this to trigger if the user has decided they want a residual axis. I expect most
+                    #  of the time that they will, but for things like the Hydrostatic mass diagnostic plots I want
+                    #  to be able to turn the residual axis off.
+                    if show_residual_ax:
+                        # This calculates and plots the residuals between the model and the data on the extra
+                        #  axis we added near the beginning of this method
+                        res = np.percentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) \
+                              - (plot_y_vals * y_norm)
+                        res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
         x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
@@ -1636,7 +1643,7 @@ class BaseProfile1D:
         # Setup the scale that the user wants to see, again on the main axis
         main_ax.set_xscale(xscale)
         main_ax.set_yscale(yscale)
-        if models:
+        if models and show_residual_ax:
             # We want the residual x axis limits to be identical to the main axis, as the
             # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
@@ -1681,7 +1688,7 @@ class BaseProfile1D:
         if max(x_axis_lims) < 100 and not models and min(x_axis_lims) > 0.1:
             main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
             main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        elif max(x_axis_lims) < 100 and models:
+        elif max(x_axis_lims) < 100 and models and show_residual_ax:
             res_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
             res_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
@@ -1691,7 +1698,7 @@ class BaseProfile1D:
         elif max(y_axis_lims) < 100 and min(y_axis_lims) <= 0.1:
             main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
-        if models:
+        if models and show_residual_ax:
             return main_ax, res_ax
         else:
             return main_ax, None
@@ -1699,7 +1706,8 @@ class BaseProfile1D:
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
              x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-             y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen', show_legend: bool = True):
+             y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen', show_legend: bool = True,
+             show_residual_ax: bool = True):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1732,6 +1740,8 @@ class BaseProfile1D:
         :param str data_colour: Used to set the colour of the data points.
         :param str model_colour: Used to set the colour of a model fit.
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1740,7 +1750,7 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend)
+                                        model_colour, show_legend, show_residual_ax)
 
         # plt.tight_layout()
         plt.show()
@@ -1752,7 +1762,7 @@ class BaseProfile1D:
                   back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                   x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                   y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
-                  show_legend: bool = True):
+                  show_legend: bool = True, show_residual_ax: bool = True):
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
         fitted to it, and their residuals. The models are plotted by generating random model realisations from
@@ -1788,6 +1798,8 @@ class BaseProfile1D:
         :param str data_colour: Used to set the colour of the data points.
         :param str model_colour: Used to set the colour of a model fit.
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1796,7 +1808,7 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend)
+                                        model_colour, show_legend, show_residual_ax)
 
         plt.savefig(save_path)
 
