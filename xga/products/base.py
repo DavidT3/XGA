@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 13:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 13:51. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1699,7 +1699,7 @@ class BaseProfile1D:
     def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
              x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-             y_label: str = None):
+             y_label: str = None, data_colour: str = 'black', model_colour: str = 'indigo', show_legend: bool = True):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1729,6 +1729,9 @@ class BaseProfile1D:
             will attempt to normalise using that.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param str data_colour: Used to set the colour of the data points.
+        :param str model_colour: Used to set the colour of a model fit.
+        :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1736,7 +1739,8 @@ class BaseProfile1D:
         main_ax = plt.gca()
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
-                                        custom_title, draw_rads, x_norm, y_norm, x_label, y_label)
+                                        custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
+                                        model_colour, show_legend)
 
         # plt.tight_layout()
         plt.show()
@@ -1747,7 +1751,8 @@ class BaseProfile1D:
     def save_view(self, save_path: str, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
                   back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                   x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-                  y_label: str = None):
+                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'indigo',
+                  show_legend: bool = True):
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
         fitted to it, and their residuals. The models are plotted by generating random model realisations from
@@ -1780,6 +1785,9 @@ class BaseProfile1D:
             will attempt to normalise using that.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param str data_colour: Used to set the colour of the data points.
+        :param str model_colour: Used to set the colour of a model fit.
+        :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1787,7 +1795,8 @@ class BaseProfile1D:
         main_ax = plt.gca()
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
-                                        custom_title, draw_rads, x_norm, y_norm, x_label, y_label)
+                                        custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
+                                        model_colour, show_legend)
 
         plt.savefig(save_path)
 
