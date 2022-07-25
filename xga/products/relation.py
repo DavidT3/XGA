@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 07/07/2022, 11:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/07/2022, 14:27. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -998,7 +998,8 @@ class AggregateScalingRelation:
     def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
              colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
              fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
-             y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None):
+             y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
+             data_shape_list: list = None):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -1025,6 +1026,10 @@ class AggregateScalingRelation:
             None in which case they are determined automatically.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
+        :param list data_colour_list: A list of matplotlib colours to use as a colour cycle specifically for
+            data points. This should be used when you want data points to be a different colour to their model.
+        :param list data_shape_list: A list of matplotlib format shapes, to manually set the shapes of plotted
+            data points.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up so I think the duplication is justified.
@@ -1040,6 +1045,20 @@ class AggregateScalingRelation:
         elif colour_list is None and len(set_mod_cols) != len(self._relations):
             colour_list = PRETTY_COLOUR_CYCLE
         new_col_cycle = cycler(color=colour_list)
+
+        # If the user didn't pass their own list of DATA colours to use, then they will be the same as the
+        #  model colours.
+        if data_colour_list is None:
+            data_colour_list = deepcopy(colour_list)
+        elif data_colour_list is not None and len(data_colour_list) != len(self._relations):
+            raise ValueError('If a data_colour_list is passed, then it must have the same number of entries as there'
+                             ' are relations.')
+
+        if data_shape_list is None:
+            data_shape_list = ['x' for i in range(0, len(self._relations))]
+        elif data_shape_list is not None and len(data_shape_list) != len(self._relations):
+            raise ValueError('If a data_shape_list is passed, then it must have the same number of entries as there'
+                             ' are relations.')
 
         # This part decides the x_lims of the plot, much the same as in the ScalingRelation view but it works
         #  on a combined sets of x-data or combined built in validity ranges, though user limits passed to view
@@ -1091,17 +1110,19 @@ class AggregateScalingRelation:
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
-        for rel in self._relations:
+        for rel_ind, rel in enumerate(self._relations):
             # This is a horrifying bodge, but I do just want the colour out and I can't be bothered to figure out
             #  how to use the colour cycle object properly
             if len(rel.x_data.value[:, 0]) == 0 or not show_data:
                 # Sets up a null error bar instance for the colour basically
-                d_out = ax.errorbar(None, None, xerr=None, yerr=None, fmt="x", capsize=2, label='')
+                d_out = ax.errorbar(None, None, xerr=None, yerr=None, fmt=data_shape_list[rel_ind], capsize=2, label='',
+                                    color=data_colour_list[rel_ind])
             else:
                 d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
-                                    yerr=rel.y_data.value[:, 1], fmt="x", capsize=2)
+                                    yerr=rel.y_data.value[:, 1], fmt=data_shape_list[rel_ind], capsize=2,
+                                    color=data_colour_list[rel_ind], alpha=0.7)
 
-            d_colour = d_out[0].get_color()
+            m_colour = colour_list[rel_ind]
 
             # Need to randomly sample from the fitted model
             num_rand = 10000
@@ -1132,12 +1153,12 @@ class AggregateScalingRelation:
             else:
                 relation_label = rel.name + ' Scaling Relation'
             plt.plot(model_x * rel.x_norm.value, rel.model_func(model_x, *model_pars[0, :]) * rel.y_norm.value,
-                     color=d_colour, label=relation_label)
+                     color=m_colour, label=relation_label)
 
-            plt.plot(model_x * rel.x_norm.value, model_upper, color=d_colour, linestyle="--")
-            plt.plot(model_x * rel.x_norm.value, model_lower, color=d_colour, linestyle="--")
+            plt.plot(model_x * rel.x_norm.value, model_upper, color=m_colour, linestyle="--")
+            plt.plot(model_x * rel.x_norm.value, model_lower, color=m_colour, linestyle="--")
             ax.fill_between(model_x * rel.x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
-                            facecolor=d_colour, alpha=0.6, interpolate=True)
+                            facecolor=m_colour, alpha=0.6, interpolate=True)
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
