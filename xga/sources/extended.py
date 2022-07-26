@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/06/2022, 13:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 21:28. Copyright (c) The Contributors
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -637,7 +637,7 @@ class GalaxyCluster(ExtendedSource):
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
-            raise NoProductAvailableError("No matching 1D projected temperature profiles can be found.")
+            raise NoProductAvailableError("No matching 3D temperature profiles can be found.")
 
         return matched_prods
 
