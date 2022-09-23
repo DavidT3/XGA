@@ -89,14 +89,22 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
         #  a Jupyter Notebook. So now I'm going to smoosh all the csv outputs into one fits.
         results = pd.read_csv(out_file + "_results.csv", header="infer")
+        #os.rename(out_file + "_results.csv", out_file_name + "_results.csv")
+        #testing new method
         # This is the csv with the fit results in, creates new fits file and adds in
         fitsio.write(out_file + ".fits", results.to_records(index=False), extname="results", clobber=True)
+        #os.rename(out_file + ".fits", out_file_name + ".fits")
+        #testing new method
         del results
 
         # The information about individual spectra, exposure times, luminosities etc.
         spec_info = pd.read_csv(out_file + "_info.csv", header="infer")
+        #os.rename(out_file + "_info.csv", out_file_name + "_info.csv")
+        #testing new method
         # Gets added into the existing file
         fitsio.write(out_file + ".fits", spec_info.to_records(index=False), extname="spec_info")
+        os.rename(out_file + ".fits", out_file_name + ".fits")
+        #testing new method
         del spec_info
 
         # This finds all of the matching spectrum plot csvs were generated
@@ -107,6 +115,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         for spec_i in range(1, len(spec_tabs)+1):
             # Loop through and redefine names like this to ensure they're in the right order
             spec_plot = pd.read_csv(out_file + "_spec{}.csv".format(spec_i), header="infer")
+            os.rename
             # Adds all the plot tables into the existing fits file in the right order
             fitsio.write(out_file + ".fits", spec_plot.to_records(index=False), extname="plot{}".format(spec_i))
             del spec_plot
@@ -117,10 +126,12 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
             if "results" not in tab_names or "spec_info" not in tab_names:
                 usable = False
         # I'm going to try returning the file path as that should be pickleable
-        res_tables = out_file + ".fits"
-        os.rename(out_file + ".csv", out_file_name + ".csv")
-    elif os.path.exists(out_file) and run_type == "conv_factors":
-        res_tables = out_file
+        os.rename(out_file+".fits", out_file_name+".fits")
+        res_tables = out_file_name + ".fits"
+        #os.rename(out_file + ".csv", out_file_name + ".csv")
+        #testing new method
+    elif os.path.exists(out_file_name) and run_type == "conv_factors":
+        res_tables = out_file_name
         usable = True
     else:
         res_tables = None
