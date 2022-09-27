@@ -146,6 +146,8 @@ if {{$run_pre_check == True}} {{
     #############################################
     # Model is defined with default parameters, these will be modified later
     model $model_name
+    # test
+    renorm
     /*
 
     # Get the number of parameters in a variable, for iterating through later. To be clear this is the TOTAL
