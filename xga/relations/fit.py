@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/07/2022, 12:51. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple
@@ -73,7 +73,7 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     # Only values that aren't NaN will be permitted
     x_values = x_values[all_not_nans]
     y_values = y_values[all_not_nans]
-    # We're not changing the error arrays here because I'll do that in the place were I ensure the error arrays
+    # We're not changing the error arrays here because I'll do that in the place where I ensure the error arrays
     #  are 1D
 
     # We need to see if the normalisation parameters have been set, and if not then make them a number

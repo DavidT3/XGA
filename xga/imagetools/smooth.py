@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:00. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -160,7 +160,7 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray
         # Sets up the XGA product, regardless of whether its just been generated or it already
         #  existed, the process is the same
         sm_prod = Image(new_path, prod.obs_id, prod.instrument, "", "", "", prod.energy_bounds[0],
-                        prod.energy_bounds[1], "", True, kernel)
+                        prod.energy_bounds[1], "", smoothed=True, smoothed_info=kernel)
 
     elif type(prod) == RateMap and not sm_im:
         raise NotImplementedError("I haven't yet made sure that the rest of XGA will like this.")

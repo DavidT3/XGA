@@ -1,11 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/02/2022, 12:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 12:13. Copyright (c) The Contributors
 
 import os
 import pickle
 import warnings
 from copy import deepcopy
 from itertools import product
+from shutil import copyfile
 from typing import Tuple, List, Dict, Union
 
 import numpy as np
@@ -20,7 +21,7 @@ from numpy import ndarray
 from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
 from regions import read_ds9, PixelRegion
 
-from .. import xga_conf
+from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.misc import pix_deg_scale
@@ -87,20 +88,76 @@ class BaseSource:
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
-        matches = simple_xmm_match(ra, dec)
+        matches, excluded = simple_xmm_match(ra, dec)
+
+        # This will store information on the observations that were never included in analysis (so it's distinct from
+        #  the disassociated_obs information) - I don't know if this is the solution I'll stick with, but it'll do
+        blacklisted_obs = {}
+        for row_ind, row in excluded.iterrows():
+            # Just blacklist all instruments because for an ObsID to be in the excluded return
+            #  from simple_xmm_match this has to be the case
+            blacklisted_obs[row['ObsID']] = ['pn', 'mos1', 'mos2']
+
+        # This checks that the observations have at least one usable instrument
         obs = matches["ObsID"].values
         instruments = {o: [] for o in obs}
         for o in obs:
-            if matches[matches["ObsID"] == o]["USE_PN"].values[0]:
-                instruments[o].append("pn")
-            if matches[matches["ObsID"] == o]["USE_MOS1"].values[0]:
-                instruments[o].append("mos1")
-            if matches[matches["ObsID"] == o]["USE_MOS2"].values[0]:
-                instruments[o].append("mos2")
+            # As the simple_xmm_match will only tell us about observations in which EVERY instrument is
+            #  blacklisted, I have to check in the blacklist to see whether some individual instruments
+            #  have to be excluded
+            excl_pn = False
+            excl_mos1 = False
+            excl_mos2 = False
+            if o in BLACKLIST['ObsID'].values:
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_PN'].values[0] == 'T':
+                    excl_pn = True
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_MOS1'].values[0] == 'T':
+                    excl_mos1 = True
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_MOS2'].values[0] == 'T':
+                    excl_mos2 = True
 
-        # This checks that the observations have at least one usable instrument
+            # Here we see if PN is allowed by the census (things like CalClosed observations are excluded in
+            #  the census) and if PN is allowed by the blacklist (individual instruments can be blacklisted).
+            if matches[matches["ObsID"] == o]["USE_PN"].values[0] and not excl_pn:
+                instruments[o].append("pn")
+            # If excluded by the blacklist, then that needs
+            elif excl_pn:
+                # The behaviour writing PN to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["pn"]
+                else:
+                    blacklisted_obs[o] += ['pn']
+
+            # Now we repeat the same process for MOS1 and 2 - its quite clunky and there's probably a more
+            #  elegant way that I could write this, but ah well
+            if matches[matches["ObsID"] == o]["USE_MOS1"].values[0] and not excl_mos1:
+                instruments[o].append("mos1")
+            # If excluded by the blacklist, then that needs
+            elif excl_mos1:
+                # The behaviour writing MOS1 to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["mos1"]
+                else:
+                    blacklisted_obs[o] += ['mos1']
+
+            if matches[matches["ObsID"] == o]["USE_MOS2"].values[0] and not excl_mos2:
+                instruments[o].append("mos2")
+            # If excluded by the blacklist, then that needs
+            elif excl_mos2:
+                # The behaviour writing MOS2 to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["mos2"]
+                else:
+                    blacklisted_obs[o] += ['mos2']
+
+        # Information about which ObsIDs/instruments are available, and which have been blacklisted, is stored
+        #  in class attributes here.
         self._obs = [o for o in obs if len(instruments[o]) > 0]
         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+        self._blacklisted_obs = blacklisted_obs
 
         # self._obs can be empty after this cleaning step, so do quick check and raise error if so.
         if len(self._obs) == 0:
@@ -120,7 +177,7 @@ class BaseSource:
 
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
-            on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))["ObsID"].values
+            on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))[0]["ObsID"].values
         except NoMatchFoundError:
             on_axis_match = np.array([])
         self._onaxis = list(np.array(self._obs)[np.isin(self._obs, on_axis_match)])
@@ -128,6 +185,10 @@ class BaseSource:
         # nhlookup returns average and weighted average values, so just take the first
         self._nH = nh_lookup(self.ra_dec)[0]
         self._redshift = redshift
+        # This method uses the instruments attribute to check and see whether a particular ObsID-Instrument
+        #  combination is allowed for this source. As that attribute was constructed using the blacklist information
+        #  we can be sure that every ObsID-Instrument combination loaded in here is allowed to be here. The only
+        #  other way for them to change is through using the dissociate observation capability
         self._products, region_dict, self._att_files = self._initial_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
@@ -201,6 +262,9 @@ class BaseSource:
 
         self._peak_lo_en = Quantity(0.5, 'keV')
         self._peak_hi_en = Quantity(2.0, 'keV')
+        # Peaks don't really have any meaning for the BaseSource class, so even though this is a boolean variable
+        #  when populated properly I set it to None here
+        self._use_peak = None
 
         # These attributes pertain to the cleaning of observations (as in disassociating them from the source if
         #  they don't include enough of the object we care about).
@@ -324,6 +388,9 @@ class BaseSource:
                 continue
             evt_key = "clean_{}_evts".format(inst)
             evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=obs_id)
+            # This is the path to the region file specified in the configuration file, but the next step is that
+            #  we make a local copy (if the original file exists) and then make use of that so that any modifications
+            #  don't harm the original file.
             reg_file = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
 
             # Attitude file is a special case of data product, only SAS should ever need it, so it doesn't
@@ -339,9 +406,18 @@ class BaseSource:
                 # Dictionary updated with derived product names
                 map_ret = map(read_default_products, en_comb)
                 obs_dict[obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
-                if os.path.exists(reg_file):
-                    # Regions dictionary updated with path to region file, if it exists
-                    reg_dict[obs_id] = reg_file
+
+                # As mentioned above, we make a local copy of the region file if the original file path exists
+                #  and if a local copy DOESN'T already exist
+                reg_copy_path = OUTPUT+"{o}/{o}_xga_copy.reg".format(o=obs_id)
+                if os.path.exists(reg_file) and not os.path.exists(reg_copy_path):
+                    # A local copy of the region file is made and used
+                    copyfile(reg_file, reg_copy_path)
+                    # Regions dictionary updated with path to local region file, if it exists
+                    reg_dict[obs_id] = reg_copy_path
+                # In the case where there is already a local copy of the region file
+                elif os.path.exists(reg_copy_path):
+                    reg_dict[obs_id] = reg_copy_path
                 else:
                     reg_dict[obs_id] = None
 
@@ -1135,8 +1211,15 @@ class BaseSource:
                 reg_dict[obs_id] = np.array([None])
 
             # Here we add the custom sources to the source list, we know they are sky regions as we have
-            #  already enforced it
-            reg_dict[obs_id] = np.append(reg_dict[obs_id], custom_regs)
+            #  already enforced it. If there was no region list for a particular ObsID (detected by the first
+            #  entry in the reg dict being None) and there IS a custom region, we just replace the None with the
+            #  custom region
+            if reg_dict[obs_id][0] is not None:
+                reg_dict[obs_id] = np.append(reg_dict[obs_id], custom_regs)
+            elif reg_dict[obs_id][0] is None and len(custom_regs) != 0:
+                reg_dict[obs_id] = custom_regs
+            else:
+                reg_dict[obs_id] = np.array([None])
 
             # I'm going to ensure that all regions are elliptical, I don't want to hunt through every place in XGA
             #  where I made that assumption
@@ -1150,7 +1233,7 @@ class BaseSource:
                     reg_dict[obs_id][reg_ind] = new_reg
 
             # Hopefully this bodge doesn't have any unforeseen consequences
-            if reg_dict[obs_id][0] is not None:
+            if reg_dict[obs_id][0] is not None and len(reg_dict[obs_id]) > 1:
                 # Quickly calculating distance between source and center of regions, then sorting
                 # and getting indices. Thus I only match to the closest 5 regions.
                 diff_sort = np.array([dist_from_source(r) for r in reg_dict[obs_id]]).argsort()
@@ -1165,6 +1248,12 @@ class BaseSource:
                 # Expands it so it can be used as a mask on the whole set of regions for this observation
                 within = np.pad(within, [0, len(diff_sort) - len(within)])
                 match_dict[obs_id] = within
+            # In the case of only one region being in the list, we simplify the above expression
+            elif reg_dict[obs_id][0] is not None and len(reg_dict[obs_id]) == 1:
+                if reg_dict[obs_id][0].contains(SkyCoord(*self._ra_dec, unit='deg'), w):
+                    match_dict[obs_id] = np.array([True])
+                else:
+                    match_dict[obs_id] = np.array([False])
             else:
                 match_dict[obs_id] = np.array([False])
 
@@ -1267,6 +1356,17 @@ class BaseSource:
         """
         return self._obs
 
+    @property
+    def blacklisted(self) -> Dict:
+        """
+        A property getter that returns the dictionary of ObsIDs and their instruments which have been
+        blacklisted, and thus not considered for use in any analysis of this source.
+
+        :return: The dictionary (with ObsIDs as keys) of blacklisted data.
+        :rtype: Dict
+        """
+        return self._blacklisted_obs
+
     def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
         """
         A method that looks for matches not just based on position, but also on the type of source
@@ -1308,14 +1408,27 @@ class BaseSource:
         #  with missing ObsIDs
         for obs in self.obs_ids:
             if obs in self._initial_regions:
-                # If there are no matches then the returned result is just None
-                if len(self._initial_regions[obs][self._initial_region_matches[obs]]) == 0:
+                # This sets up an array of matched regions, accounting for the problems that can occur when
+                #  there is only one region in the region list (numpy's indexing gets very angry). The array
+                #  of matched region(s) set up here is used in this method.
+                if len(self._initial_regions[obs]) == 1 and not self._initial_region_matches[obs][0]:
+                    init_region_matches = np.array([])
+                elif len(self._initial_regions[obs]) == 1 and self._initial_region_matches[obs][0]:
+                    init_region_matches = self._initial_regions[obs]
+                elif len(self._initial_regions[obs][self._initial_region_matches[obs]]) == 0:
+                    init_region_matches = np.array([])
+                else:
+                    init_region_matches = self._initial_regions[obs][self._initial_region_matches[obs]]
+
+                # If there are no matches then the returned result is just None.
+                if len(init_region_matches) == 0:
                     results_dict[obs] = None
                 else:
                     interim_reg = []
                     # The only solution I could think of is to go by the XCS standard of region files, so green
                     #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
-                    for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
+                    # for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
+                    for entry in init_region_matches:
                         if entry.visual["color"] in allowed_colours:
                             interim_reg.append(entry)
 
@@ -1342,8 +1455,7 @@ class BaseSource:
                                                  "for extended sources.".format(o=obs, n=self.name))
 
                 # Alt match is used for when there is a secondary match to a point source
-                alt_match_reg = [entry for entry in self._initial_regions[obs][self._initial_region_matches[obs]]
-                                 if entry != results_dict[obs]]
+                alt_match_reg = [entry for entry in init_region_matches if entry != results_dict[obs]]
                 alt_match_dict[obs] = alt_match_reg
 
                 # These are all the sources that aren't a match, and so should be removed from any analysis
@@ -1371,6 +1483,16 @@ class BaseSource:
                              "context needed to define if the source is detected or not.")
         else:
             return self._detected
+
+    @property
+    def matched_regions(self) -> dict:
+        """
+        Property getter for the matched regions associated with this particular source.
+
+        :return: A dictionary of matching regions, or None if such a match has not been performed.
+        :rtype: dict
+        """
+        return self._regions
 
     def source_back_regions(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
             -> Tuple[SkyRegion, SkyRegion]:
@@ -1469,6 +1591,33 @@ class BaseSource:
 
         return reg_within
 
+    def get_interloper_regions(self, flattened: bool = False) -> Union[List, Dict]:
+        """
+        This get method provides a way to access the regions that have been designated as interlopers (i.e.
+        not the source region that a particular Source has been designated to investigate) for all observations.
+        They can either be retrieved in a dictionary with ObsIDs as the keys, or a flattened single list with no
+        ObsID context.
+
+        :param bool flattened: If true then the regions are returned as a single list of region objects. Otherwise
+            they are returned as a dictionary with ObsIDs as keys. Default is False.
+        :return: Either a list of region objects, or a dictionary with ObsIDs as keys.
+        :rtype: Union[List,Dict]
+        """
+        if type(self) == BaseSource:
+            raise TypeError("BaseSource objects don't have enough information to know which sources "
+                            "are interlopers.")
+
+        # If flattened then a list is returned rather than the original dictionary with
+        if not flattened:
+            ret_reg = self._other_regions
+        else:
+            # Iterate through the ObsIDs in the dictionary and add the resulting lists together
+            ret_reg = []
+            for o in self._other_regions:
+                ret_reg += self._other_regions[o]
+
+        return ret_reg
+
     def get_source_mask(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
             -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -1489,7 +1638,6 @@ class BaseSource:
         # Don't need to do a bunch of checks, because the method I call to make the
         #  mask does all the checks anyway
         src_reg, bck_reg = self.source_back_regions(reg_type, obs_id, central_coord)
-
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:
@@ -1724,6 +1872,68 @@ class BaseSource:
         sn = rt.signal_to_noise(src_mask, bck_mask, exp_corr, allow_negative)
 
         return sn
+
+    def get_counts(self, outer_radius: Union[Quantity, str], central_coord: Quantity = None, lo_en: Quantity = None,
+                   hi_en: Quantity = None, obs_id: str = None, inst: str = None, psf_corr: bool = False,
+                   psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15) -> Quantity:
+        """
+        This takes a region type and central coordinate and calculates the background subtracted X-ray counts.
+        The background region is constructed using the back_inn_rad_factor and back_out_rad_factor
+        values, the defaults of which are 1.05*radius and 1.5*radius respectively.
+
+        :param Quantity/str outer_radius: The radius that counts should be calculated within, this can either be a
+            named radius such as r500, or an astropy Quantity.
+        :param Quantity central_coord: The central coordinate of the region.
+        :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the lower energy bound for peak finding will be used (default is 0.5keV).
+        :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the upper energy bound for peak finding will be used (default is 2.0keV).
+        :param str obs_id: An ObsID of a specific ratemap to use for the counts calculation. Default is None, which
+            means the combined ratemap will be used. Please note that inst must also be set to use this option.
+        :param str inst: The instrument of a specific ratemap to use for the counts calculation. Default is None, which
+            means the combined ratemap will be used.
+        :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+        :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+        :return: The background subtracted counts.
+        :rtype: Quantity
+        """
+        # Checking if the user passed any energy limits of their own
+        if lo_en is None:
+            lo_en = self._peak_lo_en
+        if hi_en is None:
+            hi_en = self._peak_hi_en
+
+        # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
+        if all([obs_id is None, inst is None]):
+            # Here the user hasn't set ObsID or instrument, so we use the combined data
+            rt = self.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+
+        elif all([obs_id is not None, inst is not None]):
+            # Both ObsID and instrument have been set by the user
+            rt = self.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+        else:
+            raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
+                             " pass both obs_id and inst.".format(s=self.name))
+
+        if isinstance(outer_radius, str):
+            # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
+            #  method understands that means it should return the mask for the combined data
+            src_mask, bck_mask = self.get_mask(outer_radius, obs_id, central_coord)
+        else:
+            # Here we have the case where the user has passed a custom outer radius, so we need to generate a
+            #  custom mask for it
+            src_mask = self.get_custom_mask(outer_radius, obs_id=obs_id, central_coord=central_coord)
+            bck_mask = self.get_custom_mask(outer_radius*self._back_out_factor, outer_radius*self._back_inn_factor,
+                                            obs_id=obs_id, central_coord=central_coord)
+
+        # We use the ratemap's built in background subtracted counts calculation method
+        cnts = rt.background_subtracted_counts(src_mask, bck_mask)
+
+        return cnts
 
     def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity, deg_central_coord: Quantity,
                              regions_to_search: Union[np.ndarray, list] = None) -> np.ndarray:
@@ -2359,8 +2569,24 @@ class BaseSource:
         #  that the rest of the function requires
         if isinstance(to_remove, str):
             to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
+        # Here is where they have just passed a list of ObsIDs, and we need to fill in the blanks with the instruments
+        #  currently loaded for those ObsIDs
         elif isinstance(to_remove, list):
             to_remove = {o: deepcopy(self.instruments[o]) for o in to_remove}
+        # Here deals with when someone might have passed a dictionary where there is a single instrument, and
+        #  they haven't put it in a list; e.g. {'0201903501': 'pn'}. This detects instances like that and then
+        #  puts the individual instrument in a list as is expected by the rest of the function
+        elif isinstance(to_remove, dict) and not all([isinstance(v, list) for v in to_remove.values()]):
+            new_to_remove = {}
+            for o in to_remove:
+                if not isinstance(to_remove[o], list):
+                    new_to_remove[o] = [deepcopy(to_remove[o])]
+                else:
+                    new_to_remove[o] = deepcopy(to_remove[o])
+
+            # I use deepcopy again because there have been issues with this function still pointing to old memory
+            #  addresses, so I'm quite paranoid in this bit of code
+            to_remove = deepcopy(new_to_remove)
 
         # We also check to make sure that the data we're being asked to remove actually is associated with the
         #  source. We shall be forgiving if it isn't, and just issue a warning to let the user know that they are
@@ -3184,6 +3410,45 @@ class BaseSource:
         # And return our ordered dictionaries
         return obs_inst, snrs
 
+    def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
+                      hi_en: Quantity = None) -> Tuple[np.ndarray, Quantity]:
+        """
+        This method generates a list of ObsID-Instrument pairs, ordered by the counts measured for the
+        given region, with element zero being the lowest counts, and element N being the highest.
+
+        :param Quantity/str outer_radius: The radius that counts should be calculated within, this can either be a
+            named radius such as r500, or an astropy Quantity.
+        :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the lower energy bound for peak finding will be used (default is 0.5keV).
+        :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the upper energy bound for peak finding will be used (default is 2.0keV).
+        :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
+            of ascending counts, then an array containing the order counts ratios.
+        :rtype: Tuple[np.ndarray, Quantity]
+        """
+        # Set up some lists for the ObsID-Instrument combos and their cnts respectively
+        obs_inst = []
+        cnts = []
+        # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+        for obs_id in self.instruments:
+            for inst in self.instruments[obs_id]:
+                cnts.append(self.get_counts(outer_radius, self.default_coord, lo_en, hi_en, obs_id, inst))
+                obs_inst.append([obs_id, inst])
+
+        # Make our storage lists into arrays, easier to work with that way
+        obs_inst = np.array(obs_inst)
+        cnts = Quantity(cnts)
+
+        # We want to order the output by counts, with the lowest being first and the highest being last, so we
+        #  use a numpy function to output the index order needed to re-order our two arrays
+        reorder_cnts = np.argsort(cnts)
+        # Then we use that to re-order them
+        cnts = cnts[reorder_cnts]
+        obs_inst = obs_inst[reorder_cnts]
+
+        # And return our ordered dictionaries'
+        return obs_inst, cnts
+
     def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
         """
         This method calculates the separation between the user supplied ra_dec coordinates, and the peak
@@ -3205,6 +3470,37 @@ class BaseSource:
 
         # Return the converted separation
         return conv_sep
+
+    @property
+    def peak_lo_en(self) -> Quantity:
+        """
+        This property returns the lower energy bound of the image used for peak finding.
+
+        :return: A quantity containing the lower energy limit used for peak finding.
+        :rtype: Quantity
+        """
+        return self._peak_lo_en
+
+    @property
+    def peak_hi_en(self) -> Quantity:
+        """
+        This property returns the upper energy bound of the image used for peak finding.
+
+        :return: A quantity containing the upper energy limit used for peak finding.
+        :rtype: Quantity
+        """
+        return self._peak_hi_en
+
+    @property
+    def use_peak(self) -> bool:
+        """
+        This property shows whether a particular XGA source object has been setup to use peak coordinates
+        or not. The property is either True, False, or None (if its a BaseSource).
+
+        :return: If the source is set to use peaks, True, otherwise False.
+        :rtype: bool
+        """
+        return self._use_peak
 
     def info(self):
         """
@@ -3360,6 +3656,11 @@ class NullSource:
         # This checks that the observations have at least one usable instrument
         self._obs = [o for o in obs if len(instruments[o]) > 0]
         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+
+        # Here we check to make sure that there is at least one valid ObsID remaining
+        if len(self._obs) == 0:
+            raise NoValidObservationsError("After checks using the XGA census, all ObsIDs associated with this "
+                                           "NullSource are considered unusable.")
 
         # The SAS generation routine might need this information
         self._att_files = {o: xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=o) for o in self._obs}

@@ -3,3 +3,4 @@
 .coverage
 .pytest_cache
 xga_output
+.ipynb_checkpoints

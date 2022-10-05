@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 20:12. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -8,6 +8,7 @@ import numpy as np
 from astropy.constants import k_B, G, m_p
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
 
 from .. import NHC, ABUND_TABLES, MEAN_MOL_WEIGHT
 from ..exceptions import ModelNotAssociatedError, XGAInvalidModelError, XGAFitError
@@ -425,7 +426,7 @@ class GasDensity3D(BaseProfile1D):
         # The density class has an extra bit of information in the storage key, the method used to generate it
         self._storage_key = "me" + dens_method + extra_info + self._storage_key
 
-    def gas_mass(self, model: str, outer_rad: Quantity, conf_level: float = 68.2,
+    def gas_mass(self, model: str, outer_rad: Quantity, inner_rad: Quantity = None, conf_level: float = 68.2,
                  fit_method: str = 'mcmc') -> Tuple[Quantity, Quantity]:
         """
         A method to calculate and return the gas mass (with uncertainties). This method uses the model to generate
@@ -434,12 +435,22 @@ class GasDensity3D(BaseProfile1D):
 
         :param str model: The name of the model from which to derive the gas mass.
         :param Quantity outer_rad: The radius to measure the gas mass out to.
+        :param Quantity inner_rad: The inner radius within which to measure the gas mass, this enables measuring
+            core-excised gas masses. Default is None, which equates to zero.
         :param float conf_level: The confidence level to use to calculate the mass errors
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
         :return: A Quantity containing three values (mass, -err, +err), and another Quantity containing
             the entire mass distribution from the whole realisation.
         :rtype: Tuple[Quantity, Quantity]
         """
+        # This checks to see if inner radius is None (probably how it will be used most of the time), and if
+        #  it is then creates a Quantity with the same units as outer_radius
+        if inner_rad is None:
+            inner_rad = Quantity(0, outer_rad.unit)
+        elif inner_rad is not None and not inner_rad.unit.is_equivalent(outer_rad):
+            raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
+                                      " as the outer_radius Quantity.")
+
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             raise XGAInvalidModelError("{m} is not a valid model for a gas density profile".format(m=model))
         elif model not in self.good_model_fits:
@@ -456,6 +467,7 @@ class GasDensity3D(BaseProfile1D):
                                       " of this profile ({u})".format(u=self.radii_unit.to_string()))
         else:
             outer_rad = outer_rad.to(self.radii_unit)
+            inner_rad = inner_rad.to(self.radii_unit)
 
         # Doing an extra check to warn the user if the radius they supplied is outside the radii
         #  covered by the data
@@ -466,23 +478,28 @@ class GasDensity3D(BaseProfile1D):
         # Just preparing the way, setting up the storage dictionary
         if str(model_obj) not in self._gas_masses:
             self._gas_masses[str(model_obj)] = {}
+        # The next layer is the outer radius, then finally the result will be stored using the inner radius
+        if outer_rad not in self._gas_masses[str(model_obj)]:
+            self._gas_masses[str(model_obj)][outer_rad] = {}
 
-        if outer_rad not in self._gas_masses[str(model_obj)] and outer_rad != 0:
-            mass_dist = model_obj.volume_integral(outer_rad, use_par_dist=True)
+        # This runs the volume integral on the density profile, using the built in integral method in the model
+        if inner_rad not in self._gas_masses[str(model_obj)][outer_rad] and outer_rad != 0:
+            mass_dist = model_obj.volume_integral(outer_rad, inner_rad, use_par_dist=True)
+            # Converts to an actual mass rather than a total number of particles
             if self._sub_type == 'num_dens':
                 mass_dist *= (MEAN_MOL_WEIGHT*m_p)
-
+            # Converts to solar masses and stores inside the current profile for future reference
             mass_dist = mass_dist.to('Msun')
-            self._gas_masses[str(model_obj)][outer_rad] = mass_dist
+            self._gas_masses[str(model_obj)][outer_rad][inner_rad] = mass_dist
 
         # Obviously the mass contained within a zero radius bin is zero, but the integral can fall over sometimes when
         #  this is requested so I put in this special case
-        elif outer_rad not in self._gas_masses[str(model_obj)] and outer_rad == 0:
+        elif inner_rad not in self._gas_masses[str(model_obj)][outer_rad] and outer_rad == 0:
             mass_dist = Quantity(np.zeros(len(model_obj.par_dists[0])), 'Msun')
-            self._gas_masses[str(model_obj)][outer_rad] = mass_dist
+            self._gas_masses[str(model_obj)][outer_rad][inner_rad] = mass_dist
 
         else:
-            mass_dist = self._gas_masses[str(model_obj)][outer_rad]
+            mass_dist = self._gas_masses[str(model_obj)][outer_rad][inner_rad]
 
         med_mass = np.percentile(mass_dist, 50).value
         upp_mass = np.percentile(mass_dist, 50 + (conf_level/2)).value
@@ -538,7 +555,7 @@ class GasDensity3D(BaseProfile1D):
             raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
                              "arrays of radii are not supported.")
 
-        gas_mass, gas_mass_dist = self.gas_mass(model, outer_rad, conf_level, fit_method)
+        gas_mass, gas_mass_dist = self.gas_mass(model, outer_rad, conf_level=conf_level, fit_method=fit_method)
 
         plt.figure(figsize=figsize)
         ax = plt.gca()
@@ -1229,7 +1246,7 @@ class HydrostaticMass(BaseProfile1D):
             # Here there are no logs in the derivatives, because its easier to take advantage of astropy's quantities
             #  that way.
             mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT*m_p) * G)) * \
-                            ((dens * temp_der) + (temp * dens_der))
+                        ((dens * temp_der) + (temp * dens_der))
 
             # Just converts the mass/masses to the unit we normally use for them
             mass_dist = mass_dist.to('Msun').T
@@ -1251,6 +1268,46 @@ class HydrostaticMass(BaseProfile1D):
             raise ValueError("A mass of less than zero has been measured, which is not physical.")
 
         return mass_res, mass_dist
+
+    def annular_mass(self, outer_radius: Quantity, inner_radius: Quantity, conf_level: float = 68.2):
+        """
+        Calculate the hydrostatic mass contained within a specific 3D annulus, bounded by the outer and inner radius
+        supplied to this method. Annular mass is calculated by measuring the mass within the inner and outer
+        radii, and then subtracting the inner from the outer. Also supports calculating multiple annular masses
+        when inner_radius and outer_radius are non-scalar.
+
+        WARNING - THIS METHOD INVOLVES SUBTRACTING TWO MASS DISTRIBUTIONS, WHICH CAN'T NECESSARILY BE APPROXIMATED
+        AS GAUSSIAN DISTRIBUTIONS, AS SUCH RESULTS FROM THIS METHOD SHOULD BE TREATED WITH SOME SUSPICION.
+
+        :param Quantity outer_radius: Astropy containing outer radius (or radii) for the annulus (annuli) within
+            which you wish to measure the mass. If calculating multiple annular masses, the length of outer_radius
+            must be the same as inner_radius.
+        :param Quantity inner_radius: Astropy containing inner radius (or radii) for the annulus (annuli) within
+            which you wish to measure the mass. If calculating multiple annular masses, the length of inner_radius
+            must be the same as outer_radius.
+        :param float conf_level: The confidence level for the mass uncertainties, the default is 68.2% (~1σ).
+        :return: An astropy quantity containing a mass distribution(s). Quantity will become two-dimensional
+            when multiple sets of inner and outer radii are passed by the user.
+        :rtype: Quantity
+        """
+        # Perform some checks to make sure that the user has passed inner and outer radii quantities that are valid
+        #  and won't break any of the calculations that will be happening in this method
+        if outer_radius.isscalar != inner_radius.isscalar:
+            raise ValueError("The outer_radius and inner_radius Quantities must both be scalar, or both "
+                             "be non-scalar.")
+        elif (not inner_radius.isscalar and inner_radius.ndim != 1) or \
+                (not outer_radius.isscalar and outer_radius.ndim != 1):
+            raise ValueError('Non-scalar radius Quantities must have only one dimension')
+        elif not outer_radius.isscalar and not inner_radius.isscalar and outer_radius.shape != inner_radius.shape:
+            raise ValueError('The outer_radius and inner_radius Quantities must be the same shape.')
+
+        # This just measures the masses within two radii, the outer and the inner supplied by the user. The mass()
+        #  method will automatically deal with the input of multiple entries for each radius
+        outer_mass, outer_mass_dist = self.mass(outer_radius, conf_level)
+        inner_mass, inner_mass_dist = self.mass(inner_radius, conf_level)
+
+        # This PROBABLY NOT AT ALL valid because they're just posterior distributions of mass
+        return outer_mass_dist - inner_mass_dist
 
     def view_mass_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8), bins: Union[str, int] = 'auto',
                        colour: str = "lightslategrey"):
@@ -1320,8 +1377,8 @@ class HydrostaticMass(BaseProfile1D):
 
         # Grab out the hydrostatic mass distribution, and the gas mass distribution
         hy_mass, hy_mass_dist = self.mass(radius, conf_level)
-        gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model.name, radius, conf_level,
-                                                           self._dens_model.fit_method)
+        gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model.name, radius, conf_level=conf_level,
+                                                           fit_method=self._dens_model.fit_method)
 
         # If the distributions don't have the same number of entries (though as far I can recall they always should),
         #  then we just make sure we have two equal length distributions to divide
@@ -1408,6 +1465,295 @@ class HydrostaticMass(BaseProfile1D):
         return BaryonFraction(self.radii, frac, self.centre, self.src_name, self.obs_id, self.instrument,
                               self.radii_err, frac_err, self.set_ident, self.associated_set_storage_key,
                               self.deg_radii)
+
+    def overdensity_radius(self, delta: int, redshift: float, cosmo, init_lo_rad: Quantity = Quantity(100, 'kpc'),
+                           init_hi_rad: Quantity = Quantity(3500, 'kpc'), init_step: Quantity = Quantity(100, 'kpc'),
+                           out_unit: Union[Unit, str] = Unit('kpc')) -> Quantity:
+        """
+        This method uses the mass profile to find the radius that corresponds to the user-supplied
+        overdensity - common choices for cluster analysis are Δ=2500, 500, and 200. Overdensity radii are
+        defined as the radius at which the density is Δ times the critical density of the Universe at the
+        cluster redshift.
+
+        This method takes a numerical approach to the location of the requested radius. Though we have calculated
+        analytical hydrostatic mass models for common choices of temperature and density profile models, there are
+        no analytical solutions for R.
+
+        When an overdensity radius is being calculated, we initially measure masses for a range of radii between
+        init_lo_rad - init_hi_rad in steps of init_step. From this we find the two radii that bracket the radius where
+        average density - Delta*critical density = 0. Between those two radii we perform the same test with another
+        range of radii (in steps of 1 kpc this time), finding the radius that corresponds to the minimum
+        density difference value.
+
+        :param int delta: The overdensity factor for which a radius is to be calculated.
+        :param float redshift: The redshift of the cluster.
+        :param cosmo: The cosmology in which to calculate the overdensity. Should be an astropy cosmology instance.
+        :param Quantity init_lo_rad: The lower radius bound for the first radii array generated to find the wide
+            brackets around the requested overdensity radius. Default value is 100 kpc.
+        :param Quantity init_hi_rad: The upper radius bound for the first radii array generated to find the wide
+            brackets around the requested overdensity radius. Default value is 3500 kpc.
+        :param Quantity init_step: The step size for the first radii array generated to find the wide brackets
+            around the requested overdensity radius. Default value is 100 kpc, recommend that you don't set it
+            smaller than 10 kpc.
+        :param Unit/str out_unit: The unit that this method should output the radius with.
+        :return: The calculated overdensity radius.
+        :rtype: Quantity
+        """
+        def turning_point(brackets: Quantity, step_size: Quantity) -> Quantity:
+            """
+            This is the meat of the overdensity_radius method. It goes looking for radii that bracket the
+            requested overdensity radius. This works by calculating an array of masses, calculating densities
+            from them and the radius array, then calculating the difference between Delta*critical density at
+            source redshift. Where the difference array flips from being positive to negative is where the
+            bracketing radii are.
+
+            :param Quantity brackets: The brackets within which to generate our array of radii.
+            :param Quantity step_size: The step size for the array of radii
+            :return: The bracketing radii for the requested overdensity for this search.
+            :rtype: Quantity
+            """
+            # Just makes sure that the step size is definitely in the same unit as the bracket
+            #  variable, as I take the value of step_size later
+            step_size = step_size.to(brackets.unit)
+
+            # This sets up a range of radii within which to calculate masses, which in turn are used to find the
+            #  closest value to the Delta*critical density we're looking for
+            rads = Quantity(np.arange(*brackets.value, step_size.value), 'kpc')
+            # The masses contained within the test radii, the transpose is just there because the array output
+            #  by that function is weirdly ordered - there is an issue open that will remind to eventually change that
+            rad_masses = self.mass(rads)[0].T
+            # Calculating the density from those masses - uses the radii that the masses were measured within
+            rad_dens = rad_masses[:, 0] / (4 * np.pi * (rads ** 3) / 3)
+            # Finds the difference between the density array calculated above and the requested
+            #  overdensity (i.e. Delta * the critical density of the Universe at the source redshift).
+            rad_dens_diffs = rad_dens - (delta * z_crit_dens)
+
+            if np.all(rad_dens_diffs.value > 0) or np.all(rad_dens_diffs.value < 0):
+                raise ValueError("The passed lower ({l}) and upper ({u}) radii don't appear to bracket the "
+                                 "requested overdensity (Delta={d}) radius.".format(l=brackets[0], u=brackets[1],
+                                                                                    d=delta))
+
+            # This finds the index of the radius where the turnover between the density difference being
+            #  positive and negative happens. The radius of that index, and the index before it, bracket
+            #  the requested overdensity.
+            turnover = np.where(rad_dens_diffs.value < 0, rad_dens_diffs.value, -np.inf).argmax()
+            brackets = rads[[turnover - 1, turnover]]
+
+            return brackets
+
+        # First perform some sanity checks to make sure that the user hasn't passed anything silly
+        # Check that the overdensity is a positive, non-zero (because that wouldn't make sense) integer.
+        if not type(delta) == int or delta <= 0:
+            raise ValueError("The overdensity must be a positive, non-zero, integer.")
+
+        # The user is allowed to pass either a unit instance or a string, we make sure the out_unit is consistently
+        #  a unit instance for the benefit of the rest of this method.
+        if isinstance(out_unit, str):
+            out_unit = Unit(out_unit)
+        elif not isinstance(out_unit, Unit):
+            raise ValueError("The out_unit argument must be either an astropy Unit instance, or a string "
+                             "representing an astropy unit.")
+
+        # We know that if we have arrived here then the out_unit variable is a Unit instance, so we just check
+        #  that it's a distance unit that makes sense. I haven't allowed degrees, arcmins etc. because it would
+        #  entail a little extra work, and I don't care enough right now.
+        if not out_unit.is_equivalent('kpc'):
+            raise UnitConversionError("The out_unit argument must be supplied with a unit that is convertible "
+                                      "to kpc. Angular units such as deg are not currently supported.")
+
+        # Obviously redshift can't be negative, and I won't allow zero redshift because it doesn't
+        #  make sense for clusters and completely changes how distance calculations are done.
+        if redshift <= 0:
+            raise ValueError("Redshift cannot be less than or equal to zero.")
+
+        # This is the critical density of the Universe at the cluster redshift - this is what we compare the
+        #  cluster density too to figure out the requested overdensity radius.
+        z_crit_dens = cosmo.critical_density(redshift)
+
+        wide_bracket = turning_point(Quantity([init_lo_rad, init_hi_rad]), init_step)
+        if init_step != Quantity(1, 'kpc'):
+            # In this case I buffer the wide bracket (subtract 5 kpc from the lower bracket and add 5 kpc to the upper
+            #  bracket) - this is a fix to help avoid errors when the turning point is equal to the upper or lower
+            #  bracket
+            buffered_wide_bracket = wide_bracket + Quantity([-5, 5], 'kpc')
+            tight_bracket = turning_point(buffered_wide_bracket, Quantity(1, 'kpc'))
+        else:
+            tight_bracket = wide_bracket
+
+        return ((tight_bracket[0]+tight_bracket[1])/2).to(out_unit)
+
+    def _diag_view_prep(self, src) -> Tuple[int, RateMap, SurfaceBrightness1D]:
+        """
+        This internal function just serves to grab the relevant photometric products (if available) and check to
+        see how many plots will be in the diagnostic view. The maximum is five; mass profile, temperature profile,
+        density profile, surface brightness profile, and ratemap.
+
+        :param GalaxyCluster src: The source object for which this hydrostatic mass profile was created
+        :return: The number of plots, a RateMap (if src was pass, otherwise None), and a SB profile (if the
+            density profile was created with the SB method, otherwise None).
+        :rtype: Tuple[int, RateMap, SurfaceBrightness1D]
+        """
+
+        # This checks to make sure that the source is a galaxy cluster, I do it this way (with strings) to avoid
+        #  annoying circular import errors. The source MUST be a galaxy cluster because you can only calculate
+        #  hydrostatic mass profiles for galaxy clusters.
+        if src is not None and type(src).__name__ != 'GalaxyCluster':
+            raise TypeError("The src argument must be a GalaxyCluster object.")
+
+        # This just checks to make sure that the name of the passed source is the same as the stored source name
+        #  of this profile. Maybe in the future this won't be necessary because a reference to the source
+        #  will be stored IN the profile.
+        if src is not None and src.name != self.src_name:
+            raise ValueError("The passed source has a different name to the source that was used to generate"
+                             " this HydrostaticMass profile.")
+
+        # If the hydrostatic mass profile was created using combined data then I grab a combined image
+        if self.obs_id == 'combined' and src is not None:
+            rt = src.get_combined_ratemaps(src.peak_lo_en, src.peak_hi_en)
+        # Otherwise we grab the specific relevant image
+        elif self.obs_id != 'combined' and src is not None:
+            rt = src.get_ratemaps(self.obs_id, self.instrument, src.peak_lo_en, src.peak_hi_en)
+        # If there is no source passed, then we don't get a ratemap
+        else:
+            rt = None
+
+        # Checks to see whether the generation profile of the density profile is a surface brightness
+        #  profile. The other option is that it's an apec normalisation profile if generated from the spectra method
+        if type(self.density_profile.generation_profile) == SurfaceBrightness1D:
+            sb = self.density_profile.generation_profile
+        # Otherwise there is no SB profile
+        else:
+            sb = None
+
+        # Maximum number of plots is five, this just figures out how many there are going to be based on what the
+        #  ratemap and surface  brightness profile values are
+        num_plots = 5 - sum([rt is None, sb is None])
+
+        return num_plots, rt, sb
+
+    def _gen_diag_view(self, fig: Figure, src, num_plots: int, rt: RateMap, sb: SurfaceBrightness1D):
+        """
+        This populates the diagnostic plot figure, grabbing axes from various classes of profile product.
+
+        :param Figure fig: The figure instance being populated.
+        :param GalaxyCluster src: The galaxy cluster source that this hydrostatic mass profile was created for.
+        :param int num_plots: The number of plots in this diagnostic view.
+        :param RateMap rt: A RateMap to add to this diagnostic view.
+        :param SurfaceBrightness1D sb: A surface brightness profile to add to this diagnostic view.
+        :return: The axes array of this diagnostic view.
+        :rtype: np.ndarray([Axes])
+        """
+        from ..imagetools.misc import physical_rad_to_pix
+
+        # The preparation method has already figured out how many plots there will be, so we create those subplots
+        ax_arr = fig.subplots(nrows=1, ncols=num_plots)
+
+        # If a RateMap has been passed then we need to get the view, calculate some things, and then add it to our
+        #  diagnostic plot
+        if rt is not None:
+            # As the RateMap is the first plot, and is not guaranteed to be present, I use the offset parameter
+            #  later in this function to shift the other plots across by 1 if it is present.
+            offset = 1
+            # If the source was setup to use a peak coordinate, then we want to include that in the ratemap display
+            if src.use_peak:
+                ch = Quantity([src.peak, src.ra_dec])
+                # I also grab the annulus boundaries from the temperature profile used to create this
+                #  HydrostaticMass profile, then convert to pixels. That does depend on there being a source, but
+                #  we know that we wouldn't have a RateMap at this point if the user hadn't passed a source
+                pix_rads = physical_rad_to_pix(rt, self.temperature_profile.annulus_bounds, src.peak, src.redshift,
+                                               src.cosmo)
+
+            else:
+                # No peak means we just use the original user-passed RA-Dec
+                ch = src.ra_dec
+                pix_rads = physical_rad_to_pix(rt, self.temperature_profile.annulus_bounds, src.ra_dec, src.redshift,
+                                               src.cosmo)
+
+            # This gets the nicely setup view from the RateMap object and adds it to our array of matplotlib axes
+            ax_arr[0] = rt.get_view(ax_arr[0], ch, radial_bins_pix=pix_rads.value)
+        else:
+            # In this case there is no RateMap to add, so I don't need to shift the other plots across
+            offset = 0
+
+        # These simply plot the mass, temperature, and density profiles with legends turned off, residuals turned
+        #  off, and no title
+        ax_arr[0+offset] = self.get_view(fig, ax_arr[0+offset], show_legend=False, custom_title='',
+                                         show_residual_ax=False)[0]
+        ax_arr[1+offset] = self.temperature_profile.get_view(fig, ax_arr[1+offset], show_legend=False, custom_title='',
+                                                             show_residual_ax=False)[0]
+        ax_arr[2+offset] = self.density_profile.get_view(fig, ax_arr[2+offset], show_legend=False, custom_title='',
+                                                         show_residual_ax=False)[0]
+        # Then if there is a surface brightness profile thats added too
+        if sb is not None:
+            ax_arr[3+offset] = sb.get_view(fig, ax_arr[3+offset], show_legend=False, custom_title='',
+                                           show_residual_ax=False)[0]
+
+        return ax_arr
+
+    def diagnostic_view(self, src=None, figsize: tuple = None):
+        """
+        This method produces a figure with the most important products that went into the creation of this
+        HydrostaticMass profile, for the purposes of quickly checking that everything looks sensible. The
+        maximum number of plots included is five; mass profile, temperature profile, density profile,
+        surface brightness profile, and ratemap. The RateMap will only be included if the source that this profile
+        was generated from is passed.
+
+        :param GalaxyCluster src: The GalaxyCluster source that this HydrostaticMass profile was generated from.
+        :param tuple figsize: A tuple that sets the size of the diagnostic plot, default is None in which case
+            it is set automatically.
+        """
+
+        # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
+        #  some common sense checks if a source has been passed.
+        num_plots, rt, sb = self._diag_view_prep(src)
+
+        # Calculate a sensible figsize if the user didn't pass one
+        if figsize is None:
+            figsize = (7.2*num_plots, 7)
+
+        # Set up the figure
+        fig = plt.figure(figsize=figsize)
+        # Set up and populate the axes with plots
+        ax_arr = self._gen_diag_view(fig, src, num_plots, rt, sb)
+
+        # And show the figure
+        plt.tight_layout()
+        plt.show()
+
+        plt.close('all')
+
+    def save_diagnostic_view(self, save_path: str, src=None, figsize: tuple = None):
+        """
+        This method saves a figure (without displaying) with the most important products that went into the creation
+        of this HydrostaticMass profile, for the purposes of quickly checking that everything looks sensible. The
+        maximum number of plots included is five; mass profile, temperature profile, density profile, surface
+        brightness profile, and ratemap. The RateMap will only be included if the source that this profile
+        was generated from is passed.
+
+        :param str save_path: The path and filename where the diagnostic figure should be saved.
+        :param GalaxyCluster src: The GalaxyCluster source that this HydrostaticMass profile was generated from.
+        :param tuple figsize: A tuple that sets the size of the diagnostic plot, default is None in which case
+            it is set automatically.
+        """
+        # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
+        #  some common sense checks if a source has been passed.
+        num_plots, rt, sb = self._diag_view_prep(src)
+
+        # Calculate a sensible figsize if the user didn't pass one
+        if figsize is None:
+            figsize = (7.2*num_plots, 7)
+
+        # Set up the figure
+        fig = plt.figure(figsize=figsize)
+        # Set up and populate the axes with plots
+        ax_arr = self._gen_diag_view(fig, src, num_plots, rt, sb)
+
+        # And show the figure
+        plt.tight_layout()
+        plt.savefig(save_path)
+
+        plt.close('all')
+
 
     @property
     def temperature_profile(self) -> GasTemperature3D:

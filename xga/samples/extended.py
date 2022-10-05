@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2022, 17:28. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -675,6 +675,67 @@ class ClusterSample(BaseSample):
             raise ValueError("All hydrostatic masses appear to be NaN.")
 
         return Quantity(ms, 'Msun')
+
+    def calc_overdensity_radii(self, delta: int, temp_model_name: str = None, dens_model_name: str = None) -> Quantity:
+        """
+        A convenience method that allows for the calculation of overdensity radii from hydrostatic mass profiles
+        measured for sources in this sample. This method uses the 'overdensity_radius' method of each mass profile
+        to find the radius that corresponds to the user-supplied overdensity - common choices for cluster analysis
+        are Δ=2500, 500, and 200. Overdensity radii are defined as the radius at which the density is Δ times the
+        critical density of the Universe at the cluster redshift.
+
+        This function is limited, and if  you have generated multiple hydrostatic mass profiles you may have to use
+        the get_hydrostatic_mass_profiles function of each source directly, or use the returned profiles from the
+        function that generated them, then use 'overdensity_radius' yourself.
+
+        If only one hydrostatic mass profile has been generated for each source, then you do not need to specify model
+        names, but if the same temperature and density profiles have been used to make a hydrostatic mass profile but
+        with different models then you may use them.
+
+        :param int delta: The overdensity factor for which a radius is to be calculated.
+        :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
+            hydrostatic mass profile required for measuring overdensity radii, default is None.
+        :param str dens_model_name: The name of the model used to fit the density profile used to generate the
+            hydrostatic mass profile required for measuring overdensity radii, default is None.
+        :return: An astropy quantity array of the calculated radii, in kpc.
+        :rtype: Quantity
+        """
+        # Just a list to store the radii in as they're being calculated - turned into an array quantity at the end
+        rs = []
+        # Iterating over the galaxy clusters in this sample
+        for gcs_ind, gcs in enumerate(self._sources.values()):
+            # First off, we try to fetch hydrostatic mass profile(s), and catch the exception if there
+            #  aren't any matching profiles
+            try:
+                mass_profs = gcs.get_hydrostatic_mass_profiles(temp_model_name=temp_model_name,
+                                                               dens_model_name=dens_model_name)
+                # As I just ask for temperature and density model names, it's entirely possible that there are
+                #  multiple hydrostatic mass profiles that use those two models. If there are then the user
+                #  has to do this the long way around.
+                if isinstance(mass_profs, list):
+                    raise ValueError("There are multiple matching hydrostatic mass profiles associated with {}, "
+                                     "you will have to retrieve profiles and calculate radii "
+                                     "manually.".format(gcs.name))
+
+                try:
+                    # Simply calculate the overdensity radius for the delta requested by the user
+                    rad = mass_profs.overdensity_radius(delta, gcs.redshift, gcs.cosmo)
+                    rs.append(rad)
+                except ValueError:
+                    warn("Overdensity radius calculation for {s} failed because the default starting radii "
+                         "didn't bracket the requested overdensity radius. See the docs of overdensity_radius "
+                         "method of HydrostaticMass for more info.".format(s=gcs.name))
+
+                    rs.append(np.NaN)
+
+            except NoProductAvailableError:
+                # If no dens_prof has been run or something goes wrong then NaNs are added
+                rs.append(np.NaN)
+                warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name))
+
+        # Turn the radii list into a quantity and return it
+        rs = Quantity(rs)
+        return rs
 
     def gm_richness(self, rad_name: str, dens_model: str, prof_outer_rad: Union[Quantity, str], dens_method: str,
                     x_norm: Quantity = Quantity(60), y_norm: Quantity = Quantity(1e+12, 'solMass'),

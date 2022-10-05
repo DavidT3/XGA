@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 21/07/2022, 12:45. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -39,8 +39,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     #  pre-existing image
     if p_type == "image":
         # Maybe let the user decide not to raise errors detected in stderr
-        prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                     extra_info["lo_en"], extra_info["hi_en"])
+        prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd, extra_info["lo_en"],
+                     extra_info["hi_en"])
         if "psf_corr" in extra_info and extra_info["psf_corr"]:
             prod.psf_corrected = True
             prod.psf_bins = extra_info["psf_bins"]
@@ -235,10 +235,12 @@ def sas_call(sas_func):
                 # So now we pass the list of spectra to a AnnularSpectra definition - and it will sort them out
                 #  itself so the order doesn't matter
                 ann_spec = AnnularSpectra(ann_spec_comps[entry])
+                # Refresh the value of ind so that the correct source is used for radii conversion and so that
+                #  the AnnularSpectra is added to the correct source.
+                ind = src_lookup[entry]
                 if sources[ind].redshift is not None:
                     # If we know the redshift we will add the radii to the annular spectra in proper distance units
                     ann_spec.proper_radii = sources[ind].convert_radius(ann_spec.radii, 'kpc')
-                ind = src_lookup[entry]
                 # And adding our exciting new set of annular spectra into the storage structure
                 sources[ind].update_products(ann_spec)
 

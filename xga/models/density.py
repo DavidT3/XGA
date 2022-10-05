@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/04/2022, 15:03. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -72,7 +72,7 @@ class KingProfile1D(BaseModel1D):
 
         priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
 
-        nice_pars = [r"$\beta$", r"R$_{\rm{core}}$", "S$_{0}$"]
+        nice_pars = [r"$\beta$", r"R$_{\rm{core}}$", "N$_{0}$"]
         info_dict = {'author': 'placeholder', 'year': 'placeholder', 'reference': 'placeholder',
                      'general': 'The un-projected version of the beta profile, suitable for a simple fit\n'
                                 ' to 3D density distributions. Describes a simple isothermal sphere.'}
@@ -114,6 +114,121 @@ class KingProfile1D(BaseModel1D):
             beta, r_core, norm = self.par_dists
 
         return (-6*beta*norm*x/np.power(r_core, 2))*np.power((1+np.power(x/r_core, 2)), (-3*beta) - 1)
+
+
+class DoubleKingProfile1D(BaseModel1D):
+    """
+    An XGA model implementation of the double King profile, simply the sum of two King profiles. This describes a
+    radial density profile and assumes spherical symmetry.
+
+    :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+        representation or an astropy unit object.
+    :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
+        used start values. The units are checked against default start values.
+    """
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('Msun/Mpc^3'),
+                 cust_start_pars: List[Quantity] = None):
+        """
+        The init of a subclass of the XGA BaseModel1D class, describing a basic model for galaxy cluster gas
+        density, the king profile.
+        """
+        # If a string representation of a unit was passed then we make it an astropy unit
+        if isinstance(x_unit, str):
+            x_unit = Unit(x_unit)
+        if isinstance(y_unit, str):
+            y_unit = Unit(y_unit)
+
+        poss_y_units = [Unit('Msun/Mpc^3'), Unit('1/cm^3')]
+        y_convertible = [u.is_equivalent(y_unit) for u in poss_y_units]
+        if not any(y_convertible):
+            allowed = ", ".join([u.to_string() for u in poss_y_units])
+            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
+                                      "{a}".format(p=y_unit.to_string(), a=allowed))
+        else:
+            yu_ind = y_convertible.index(True)
+
+        poss_x_units = [kpc, deg, r200, r500, r2500]
+        x_convertible = [u.is_equivalent(x_unit) for u in poss_x_units]
+        if not any(x_convertible):
+            allowed = ", ".join([u.to_string() for u in poss_x_units])
+            raise UnitConversionError("{p} is not convertible to any of the allowed units; "
+                                      "{a}".format(p=x_unit.to_string(), a=allowed))
+        else:
+            xu_ind = x_convertible.index(True)
+
+        r_core_starts = [Quantity(100, 'kpc'), Quantity(0.2, 'deg'), Quantity(0.05, r200), Quantity(0.1, r500),
+                         Quantity(0.5, r2500)]
+        # TODO MAKE THE NEW START PARAMETERS MORE SENSIBLE
+        norm_starts = [Quantity(1e+13, 'Msun/Mpc^3'), Quantity(1e-3, '1/cm^3')]
+        start_pars = [Quantity(1, ''), r_core_starts[xu_ind], norm_starts[yu_ind],
+                      Quantity(1, ''), r_core_starts[xu_ind], norm_starts[yu_ind]]
+        if cust_start_pars is not None:
+            # If the custom start parameters can run this gauntlet without tripping an error then we're all good
+            # This method also returns the custom start pars converted to exactly the same units as the default
+            start_pars = self.compare_units(cust_start_pars, start_pars)
+
+        # TODO MAYBE ADJUST ALL OF THE PRIORS ETC AS THEY'RE JUST COPIED FROM KING
+        r_core_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], 'deg'), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
+                         {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
+        norm_priors = [{'prior': Quantity([1e+12, 1e+16], 'Msun/Mpc^3'), 'type': 'uniform'},
+                       {'prior': Quantity([0, 10], '1/cm^3'), 'type': 'uniform'}]
+
+        priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind],
+                  {'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
+
+        nice_pars = [r"$\beta_{1}$", r"R$_{\rm{core}, 1}$", "N$_{0, 1}$", r"$\beta_{2}$", r"R$_{\rm{core}, 2}$",
+                     "N$_{0, 2}$"]
+        info_dict = {'author': 'placeholder', 'year': 'placeholder', 'reference': 'placeholder',
+                     'general': 'placeholder'}
+        super().__init__(x_unit, y_unit, start_pars, priors, 'double_king', 'Double King Profile', nice_pars,
+                         'Gas Density', info_dict)
+
+    @staticmethod
+    def model(x: Quantity, beta_one: Quantity, r_core_one: Quantity, norm_one: Quantity, beta_two: Quantity,
+              r_core_two: Quantity, norm_two: Quantity) -> Quantity:
+        """
+        The model function for the double King profile.
+
+        :param Quantity x: The radii to calculate y values for.
+        :param Quantity beta_one: The beta slope parameter of the first King model.
+        :param Quantity r_core_one: The core radius of the first King model.
+        :param Quantity norm_one: The normalisation of the first King model.
+        :param Quantity beta_two: The beta slope parameter of the second King model.
+        :param Quantity r_core_two: The core radius of the second King model.
+        :param Quantity norm_two: The normalisation of the second King model.
+        :return: The y values corresponding to the input x values.
+        :rtype: Quantity
+        """
+        return (norm_one * ((1 + (x / r_core_one)**2)**(-3 * beta_one))) + \
+               (norm_two * ((1 + (x / r_core_two)**2)**(-3 * beta_two)))
+
+    def derivative(self, x: Quantity, dx: Quantity = Quantity(0, ''), use_par_dist: bool = False) -> Quantity:
+        """
+        Calculates the gradient of the double King profile at a given point, overriding the numerical method implemented
+        in the BaseModel1D class, as this simple model has an easily derivable first derivative.
+
+        :param Quantity x: The point(s) at which the slope of the model should be measured.
+        :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
+            been left in so that the inputs for this method don't vary between models.
+        :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
+            distribution; this can only be used if a fit has been performed using the model instance.
+            Default is False, in which case the current parameters will be used to calculate a single value.
+        :return: The calculated slope of the model at the supplied x position(s).
+        :rtype: Quantity
+        """
+        x = x[..., None]
+        if not use_par_dist:
+            beta_one, r_core_one, norm_one, beta_two, r_core_two, norm_two = self._model_pars
+        else:
+            beta_one, r_core_one, norm_one, beta_two, r_core_two, norm_two = self.par_dists
+        p1 = (-6*beta_one*norm_one*x/np.power(r_core_one, 2))*np.power((1+np.power(x/r_core_one, 2)), (-3*beta_one) - 1)
+        p2 = (-6*beta_two*norm_two*x/np.power(r_core_two, 2))*np.power((1+np.power(x/r_core_two, 2)), (-3*beta_two) - 1)
+        return p1 + p2
 
 
 class SimpleVikhlininDensity1D(BaseModel1D):
@@ -402,7 +517,7 @@ class VikhlininDensity1D(BaseModel1D):
 
 
 DENS_MODELS = {"simple_vikhlinin_dens": SimpleVikhlininDensity1D, 'king': KingProfile1D,
-               'vikhlinin_dens': VikhlininDensity1D}
+               'double_king': DoubleKingProfile1D, 'vikhlinin_dens': VikhlininDensity1D}
 DENS_MODELS_PAR_NAMES = {n: m().par_publication_names for n, m in DENS_MODELS.items()}
 DENS_MODELS_PUB_NAMES = {n: m().publication_name for n, m in DENS_MODELS.items()}
 
