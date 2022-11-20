@@ -65,25 +65,31 @@ RUN apt-get update \
  && mamba create --name=xga_env python=3.8 fitsio=1.1.7 && mamba init && . ~/.bashrc && mamba activate xga_env &&  \
     pip install xga==${xga_version}
 
+RUN groupadd xga && useradd -r -m -g xga xga \
+ && mkdir -p /opt/heasoft \
+ && mkdir -p /opt/sas \
+ && chown -R xga:xga /opt/heasoft \
+ && chown -R xga:xga /opt/sas
 
-#RUN groupadd heasoft && useradd -r -m -g heasoft heasoft \
-# && mkdir -p /opt/heasoft/caldb \
-# && chown -R heasoft:heasoft /opt/heasoft
-#
-#USER heasoft
-#WORKDIR /home/heasoft
-#
-## Retrieve the HEASoft source code, unpack, configure,
-## make, install, clean up, and create symlinks....
-#ARG heasoft_tarfile_suffix=src
-#RUN wget https://heasarc.gsfc.nasa.gov/FTP/software/lheasoft/lheasoft${HEASOFT_VERSION}/heasoft-${HEASOFT_VERSION}${heasoft_tarfile_suffix}.tar.gz \
-# && echo "Unpacking heasoft-${HEASOFT_VERSION}${heasoft_tarfile_suffix}.tar.gz..." \
-# && tar xzf heasoft-${HEASOFT_VERSION}${heasoft_tarfile_suffix}.tar.gz \
-# && rm -f heasoft-${HEASOFT_VERSION}${heasoft_tarfile_suffix}.tar.gz \
-# && cd ${HOME}/heasoft-${HEASOFT_VERSION}/BUILD_DIR/ \
-# && ./configure --prefix=/opt/heasoft 2>&1 | tee ${HOME}/configure.log \
-# && make 2>&1 | tee ${HOME}/build.log \
-# && make install 2>&1 | tee ${HOME}/install.log \
+COPY heasoft_download.py /home/xga
+
+USER xga
+WORKDIR /home/xga
+
+# Retrieve the HEASoft source code, unpack, configure,
+# make, install, clean up, and create symlinks....
+RUN echo Downloading a minimal HEASoft installation... &&   python heasoft_download.py \
+ && echo "Unpacking HEASoft..." \
+ && mkdir heasoft \
+ && tar -xzf heasoft.tar.gz -C heasoft --strip-components=1 \
+ && rm -f heasoft.tar.gz
+
+RUN cd ${HOME}/heasoft/BUILD_DIR/ \
+ && mamba activate xga_env \
+ && echo "Building HEASoft..." \
+ && ./configure --prefix=/opt/heasoft 2>&1 | tee ${HOME}/configure.log \
+ && make 2>&1 | tee ${HOME}/build.log \
+ && make install 2>&1 | tee ${HOME}/install.log \
 # && /bin/bash -c 'cd /opt/heasoft/; for loop in x86_64*/*; do ln -sf $loop; done' \
 # && cd ${HOME}/heasoft-${HEASOFT_VERSION} \
 # && cp -p Xspec/BUILD_DIR/hmakerc /opt/heasoft/bin/ \
@@ -91,14 +97,14 @@ RUN apt-get update \
 # && cd \
 # && gzip -9 ${HOME}/*.log \
 # && cp -p ${HOME}/heasoft-${HEASOFT_VERSION}/Release_Notes* /opt/heasoft/ \
-# && rm -rf ${HOME}/heasoft-${HEASOFT_VERSION}*
-#
+ && rm -rf ${HOME}/heasoft
+
 ## Configure shells...
-#RUN /bin/echo >> /home/heasoft/.bashrc \
-# && /bin/echo '# Initialize HEASoft environment' >> /home/heasoft/.bashrc \
-# && /bin/echo 'export HEADAS=/opt/heasoft' >> /home/heasoft/.bashrc \
-# && /bin/echo '. $HEADAS/headas-init.sh' >> /home/heasoft/.bashrc \
-# && /bin/echo >> /home/heasoft/.bashrc \
+RUN /bin/echo >> /home/heasoft/.bashrc \
+ && /bin/echo '# Initialize HEASoft environment' >> /home/heasoft/.bashrc \
+ && /bin/echo 'export HEADAS=/opt/heasoft' >> /home/heasoft/.bashrc \
+ && /bin/echo '. $HEADAS/headas-init.sh' >> /home/heasoft/.bashrc \
+ && /bin/echo >> /home/heasoft/.bashrc \
 # && /bin/echo '# Initialize environment for CALDB' >> /home/heasoft/.bashrc \
 # && /bin/echo 'export CALDB=https://heasarc.gsfc.nasa.gov/FTP/caldb' >> /home/heasoft/.bashrc \
 # && /bin/echo 'export CALDBCONFIG=/opt/heasoft/caldb/caldb.config' >> /home/heasoft/.bashrc \
@@ -125,37 +131,37 @@ RUN apt-get update \
 #    && wget https://heasarc.gsfc.nasa.gov/FTP/caldb/software/tools/caldb.config \
 #    && wget https://heasarc.gsfc.nasa.gov/FTP/caldb/software/tools/alias_config.fits
 #
-#ENV CC=/usr/bin/gcc \
-#    CXX=/usr/bin/g++ \
-#    FC=/usr/bin/gfortran \
-#    PERL=/usr/bin/perl \
-#    PERLLIB=/opt/heasoft/lib/perl \
-#    PERL5LIB=/opt/heasoft/lib/perl \
+ENV CC=/usr/bin/gcc \
+    CXX=/usr/bin/g++ \
+    FC=/usr/bin/gfortran \
+    PERL=/usr/bin/perl \
+    PERLLIB=/opt/heasoft/lib/perl \
+    PERL5LIB=/opt/heasoft/lib/perl \
 #    PYTHON=/usr/bin/python \
 #    PYTHONPATH=/opt/heasoft/lib/python:/opt/heasoft/lib \
-#    PATH=/opt/heasoft/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-#    HEADAS=/opt/heasoft \
-#    LHEASOFT=/opt/heasoft \
-#    FTOOLS=/opt/heasoft \
-#    LD_LIBRARY_PATH=/opt/heasoft/lib \
-#    LHEAPERL=/usr/bin/perl \
-#    PFCLOBBER=1 \
-#    PFILES=/home/heasoft/pfiles;/opt/heasoft/syspfiles \
-#    FTOOLSINPUT=stdin \
-#    FTOOLSOUTPUT=stdout \
-#    LHEA_DATA=/opt/heasoft/refdata \
-#    LHEA_HELP=/opt/heasoft/help \
-#    EXT=lnx \
-#    PGPLOT_FONT=/opt/heasoft/lib/grfont.dat \
-#    PGPLOT_RGB=/opt/heasoft/lib/rgb.txt \
-#    PGPLOT_DIR=/opt/heasoft/lib \
-#    POW_LIBRARY=/opt/heasoft/lib/pow \
-#    XRDEFAULTS=/opt/heasoft/xrdefaults \
-#    TCLRL_LIBDIR=/opt/heasoft/lib \
-#    XANADU=/opt/heasoft \
-#    XANBIN=/opt/heasoft \
-#    CALDB=https://heasarc.gsfc.nasa.gov/FTP/caldb \
-#    CALDBCONFIG=/opt/heasoft/caldb/caldb.config \
-#    CALDBALIAS=/opt/heasoft/caldb/alias_config.fits
+    PATH=/opt/heasoft/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    HEADAS=/opt/heasoft \
+    LHEASOFT=/opt/heasoft \
+    FTOOLS=/opt/heasoft \
+    LD_LIBRARY_PATH=/opt/heasoft/lib \
+    LHEAPERL=/usr/bin/perl \
+    PFCLOBBER=1 \
+    PFILES=/home/heasoft/pfiles;/opt/heasoft/syspfiles \
+    FTOOLSINPUT=stdin \
+    FTOOLSOUTPUT=stdout \
+    LHEA_DATA=/opt/heasoft/refdata \
+    LHEA_HELP=/opt/heasoft/help \
+    EXT=lnx \
+    PGPLOT_FONT=/opt/heasoft/lib/grfont.dat \
+    PGPLOT_RGB=/opt/heasoft/lib/rgb.txt \
+    PGPLOT_DIR=/opt/heasoft/lib \
+    POW_LIBRARY=/opt/heasoft/lib/pow \
+    XRDEFAULTS=/opt/heasoft/xrdefaults \
+    TCLRL_LIBDIR=/opt/heasoft/lib \
+    XANADU=/opt/heasoft \
+    XANBIN=/opt/heasoft \
+    CALDB=https://heasarc.gsfc.nasa.gov/FTP/caldb \
+    CALDBCONFIG=/opt/heasoft/caldb/caldb.config \
+    CALDBALIAS=/opt/heasoft/caldb/alias_config.fits
 #
-#CMD [ "fversion" ]
+CMD [ "fversion" ]
