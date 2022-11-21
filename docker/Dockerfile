@@ -5,6 +5,9 @@
 #  module within a Docker container
 #  Inspired by the official HEASOFT Dockerfile (https://heasarc.gsfc.nasa.gov/docs/software/heasoft/docker.html)
 
+# NOTES FOR FUTURE DAVID
+#  https://pythonspeed.com/articles/activate-conda-dockerfile/ - has info on activating Conda in Docker
+
 #FROM ubuntu:20.04
 FROM condaforge/mambaforge:22.9.0-1
 
@@ -60,108 +63,120 @@ RUN apt-get update \
 	vim \
 	wget \
 	xorg-dev \
+    nano \
  && apt-get clean \
- && rm -rf /var/lib/apt/lists/* \
- && mamba create --name=xga_env python=3.8 fitsio=1.1.7 && mamba init && . ~/.bashrc && mamba activate xga_env &&  \
-    pip install xga==${xga_version}
+ && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd xga && useradd -r -m -g xga xga \
  && mkdir -p /opt/heasoft \
  && mkdir -p /opt/sas \
  && chown -R xga:xga /opt/heasoft \
- && chown -R xga:xga /opt/sas
+ && chown -R xga:xga /opt/sas \
+ && chown -R xga:xga /opt/conda
 
-COPY heasoft_download.py /home/xga
+# TODO REMOVE THIS IN THE END, JUST MAKES IT QUICKER THAN DOWNLOADING EVERY TIME I WANT TO BUILD WITHOUT CACHE
+COPY heasoft.tar.gz /home/xga
+COPY
+RUN chown -R xga:xga /home/xga/heasoft.tar.gz
 
 USER xga
 WORKDIR /home/xga
 
+COPY heasoft_download.py /home/xga
+
 # Retrieve the HEASoft source code, unpack, configure,
 # make, install, clean up, and create symlinks....
-RUN echo Downloading a minimal HEASoft installation... &&   python heasoft_download.py \
+RUN whoami && echo $0 && echo Downloading a minimal HEASoft installation...  \
+# && python heasoft_download.py \
  && echo "Unpacking HEASoft..." \
  && mkdir heasoft \
  && tar -xzf heasoft.tar.gz -C heasoft --strip-components=1 \
+# && chown -R xga:xga /home/heasoft \
  && rm -f heasoft.tar.gz
 
+RUN mamba create --name=xga_env python=3.8 fitsio=1.1.7
+
+# Make RUN commands use the new environment:
+SHELL ["mamba", "run", "-n", "xga_env", "/bin/bash", "--login", "-c"]
+
 RUN cd ${HOME}/heasoft/BUILD_DIR/ \
- && mamba activate xga_env \
+ && which python \
+ && pip install xga \
  && echo "Building HEASoft..." \
  && ./configure --prefix=/opt/heasoft 2>&1 | tee ${HOME}/configure.log \
  && make 2>&1 | tee ${HOME}/build.log \
  && make install 2>&1 | tee ${HOME}/install.log \
 # && /bin/bash -c 'cd /opt/heasoft/; for loop in x86_64*/*; do ln -sf $loop; done' \
-# && cd ${HOME}/heasoft-${HEASOFT_VERSION} \
-# && cp -p Xspec/BUILD_DIR/hmakerc /opt/heasoft/bin/ \
-# && cp -p Xspec/BUILD_DIR/Makefile-std /opt/heasoft/bin/ \
-# && cd \
-# && gzip -9 ${HOME}/*.log \
-# && cp -p ${HOME}/heasoft-${HEASOFT_VERSION}/Release_Notes* /opt/heasoft/ \
+ && cp -p Xspec/BUILD_DIR/hmakerc /opt/heasoft/bin/ \
+ && cp -p Xspec/BUILD_DIR/Makefile-std /opt/heasoft/bin/ \
+ && cd \
+ && gzip -9 ${HOME}/*.log \
+ && cp -p ${HOME}/heasoft/Release_Notes* /opt/heasoft/ \
  && rm -rf ${HOME}/heasoft
 
 ## Configure shells...
-RUN /bin/echo >> /home/heasoft/.bashrc \
- && /bin/echo '# Initialize HEASoft environment' >> /home/heasoft/.bashrc \
- && /bin/echo 'export HEADAS=/opt/heasoft' >> /home/heasoft/.bashrc \
- && /bin/echo '. $HEADAS/headas-init.sh' >> /home/heasoft/.bashrc \
- && /bin/echo >> /home/heasoft/.bashrc \
-# && /bin/echo '# Initialize environment for CALDB' >> /home/heasoft/.bashrc \
-# && /bin/echo 'export CALDB=https://heasarc.gsfc.nasa.gov/FTP/caldb' >> /home/heasoft/.bashrc \
-# && /bin/echo 'export CALDBCONFIG=/opt/heasoft/caldb/caldb.config' >> /home/heasoft/.bashrc \
-# && /bin/echo 'export CALDBALIAS=/opt/heasoft/caldb/alias_config.fits' >> /home/heasoft/.bashrc \
-# && /bin/echo >> /home/heasoft/.profile \
-# && /bin/echo '# Initialize HEASoft environment' >> /home/heasoft/.profile \
-# && /bin/echo 'export HEADAS=/opt/heasoft' >> /home/heasoft/.profile \
-# && /bin/echo '. $HEADAS/headas-init.sh' >> /home/heasoft/.profile \
-# && /bin/echo >> /home/heasoft/.profile \
-# && /bin/echo '# Initialize environment for CALDB' >> /home/heasoft/.profile \
-# && /bin/echo 'export CALDB=https://heasarc.gsfc.nasa.gov/FTP/caldb' >> /home/heasoft/.profile \
-# && /bin/echo 'export CALDBCONFIG=/opt/heasoft/caldb/caldb.config' >> /home/heasoft/.profile \
-# && /bin/echo 'export CALDBALIAS=/opt/heasoft/caldb/alias_config.fits' >> /home/heasoft/.profile \
-# && /bin/echo '# Initialize HEASoft environment' >> /home/heasoft/.cshrc \
-# && /bin/echo 'setenv HEADAS /opt/heasoft' >> /home/heasoft/.cshrc \
-# && /bin/echo 'source $HEADAS/headas-init.csh' >> /home/heasoft/.cshrc \
-# && /bin/echo >> /home/heasoft/.cshrc \
-# && /bin/echo '# Initialize environment for CALDB' >> /home/heasoft/.cshrc \
-# && /bin/echo 'setenv CALDB https://heasarc.gsfc.nasa.gov/FTP/caldb' >> /home/heasoft/.cshrc \
-# && /bin/echo 'setenv CALDBCONFIG /opt/heasoft/caldb/caldb.config' >> /home/heasoft/.cshrc \
-# && /bin/echo 'setenv CALDBALIAS /opt/heasoft/caldb/alias_config.fits' >> /home/heasoft/.cshrc
-#
-#RUN cd /opt/heasoft/caldb \
-#    && wget https://heasarc.gsfc.nasa.gov/FTP/caldb/software/tools/caldb.config \
-#    && wget https://heasarc.gsfc.nasa.gov/FTP/caldb/software/tools/alias_config.fits
-#
-ENV CC=/usr/bin/gcc \
-    CXX=/usr/bin/g++ \
-    FC=/usr/bin/gfortran \
-    PERL=/usr/bin/perl \
-    PERLLIB=/opt/heasoft/lib/perl \
-    PERL5LIB=/opt/heasoft/lib/perl \
-#    PYTHON=/usr/bin/python \
-#    PYTHONPATH=/opt/heasoft/lib/python:/opt/heasoft/lib \
-    PATH=/opt/heasoft/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    HEADAS=/opt/heasoft \
-    LHEASOFT=/opt/heasoft \
-    FTOOLS=/opt/heasoft \
-    LD_LIBRARY_PATH=/opt/heasoft/lib \
-    LHEAPERL=/usr/bin/perl \
-    PFCLOBBER=1 \
-    PFILES=/home/heasoft/pfiles;/opt/heasoft/syspfiles \
-    FTOOLSINPUT=stdin \
-    FTOOLSOUTPUT=stdout \
-    LHEA_DATA=/opt/heasoft/refdata \
-    LHEA_HELP=/opt/heasoft/help \
-    EXT=lnx \
-    PGPLOT_FONT=/opt/heasoft/lib/grfont.dat \
-    PGPLOT_RGB=/opt/heasoft/lib/rgb.txt \
-    PGPLOT_DIR=/opt/heasoft/lib \
-    POW_LIBRARY=/opt/heasoft/lib/pow \
-    XRDEFAULTS=/opt/heasoft/xrdefaults \
-    TCLRL_LIBDIR=/opt/heasoft/lib \
-    XANADU=/opt/heasoft \
-    XANBIN=/opt/heasoft \
-    CALDB=https://heasarc.gsfc.nasa.gov/FTP/caldb \
-    CALDBCONFIG=/opt/heasoft/caldb/caldb.config \
-    CALDBALIAS=/opt/heasoft/caldb/alias_config.fits
-#
-CMD [ "fversion" ]
+#RUN /bin/echo >> /home/xga/.bashrc \
+# && /bin/echo '# Initialize HEASoft environment' >> /home/xga/.bashrc \
+# && /bin/echo 'export HEADAS=/opt/heasoft' >> /home/xga/.bashrc \
+# && /bin/echo '. $HEADAS/headas-init.sh' >> /home/xga/.bashrc \
+# && /bin/echo >> /home/heasoft/.bashrc \
+## && /bin/echo '# Initialize environment for CALDB' >> /home/heasoft/.bashrc \
+## && /bin/echo 'export CALDB=https://heasarc.gsfc.nasa.gov/FTP/caldb' >> /home/heasoft/.bashrc \
+## && /bin/echo 'export CALDBCONFIG=/opt/heasoft/caldb/caldb.config' >> /home/heasoft/.bashrc \
+## && /bin/echo 'export CALDBALIAS=/opt/heasoft/caldb/alias_config.fits' >> /home/heasoft/.bashrc \
+## && /bin/echo >> /home/heasoft/.profile \
+## && /bin/echo '# Initialize HEASoft environment' >> /home/heasoft/.profile \
+## && /bin/echo 'export HEADAS=/opt/heasoft' >> /home/heasoft/.profile \
+## && /bin/echo '. $HEADAS/headas-init.sh' >> /home/heasoft/.profile \
+## && /bin/echo >> /home/heasoft/.profile \
+## && /bin/echo '# Initialize environment for CALDB' >> /home/heasoft/.profile \
+## && /bin/echo 'export CALDB=https://heasarc.gsfc.nasa.gov/FTP/caldb' >> /home/heasoft/.profile \
+## && /bin/echo 'export CALDBCONFIG=/opt/heasoft/caldb/caldb.config' >> /home/heasoft/.profile \
+## && /bin/echo 'export CALDBALIAS=/opt/heasoft/caldb/alias_config.fits' >> /home/heasoft/.profile \
+## && /bin/echo '# Initialize HEASoft environment' >> /home/heasoft/.cshrc \
+## && /bin/echo 'setenv HEADAS /opt/heasoft' >> /home/heasoft/.cshrc \
+## && /bin/echo 'source $HEADAS/headas-init.csh' >> /home/heasoft/.cshrc \
+## && /bin/echo >> /home/heasoft/.cshrc \
+## && /bin/echo '# Initialize environment for CALDB' >> /home/heasoft/.cshrc \
+## && /bin/echo 'setenv CALDB https://heasarc.gsfc.nasa.gov/FTP/caldb' >> /home/heasoft/.cshrc \
+## && /bin/echo 'setenv CALDBCONFIG /opt/heasoft/caldb/caldb.config' >> /home/heasoft/.cshrc \
+## && /bin/echo 'setenv CALDBALIAS /opt/heasoft/caldb/alias_config.fits' >> /home/heasoft/.cshrc
+##
+##RUN cd /opt/heasoft/caldb \
+##    && wget https://heasarc.gsfc.nasa.gov/FTP/caldb/software/tools/caldb.config \
+##    && wget https://heasarc.gsfc.nasa.gov/FTP/caldb/software/tools/alias_config.fits
+##
+#ENV CC=/usr/bin/gcc \
+#    CXX=/usr/bin/g++ \
+#    FC=/usr/bin/gfortran \
+#    PERL=/usr/bin/perl \
+#    PERLLIB=/opt/heasoft/lib/perl \
+#    PERL5LIB=/opt/heasoft/lib/perl \
+##    PYTHON=/usr/bin/python \
+##    PYTHONPATH=/opt/heasoft/lib/python:/opt/heasoft/lib \
+#    PATH=/opt/heasoft/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+#    HEADAS=/opt/heasoft \
+#    LHEASOFT=/opt/heasoft \
+#    FTOOLS=/opt/heasoft \
+#    LD_LIBRARY_PATH=/opt/heasoft/lib \
+#    LHEAPERL=/usr/bin/perl \
+#    PFCLOBBER=1 \
+#    PFILES=/home/heasoft/pfiles;/opt/heasoft/syspfiles \
+#    FTOOLSINPUT=stdin \
+#    FTOOLSOUTPUT=stdout \
+#    LHEA_DATA=/opt/heasoft/refdata \
+#    LHEA_HELP=/opt/heasoft/help \
+#    EXT=lnx \
+#    PGPLOT_FONT=/opt/heasoft/lib/grfont.dat \
+#    PGPLOT_RGB=/opt/heasoft/lib/rgb.txt \
+#    PGPLOT_DIR=/opt/heasoft/lib \
+#    POW_LIBRARY=/opt/heasoft/lib/pow \
+#    XRDEFAULTS=/opt/heasoft/xrdefaults \
+#    TCLRL_LIBDIR=/opt/heasoft/lib \
+#    XANADU=/opt/heasoft \
+#    XANBIN=/opt/heasoft \
+#    CALDB=https://heasarc.gsfc.nasa.gov/FTP/caldb \
+#    CALDBCONFIG=/opt/heasoft/caldb/caldb.config \
+#    CALDBALIAS=/opt/heasoft/caldb/alias_config.fits
+
+#CMD [ "fversion" ]
