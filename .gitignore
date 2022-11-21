@@ -5,3 +5,4 @@
 xga_output
 .ipynb_checkpoints
 /docker/heasoft.tar.gz
+/docker/sas_20.0.0-Ubuntu20.04.tgz
