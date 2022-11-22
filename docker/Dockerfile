@@ -76,8 +76,9 @@ RUN groupadd xga && useradd -r -m -g xga xga \
 
 # TODO REMOVE THIS IN THE END, JUST MAKES IT QUICKER THAN DOWNLOADING EVERY TIME I WANT TO BUILD WITHOUT CACHE
 COPY heasoft.tar.gz /home/xga
-COPY
+COPY sas_20.0.0-Ubuntu20.04.tgz /home/xga
 RUN chown -R xga:xga /home/xga/heasoft.tar.gz
+RUN chown -R xga:xga /home/xga/sas_20.0.0-Ubuntu20.04.tgz
 
 USER xga
 WORKDIR /home/xga
@@ -86,13 +87,16 @@ COPY heasoft_download.py /home/xga
 
 # Retrieve the HEASoft source code, unpack, configure,
 # make, install, clean up, and create symlinks....
-RUN whoami && echo $0 && echo Downloading a minimal HEASoft installation...  \
+RUN echo Downloading a minimal HEASoft installation...  \
 # && python heasoft_download.py \
  && echo "Unpacking HEASoft..." \
  && mkdir heasoft \
+ && mkdir sas \
  && tar -xzf heasoft.tar.gz -C heasoft --strip-components=1 \
+ && tar -xf sas_20.0.0-Ubuntu20.04.tgz -C /opt/sas/ \
 # && chown -R xga:xga /home/heasoft \
- && rm -f heasoft.tar.gz
+ && rm -f heasoft.tar.gz \
+ && rm -f sas_20.0.0-Ubuntu20.04.tgz
 
 RUN mamba create --name=xga_env python=3.8 fitsio=1.1.7
 
@@ -106,20 +110,20 @@ RUN cd ${HOME}/heasoft/BUILD_DIR/ \
  && ./configure --prefix=/opt/heasoft 2>&1 | tee ${HOME}/configure.log \
  && make 2>&1 | tee ${HOME}/build.log \
  && make install 2>&1 | tee ${HOME}/install.log \
-# && /bin/bash -c 'cd /opt/heasoft/; for loop in x86_64*/*; do ln -sf $loop; done' \
- && cp -p Xspec/BUILD_DIR/hmakerc /opt/heasoft/bin/ \
- && cp -p Xspec/BUILD_DIR/Makefile-std /opt/heasoft/bin/ \
+ && /bin/bash -c 'cd /opt/heasoft/; if compgen -G "x86_64*" > /dev/null; then for loop in x86_64*/*;  \
+    do ln -sf $loop; done; else for loop in aarch64*/*; do ln -sf $loop; done; fi' \
+# && cp -p Xspec/BUILD_DIR/hmakerc /opt/heasoft/bin/ \
+# && cp -p Xspec/BUILD_DIR/Makefile-std /opt/heasoft/bin/ \
  && cd \
  && gzip -9 ${HOME}/*.log \
  && cp -p ${HOME}/heasoft/Release_Notes* /opt/heasoft/ \
  && rm -rf ${HOME}/heasoft
 
-## Configure shells...
-#RUN /bin/echo >> /home/xga/.bashrc \
-# && /bin/echo '# Initialize HEASoft environment' >> /home/xga/.bashrc \
-# && /bin/echo 'export HEADAS=/opt/heasoft' >> /home/xga/.bashrc \
-# && /bin/echo '. $HEADAS/headas-init.sh' >> /home/xga/.bashrc \
-# && /bin/echo >> /home/heasoft/.bashrc \
+# Configure shells for HEASoft...
+RUN /bin/echo >> /home/xga/.bashrc \
+ && /bin/echo '# Initialize HEASoft environment' >> /home/xga/.bashrc \
+ && /bin/echo 'export HEADAS=/opt/heasoft' >> /home/xga/.bashrc \
+ && /bin/echo '. $HEADAS/headas-init.sh' >> /home/xga/.bashrc \
 ## && /bin/echo '# Initialize environment for CALDB' >> /home/heasoft/.bashrc \
 ## && /bin/echo 'export CALDB=https://heasarc.gsfc.nasa.gov/FTP/caldb' >> /home/heasoft/.bashrc \
 ## && /bin/echo 'export CALDBCONFIG=/opt/heasoft/caldb/caldb.config' >> /home/heasoft/.bashrc \
@@ -141,7 +145,19 @@ RUN cd ${HOME}/heasoft/BUILD_DIR/ \
 ## && /bin/echo 'setenv CALDB https://heasarc.gsfc.nasa.gov/FTP/caldb' >> /home/heasoft/.cshrc \
 ## && /bin/echo 'setenv CALDBCONFIG /opt/heasoft/caldb/caldb.config' >> /home/heasoft/.cshrc \
 ## && /bin/echo 'setenv CALDBALIAS /opt/heasoft/caldb/alias_config.fits' >> /home/heasoft/.cshrc
-##
+
+ENV SAS_PERL=/usr/bin/perl
+
+# Install SAS
+RUN cd /opt/sas \
+ && ./install.sh \
+ && cd ${HOME} \
+ && /bin/echo '# Initialize SAS' >> /home/xga/.bashrc \
+ && /bin/echo 'export SAS_DIR=/opt/sas/xmmsas_*' >> /home/xga/.bashrc \
+# && /bin/echo 'source $SAS_DIR/setsas.sh' >> /home/xga/.bashrc
+# && /bin/echo 'export SAS_CCFPATH=/home/xga/xmm_ccfs' >> /home/xga/.bashrc \
+ && /bin/echo 'conda activate xga_env' >> /home/xga/.bashrc
+
 ##RUN cd /opt/heasoft/caldb \
 ##    && wget https://heasarc.gsfc.nasa.gov/FTP/caldb/software/tools/caldb.config \
 ##    && wget https://heasarc.gsfc.nasa.gov/FTP/caldb/software/tools/alias_config.fits
@@ -179,4 +195,4 @@ RUN cd ${HOME}/heasoft/BUILD_DIR/ \
 #    CALDBCONFIG=/opt/heasoft/caldb/caldb.config \
 #    CALDBALIAS=/opt/heasoft/caldb/alias_config.fits
 
-#CMD [ "fversion" ]
+#CMD ["conda", "activate", "xga_env"]
