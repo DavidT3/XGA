@@ -33,11 +33,13 @@ CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 # Section of the config file for setting up the XGA module
 XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/"}
 # Will have to make it clear in the documentation what is allowed here, and which can be left out
-XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
-             "clean_pn_evts": "/this/is/required/{obs_id}/pn_exp1_clean_evts.fits",
-             "clean_mos1_evts": "/this/is/required/{obs_id}/mos1_exp1_clean_evts.fits",
-             "clean_mos2_evts": "/this/is/required/{obs_id}/mos2_exp1_clean_evts.fits",
-             "attitude_file": "/this/is/required/{obs_id}/attitude.fits",
+# DAVID_QUESTION unsure of equivalent clean_tm_events since I think you did the xmm equivalent yourself??
+# DAVID_QUESTION are you happy with this wording in the path names?
+XMM_FILES = {"root_xmm_dir": "/this/is/required_for_xmm/xmm_obs/data/",
+             "clean_pn_evts": "/this/is/required_for_xmm/{obs_id}/pn_exp1_clean_evts.fits",
+             "clean_mos1_evts": "/this/is/required_for_xmm/{obs_id}/mos1_exp1_clean_evts.fits",
+             "clean_mos2_evts": "/this/is/required_for_xmm/{obs_id}/mos2_exp1_clean_evts.fits",
+             "attitude_file": "/this/is/required_for_xmm/{obs_id}/attitude.fits",
              "lo_en": ['0.50', '2.00'],
              "hi_en": ['2.00', '10.00'],
              "pn_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-pn_merged_img.fits",
@@ -47,7 +49,16 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "mos1_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos1_merged_expmap.fits",
              "mos2_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_expmap.fits",
              "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
+EROSITA_FILES = {"root_eROSITA_dir": "/this/is/required_for_eROSITA/eROSITA_obs/data/", 
+            "eROSITA_calibration_database": "/this/is/required_for_eROSITA/eROSITA_calibration/",
+            # JESS_TODO check if these bounds would be the same for erosita --> they would need a different variable name
+            "lo_en": ['0.50', '2.00'],
+            "hi_en": ['2.00', '10.00'],
+            "region_file": "/this/is/optional/eROSITA_obs/regions/{obs_id}/regions.reg"}
+# List of sections for setting up telescope data paths in config file
+TELESCOPE_FILES = ['XMM_FILES', 'EROSITA_FILES']
 # List of XMM products supported by XGA that are allowed to be energy bound
+# DAVID_QUESTION unsure of what the combined images are
 ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap"]
 # These are the built in profile types
 PROFILE_PRODUCTS = ["brightness_profile", "gas_density_profile", "gas_mass_profile", "1d_apec_norm_profile",
@@ -57,7 +68,9 @@ COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
 # List of all XMM products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
                     ] + ENERGY_BOUND_PRODUCTS + PROFILE_PRODUCTS + COMBINED_PROFILE_PRODUCTS
-XMM_INST = ["pn", "mos1", "mos2"]
+XMM_INST = {"XMM":{["pn", "mos1", "mos2"]},
+        "EROSITA": {["tm1, tm2, tm3, tm4, tm5, tm6, tm7"]} 
+        }
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
 BANNED_FILTS = ['CalClosed', 'Closed']
 
@@ -300,6 +313,9 @@ if not os.path.exists(CONFIG_FILE):
     xga_default["XGA_SETUP"] = XGA_CONFIG
     xga_default.add_section("XMM_FILES")
     xga_default["XMM_FILES"] = XMM_FILES
+    xga_default.add_section("EROSTIA_FILES")
+    xga_default["EROSITA_FILES"] = EROSITA_FILES
+
     with open(CONFIG_FILE, 'w') as new_cfg:
         xga_default.write(new_cfg)
 
@@ -313,7 +329,7 @@ else:
     # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
     xga_conf.read(CONFIG_FILE)
     keys_to_check = ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file"]
-    # Here I check that the installer has actually changed the three events file paths
+    # Here I check that the installer has actually changed the events file paths for each telescope
     all_changed = all([xga_conf["XMM_FILES"][key] != XMM_FILES[key] for key in keys_to_check])
     if not all_changed:
         raise XGAConfigError("Some events file paths (or the root_xmm_dir) in the config have not "
