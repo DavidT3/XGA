@@ -63,6 +63,7 @@ COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
 # List of all products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
                     ] + ENERGY_BOUND_PRODUCTS + PROFILE_PRODUCTS + COMBINED_PROFILE_PRODUCTS
+# JESS_TODO changing this to a dict will break lots of big functions in base.py, will fix them later
 XMM_INST = {"xmm": ["pn", "mos1", "mos2"],
             "erosita": ["tm1, tm2, tm3, tm4, tm5, tm6, tm7"]}
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
@@ -101,26 +102,36 @@ MEAN_MOL_WEIGHT = 0.61
 # A centralised constant to define what radius labels are allowed
 RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
 
-
-def xmm_obs_id_test(test_string: str) -> bool:
+# JESS_TODO used to be called xmm_obs_id_test, its used in observation_census
+def obs_id_test(telescope: str, test_string: str) -> bool:
     """
-    Crude function to try and determine if a string follows the pattern of an XMM ObsID.
+    Crude function to try and determine if a string follows the pattern
+    of an ObsID from the supported telescopes.
 
+    :param str telescope: The telescope for the ObsID we wish to check. 
     :param str test_string: The string we wish to test.
-    :return: Whether the string is probably an XMM ObsID or not.
+    :return: Whether the string is probably an ObsID from the corresponding telescope or not.
     :rtype: bool
     """
-    probably_xmm = False
-    # XMM ObsIDs are ten characters long, and making sure there is no . that might indicate a file extension.
-    if len(test_string) == 10 and '.' not in test_string:
-        try:
-            # To our constant pain, XMM ObsIDs can convert to integers, so if this works then its likely
-            # an XMM ObsID.
-            int(test_string)
-            probably_xmm = True
-        except ValueError:
-            pass
-    return probably_xmm
+    if telescope == "xmm":
+        probably_xmm = False
+        # XMM ObsIDs are ten characters long, and making sure there is no . that might indicate a file extension.
+        if len(test_string) == 10 and '.' not in test_string:
+            try:
+                # To our constant pain, XMM ObsIDs can convert to integers, so if this works then its likely
+                # an XMM ObsID.
+                int(test_string)
+                probably_xmm = True
+            except ValueError:
+                pass
+        return probably_xmm
+    
+    if telescope == "erosita":
+        probably_erosita = False
+        # Obviously a terrible test, but only have 4 obs ids to work with at the moment
+        if not test_string.isnumeric():
+            probably_erosita = True
+        return probably_erosita
 
 
 def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame]:
