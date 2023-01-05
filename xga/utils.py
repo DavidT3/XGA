@@ -33,15 +33,13 @@ CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 # Section of the config file for setting up the XGA module
 XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/"}
 # Will have to make it clear in the documentation what is allowed here, and which can be left out
-# DAVID_QUESTION unsure of equivalent clean_tm_events since I think you did the xmm equivalent yourself??
-# DAVID_QUESTION are you happy with this wording in the path names?
 XMM_FILES = {"root_xmm_dir": "/this/is/required_for_xmm/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required_for_xmm/{obs_id}/pn_exp1_clean_evts.fits",
              "clean_mos1_evts": "/this/is/required_for_xmm/{obs_id}/mos1_exp1_clean_evts.fits",
              "clean_mos2_evts": "/this/is/required_for_xmm/{obs_id}/mos2_exp1_clean_evts.fits",
              "attitude_file": "/this/is/required_for_xmm/{obs_id}/attitude.fits",
-             "lo_en": ['0.50', '2.00'],
-             "hi_en": ['2.00', '10.00'],
+             "lo_en_xmm": ['0.50', '2.00'],
+             "hi_en_xmm": ['2.00', '10.00'],
              "pn_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-pn_merged_img.fits",
              "mos1_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos1_merged_img.fits",
              "mos2_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_img.fits",
@@ -49,31 +47,28 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required_for_xmm/xmm_obs/data/",
              "mos1_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos1_merged_expmap.fits",
              "mos2_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_expmap.fits",
              "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
-EROSITA_FILES = {"root_eROSITA_dir": "/this/is/required_for_eROSITA/eROSITA_obs/data/", 
-            "eROSITA_calibration_database": "/this/is/required_for_eROSITA/eROSITA_calibration/",
-            # JESS_TODO check if these bounds would be the same for erosita --> they would need a different variable name
-            "lo_en": ['0.50', '2.00'],
-            "hi_en": ['2.00', '10.00'],
-            "region_file": "/this/is/optional/eROSITA_obs/regions/{obs_id}/regions.reg"}
-# List of sections for setting up telescope data paths in config file
-TELESCOPE_FILES = ['XMM_FILES', 'EROSITA_FILES']
-# List of XMM products supported by XGA that are allowed to be energy bound
-# DAVID_QUESTION unsure of what the combined images are
+EROSITA_FILES = {"root_erosita_dir": "/this/is/required_for_erosita/erosita_obs/data/", 
+                 "erosita_evts": "/this/is/required_for_erosita/{obs_id}/{obs_id}.fits", 
+                 "erosita_calibration_database": "/this/is/required_for_erosita/erosita_calibration/",
+                 "lo_en_erosita": ['0.50', '2.00'],
+                 "hi_en_erosita": ['2.00', '10.00'],
+                 "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
+
+# List of products supported by XGA that are allowed to be energy bound
 ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap"]
 # These are the built in profile types
 PROFILE_PRODUCTS = ["brightness_profile", "gas_density_profile", "gas_mass_profile", "1d_apec_norm_profile",
                     "1d_proj_temperature_profile", "gas_temperature_profile", "baryon_fraction_profile",
                     "1d_proj_metallicity_profile", "1d_emission_measure_profile", "hydrostatic_mass_profile"]
 COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
-# List of all XMM products supported by XGA
+# List of all products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
                     ] + ENERGY_BOUND_PRODUCTS + PROFILE_PRODUCTS + COMBINED_PROFILE_PRODUCTS
-XMM_INST = {"XMM":{["pn", "mos1", "mos2"]},
-        "EROSITA": {["tm1, tm2, tm3, tm4, tm5, tm6, tm7"]} 
-        }
+XMM_INST = {"xmm": ["pn", "mos1", "mos2"],
+            "erosita": ["tm1, tm2, tm3, tm4, tm5, tm6, tm7"]}
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
-BANNED_FILTS = ['CalClosed', 'Closed']
-
+BANNED_FILTS = {"xmm": ['CalClosed', 'Closed'],
+                "erosita": []}
 # Here we read in files that list the errors and warnings in SAS
 errors = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_errors.csv"), header="infer")
 warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warnings.csv"), header="infer")
@@ -328,15 +323,44 @@ else:
     xga_conf = ConfigParser()
     # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
     xga_conf.read(CONFIG_FILE)
-    keys_to_check = ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file"]
-    # Here I check that the installer has actually changed the events file paths for each telescope
-    all_changed = all([xga_conf["XMM_FILES"][key] != XMM_FILES[key] for key in keys_to_check])
-    if not all_changed:
-        raise XGAConfigError("Some events file paths (or the root_xmm_dir) in the config have not "
-                             "been changed from default, please configure {} to match your setup".format(CONFIG_FILE))
-    elif not os.path.exists(xga_conf["XMM_FILES"]["root_xmm_dir"]):
-        raise FileNotFoundError("root_xmm_dir={d} does not appear to exist, if it an SFTP mount check the "
-                                "connection.".format(d=xga_conf["XMM_FILES"]["root_xmm_dir"]))
+    # Dictionary to be used to check the installer has input event file paths for each telescope
+    # Top Layer is the telescope
+    # Second layer contains the event paths, root dir path and the default/config file names of the telescope section 
+    telescope_files_to_check = {"xmm":{"event_paths":["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file"],
+                                       "default_section": XMM_FILES,
+                                       "config_section": "XMM_FILES",
+                                       "root_dir": "root_xmm_dir"},
+                                "erosita": {"event_paths":["root_erosita_dir", "erosita_calibration_database", "erosita_evts"],
+                                            "default_section": EROSITA_FILES,
+                                            "config_section": "EROSITA_FILES",
+                                            "root_dir": "root_erosita_dir"}}
+    # Dictonary to keep track of which telescopes the installer has changed event file paths from the default
+    setup_telescope_counter = {}
+    # Here I check that the installer has actually changed the events file paths for at least one telescope
+    for telescope, telescope_dict in telescope_files_to_check.items():
+        all_changed = all([xga_conf[telescope_dict["config_section"]][key] != telescope_dict["default_section"][key] for key in telescope_dict["event_paths"]])
+        setup_telescope_counter[telescope] = all_changed
+        # For telescopes that have been setup, check the root directory exists
+        # JESS_TODO do the warnings/ errors appear in a logical order?
+        if all_changed:
+            if not os.path.exists(xga_conf[telescope_dict["config_section"]][telescope_dict["root_dir"]]):
+                raise FileNotFoundError("{ROOT_DIR}={d} does not appear to exist, if it an SFTP mount check the "
+                                    "connection.".format(ROOT_DIR=telescope_dict["root_dir"],
+                                    d=xga_conf[telescope_dict["config_section"]][telescope_dict["root_dir"]]))
+    # Checking there is at least one telescope that has been setup
+    # JESS_TODO probably need to word the warnings better
+    if sum(setup_telescope_counter) == 0:
+        warn("No event file paths in the config have been changed. "
+             "Please configure {CONFIG_FILE} to match your setup "
+             "for at least one telescope").format(CONFIG_FILE=CONFIG_FILE)
+    # If not all telescopes are set up, print some warnings 
+    elif sum(setup_telescope_counter) != len(setup_telescope_counter): 
+        setup_telescopes = [telescope for telescope, setup_bool in setup_telescope_counter.items() if setup_bool]
+        unsetup_telescopes = [telescope for telescope, setup_bool in setup_telescope_counter.items() if not setup_bool]
+        warn("Some events file paths (or the root directories) in the config have not "
+                            "been changed from default for {TELESCOPES}, please configure {CONFIG_FILE} to match your setup"
+                            " if you intend to use this/these telescope/s".format(TELESCOPES=', '.join(setup_telescopes),
+                                                                                  CONFIG_FILE=CONFIG_FILE))
 
     # Now I do the same for the XGA_SETUP section
     keys_to_check = ["xga_save_path"]
