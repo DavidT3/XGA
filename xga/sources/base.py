@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/12/2022, 12:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2023, 12:35. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1187,10 +1187,11 @@ class BaseSource:
                 ds9_regs = [None]
 
             # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
-            #  where they were generated with different resolutions). # TODO see issue #908, figure out how to
-            #  support different resolutions of image
-            ims = self.get_images(obs_id)
-            if len(ims) == 0:
+            #  where they were generated with different resolutions).
+            #  TODO see issue #908, figure out how to support different resolutions of image
+            try:
+                ims = self.get_images(obs_id)
+            except NoProductAvailableError:
                 raise NoProductAvailableError("There is no image available for observation {o}, associated "
                                               "with {n}. An image is currently required to check for sky coordinates "
                                               "being present within a sky region - though hopefully no-one will ever "
