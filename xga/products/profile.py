@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 19/07/2022, 20:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2023, 13:16. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -466,6 +466,8 @@ class GasDensity3D(BaseProfile1D):
             raise UnitConversionError("The supplied outer radius cannot be converted to the radius unit"
                                       " of this profile ({u})".format(u=self.radii_unit.to_string()))
         else:
+            # This is for consistency, to make sure the same units as the profile radii are used for calculation
+            #  and for storage keys
             outer_rad = outer_rad.to(self.radii_unit)
             inner_rad = inner_rad.to(self.radii_unit)
 
@@ -475,7 +477,7 @@ class GasDensity3D(BaseProfile1D):
             warn("The outer radius you supplied is greater than or equal to the outer radius covered by the data, so"
                  " you are effectively extrapolating using the model.")
 
-        # Just preparing the way, setting up the storage dictionary
+        # Just preparing the way, setting up the storage dictionary - top level identifies the model
         if str(model_obj) not in self._gas_masses:
             self._gas_masses[str(model_obj)] = {}
         # The next layer is the outer radius, then finally the result will be stored using the inner radius

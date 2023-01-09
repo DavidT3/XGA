@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 14:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2023, 13:01. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -478,7 +478,7 @@ class BaseModel1D(metaclass=ABCMeta):
             else:
                 self._vol_ints['pars'][outer_radius][inner_radius] = integral_res
 
-        return integral_res
+        return integral_res.copy()
 
     def allowed_prior_types(self, table_format: str = 'fancy_grid'):
         """
