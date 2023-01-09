@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2023, 13:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2023, 17:35. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -427,7 +427,7 @@ class GasDensity3D(BaseProfile1D):
         self._storage_key = "me" + dens_method + extra_info + self._storage_key
 
     def gas_mass(self, model: str, outer_rad: Quantity, inner_rad: Quantity = None, conf_level: float = 68.2,
-                 fit_method: str = 'mcmc') -> Tuple[Quantity, Quantity]:
+                 fit_method: str = 'mcmc', radius_err: Quantity = None) -> Tuple[Quantity, Quantity]:
         """
         A method to calculate and return the gas mass (with uncertainties). This method uses the model to generate
         a gas mass distribution (using the fit parameter distributions from the fit performed using the model), then
@@ -436,21 +436,19 @@ class GasDensity3D(BaseProfile1D):
         :param str model: The name of the model from which to derive the gas mass.
         :param Quantity outer_rad: The radius to measure the gas mass out to.
         :param Quantity inner_rad: The inner radius within which to measure the gas mass, this enables measuring
-            core-excised gas masses. Default is None, which equates to zero.
+            core-excised gas masses. Default is None, which equates to zero. If passing separate uncertainties for
+            inner and outer radii using `radius_err', the inner radius error must be the second entry.
         :param float conf_level: The confidence level to use to calculate the mass errors
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
+        :param Quantity radius_err: A standard deviation on radius, which will be taken into account during the
+            calculation of gas mass. If both an inner and outer radius have been passed, then you may pass either
+            a single standard deviation value for both, or a Quantity with two entries. THE FIRST being the outer
+            radius error, THE SECOND being inner radius error.
         :return: A Quantity containing three values (mass, -err, +err), and another Quantity containing
             the entire mass distribution from the whole realisation.
         :rtype: Tuple[Quantity, Quantity]
         """
-        # This checks to see if inner radius is None (probably how it will be used most of the time), and if
-        #  it is then creates a Quantity with the same units as outer_radius
-        if inner_rad is None:
-            inner_rad = Quantity(0, outer_rad.unit)
-        elif inner_rad is not None and not inner_rad.unit.is_equivalent(outer_rad):
-            raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
-                                      " as the outer_radius Quantity.")
-
+        # First of all we have to find the model that has been fit to this gas density profile.
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             raise XGAInvalidModelError("{m} is not a valid model for a gas density profile".format(m=model))
         elif model not in self.good_model_fits:
@@ -461,6 +459,14 @@ class GasDensity3D(BaseProfile1D):
         if not model_obj.success:
             raise ValueError("The fit to that model was not considered a success by the fit method, cannot proceed.")
 
+        # This checks to see if inner radius is None (probably how it will be used most of the time), and if
+        #  it is then creates a Quantity with the same units as outer_radius
+        if inner_rad is None:
+            inner_rad = Quantity(0, outer_rad.unit)
+        elif inner_rad is not None and not inner_rad.unit.is_equivalent(outer_rad):
+            raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
+                                      " as the outer_radius Quantity.")
+
         # Checking the input radius units
         if not outer_rad.unit.is_equivalent(self.radii_unit):
             raise UnitConversionError("The supplied outer radius cannot be converted to the radius unit"
@@ -470,6 +476,53 @@ class GasDensity3D(BaseProfile1D):
             #  and for storage keys
             outer_rad = outer_rad.to(self.radii_unit)
             inner_rad = inner_rad.to(self.radii_unit)
+
+        # When only an outer radius has been passed (i.e. inner radius is zero), then we can only allow one
+        #  radius error to be passed
+        if radius_err is not None and inner_rad == 0 and not radius_err.isscalar:
+            raise ValueError('You may only pass a two-element radius error quantity if you have also set inner_radius '
+                             'to a non-zero value.')
+        # We know that there is no circumstance where more than two radius errors should be passed
+        elif radius_err is not None and not radius_err.isscalar and len(radius_err) > 2:
+            raise ValueError("The 'radius_error' argument may have a maximum of two entries, a single value for both"
+                             "outer and inner radii, or separate entries for outer and inner radii.")
+        # Now we check to see whether the radius error unit is compatible with the radius units we're already
+        #  working with
+        elif radius_err is not None and not radius_err.unit.is_equivalent(outer_rad):
+            raise UnitConversionError("The radius_err quantity must be in units that are equivalent to units "
+                                      "of {}.".format(outer_rad.unit.to_string()))
+        # Now we make absolutely sure that the radius error(s) are in the correct units
+        elif radius_err is not None:
+            radius_err = radius_err.to(self.radii_unit)
+
+        # The next step is setting up radius distributions, if the radius error is not None. The outer_rad
+        #  and inner_rad (if applicable) variables will be overwritten with a distribution, which will be picked up
+        #  on by the volume integral part of the model function.
+        rng = np.random.default_rng()
+        if radius_err is not None and inner_rad == 0:
+            outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
+                                 radius_err.unit)
+        elif radius_err is not None and len(radius_err) == 1:
+            outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
+                                 radius_err.unit)
+            inner_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
+                                 radius_err.unit)
+        elif radius_err is not None and len(radius_err) == 2:
+            outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value[0], len(model_obj.par_dists[0])),
+                                 radius_err.unit)
+            inner_rad = Quantity(rng.normal(outer_rad.value, radius_err.value[1], len(model_obj.par_dists[0])),
+                                 radius_err.unit)
+        else:
+            raise ValueError("Somehow you have passed a radius error with more than two entries and "
+                             "it hasn't been caught - contact the developer.")
+
+        # TODO MAKE SURE THAT THINGS GET SAVED PROPERLY, AND MAKE SURE THAT THE MODEL INTEGRAL METHOD CAN HANDLE
+        #  A RADIUS DISTRIBUTION
+        print(radius_err)
+        print(outer_rad)
+        print(inner_rad)
+        import sys
+        sys.exit()
 
         # Doing an extra check to warn the user if the radius they supplied is outside the radii
         #  covered by the data
