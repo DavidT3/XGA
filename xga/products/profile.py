@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2023, 11:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2023, 11:59. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -536,7 +536,7 @@ class GasDensity3D(BaseProfile1D):
             inn_stor_key = str(inner_rad.value) + '_' + str(radius_err.value) + " " + str(outer_rad.unit)
             outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
                                  radius_err.unit)
-            inner_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
+            inner_rad = Quantity(rng.normal(inner_rad.value, radius_err.value, len(model_obj.par_dists[0])),
                                  radius_err.unit)
         elif radius_err is not None and len(radius_err) == 2:
             # The keys are defined first because the radii variables are about to be turned into radius
@@ -547,13 +547,11 @@ class GasDensity3D(BaseProfile1D):
             inn_stor_key = str(inner_rad.value) + '_' + str(radius_err[1].value) + " " + str(outer_rad.unit)
             outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value[0], len(model_obj.par_dists[0])),
                                  radius_err.unit)
-            inner_rad = Quantity(rng.normal(outer_rad.value, radius_err.value[1], len(model_obj.par_dists[0])),
+            inner_rad = Quantity(rng.normal(inner_rad.value, radius_err.value[1], len(model_obj.par_dists[0])),
                                  radius_err.unit)
         else:
             raise ValueError("Somehow you have passed a radius error with more than two entries and "
                              "it hasn't been caught - contact the developer.")
-
-
 
         # Just preparing the way, setting up the storage dictionary - top level identifies the model
         if str(model_obj) not in self._gas_masses:
@@ -563,7 +561,8 @@ class GasDensity3D(BaseProfile1D):
             self._gas_masses[str(model_obj)][out_stor_key] = {}
 
         # This runs the volume integral on the density profile, using the built-in integral method in the model.
-        if inn_stor_key not in self._gas_masses[str(model_obj)][out_stor_key] and outer_rad != 0:
+        if inn_stor_key not in self._gas_masses[str(model_obj)][out_stor_key] and \
+                out_stor_key != str(Quantity(0, outer_rad.unit)):
             mass_dist = model_obj.volume_integral(outer_rad, inner_rad, use_par_dist=True)
             # Converts to an actual mass rather than a total number of particles
             if self._sub_type == 'num_dens':
@@ -574,7 +573,8 @@ class GasDensity3D(BaseProfile1D):
 
         # Obviously the mass contained within a zero radius bin is zero, but the integral can fall over sometimes when
         #  this is requested so I put in this special case
-        elif inn_stor_key not in self._gas_masses[str(model_obj)][out_stor_key] and outer_rad == 0:
+        elif inn_stor_key not in self._gas_masses[str(model_obj)][out_stor_key] and \
+                (outer_rad.isscalar and outer_rad == 0):
             mass_dist = Quantity(np.zeros(len(model_obj.par_dists[0])), 'Msun')
             self._gas_masses[str(model_obj)][out_stor_key][inn_stor_key] = mass_dist
 
