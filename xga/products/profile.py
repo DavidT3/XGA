@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2023, 17:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2023, 10:38. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -434,7 +434,7 @@ class GasDensity3D(BaseProfile1D):
         measures the median mass, along with lower and upper uncertainties.
 
         :param str model: The name of the model from which to derive the gas mass.
-        :param Quantity outer_rad: The radius to measure the gas mass out to.
+        :param Quantity outer_rad: The radius to measure the gas mass out to. Only one radius may be passed at a time.
         :param Quantity inner_rad: The inner radius within which to measure the gas mass, this enables measuring
             core-excised gas masses. Default is None, which equates to zero. If passing separate uncertainties for
             inner and outer radii using `radius_err', the inner radius error must be the second entry.
@@ -458,6 +458,13 @@ class GasDensity3D(BaseProfile1D):
 
         if not model_obj.success:
             raise ValueError("The fit to that model was not considered a success by the fit method, cannot proceed.")
+
+        if not outer_rad.isscalar:
+            raise ValueError("Gas masses can only be calculated within one radii at a time, please pass a scalar "
+                             "value for outer_rad.")
+        elif inner_rad is not None and not inner_rad.isscalar:
+            raise ValueError("Gas masses can only be calculated within one radii at a time, please pass a scalar "
+                             "value for inner_rad.")
 
         # This checks to see if inner radius is None (probably how it will be used most of the time), and if
         #  it is then creates a Quantity with the same units as outer_radius
@@ -488,7 +495,7 @@ class GasDensity3D(BaseProfile1D):
                              "outer and inner radii, or separate entries for outer and inner radii.")
         # Now we check to see whether the radius error unit is compatible with the radius units we're already
         #  working with
-        elif radius_err is not None and not radius_err.unit.is_equivalent(outer_rad):
+        elif radius_err is not None and not radius_err.unit.is_equivalent(outer_rad.unit):
             raise UnitConversionError("The radius_err quantity must be in units that are equivalent to units "
                                       "of {}.".format(outer_rad.unit.to_string()))
         # Now we make absolutely sure that the radius error(s) are in the correct units
@@ -499,15 +506,24 @@ class GasDensity3D(BaseProfile1D):
         #  and inner_rad (if applicable) variables will be overwritten with a distribution, which will be picked up
         #  on by the volume integral part of the model function.
         rng = np.random.default_rng()
-        if radius_err is not None and inner_rad == 0:
+        if radius_err is None:
+            out_stor_key = str(outer_rad)
+            inn_stor_key = str(inner_rad)
+        elif radius_err is not None and inner_rad == 0:
+            out_stor_key = str(outer_rad.value) + '_' + str(radius_err.value) + " " + str(outer_rad.unit)
+            inn_stor_key = str(inner_rad)
             outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
                                  radius_err.unit)
-        elif radius_err is not None and len(radius_err) == 1:
+        elif radius_err is not None and radius_err.isscalar:
+            out_stor_key = str(outer_rad.value) + '_' + str(radius_err.value) + " " + str(outer_rad.unit)
+            inn_stor_key = str(inner_rad.value) + '_' + str(radius_err.value) + " " + str(outer_rad.unit)
             outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
                                  radius_err.unit)
             inner_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
                                  radius_err.unit)
         elif radius_err is not None and len(radius_err) == 2:
+            out_stor_key = str(outer_rad.value) + '_' + str(radius_err[0].value) + " " + str(outer_rad.unit)
+            inn_stor_key = str(inner_rad.value) + '_' + str(radius_err[1].value) + " " + str(outer_rad.unit)
             outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value[0], len(model_obj.par_dists[0])),
                                  radius_err.unit)
             inner_rad = Quantity(rng.normal(outer_rad.value, radius_err.value[1], len(model_obj.par_dists[0])),
@@ -521,6 +537,8 @@ class GasDensity3D(BaseProfile1D):
         print(radius_err)
         print(outer_rad)
         print(inner_rad)
+        print(inn_stor_key)
+        print(out_stor_key)
         import sys
         sys.exit()
 
