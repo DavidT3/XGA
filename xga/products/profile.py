@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2023, 10:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2023, 11:36. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -502,6 +502,12 @@ class GasDensity3D(BaseProfile1D):
         elif radius_err is not None:
             radius_err = radius_err.to(self.radii_unit)
 
+        # Doing an extra check to warn the user if the radius they supplied is outside the radii
+        #  covered by the data
+        if outer_rad >= self.radii[-1]:
+            warn("The outer radius you supplied is greater than or equal to the outer radius covered by the data, so"
+                 " you are effectively extrapolating using the model.")
+
         # The next step is setting up radius distributions, if the radius error is not None. The outer_rad
         #  and inner_rad (if applicable) variables will be overwritten with a distribution, which will be picked up
         #  on by the volume integral part of the model function.
@@ -547,11 +553,7 @@ class GasDensity3D(BaseProfile1D):
             raise ValueError("Somehow you have passed a radius error with more than two entries and "
                              "it hasn't been caught - contact the developer.")
 
-        # Doing an extra check to warn the user if the radius they supplied is outside the radii
-        #  covered by the data
-        if outer_rad >= self.radii[-1]:
-            warn("The outer radius you supplied is greater than or equal to the outer radius covered by the data, so"
-                 " you are effectively extrapolating using the model.")
+
 
         # Just preparing the way, setting up the storage dictionary - top level identifies the model
         if str(model_obj) not in self._gas_masses:
