@@ -19,14 +19,27 @@ from fitsio.header import FITSHDR
 from numpy import nan, floor
 from tqdm import tqdm
 
-from .exceptions import XGAConfigError
+#from .exceptions import XGAConfigError
+from exceptions import XGAConfigError
 
+# The telescopes xga can analyse 
+COMPATIBLE_TELESCOPES = ["xmm", "erosita"]
 # If XDG_CONFIG_HOME is set, then use that, otherwise use this default config path
 CONFIG_PATH = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))
-# The path to the census file, which documents all available ObsIDs and their pointings
-CENSUS_FILE = os.path.join(CONFIG_PATH, 'census.csv')
-# The path to the blacklist file, which is where users can specify ObsIDs they don't want to be used in analyses
-BLACKLIST_FILE = os.path.join(CONFIG_PATH, 'blacklist.csv')
+# Path to the directory containing all censuses and blacklists 
+CENSUSES_PATH = os.path.join(CONFIG_PATH, 'censuses/')
+# Nested dictonary containing paths to the censuses and blacklists 
+# Top layer is the telescope, second layer contains the directory, census, and blacklist paths
+CENSUSES_DICT = {"xmm": {}, "erosita": {}}
+for telescope in COMPATIBLE_TELESCOPES:
+    # The path to the directory containing the census and blacklist files
+    CENSUSES_DICT[telescope]["DIRECTORY"] = os.path.join(CENSUSES_PATH, '{}/'.format(telescope))
+    # Only doing this to make the next lines more readable
+    dir = CENSUSES_DICT[telescope]["DIRECTORY"]
+    # The path to the census file, which documents all available ObsIDs and their pointings
+    CENSUSES_DICT[telescope]["CENSUS_FILE"] = os.path.join(dir, '{}_census.csv'.format(telescope))
+    # The path to the blacklist file, which is where users can specify ObsIDs they don't want to be used in analyses
+    CENSUSES_DICT[telescope]["BLACKLIST_FILE"] = os.path.join(dir, '{}_blacklist.csv'.format(telescope))
 # XGA config file path
 CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 # Section of the config file for setting up the XGA module
@@ -53,6 +66,26 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required_for_erosita/erosita_obs/
                  "hi_en_erosita": ['2.00', '10.00'],
                  "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
 
+# Nested dictionary to be used to cyle over different telescopes in the following functions in this script
+# Top Layer is the telescope
+# Second layer contains: 
+# event_path_key - the mandatory directories that are needed for xga to function
+# default_section, config_section - holds the variables that contain all the input file paths in each section
+# root_dir_key - the root directory label in the config file
+# used - a bool to indicate whether the telescope has been set up in the config file
+TELESCOPE_DICT = {"xmm":{"event_path_key":["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file"],
+                         "default_section": XMM_FILES,
+                         "config_section": "XMM_FILES",
+                         "root_dir_key": "root_xmm_dir",
+                         "instruments": ["PN", "MOS1", "MOS2"],
+                         "used": False},
+                  "erosita": {"event_path_key":["root_erosita_dir", "erosita_calibration_database", "erosita_evts"],
+                              "default_section": EROSITA_FILES,
+                              "config_section": "EROSITA_FILES",
+                              "root_dir_key": "root_erosita_dir",
+                              "instruments": ["TM1", "TM2", "TM3", "TM4", "TM5", "TM6", "TM7"],
+                              "used": False}}
+
 # List of products supported by XGA that are allowed to be energy bound
 ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap"]
 # These are the built in profile types
@@ -63,7 +96,7 @@ COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
 # List of all products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
                     ] + ENERGY_BOUND_PRODUCTS + PROFILE_PRODUCTS + COMBINED_PROFILE_PRODUCTS
-# JESS_TODO changing this to a dict will break lots of big functions in base.py, will fix them later
+# JESS_TODO changed this to a dict will break lots of big functions in base.py
 XMM_INST = {"xmm": ["pn", "mos1", "mos2"],
             "erosita": ["tm1, tm2, tm3, tm4, tm5, tm6, tm7"]}
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
@@ -102,7 +135,6 @@ MEAN_MOL_WEIGHT = 0.61
 # A centralised constant to define what radius labels are allowed
 RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
 
-# JESS_TODO used to be called xmm_obs_id_test, its used in observation_census
 def obs_id_test(telescope: str, test_string: str) -> bool:
     """
     Crude function to try and determine if a string follows the pattern
@@ -128,14 +160,16 @@ def obs_id_test(telescope: str, test_string: str) -> bool:
     
     if telescope == "erosita":
         probably_erosita = False
-        # Obviously a terrible test, but only have 4 obs ids to work with at the moment
+        # JESS_TODO Obviously a terrible test, but only have 4 obs ids to work with at the moment
         if not test_string.isnumeric():
             probably_erosita = True
         return probably_erosita
 
 
-def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def xmm_observation_census(config: ConfigParser, obs_census: List, obs_lookup: List) -> List:
     """
+    JESS_TODO write this doc string properly please
+    JESS_TODO check that 
     A function to initialise or update the file that stores which observations are available in the user
     specified XMM data directory, and what their pointing coordinates are.
     CURRENTLY THIS WILL NOT UPDATE TO DEAL WITH OBSID FOLDERS THAT HAVE BEEN DELETED.
@@ -144,72 +178,129 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
     :return: ObsIDs and pointing coordinates of available XMM observations.
     :rtype: Tuple[pd.DataFrame, pd.DataFrame]
     """
-    # The census lives in the XGA config folder, and CENSUS_FILE stores the path to it.
-    # If it exists, it is read in, otherwise empty lists are initialised to be appended to.
+    with tqdm(desc="Assembling list of ObsIDs for XMM", total=len(obs_census)) as census_progress:
+        for obs in obs_census:
+            info = {'ra': None, 'dec': None, "the_rest": []}
+            for key in ["clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts"]:
+                evt_path = config["XMM_FILES"][key].format(obs_id=obs)
+                if os.path.exists(evt_path):
+                    evts_header = read_header(evt_path)
+                    try:
+                        # DAVID_QUESTION - i think because of the difference in the way the data is served 
+                        # this cant be generalised? 
+                        # efeds events headers dont have a filter they are in the name of the file
+                        # Reads out the filter header, if it is CalClosed/Closed then we can't use it
+                        filt = evts_header["FILTER"]
+                        submode = evts_header["SUBMODE"]
+                        info['ra'] = evts_header["RA_PNT"]
+                        info['dec'] = evts_header["DEC_PNT"]
+                    except KeyError:
+                        # It won't actually, but this will trigger the if statement that tells XGA not to use
+                        #  this particular obs/inst combo
+                        filt = "CalClosed"
+
+                    # TODO Decide if I want to disallow small window mode observations
+                    if filt not in BANNED_FILTS:
+                        info["the_rest"].append("T")
+                    else:
+                        info["the_rest"].append("F")
+                else:
+                    info["the_rest"].append("F")
+
+            use_insts = ",".join(info["the_rest"])
+            # Write the information to the line that will go in the census csv
+            if info["ra"] is not None and info["dec"] is not None:
+                # Format to write to the census.csv that lives in the config directory.
+                obs_lookup.append("{o},{r},{d},{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
+            else:
+                obs_lookup.append("{o},,,{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
+
+            census_progress.update(1)
+    return obs_lookup
+
+def erosita_observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    JESS_TODO write this doc string properly please
+    A function to initialise or update the file that stores which observations are available in the user
+    specified XMM data directory, and what their pointing coordinates are.
+    CURRENTLY THIS WILL NOT UPDATE TO DEAL WITH OBSID FOLDERS THAT HAVE BEEN DELETED.
+
+    :param config: The XGA configuration object.
+    :return: ObsIDs and pointing coordinates of available XMM observations.
+    :rtype: Tuple[pd.DataFrame, pd.DataFrame]
+    """
+    # JESS_TODO write this function
+    return None
+
+def build_observation_census(telescope: str, config: ConfigParser) -> None:
+    """
+    JESS_TODO write this doc string properly please
+    A function that builds/ updates the census and blacklist for each telescope
+    CURRENTLY THIS WILL NOT UPDATE TO DEAL WITH OBSID FOLDERS THAT HAVE BEEN DELETED.
+
+    :param config: The XGA configuration object.
+    :return: ObsIDs and pointing coordinates of available XMM observations.
+    :rtype: Tuple[pd.DataFrame, pd.DataFrame]
+    """
+
+     # CENSUS_DIR is the directory containing the blacklist and census,
+    # It lives in the census folder, in the XGA config folder
+    CENSUS_DIR = CENSUSES_DICT[telescope]["DIRECTORY"]
+    # If it doesn't exist yet we create the directory
+    if not os.path.exists(CENSUS_DIR):
+        os.mkdir(CENSUS_DIR)
+    
+    # BLACKLIST FILE stores the path to the blacklist file, and lives in CENSUS_DIR
+    BLACKLIST_FILE = CENSUSES_DICT[telescope]["BLACKLIST_FILE"]
+    # INST is a list of the instruments of the telescope
+    INST = TELESCOPE_DICT[telescope]["instruments"]
+    # Creates black list file if one doesn't exist, then reads it in
+    if not os.path.exists(BLACKLIST_FILE):
+        with open(BLACKLIST_FILE, 'w') as bl:
+            inst_list = ["EXCLUDE_{},".format(inst) for inst in INST]
+            inst_list = "".join(inst_list)[:-1]
+            bl.write("ObsID," + inst_list)
+    blacklist = pd.read_csv(BLACKLIST_FILE, header="infer", dtype=str)
+
+    # This part here is to support blacklists used by older versions of XGA, where only a full ObsID was excluded.
+    #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected
+    if len(blacklist.columns) == 1:
+        # Adds the four new columns, all with a default value of True. So any ObsID already in the blacklist
+        #  will have the same behaviour as before, all instruments for the ObsID are excluded
+        blacklist_columns = ["EXCLUDE_{}".format(inst) for inst in INST]
+        blacklist[blacklist_columns] = 'T'
+        # If we have even gotten to this stage then the actual blacklist file needs re-writing, so I do
+        blacklist.to_csv(BLACKLIST_FILE, index=False)
+
+    # CENSUS FILE stores the path to the census file, and lives in CENSUS_DIR
+    CENSUS_FILE = CENSUSES_DICT[telescope]["CENSUS_FILE"]
+    # If CENSUS FILE exists, it is read in, otherwise empty lists are initialised to be appended to.
     if os.path.exists(CENSUS_FILE):
         with open(CENSUS_FILE, 'r') as census:
             obs_lookup = census.readlines()  # Reads the lines of the files
             # This is just ObsIDs, needed to see which ObsIDs have already been processed.
             obs_lookup_obs = [entry.split(',')[0] for entry in obs_lookup[1:]]
     else:
-        obs_lookup = ["ObsID,RA_PNT,DEC_PNT,USE_PN,USE_MOS1,USE_MOS2\n"]
-        obs_lookup_obs = []
-
-    # Creates black list file if one doesn't exist, then reads it in
-    if not os.path.exists(BLACKLIST_FILE):
-        with open(BLACKLIST_FILE, 'w') as bl:
-            bl.write("ObsID,EXCLUDE_PN,EXCLUDE_MOS1,EXCLUDE_MOS2")
-    blacklist = pd.read_csv(BLACKLIST_FILE, header="infer", dtype=str)
-
-    # This part here is to support blacklists used by older versions of XGA, where only a full ObsID was excluded.
-    #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected
-    if len(blacklist.columns) == 1:
-        # Adds the three new columns, all with a default value of True. So any ObsID already in the blacklist
-        #  will have the same behaviour as before, all instruments for the ObsID are excluded
-        blacklist[["EXCLUDE_PN", "EXCLUDE_MOS1", "EXCLUDE_MOS2"]] = 'T'
-        # If we have even gotten to this stage then the actual blacklist file needs re-writing, so I do
-        blacklist.to_csv(BLACKLIST_FILE, index=False)
+        # Making the columns in the census
+        inst_list = ["USE_{},".format(inst) for inst in INST]
+        inst_list = "".join(inst_list)[:-1] + "\n"
+        obs_lookup = ["ObsID,RA_PNT,DEC_PNT," + inst_list]
 
     # Need to find out which observations are available, crude way of making sure they are ObsID directories
     # This also checks that I haven't run them before
-    obs_census = [entry for entry in os.listdir(config["XMM_FILES"]["root_xmm_dir"]) if xmm_obs_id_test(entry)
+    section_key = TELESCOPE_DICT[telescope]["config_section"]
+    root_dir_key = TELESCOPE_DICT[telescope]["root_dir_key"]
+    obs_census = [entry for entry in os.listdir(config[section_key][root_dir_key]) if obs_id_test(telescope, entry)
                   and entry not in obs_lookup_obs]
     if len(obs_census) != 0:
-        with tqdm(desc="Assembling list of ObsIDs", total=len(obs_census)) as census_progress:
-            for obs in obs_census:
-                info = {'ra': None, 'dec': None, "the_rest": []}
-                for key in ["clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts"]:
-                    evt_path = config["XMM_FILES"][key].format(obs_id=obs)
-                    if os.path.exists(evt_path):
-                        evts_header = read_header(evt_path)
-                        try:
-                            # Reads out the filter header, if it is CalClosed/Closed then we can't use it
-                            filt = evts_header["FILTER"]
-                            submode = evts_header["SUBMODE"]
-                            info['ra'] = evts_header["RA_PNT"]
-                            info['dec'] = evts_header["DEC_PNT"]
-                        except KeyError:
-                            # It won't actually, but this will trigger the if statement that tells XGA not to use
-                            #  this particular obs/inst combo
-                            filt = "CalClosed"
+         # This looks in the header for each event list in the root dir and retrieves ra, dec and other info
+        # Then it appends it to obs_lookup, which is then written to the census.csv file
+        if telescope == "xmm":
+            # Each telescope has differently formatted headers hence having different functions for each
+            obs_lookup = xmm_observation_census(config, obs_census, obs_lookup)
+        elif telescope == "erosita":
+            obs_lookup = erosita_observation_census(config, obs_census, obs_lookup)
 
-                        # TODO Decide if I want to disallow small window mode observations
-                        if filt not in BANNED_FILTS:
-                            info["the_rest"].append("T")
-                        else:
-                            info["the_rest"].append("F")
-                    else:
-                        info["the_rest"].append("F")
-
-                use_insts = ",".join(info["the_rest"])
-                # Write the information to the line that will go in the census csv
-                if info["ra"] is not None and info["dec"] is not None:
-                    # Format to write to the census.csv that lives in the config directory.
-                    obs_lookup.append("{o},{r},{d},{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
-                else:
-                    obs_lookup.append("{o},,,{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
-
-                census_progress.update(1)
         with open(CENSUS_FILE, 'w') as census:
             census.writelines(obs_lookup)
 
@@ -218,11 +309,10 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
                               columns=obs_lookup[0].strip("\n").split(','), dtype=str)
     obs_lookup["RA_PNT"] = obs_lookup["RA_PNT"].replace('', nan).astype(float)
     obs_lookup["DEC_PNT"] = obs_lookup["DEC_PNT"].replace('', nan).astype(float)
-    obs_lookup["USE_PN"] = obs_lookup["USE_PN"].replace('T', True).replace('F', False)
-    obs_lookup["USE_MOS1"] = obs_lookup["USE_MOS1"].replace('T', True).replace('F', False)
-    obs_lookup["USE_MOS2"] = obs_lookup["USE_MOS2"].replace('T', True).replace('F', False)
+    # Adding in columns for the instruments
+    for inst in INST:
+        obs_lookup["USE_{}".format(inst)] = obs_lookup["USE_{}".format(inst)].replace('T', True).replace('F', False)
     return obs_lookup, blacklist
-
 
 def to_list(str_rep_list: str) -> list:
     """
@@ -330,38 +420,28 @@ else:
     xga_conf = ConfigParser()
     # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
     xga_conf.read(CONFIG_FILE)
-    # Dictionary to be used to check the installer has input event file paths for each telescope
-    # Top Layer is the telescope
-    # Second layer contains the event paths, root dir path and the default/config file names of the telescope section 
-    telescope_files_to_check = {"xmm":{"event_paths":["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file"],
-                                       "default_section": XMM_FILES,
-                                       "config_section": "XMM_FILES",
-                                       "root_dir": "root_xmm_dir"},
-                                "erosita": {"event_paths":["root_erosita_dir", "erosita_calibration_database", "erosita_evts"],
-                                            "default_section": EROSITA_FILES,
-                                            "config_section": "EROSITA_FILES",
-                                            "root_dir": "root_erosita_dir"}}
     # Dictonary to keep track of which telescopes the installer has changed event file paths from the default
     setup_telescope_counter = {}
     # Here I check that the installer has actually changed the events file paths for at least one telescope
-    for telescope, telescope_dict in telescope_files_to_check.items():
-        all_changed = all([xga_conf[telescope_dict["config_section"]][key] != telescope_dict["default_section"][key] for key in telescope_dict["event_paths"]])
+    for telescope, dict in TELESCOPE_DICT.items():
+        all_changed = all([xga_conf[dict["config_section"]][key] != dict["default_section"][key] for key in dict["event_path_key"]])
         setup_telescope_counter[telescope] = all_changed
         # For telescopes that have been setup, check the root directory exists
         # JESS_TODO do the warnings/ errors appear in a logical order?
         if all_changed:
-            if not os.path.exists(xga_conf[telescope_dict["config_section"]][telescope_dict["root_dir"]]):
+            if not os.path.exists(xga_conf[dict["config_section"]][dict["root_dir_key"]]):
                 raise FileNotFoundError("{ROOT_DIR}={d} does not appear to exist, if it an SFTP mount check the "
-                                    "connection.".format(ROOT_DIR=telescope_dict["root_dir"],
-                                    d=xga_conf[telescope_dict["config_section"]][telescope_dict["root_dir"]]))
+                                    "connection.".format(ROOT_DIR=dict["root_dir_key"],
+                                    d=xga_conf[dict["config_section"]][dict["root_di_key"]]))
     # Checking there is at least one telescope that has been setup
     # JESS_TODO probably need to word the warnings better
-    if sum(setup_telescope_counter) == 0:
+    # also maybe define the dict["example"] as a new variable to make it more readable
+    if sum(setup_telescope_counter.values()) == 0:
         warn("No event file paths in the config have been changed. "
              "Please configure {CONFIG_FILE} to match your setup "
              "for at least one telescope").format(CONFIG_FILE=CONFIG_FILE)
     # If not all telescopes are set up, print some warnings 
-    elif sum(setup_telescope_counter) != len(setup_telescope_counter): 
+    elif sum(setup_telescope_counter.values()) != len(setup_telescope_counter): 
         setup_telescopes = [telescope for telescope, setup_bool in setup_telescope_counter.items() if setup_bool]
         unsetup_telescopes = [telescope for telescope, setup_bool in setup_telescope_counter.items() if not setup_bool]
         warn("Some events file paths (or the root directories) in the config have not "
