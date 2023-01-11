@@ -22,5 +22,7 @@
         "titleBar.border": "#333b4f",
         "sideBar.border": "#0b0d11"
     },
-    "peacock.color": "#1f2430"
+    "peacock.color": "#1f2430",
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": false
 }
