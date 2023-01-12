@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 10/01/2023, 11:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/01/2023, 16:44. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -433,6 +433,10 @@ class GasDensity3D(BaseProfile1D):
         a gas mass distribution (using the fit parameter distributions from the fit performed using the model), then
         measures the median mass, along with lower and upper uncertainties.
 
+        Passing uncertainties on the outer (and inner) radii for the gas mass calculation is supported, with such
+        uncertainties assumed to be representing a Gaussian distribution. Radii distributions will be drawn from a
+        Gaussian, though any radii that are negative will be set to zero, so it could be a truncated Gaussian.
+
         :param str model: The name of the model from which to derive the gas mass.
         :param Quantity outer_rad: The radius to measure the gas mass out to. Only one radius may be passed at a time.
         :param Quantity inner_rad: The inner radius within which to measure the gas mass, this enables measuring
@@ -552,6 +556,14 @@ class GasDensity3D(BaseProfile1D):
         else:
             raise ValueError("Somehow you have passed a radius error with more than two entries and "
                              "it hasn't been caught - contact the developer.")
+
+        # If we're using a radius distribution(s), then this part checks to ensure that none of the values are
+        #  negative because that doesn't make any sense! In such cases the offending radii are set to zero, so really
+        #  the radii could be a truncated Gaussian distribution.
+        if not outer_rad.isscalar:
+            outer_rad[outer_rad < 0] = 0
+        if not inner_rad.isscalar:
+            inner_rad[inner_rad < 0] = 0
 
         # Just preparing the way, setting up the storage dictionary - top level identifies the model
         if str(model_obj) not in self._gas_masses:
