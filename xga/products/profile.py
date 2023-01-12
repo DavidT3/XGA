@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/01/2023, 13:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/01/2023, 16:44. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -427,30 +427,32 @@ class GasDensity3D(BaseProfile1D):
         self._storage_key = "me" + dens_method + extra_info + self._storage_key
 
     def gas_mass(self, model: str, outer_rad: Quantity, inner_rad: Quantity = None, conf_level: float = 68.2,
-                 fit_method: str = 'mcmc') -> Tuple[Quantity, Quantity]:
+                 fit_method: str = 'mcmc', radius_err: Quantity = None) -> Tuple[Quantity, Quantity]:
         """
         A method to calculate and return the gas mass (with uncertainties). This method uses the model to generate
         a gas mass distribution (using the fit parameter distributions from the fit performed using the model), then
         measures the median mass, along with lower and upper uncertainties.
 
+        Passing uncertainties on the outer (and inner) radii for the gas mass calculation is supported, with such
+        uncertainties assumed to be representing a Gaussian distribution. Radii distributions will be drawn from a
+        Gaussian, though any radii that are negative will be set to zero, so it could be a truncated Gaussian.
+
         :param str model: The name of the model from which to derive the gas mass.
-        :param Quantity outer_rad: The radius to measure the gas mass out to.
+        :param Quantity outer_rad: The radius to measure the gas mass out to. Only one radius may be passed at a time.
         :param Quantity inner_rad: The inner radius within which to measure the gas mass, this enables measuring
-            core-excised gas masses. Default is None, which equates to zero.
+            core-excised gas masses. Default is None, which equates to zero. If passing separate uncertainties for
+            inner and outer radii using `radius_err', the inner radius error must be the second entry.
         :param float conf_level: The confidence level to use to calculate the mass errors
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
+        :param Quantity radius_err: A standard deviation on radius, which will be taken into account during the
+            calculation of gas mass. If both an inner and outer radius have been passed, then you may pass either
+            a single standard deviation value for both, or a Quantity with two entries. THE FIRST being the outer
+            radius error, THE SECOND being inner radius error.
         :return: A Quantity containing three values (mass, -err, +err), and another Quantity containing
             the entire mass distribution from the whole realisation.
         :rtype: Tuple[Quantity, Quantity]
         """
-        # This checks to see if inner radius is None (probably how it will be used most of the time), and if
-        #  it is then creates a Quantity with the same units as outer_radius
-        if inner_rad is None:
-            inner_rad = Quantity(0, outer_rad.unit)
-        elif inner_rad is not None and not inner_rad.unit.is_equivalent(outer_rad):
-            raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
-                                      " as the outer_radius Quantity.")
-
+        # First of all we have to find the model that has been fit to this gas density profile.
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             raise XGAInvalidModelError("{m} is not a valid model for a gas density profile".format(m=model))
         elif model not in self.good_model_fits:
@@ -460,6 +462,21 @@ class GasDensity3D(BaseProfile1D):
 
         if not model_obj.success:
             raise ValueError("The fit to that model was not considered a success by the fit method, cannot proceed.")
+
+        if not outer_rad.isscalar:
+            raise ValueError("Gas masses can only be calculated within one radii at a time, please pass a scalar "
+                             "value for outer_rad.")
+        elif inner_rad is not None and not inner_rad.isscalar:
+            raise ValueError("Gas masses can only be calculated within one radii at a time, please pass a scalar "
+                             "value for inner_rad.")
+
+        # This checks to see if inner radius is None (probably how it will be used most of the time), and if
+        #  it is then creates a Quantity with the same units as outer_radius
+        if inner_rad is None:
+            inner_rad = Quantity(0, outer_rad.unit)
+        elif inner_rad is not None and not inner_rad.unit.is_equivalent(outer_rad):
+            raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
+                                      " as the outer_radius Quantity.")
 
         # Checking the input radius units
         if not outer_rad.unit.is_equivalent(self.radii_unit):
@@ -471,37 +488,110 @@ class GasDensity3D(BaseProfile1D):
             outer_rad = outer_rad.to(self.radii_unit)
             inner_rad = inner_rad.to(self.radii_unit)
 
+        # When only an outer radius has been passed (i.e. inner radius is zero), then we can only allow one
+        #  radius error to be passed
+        if radius_err is not None and inner_rad == 0 and not radius_err.isscalar:
+            raise ValueError('You may only pass a two-element radius error quantity if you have also set inner_radius '
+                             'to a non-zero value.')
+        # We know that there is no circumstance where more than two radius errors should be passed
+        elif radius_err is not None and not radius_err.isscalar and len(radius_err) > 2:
+            raise ValueError("The 'radius_error' argument may have a maximum of two entries, a single value for both"
+                             "outer and inner radii, or separate entries for outer and inner radii.")
+        # Now we check to see whether the radius error unit is compatible with the radius units we're already
+        #  working with
+        elif radius_err is not None and not radius_err.unit.is_equivalent(outer_rad.unit):
+            raise UnitConversionError("The radius_err quantity must be in units that are equivalent to units "
+                                      "of {}.".format(outer_rad.unit.to_string()))
+        # Now we make absolutely sure that the radius error(s) are in the correct units
+        elif radius_err is not None:
+            radius_err = radius_err.to(self.radii_unit)
+
         # Doing an extra check to warn the user if the radius they supplied is outside the radii
         #  covered by the data
         if outer_rad >= self.radii[-1]:
             warn("The outer radius you supplied is greater than or equal to the outer radius covered by the data, so"
                  " you are effectively extrapolating using the model.")
 
+        # The next step is setting up radius distributions, if the radius error is not None. The outer_rad
+        #  and inner_rad (if applicable) variables will be overwritten with a distribution, which will be picked up
+        #  on by the volume integral part of the model function.
+        rng = np.random.default_rng()
+        if radius_err is None:
+            # This is the simplest case, where there is no error at all - here the storage keys are just string
+            #  versions of the inner and outer radii
+            out_stor_key = str(outer_rad)
+            inn_stor_key = str(inner_rad)
+        elif radius_err is not None and inner_rad == 0:
+            # The keys are defined first because 'outer_rad' is about to be turned into a radius distribution rather
+            #  than a single value and we need the original values for string representations. Here the outer radius
+            #  is uncertain and the size of the standard deviation becomes part of the storage key
+            out_stor_key = str(outer_rad.value) + '_' + str(radius_err.value) + " " + str(outer_rad.unit)
+            inn_stor_key = str(inner_rad)
+            # The length of one of the parameter distributions in the model is used to tell us how many samples to
+            #  draw from our radius distribution, as we need it to be the same length for the volume integral.
+            outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
+                                 radius_err.unit)
+        elif radius_err is not None and radius_err.isscalar:
+            # The keys are defined first because the radii variables are about to be turned into radius
+            #  distributions rather than single values and we need the original values for string representations.
+            #  Here the radii are uncertain (with the same st dev) and the size of the standard deviation becomes
+            #  part of the storage key
+            out_stor_key = str(outer_rad.value) + '_' + str(radius_err.value) + " " + str(outer_rad.unit)
+            inn_stor_key = str(inner_rad.value) + '_' + str(radius_err.value) + " " + str(outer_rad.unit)
+            outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
+                                 radius_err.unit)
+            inner_rad = Quantity(rng.normal(inner_rad.value, radius_err.value, len(model_obj.par_dists[0])),
+                                 radius_err.unit)
+        elif radius_err is not None and len(radius_err) == 2:
+            # The keys are defined first because the radii variables are about to be turned into radius
+            #  distributions rather than single values and we need the original values for string representations.
+            #  Here the radii are uncertain (with different st devs) and the size of the standard deviations become
+            #  part of the storage keys
+            out_stor_key = str(outer_rad.value) + '_' + str(radius_err[0].value) + " " + str(outer_rad.unit)
+            inn_stor_key = str(inner_rad.value) + '_' + str(radius_err[1].value) + " " + str(outer_rad.unit)
+            outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value[0], len(model_obj.par_dists[0])),
+                                 radius_err.unit)
+            inner_rad = Quantity(rng.normal(inner_rad.value, radius_err.value[1], len(model_obj.par_dists[0])),
+                                 radius_err.unit)
+        else:
+            raise ValueError("Somehow you have passed a radius error with more than two entries and "
+                             "it hasn't been caught - contact the developer.")
+
+        # If we're using a radius distribution(s), then this part checks to ensure that none of the values are
+        #  negative because that doesn't make any sense! In such cases the offending radii are set to zero, so really
+        #  the radii could be a truncated Gaussian distribution.
+        if not outer_rad.isscalar:
+            outer_rad[outer_rad < 0] = 0
+        if not inner_rad.isscalar:
+            inner_rad[inner_rad < 0] = 0
+
         # Just preparing the way, setting up the storage dictionary - top level identifies the model
         if str(model_obj) not in self._gas_masses:
             self._gas_masses[str(model_obj)] = {}
-        # The next layer is the outer radius, then finally the result will be stored using the inner radius
-        if outer_rad not in self._gas_masses[str(model_obj)]:
-            self._gas_masses[str(model_obj)][outer_rad] = {}
+        # The next layer is the outer radius key, then finally the result will be stored using the inner radius key
+        if out_stor_key not in self._gas_masses[str(model_obj)]:
+            self._gas_masses[str(model_obj)][out_stor_key] = {}
 
-        # This runs the volume integral on the density profile, using the built in integral method in the model
-        if inner_rad not in self._gas_masses[str(model_obj)][outer_rad] and outer_rad != 0:
+        # This runs the volume integral on the density profile, using the built-in integral method in the model.
+        if inn_stor_key not in self._gas_masses[str(model_obj)][out_stor_key] and \
+                out_stor_key != str(Quantity(0, outer_rad.unit)):
             mass_dist = model_obj.volume_integral(outer_rad, inner_rad, use_par_dist=True)
             # Converts to an actual mass rather than a total number of particles
             if self._sub_type == 'num_dens':
                 mass_dist *= (MEAN_MOL_WEIGHT*m_p)
             # Converts to solar masses and stores inside the current profile for future reference
             mass_dist = mass_dist.to('Msun')
-            self._gas_masses[str(model_obj)][outer_rad][inner_rad] = mass_dist
+            self._gas_masses[str(model_obj)][out_stor_key][inn_stor_key] = mass_dist
 
         # Obviously the mass contained within a zero radius bin is zero, but the integral can fall over sometimes when
         #  this is requested so I put in this special case
-        elif inner_rad not in self._gas_masses[str(model_obj)][outer_rad] and outer_rad == 0:
+        elif inn_stor_key not in self._gas_masses[str(model_obj)][out_stor_key] and \
+                (outer_rad.isscalar and outer_rad == 0):
             mass_dist = Quantity(np.zeros(len(model_obj.par_dists[0])), 'Msun')
-            self._gas_masses[str(model_obj)][outer_rad][inner_rad] = mass_dist
+            self._gas_masses[str(model_obj)][out_stor_key][inn_stor_key] = mass_dist
 
         else:
-            mass_dist = self._gas_masses[str(model_obj)][outer_rad][inner_rad]
+            mass_dist = self._gas_masses[str(model_obj)][out_stor_key][inn_stor_key]
 
         med_mass = np.percentile(mass_dist, 50).value
         upp_mass = np.percentile(mass_dist, 50 + (conf_level/2)).value
