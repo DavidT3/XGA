@@ -247,7 +247,7 @@ def build_observation_census(telescope: str, config: ConfigParser) -> None:
     CENSUS_DIR = CENSUSES_DICT[telescope]["DIRECTORY"]
     # If it doesn't exist yet we create the directory
     if not os.path.exists(CENSUS_DIR):
-        os.mkdir(CENSUS_DIR)
+        os.makedirs(CENSUS_DIR)
     
     # BLACKLIST FILE stores the path to the blacklist file, and lives in CENSUS_DIR
     BLACKLIST_FILE = CENSUSES_DICT[telescope]["BLACKLIST_FILE"]
@@ -273,17 +273,20 @@ def build_observation_census(telescope: str, config: ConfigParser) -> None:
 
     # CENSUS FILE stores the path to the census file, and lives in CENSUS_DIR
     CENSUS_FILE = CENSUSES_DICT[telescope]["CENSUS_FILE"]
+    # DAVID_QUESTION this wasn't an error in the master branch? 
+    obs_lookup = []
+    obs_lookup_obs = []
     # If CENSUS FILE exists, it is read in, otherwise empty lists are initialised to be appended to.
     if os.path.exists(CENSUS_FILE):
         with open(CENSUS_FILE, 'r') as census:
             obs_lookup = census.readlines()  # Reads the lines of the files
             # This is just ObsIDs, needed to see which ObsIDs have already been processed.
-            obs_lookup_obs = [entry.split(',')[0] for entry in obs_lookup[1:]]
+            obs_lookup_obs.append(entry.split(',')[0] for entry in obs_lookup[1:])
     else:
         # Making the columns in the census
         inst_list = ["USE_{},".format(inst) for inst in INST]
         inst_list = "".join(inst_list)[:-1] + "\n"
-        obs_lookup = ["ObsID,RA_PNT,DEC_PNT," + inst_list]
+        obs_lookup.append("ObsID,RA_PNT,DEC_PNT," + inst_list)
 
     # Need to find out which observations are available, crude way of making sure they are ObsID directories
     # This also checks that I haven't run them before
@@ -478,6 +481,8 @@ else:
         # As it turns out, the ConfigParser class is a pain to work with, so we're converting to a dict here
         # Addressing works just the same
         xga_conf = {str(sect): dict(xga_conf[str(sect)]) for sect in xga_conf}
+        # need to redefine this variable with the new definition of xga_conf
+        section = xga_conf[TELESCOPE_DICT[telescope]["config_section"]]
         energy_bounds_key = ["lo_en", "hi_en"]
         for energy in energy_bounds_key:
             try:
@@ -487,16 +492,48 @@ else:
                             "please leave all in place, even if they are empty")
 
         # Do a little pre-checking for the energy entries
-        if len(section["lo_en"]) != len(section["hi_en"]):
+        if len(section["lo_en" + "_{}".format(telescope)]) != len(section["hi_en" + "_{}".format(telescope)]):
             raise ValueError("lo_en and hi_en entries in the config "
                             "file for {} do not parse to lists of the same length.".format(telescope))
 
         # Make sure that this is the absolute path
         root_dir = os.path.abspath(root_dir) + "/"
-    # Read dataframe of ObsIDs and pointing coordinates into constant
-    CENSUS, BLACKLIST = build_observation_census(xga_conf)
-    OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
+    # Read dataframe of ObsIDs and pointing coordinates into dictionaries
+    CENSUS = {}
+    BLACKLIST = {}
+    for telescope in setup_telescopes:
+        if setup_telescope_counter[telescope]:
+            # only doing this for telescopes that are setup in the config file
+            CENSUS[telescope], BLACKLIST[telescope] = build_observation_census(telescope, xga_conf)
+            # Checking that the relevant analysis software is installed for the setup telescopes
+            if telescope == "xmm":
+                # Here we check to see whether SAS is installed (along with all the necessary paths)
+                SAS_VERSION = None
+                if "SAS_DIR" not in os.environ:
+                    warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
+                        "all functions in xga.sas will not work.")
+                    SAS_VERSION = None
+                    SAS_AVAIL = False
+                else:
+                    # This way, the user can just import the SAS_VERSION from this utils code
+                    sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+                    SAS_VERSION = sas_out.decode("UTF-8").strip("]\n").split('-')[-1]
+                    SAS_AVAIL = True
 
+                # This checks for the CCF path, which is required to use cifbuild, which is required to do basically
+                #  anything with SAS
+                if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
+                    warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
+                        "functions in xga.sas will not work.")
+                    SAS_AVAIL = False
+            elif telescope == "erosita":
+                # Checking if Docker is installed
+                if shutil.which("docker") is None:
+                    warn("Unable to locate a Docker installation.")
+                # DAVID_QUESTION should i install the container here?
+
+    OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
+    # DAVID_QUESTION should i make a seperate folder for telescopes, just because some will eventually be for both
     # Make a storage directory where specific source name directories will then be created, there profile objects
     #  created for those sources will be saved
     if not os.path.exists(OUTPUT + "profiles"):
@@ -510,6 +547,7 @@ else:
     # And create an inventory file for that directory
     if not os.path.exists(OUTPUT + "combined/inventory.csv"):
         with open(OUTPUT + "combined/inventory.csv", 'w') as inven:
+            # DAVID_QUESTION maybe just add a column for telescopes in here? (in relation to the comment above)
             inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
 
     if "num_cores" in xga_conf["XGA_SETUP"]:
@@ -520,8 +558,8 @@ else:
         # this can be over-ridden in individual SAS calls.
         NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
 
-    xmm_sky = def_unit("xmm_sky")
-    xmm_det = def_unit("xmm_det")
+    sky = {"xmm" : def_unit("xmm_sky"), "erosita": def_unit("erosita_sky")}
+    det = {"xmm": def_unit("xmm_det"), "erosita": def_unit("erosita_det")}
     # These are largely defined so that I can use them for when I'm normalising profile plots, that way
     #  the view method can just write the units nicely the way it normally does
     r200 = def_unit('r200', format={'latex': r"\mathrm{R_{200}}"})
@@ -532,29 +570,10 @@ else:
     try:
         Quantity(1, 'r200')
     except ValueError:
-        add_enabled_units([r200, r500, r2500, xmm_det, xmm_det])
+        # DAVID_QUESTION in master you have xmm_det twice in this array 
+        add_enabled_units([r200, r500, r2500, sky["xmm"], sky["erosita"], det["xmm"], det["erosita"]])
 
-    # Here we check to see whether SAS is installed (along with all the necessary paths)
-    SAS_VERSION = None
-    if "SAS_DIR" not in os.environ:
-        warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
-             "all functions in xga.sas will not work.")
-        SAS_VERSION = None
-        SAS_AVAIL = False
-    else:
-        # This way, the user can just import the SAS_VERSION from this utils code
-        sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
-        SAS_VERSION = sas_out.decode("UTF-8").strip("]\n").split('-')[-1]
-        SAS_AVAIL = True
-
-    # This checks for the CCF path, which is required to use cifbuild, which is required to do basically
-    #  anything with SAS
-    if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
-        warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
-             "functions in xga.sas will not work.")
-        SAS_AVAIL = False
-
-    # Equivelant for the XSPEC dependency
+    # Here we check to see whether XSPEC is installed (along with all the necessary paths)
     XSPEC_VERSION = None
     # Got to make sure we can access command line XSPEC.
     if shutil.which("xspec") is None:
