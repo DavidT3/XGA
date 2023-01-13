@@ -308,6 +308,7 @@ def build_observation_census(telescope: str, config: ConfigParser) -> None:
     # CENSUS FILE stores the path to the census file, and lives in CENSUS_DIR
     CENSUS_FILE = CENSUSES_DICT[telescope]["CENSUS_FILE"]
     # DAVID_QUESTION this wasn't an error in the master branch?
+    # it was a NameError, assigned a local variable in loop
     obs_lookup = []
     obs_lookup_obs = []
     # If CENSUS FILE exists, it is read in, otherwise empty lists are initialised to be appended to.
