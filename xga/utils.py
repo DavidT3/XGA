@@ -33,7 +33,7 @@ CENSUSES_PATH = os.path.join(CONFIG_PATH, 'censuses/')
 CENSUSES_DICT = {"xmm": {}, "erosita": {}}
 for telescope in COMPATIBLE_TELESCOPES:
     # The path to the directory containing the census and blacklist files
-    CENSUSES_DICT[telescope]["DIRECTORY"] = os.path.join(CENSUSES_PATH, '{}/'.format(telescope))
+    CENSUSES_DICT[telescope]["DIRECTORY"] = os.path.join(CONFIG_PATH, '{}/'.format(telescope))
     # Only doing this to make the next lines more readable
     directory = CENSUSES_DICT[telescope]["DIRECTORY"]
     # The path to the census file, which documents all available ObsIDs and their pointings
@@ -366,7 +366,7 @@ def to_list(str_rep_list: str) -> list:
 
 def energy_to_channel(energy: Quantity) -> int:
     """
-    # DAVID_QUESTION not sure if this would need to change for erosita?
+    # QUESTION not sure if this would need to change for erosita?
     Converts an astropy energy quantity into an XMM channel.
 
     :param energy:
@@ -431,7 +431,6 @@ def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
         wcses.append(w)
 
     return wcses
-
 
 if not os.path.exists(CONFIG_PATH):
     os.makedirs(CONFIG_PATH)
@@ -499,7 +498,6 @@ else:
 
     for telescope in TELESCOPE_DICT.keys():
         # Defining these to make the next lines easier to read
-        # DAVID_QUESTION I keep defining these in functions, should I add them to the start or is that bad practise? 
         #This is the section of the config file corresponding to each telescope
         section = xga_conf[TELESCOPE_DICT[telescope]["config_section"]]
         #This is the root directory in that section
@@ -538,6 +536,7 @@ else:
     BLACKLIST = {}
     for telescope in setup_telescopes:
         if setup_telescope_counter[telescope]:
+            # JESS_TODO check if they have the old setup and then rearrange
             # only doing this for telescopes that are setup in the config file
             CENSUS[telescope], BLACKLIST[telescope] = build_observation_census(telescope, xga_conf)
             # Checking that the relevant analysis software is installed for the setup telescopes
@@ -562,10 +561,10 @@ else:
                         "functions in xga.sas will not work.")
                     SAS_AVAIL = False
             elif telescope == "erosita":
+                raise NotImplementedError("Erosita isn't supported yet.")
                 # Checking if Docker is installed
                 if shutil.which("docker") is None:
                     warn("Unable to locate a Docker installation.")
-                # DAVID_QUESTION should i install the container here?
 
     OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
     # DAVID_QUESTION should i make a seperate folder for telescopes, just because some will eventually be for both
@@ -593,8 +592,11 @@ else:
         # this can be over-ridden in individual SAS calls.
         NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
 
-    sky = {"xmm" : def_unit("xmm_sky"), "erosita": def_unit("erosita_sky")}
-    det = {"xmm": def_unit("xmm_det"), "erosita": def_unit("erosita_det")}
+    xmm_sky = def_unit("xmm_sky")
+    xmm_det = def_unit("xmm_det")
+    erosita_sky = def_unit("erosita_sky")
+    erosita_det = def_unit("erosita_det")
+
     # These are largely defined so that I can use them for when I'm normalising profile plots, that way
     #  the view method can just write the units nicely the way it normally does
     r200 = def_unit('r200', format={'latex': r"\mathrm{R_{200}}"})
