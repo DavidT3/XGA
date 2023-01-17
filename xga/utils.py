@@ -275,9 +275,20 @@ def build_observation_census(telescope: str, config: ConfigParser) -> None:
     :return: ObsIDs and pointing coordinates of available XMM observations.
     :rtype: Tuple[pd.DataFrame, pd.DataFrame]
     """
+    # Checking if someone had been using the XMM only version of xga previously
+    old_census_path = os.path.join(CONFIG_PATH, 'census.csv')
+    if os.path.exists(old_census_path):
+        # Chaning the .config/xga directory to the updated structure for the mulit-telescope version of xga
+        os.makedirs(CENSUSES_DICT["xmm"]["DIRECTORY"])
+        new_census_path = os.path.join(CENSUSES_DICT["xmm"]["DIRECTORY"], 'xmm_census.csv')
+        # Moving the xmm census to the correct place and renaming it with the updated naming scheme
+        shutil.move(old_census_path, new_census_path)
+        # Doing the same for the blacklist
+        old_bl_path = os.path.join(CONFIG_PATH, 'blacklist.csv')
+        new_bl_path = os.path.join(CENSUSES_DICT["xmm"]["DIRECTORY"], 'xmm_blacklist.csv')
+        shutil.move(old_bl_path, new_bl_path)
 
-     # CENSUS_DIR is the directory containing the blacklist and census,
-    # It lives in the census folder, in the XGA config folder
+    # CENSUS_DIR is the directory containing the blacklist and census for each telescope
     CENSUS_DIR = CENSUSES_DICT[telescope]["DIRECTORY"]
     # If it doesn't exist yet we create the directory
     if not os.path.exists(CENSUS_DIR):
