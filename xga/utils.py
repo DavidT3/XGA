@@ -566,8 +566,7 @@ else:
     try:
         Quantity(1, 'r200')
     except ValueError:
-        # DAVID_QUESTION in master you have xmm_det twice in this array 
-        add_enabled_units([r200, r500, r2500, sky["xmm"], sky["erosita"], det["xmm"], det["erosita"]])
+        add_enabled_units([r200, r500, r2500, xmm_sky, erosita_sky, xmm_det, erosita_det])
 
     # Here we check to see whether XSPEC is installed (along with all the necessary paths)
     XSPEC_VERSION = None
