@@ -472,6 +472,7 @@ else:
     for telescope, tel_dict in TELESCOPE_DICT.items():
          # Here I check that the installer has actually changed the events file paths 
         setup_telescope_counter[telescope] = all([xga_conf[tel_dict["config_section"]][key] != tel_dict["default_section"][key] for key in tel_dict["event_path_key"]])
+        # JESS_TODO need to change the values in TELESCOPE_DICT
         # JESS_TODO do the warnings/ errors appear in a logical order?
         if setup_telescope_counter[telescope]:
             # For telescopes that have been setup, check the root directory exists
@@ -578,22 +579,38 @@ else:
                     warn("Unable to locate a Docker installation.")
 
     OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
-    # DAVID_QUESTION should i make a seperate folder for telescopes, just because some will eventually be for both
-    # Make a storage directory where specific source name directories will then be created, there profile objects
-    #  created for those sources will be saved
-    if not os.path.exists(OUTPUT + "profiles"):
-        os.makedirs(OUTPUT + "profiles")
 
-    # Also making a storage directory specifically for products which are combinations of different ObsIDs
-    #  and instruments
-    if not os.path.exists(OUTPUT + "combined"):
-        os.makedirs(OUTPUT + "combined")
+    # Checking if the user was using the xmm only verison of xga previously
+    # Do this by looking for the 'combined' directory in the xga_save_path directory
+    # JESS_TODO this would only work if they hadnt changed their xga_save_path
+    combined = [direct == "combined" for direct in os.listdir(OUTPUT)]
+    if sum(combined) != 0:
+        # if there is a directory called combined, then they have used an old version of xga
+        new_directory = os.path.join(OUTPUT, "xmm")
+        for direct in os.listdir(OUTPUT):
+            # rearranging their xga_save_path directory to the updated multi-telescope format
+            old_path = os.path.join(OUTPUT, direct)
+            new_path = os.path.join(new_directory, direct)
+            shutil.move(old_path, new_path)
+    # Created for those sources will be saved
+    for telescope in setup_telescopes:
+        # Telescope specific path where products are stored in xga output directory
+        OUTPUT_TEL = os.path.join(OUTPUT, telescope)
+        if not os.path.exists(OUTPUT_TEL):
+            os.makedirs(OUTPUT_TEL)
+        # Make a storage directory where specific source name directories will then be created, there profile objects
+        if not os.path.exists(OUTPUT_TEL + "/profiles"):
+            os.makedirs(OUTPUT_TEL + "/profiles")
 
-    # And create an inventory file for that directory
-    if not os.path.exists(OUTPUT + "combined/inventory.csv"):
-        with open(OUTPUT + "combined/inventory.csv", 'w') as inven:
-            # DAVID_QUESTION maybe just add a column for telescopes in here? (in relation to the comment above)
-            inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
+        # Also making a storage directory specifically for products which are combinations of different ObsIDs
+        #  and instruments
+        if not os.path.exists(OUTPUT_TEL + "/combined"):
+            os.makedirs(OUTPUT_TEL + "/combined")
+
+        # And create an inventory file for that directory
+        if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
+            with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
+                inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
 
     if "num_cores" in xga_conf["XGA_SETUP"]:
         # If the user has set a number of cores in the config file then we'll use that.
