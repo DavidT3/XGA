@@ -581,10 +581,10 @@ else:
     OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
 
     # Checking if the user was using the xmm only verison of xga previously
-    # Do this by looking for the 'combined' directory in the xga_save_path directory
+    # Do this by looking for the 'profile' directory in the xga_save_path directory
     # JESS_TODO this would only work if they hadnt changed their xga_save_path
-    combined = [direct == "combined" for direct in os.listdir(OUTPUT)]
-    if sum(combined) != 0:
+    profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
+    if sum(profiles) != 0:
         # if there is a directory called combined, then they have used an old version of xga
         new_directory = os.path.join(OUTPUT, "xmm")
         for direct in os.listdir(OUTPUT):
@@ -656,16 +656,18 @@ else:
         except:
             XSPEC_VERSION = None
 
-    # This defines the meaning of different colours of region - this will eventually be user configurable in the
-    #  configuration file, but putting it here means that the user can still change the definitions programmatically
-    # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
-    #  University of Edinburgh - 2005.
-    # Red - Point source
-    # Green - Extended source
-    # Magenta - PSF-sized extended source
-    # Blue - Extended source with significant point source contribution
-    # Cyan - Extended source with significant Run1 contribution
-    # Yellow - Extended source with less than 10 counts
-    SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan", "yellow"]}
+SETUP_TELESCOPES = [telescope for telescope in TELESCOPE_DICT.keys() if TELESCOPE_DICT[telescope]["used"]]
+
+# This defines the meaning of different colours of region - this will eventually be user configurable in the
+#  configuration file, but putting it here means that the user can still change the definitions programmatically
+# Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
+#  University of Edinburgh - 2005.
+# Red - Point source
+# Green - Extended source
+# Magenta - PSF-sized extended source
+# Blue - Extended source with significant point source contribution
+# Cyan - Extended source with significant Run1 contribution
+# Yellow - Extended source with less than 10 counts
+SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan", "yellow"]}
 
 
