@@ -540,10 +540,10 @@ else:
     OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
 
     # Checking if the user was using the xmm only verison of xga previously
-    # Do this by looking for the 'combined' directory in the xga_save_path directory
+    # Do this by looking for the 'profile' directory in the xga_save_path directory
     # JESS_TODO this would only work if they hadnt changed their xga_save_path
-    combined = [direct == "combined" for direct in os.listdir(OUTPUT)]
-    if sum(combined) != 0:
+    profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
+    if sum(profiles) != 0:
         # if there is a directory called combined, then they have used an old version of xga
         new_directory = os.path.join(OUTPUT, "xmm")
         for direct in os.listdir(OUTPUT):
@@ -614,6 +614,4 @@ else:
         except:
             XSPEC_VERSION = None
 
-
-
-
+SETUP_TELESCOPES = [telescope for telescope in TELESCOPE_DICT.keys() if TELESCOPE_DICT[telescope]["used"]]
