@@ -166,7 +166,6 @@ def obs_id_test(telescope: str, test_string: str) -> bool:
 def xmm_observation_census(config: ConfigParser, obs_census: List, obs_lookup: List) -> List:
     """
     JESS_TODO write this doc string properly please
-    JESS_TODO check that 
     A function to initialise or update the file that stores which observations are available in the user
     specified XMM data directory, and what their pointing coordinates are.
     CURRENTLY THIS WILL NOT UPDATE TO DEAL WITH OBSID FOLDERS THAT HAVE BEEN DELETED.
@@ -223,7 +222,7 @@ def erosita_observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.D
     :return: ObsIDs and pointing coordinates of available XMM observations.
     :rtype: Tuple[pd.DataFrame, pd.DataFrame]
     """
-    # JESS_TODO write this function
+    # JESS_TODO check if returning None will break lines ~120 in base.py, might need to be an empty obs_lookup
     return None
 
 def build_observation_census(telescope: str, config: ConfigParser) -> None:
