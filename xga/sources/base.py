@@ -73,7 +73,7 @@ class BaseSource:
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
         # JESS_TODO need to change this function so that it will assign the telescopes that the function finds a match for
-        # JESS_TODO need to change matches and excluded to dictionaries
+        # JESS_TODO need to change matches and excluded to dictionaries in simple_xmm_match
         # self._telsescope will be a list of telescopes that the simple_match has found matches for
         # matches, excluded will be a dictonary of {telescope: matches_dataframe}
         self._telescope, matches, excluded = simple_xmm_match(ra, dec)
@@ -330,32 +330,39 @@ class BaseSource:
                 dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key, "attitude_file"]
-            # Formats the generic paths given in the config file for this particular obs and energy range
-            files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
-                     for k, v in xga_conf["XMM_FILES"].items() if k not in not_these and inst in k}
+            # storing 
+            bound_key = {}
+            prod_objs = {}
+            for tscope in self._obs.keys():
+                # JESS_TODO after DAXA is done, can come back to this and maybe generalise it 
+                if tscope == "xmm":
+                    not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key, "attitude_file"]
+                    # Formats the generic paths given in the config file for this particular obs and energy range
+                    # JESS_INFO files is {'image': path to obs/energy bounds-inst_merged_img.fits}
+                    # ie, the product then its path to a certain energy range instrument fits file
+                    files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
+                            for k, v in xga_conf["XMM_FILES"].items() if k not in not_these and inst in k}
 
-            # It is not necessary to check that the files exist, as this happens when the product classes
-            # are instantiated. So whether the file exists or not, an object WILL exist, and you can check if
-            # you should use it for analysis using the .usable attribute
+                    # It is not necessary to check that the files exist, as this happens when the product classes
+                    # are instantiated. So whether the file exists or not, an object WILL exist, and you can check if
+                    # you should use it for analysis using the .usable attribute
 
-            # This looks up the class which corresponds to the key (which is the product
-            # ID in this case e.g. image), then instantiates an object of that class
-            lo = Quantity(float(en_lims[0]), 'keV')
-            hi = Quantity(float(en_lims[1]), 'keV')
-            prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
-                                            gen_cmd="", lo_en=lo, hi_en=hi)
-                         for key, file in files.items() if os.path.exists(file)}
-            # If both an image and an exposure map are present for this energy band, a RateMap object is generated
-            if "image" in prod_objs and "expmap" in prod_objs:
-                prod_objs["ratemap"] = RateMap(prod_objs["image"], prod_objs["expmap"])
-            # Adds in the source name to the products
-            for prod in prod_objs:
-                prod_objs[prod].src_name = self._name
-            # As these files existed already, I don't have any stdout/err strings to pass, also no
-            # command string.
-
-            bound_key = "bound_{l}-{u}".format(l=float(en_lims[0]), u=float(en_lims[1]))
+                    # This looks up the class which corresponds to the key (which is the product
+                    # ID in this case e.g. image), then instantiates an object of that class
+                    lo = Quantity(float(en_lims[0]), 'keV')
+                    hi = Quantity(float(en_lims[1]), 'keV')
+                    prod_objs[tscope] = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
+                                                    gen_cmd="", lo_en=lo, hi_en=hi)
+                                for key, file in files.items() if os.path.exists(file)}
+                    # If both an image and an exposure map are present for this energy band, a RateMap object is generated
+                    if "image" in prod_objs[tscope] and "expmap" in prod_objs[tscope]:
+                        prod_objs[tscope]["ratemap"] = RateMap(prod_objs[tscope]["image"], prod_objs[tscope]["expmap"])
+                    # Adds in the source name to the products
+                    for prod in prod_objs[tscope]:
+                        prod_objs[tscope][prod].src_name = self._name
+                    # As these files existed already, I don't have any stdout/err strings to pass, also no
+                    # command string.
+                    bound_key[tscope] = "bound_{l}-{u}".format(l=float(en_lims[0]), u=float(en_lims[1]))
             return bound_key, prod_objs
 
         # This dictionary structure will contain paths to all available data products associated with this
