@@ -218,10 +218,11 @@ class BaseSource:
         #  other way for them to change is through using the dissociate observation capability
         self._products, region_dict, self._att_files = self._initial_products()
 
-        # Want to update the ObsIDs associated with this source after seeing if all files are present
-        self._obs = list(self._products.keys())
-        self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
-
+        for tscope in self._products.keys():
+            # Want to update the ObsIDs associated with this source after seeing if all files are present
+            self._obs[tscope] = list(self._products[tscope].keys())
+            self._instruments[tscope] = {o: instruments[tscope][o] for o in self._obs[tscope] 
+                                         if len(instruments[tscope][o]) > 0}
         self._cosmo = cosmology
         if redshift is not None:
             self._lum_dist = self._cosmo.luminosity_distance(self._redshift)
@@ -1192,29 +1193,30 @@ class BaseSource:
                     # so we call this function recursively.
                     unpack_list(entry)
 
-        if obs_id not in self._products and obs_id is not None:
-            raise NotAssociatedError("{0} is not associated with {1} .".format(obs_id, self.name))
-        elif (obs_id is not None and obs_id in self._products) and \
-                (inst is not None and inst not in self._products[obs_id]):
-            raise NotAssociatedError("{0} is associated with {1}, but {2} is not associated with that "
-                                     "observation".format(obs_id, self.name, inst))
-
-        matches = []
-        # Iterates through the dict search return, but each match is likely to be a very nested list,
-        # with the degree of nesting dependant on product type (as event lists live a level up from
-        # images for instance
-        for match in dict_search(p_type, self._products):
-            out = []
-            unpack_list(match)
-            # Only appends if this particular match is for the obs_id and instrument passed to this method
-            # Though all matches will be returned if no obs_id/inst is passed
-            if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                    and (extra_key in out or extra_key is None) and not just_obj:
-                matches.append(out)
-            elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                    and (extra_key in out or extra_key is None) and just_obj:
-                matches.append(out[-1])
-        return matches
+        matches = {}
+        for tscope in self._products:
+            if obs_id not in self._products[tscope] and obs_id is not None:
+                raise NotAssociatedError("{0} is not associated with {1} .".format(obs_id, self.name))
+            elif (obs_id is not None and obs_id in self._products[tscope]) and \
+                    (inst is not None and inst not in self._products[tscope][obs_id]):
+                raise NotAssociatedError("{0} is associated with {1}, but {2} is not associated with that "
+                                        "observation".format(obs_id, self.name, inst))
+            # Iterates through the dict search return, but each match is likely to be a very nested list,
+            # with the degree of nesting dependant on product type (as event lists live a level up from
+            # images for instance
+            for match in dict_search(p_type, self._products[tscope]):
+                out = []
+                unpack_list(match)
+                # Only adds to matches dict if this particular match is for the obs_id and instrument passed to this method
+                # Though all matches will be returned if no obs_id/inst is passed
+                # DAVID_QUESTION confused about what matches contains?
+                if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
+                        and (extra_key in out or extra_key is None) and not just_obj:
+                    matches[tscope] = out
+                elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
+                        and (extra_key in out or extra_key is None) and just_obj:
+                    matches[tscope] = out[-1]
+            return matches
 
     def _load_regions(self, reg_paths) -> Tuple[dict, dict]:
         """
@@ -1240,13 +1242,32 @@ class BaseSource:
             dec = reg.center.dec.value
             return np.sqrt(abs(ra - self._ra_dec[0]) ** 2 + abs(dec - self._ra_dec[1]) ** 2)
 
-        # Read in the custom region file that every XGA has associated with it. Sources within will be added to the
-        #  source list for every ObsID?
-        custom_regs = read_ds9(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name))
-        for reg in custom_regs:
-            if not isinstance(reg, SkyRegion):
-                raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
+        # TODO DON'T TRUST THIS AT ALL FOR GOD'S SAKE
+        reg_dict = {}
+        match_dict = {}
+        
+        for tscope in reg_paths:
+            reg_dict[tscope] = {}
+            match_dict[tscope] = {}
+            # Read in the custom region file that every XGA has associated with it. Sources within will be added to the
+            #  source list for every ObsID?
+            custom_regs = read_ds9(OUTPUT + tscope + "/regions/{0}/{0}_custom.reg".format(self.name))
+            for reg in custom_regs:
+                if not isinstance(reg, SkyRegion):
+                    raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
 
+            # As we only allow one set of regions per observation, we shall assume that we can use the
+            # WCS transform from ANY of the images to convert pixels to degrees
+            for obs_id in reg_paths[tscope]:
+                if reg_paths[tscope][obs_id] is not None:
+                    ds9_regs = read_ds9(reg_paths[tscope][obs_id])
+                    # Apparently can happen that there are no regions in a region file, so if that is the case
+                    #  then I just set the ds9_regs to [None] because I know the rest of the code can deal with that.
+                    #  It can't deal with an empty list
+                    if len(ds9_regs) == 0:
+                        ds9_regs = [None]
+                else:
+                    ds9_regs = [None]
         reg_dict = {}
         match_dict = {}
         # As we only allow one set of regions per observation, we shall assume that we can use the
@@ -1294,53 +1315,78 @@ class BaseSource:
             else:
                 # So there is an entry in this for EVERY ObsID
                 reg_dict[obs_id] = np.array([None])
+                if isinstance(ds9_regs[0], PixelRegion):
+                    # If regions exist in pixel coordinates, we need an image WCS to convert them to RA-DEC, so we need
+                    #  one of the images supplied in the config file, not anything that XGA generates.
+                    #  But as this method is only run once, before XGA generated products are loaded in, it
+                    #  should be fine
+                    inst = [k for k in self._products[tscope][obs_id] if k in XMM_INST[tscope]][0]
+                    # DAVID_QUESTION why do you need the "-" in the eventlist?
+                    en = [k for k in self._products[tscope][obs_id][inst] if "-" in k][0]
+                    # Making an assumption here, that if there are regions there will be images
+                    # Getting the radec_wcs property from the Image object
+                    # you are here
+                    im = [i for i in self.get_products("image", obs_id, inst, just_obj=False)[tscope] if en in i]
 
-            # Here we add the custom sources to the source list, we know they are sky regions as we have
-            #  already enforced it. If there was no region list for a particular ObsID (detected by the first
-            #  entry in the reg dict being None) and there IS a custom region, we just replace the None with the
-            #  custom region
-            if reg_dict[obs_id][0] is not None:
-                reg_dict[obs_id] = np.append(reg_dict[obs_id], custom_regs)
-            elif reg_dict[obs_id][0] is None and len(custom_regs) != 0:
-                reg_dict[obs_id] = custom_regs
-            else:
-                reg_dict[obs_id] = np.array([None])
-
-            # I'm going to ensure that all regions are elliptical, I don't want to hunt through every place in XGA
-            #  where I made that assumption
-            for reg_ind, reg in enumerate(reg_dict[obs_id]):
-                if isinstance(reg, CircleSkyRegion):
-                    # Multiply radii by two because the ellipse based sources want HEIGHT and WIDTH, not RADIUS
-                    # Give small angle (though won't make a difference as circular) to avoid problems with angle=0
-                    #  that I've noticed previously
-                    new_reg = EllipseSkyRegion(reg.center, reg.radius*2, reg.radius*2, Quantity(3, 'deg'))
-                    new_reg.visual['color'] = reg.visual['color']
-                    reg_dict[obs_id][reg_ind] = new_reg
-
-            # Hopefully this bodge doesn't have any unforeseen consequences
-            if reg_dict[obs_id][0] is not None and len(reg_dict[obs_id]) > 1:
-                # Quickly calculating distance between source and center of regions, then sorting
-                # and getting indices. Thus I only match to the closest 5 regions.
-                diff_sort = np.array([dist_from_source(r) for r in reg_dict[obs_id]]).argsort()
-                # Unfortunately due to a limitation of the regions module I think you need images
-                #  to do this contains match...
-                within = np.array([reg.contains(SkyCoord(*self._ra_dec, unit='deg'), w)
-                                   for reg in reg_dict[obs_id][diff_sort[0:5]]])
-
-                # Make sure to re-order the region list to match the sorted within array
-                reg_dict[obs_id] = reg_dict[obs_id][diff_sort]
-
-                # Expands it so it can be used as a mask on the whole set of regions for this observation
-                within = np.pad(within, [0, len(diff_sort) - len(within)])
-                match_dict[obs_id] = within
-            # In the case of only one region being in the list, we simplify the above expression
-            elif reg_dict[obs_id][0] is not None and len(reg_dict[obs_id]) == 1:
-                if reg_dict[obs_id][0].contains(SkyCoord(*self._ra_dec, unit='deg'), w):
-                    match_dict[obs_id] = np.array([True])
+                    if len(im) != 1:
+                        raise NoProductAvailableError("There is no image available for observation {o}, associated "
+                                                    "with {n}. An image is require to translate pixel regions "
+                                                    "to RA-DEC.".format(o=obs_id, n=self.name))
+                    w = im[0][-1].radec_wcs
+                    sky_regs = [reg.to_sky(w) for reg in ds9_regs]
+                    reg_dict[tscope][obs_id] = np.array(sky_regs)
+                elif isinstance(ds9_regs[0], SkyRegion):
+                    reg_dict[tscope][obs_id] = np.array(ds9_regs)
                 else:
-                    match_dict[obs_id] = np.array([False])
-            else:
-                match_dict[obs_id] = np.array([False])
+                    # So there is an entry in this for EVERY ObsID
+                    reg_dict[tscope][obs_id] = np.array([None])
+
+                # Here we add the custom sources to the source list, we know they are sky regions as we have
+                #  already enforced it. If there was no region list for a particular ObsID (detected by the first
+                #  entry in the reg dict being None) and there IS a custom region, we just replace the None with the
+                #  custom region
+                if reg_dict[tscope][obs_id][0] is not None:
+                    reg_dict[tscope][obs_id] = np.append(reg_dict[tscope][obs_id], custom_regs)
+                elif reg_dict[tscope][obs_id][0] is None and len(custom_regs) != 0:
+                    reg_dict[tscope][obs_id] = custom_regs
+                else:
+                    reg_dict[tscope][obs_id] = np.array([None])
+
+                # I'm going to ensure that all regions are elliptical, I don't want to hunt through every place in XGA
+                #  where I made that assumption
+                for reg_ind, reg in enumerate(reg_dict[tscope][obs_id]):
+                    if isinstance(reg, CircleSkyRegion):
+                        # Multiply radii by two because the ellipse based sources want HEIGHT and WIDTH, not RADIUS
+                        # Give small angle (though won't make a difference as circular) to avoid problems with angle=0
+                        #  that I've noticed previously
+                        new_reg = EllipseSkyRegion(reg.center, reg.radius*2, reg.radius*2, Quantity(3, 'deg'))
+                        new_reg.visual['color'] = reg.visual['color']
+                        reg_dict[tscope][obs_id][reg_ind] = new_reg
+
+                # Hopefully this bodge doesn't have any unforeseen consequences
+                if reg_dict[tscope][obs_id][0] is not None and len(reg_dict[tscope][obs_id]) > 1:
+                    # Quickly calculating distance between source and center of regions, then sorting
+                    # and getting indices. Thus I only match to the closest 5 regions.
+                    diff_sort = np.array([dist_from_source(r) for r in reg_dict[tscope][obs_id]]).argsort()
+                    # Unfortunately due to a limitation of the regions module I think you need images
+                    #  to do this contains match...
+                    within = np.array([reg.contains(SkyCoord(*self._ra_dec, unit='deg'), w)
+                                    for reg in reg_dict[tscope][obs_id][diff_sort[0:5]]])
+
+                    # Make sure to re-order the region list to match the sorted within array
+                    reg_dict[tscope][obs_id] = reg_dict[tscope][obs_id][diff_sort]
+
+                    # Expands it so it can be used as a mask on the whole set of regions for this observation
+                    within = np.pad(within, [0, len(diff_sort) - len(within)])
+                    match_dict[tscope][obs_id] = within
+                # In the case of only one region being in the list, we simplify the above expression
+                elif reg_dict[tscope][obs_id][0] is not None and len(reg_dict[tscope][obs_id]) == 1:
+                    if reg_dict[tscope][obs_id][0].contains(SkyCoord(*self._ra_dec, unit='deg'), w):
+                        match_dict[tscope][obs_id] = np.array([True])
+                    else:
+                        match_dict[tscope][obs_id] = np.array([False])
+                else:
+                    match_dict[tscope][obs_id] = np.array([False])
 
         return reg_dict, match_dict
 
