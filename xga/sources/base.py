@@ -726,370 +726,383 @@ class BaseSource:
             return final_obj
 
         og_dir = os.getcwd()
-        # This is used for spectra that should be part of an AnnularSpectra object
-        ann_spec_constituents = {}
-        # This is to store whether all components could be loaded in successfully
-        ann_spec_usable = {}
-        for obs in self._obs:
-            if os.path.exists(OUTPUT + obs):
-                os.chdir(OUTPUT + obs)
-                cur_d = os.getcwd() + '/'
-                # Loads in the inventory file for this ObsID
-                inven = pd.read_csv("inventory.csv", dtype=str)
+        # DAVID_QUESTION do u know what's faster/ the difference between doing .keys() and nothing
+        for tscope in self._obs.keys():
+            # This is used for spectra that should be part of an AnnularSpectra object
+            ann_spec_constituents = {}
+            # This is to store whether all components could be loaded in successfully
+            ann_spec_usable = {}
+            for obs in self._obs[tscope]:
+                if os.path.exists(OUTPUT + tscope + '/' + obs):
+                    os.chdir(OUTPUT + tscope + '/' + obs)
+                    cur_d = os.getcwd() + '/'
+                    # Loads in the inventory file for this ObsID
+                    inven = pd.read_csv("inventory.csv", dtype=str)
 
-                # Here we read in instruments and exposure maps which are relevant to this source
-                im_lines = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
-                # Instruments is a dictionary with ObsIDs on the top level and then valid instruments on
-                #  the lower level. As such we can be sure here we're only reading in instruments we decided
-                #  are valid
-                for i in self.instruments[obs]:
-                    # Fetches lines of the inventory which match the current ObsID and instrument
-                    rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
-                    for r_ind, r in rel_ims.iterrows():
-                        self.update_products(parse_image_like(cur_d+r['file_name'], r['type']))
+                    # Here we read in instruments and exposure maps which are relevant to this source
+                    im_lines = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
+                    # Instruments is a dictionary with ObsIDs on the top level and then valid instruments on
+                    #  the lower level. As such we can be sure here we're only reading in instruments we decided
+                    #  are valid
+                    for i in self.instruments[tscope][obs]:
+                        # Fetches lines of the inventory which match the current ObsID and instrument
+                        rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
+                        for r_ind, r in rel_ims.iterrows():
+                            # JESS_TODO need to change the update_products function
+                            self.update_products(parse_image_like(cur_d+r['file_name'], r['type']))
 
-                # For spectra we search for products that have the name of this object in, as they are for
-                #  specific parts of the observation.
-                # Have to replace any + characters with x, as that's what we did in evselect_spectrum due to SAS
-                #  having some issues with the + character in file names
-                named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
-                         self._name.replace("+", "x") in f and obs in f
-                         and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
-                specs = [f for f in named if "spec" in f.split('/')[-1] and "back" not in f.split('/')[-1]]
+                    # For spectra we search for products that have the name of this object in, as they are for
+                    #  specific parts of the observation.
+                    # Have to replace any + characters with x, as that's what we did in evselect_spectrum due to SAS
+                    #  having some issues with the + character in file names
+                    named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
+                            self._name.replace("+", "x") in f and obs in f
+                            and any(inst in f for inst in XMM_INST[tscope])]
+                            # JESS_TODO this doesnt deal with erosita telescope combos 
+                            # DAVID_QUESTION alright to just leave this for now?
+                    specs = [f for f in named if "spec" in f.split('/')[-1] and "back" not in f.split('/')[-1]]
 
-                for sp in specs:
-                    # Filename contains a lot of useful information, so splitting it out to get it
-                    sp_info = sp.split("/")[-1].split("_")
-                    # Reading these out into variables mostly for my own sanity while writing this
-                    obs_id = sp_info[0]
-                    inst = sp_info[1]
-                    # I now store the central coordinate in the file name, and read it out into astropy quantity
-                    #  for when I need to define the spectrum object
-                    central_coord = Quantity([float(sp_info[3].strip('ra')), float(sp_info[4].strip('dec'))], 'deg')
-                    # Also read out the inner and outer radii into astropy quantities (I know that
-                    #  they will be in degree units).
-                    r_inner = Quantity(np.array(sp_info[5].strip('ri').split('and')).astype(float), 'deg')
-                    r_outer = Quantity(np.array(sp_info[6].strip('ro').split('and')).astype(float), 'deg')
-                    # Check if there is only one r_inner and r_outer value each, if so its a circle
-                    #  (otherwise its an ellipse)
-                    if len(r_inner) == 1:
-                        r_inner = r_inner[0]
-                        r_outer = r_outer[0]
+                    for sp in specs:
+                        # Filename contains a lot of useful information, so splitting it out to get it
+                        sp_info = sp.split("/")[-1].split("_")
+                        # Reading these out into variables mostly for my own sanity while writing this
+                        obs_id = sp_info[0]
+                        inst = sp_info[1]
+                        # I now store the central coordinate in the file name, and read it out into astropy quantity
+                        #  for when I need to define the spectrum object
+                        central_coord = Quantity([float(sp_info[3].strip('ra')), float(sp_info[4].strip('dec'))], 'deg')
+                        # Also read out the inner and outer radii into astropy quantities (I know that
+                        #  they will be in degree units).
+                        r_inner = Quantity(np.array(sp_info[5].strip('ri').split('and')).astype(float), 'deg')
+                        r_outer = Quantity(np.array(sp_info[6].strip('ro').split('and')).astype(float), 'deg')
+                        # Check if there is only one r_inner and r_outer value each, if so its a circle
+                        #  (otherwise its an ellipse)
+                        if len(r_inner) == 1:
+                            r_inner = r_inner[0]
+                            r_outer = r_outer[0]
 
-                    # Only check the actual filename, as I have no knowledge of what strings might be in the
-                    #  user's path to xga output
-                    if 'grpTrue' in sp.split('/')[-1]:
-                        grp_ind = sp_info.index('grpTrue')
-                        grouped = True
-                    else:
-                        grouped = False
-
-                    # mincnt or minsn information will only be in the filename if the spectrum is grouped
-                    if grouped and 'mincnt' in sp.split('/')[-1]:
-                        min_counts = int(sp_info[grp_ind+1].split('mincnt')[-1])
-                        min_sn = None
-                    elif grouped and 'minsn' in sp.split('/')[-1]:
-                        min_sn = float(sp_info[grp_ind+1].split('minsn')[-1])
-                        min_counts = None
-                    else:
-                        # We still need to pass the variables to the spectrum definition, even if it isn't
-                        #  grouped
-                        min_sn = None
-                        min_counts = None
-
-                    # Only if oversampling was applied will it appear in the filename
-                    if 'ovsamp' in sp.split('/')[-1]:
-                        over_sample = int(sp_info[-2].split('ovsamp')[-1])
-                    else:
-                        over_sample = None
-
-                    if "region" in sp.split('/')[-1]:
-                        region = True
-                    else:
-                        region = False
-
-                    # I split the 'spec' part of the end of the name of the spectrum, and can use the parts of the
-                    #  file name preceding it to search for matching arf/rmf files
-                    sp_info_str = cur_d + sp.split('/')[-1].split('_spec')[0]
-
-                    # Fairly self explanatory, need to find all the separate products needed to define an XGA
-                    #  spectrum
-                    arf = [f for f in named if "arf" in f and "back" not in f and sp_info_str == f.split('.arf')[0]]
-                    rmf = [f for f in named if "rmf" in f and "back" not in f and sp_info_str == f.split('.rmf')[0]]
-                    # As RMFs can be generated for source and background spectra separately, or one for both,
-                    #  we need to check for matching RMFs to the spectrum we found
-                    if len(rmf) == 0:
-                        rmf = [f for f in named if "rmf" in f and "back" not in f and inst in f and "universal" in f]
-
-                    # Exact same checks for the background spectrum
-                    back = [f for f in named if "backspec" in f and inst in f
-                            and sp_info_str == f.split('_backspec')[0]]
-                    back_arf = [f for f in named if "arf" in f and inst in f
-                                and sp_info_str == f.split('_back.arf')[0] and "back" in f]
-                    back_rmf = [f for f in named if "rmf" in f and "back" in f and inst in f
-                                and sp_info_str == f.split('_back.rmf')[0]]
-                    if len(back_rmf) == 0:
-                        back_rmf = rmf
-
-                    # If exactly one match has been found for all of the products, we define an XGA spectrum and
-                    #  add it the source object.
-                    if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and len(back_rmf) == 1:
-                        # Defining our XGA spectrum instance
-                        obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
-                                       grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf[0],
-                                       back_arf[0])
-
-                        if "ident" in sp.split('/')[-1]:
-                            set_id = int(sp.split('ident')[-1].split('_')[0])
-                            ann_id = int(sp.split('ident')[-1].split('_')[1])
-                            obj.annulus_ident = ann_id
-                            obj.set_ident = set_id
-                            if set_id not in ann_spec_constituents:
-                                ann_spec_constituents[set_id] = []
-                                ann_spec_usable[set_id] = True
-                            ann_spec_constituents[set_id].append(obj)
+                        # Only check the actual filename, as I have no knowledge of what strings might be in the
+                        #  user's path to xga output
+                        if 'grpTrue' in sp.split('/')[-1]:
+                            grp_ind = sp_info.index('grpTrue')
+                            grouped = True
                         else:
-                            # And adding it to the source storage structure, but only if its not a member
-                            #  of an AnnularSpectra
-                            try:
-                                self.update_products(obj)
-                            except NotAssociatedError:
-                                pass
+                            grouped = False
 
-                    elif len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 0:
-                        # Defining our XGA spectrum instance
-                        obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
-                                       grouped, min_counts, min_sn, over_sample, "", "", "", region)
-
-                        if "ident" in sp.split('/')[-1]:
-                            set_id = int(sp.split('ident')[-1].split('_')[0])
-                            ann_id = int(sp.split('ident')[-1].split('_')[1])
-                            obj.annulus_ident = ann_id
-                            obj.set_ident = set_id
-                            if set_id not in ann_spec_constituents:
-                                ann_spec_constituents[set_id] = []
-                                ann_spec_usable[set_id] = True
-                            ann_spec_constituents[set_id].append(obj)
+                        # mincnt or minsn information will only be in the filename if the spectrum is grouped
+                        if grouped and 'mincnt' in sp.split('/')[-1]:
+                            min_counts = int(sp_info[grp_ind+1].split('mincnt')[-1])
+                            min_sn = None
+                        elif grouped and 'minsn' in sp.split('/')[-1]:
+                            min_sn = float(sp_info[grp_ind+1].split('minsn')[-1])
+                            min_counts = None
                         else:
-                            # And adding it to the source storage structure, but only if its not a member
-                            #  of an AnnularSpectra
-                            try:
-                                self.update_products(obj)
-                            except NotAssociatedError:
-                                pass
-                    else:
-                        warnings.warn("{src} spectrum {sp} cannot be loaded in due to a mismatch in available"
-                                      " ancillary files".format(src=self.name, sp=sp))
-                        if "ident" in sp.split("/")[-1]:
-                            set_id = int(sp.split('ident')[-1].split('_')[0])
-                            ann_spec_usable[set_id] = False
+                            # We still need to pass the variables to the spectrum definition, even if it isn't
+                            #  grouped
+                            min_sn = None
+                            min_counts = None
 
-        os.chdir(og_dir)
-
-        # Here we will load in existing xga profile objects
-        os.chdir(OUTPUT + "profiles/{}".format(self.name))
-        saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
-        for pf in saved_profs:
-            with open(pf, 'rb') as reado:
-                temp_prof = pickle.load(reado)
-                try:
-                    self.update_products(temp_prof)
-                except NotAssociatedError:
-                    pass
-        os.chdir(og_dir)
-
-        # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
-        #  those objects and add them to the storage structure
-        if len(ann_spec_constituents) != 0:
-            for set_id in ann_spec_constituents:
-                if ann_spec_usable[set_id]:
-                    ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
-                    if self._redshift is not None:
-                        # If we know the redshift we will add the radii to the annular spectra in proper distance units
-                        ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
-                    self.update_products(ann_spec_obj)
-
-        # Here we load in any combined images and exposure maps that may have been generated
-        os.chdir(OUTPUT + 'combined')
-        cur_d = os.getcwd() + '/'
-        # This creates a set of observation-instrument strings that describe the current combinations associated
-        #  with this source, for testing against to make sure we're loading in combined images/expmaps that
-        #  do belong with this source
-        src_oi_set = set([o+i for o in self._instruments for i in self._instruments[o]])
-
-        # Loads in the inventory file for this ObsID
-        inven = pd.read_csv("inventory.csv", dtype=str)
-        rel_inven = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
-        for row_ind, row in rel_inven.iterrows():
-            o_split = row['obs_ids'].split('/')
-            i_split = row['insts'].split('/')
-            # Assemble a set of observations-instrument strings for the current row, to test against the
-            #  src_oi_set we assembled earlier
-            test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
-            # First we make sure the sets are the same length, if they're not then we know before starting that this
-            #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
-            #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they match
-            #  exactly and the product can be loaded
-            if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], merged=True))
-
-        os.chdir(og_dir)
-
-        # Now loading in previous fits
-        if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
-            ann_obs_order = {}
-            ann_results = {}
-            ann_lums = {}
-            prev_fits = [OUTPUT + "XSPEC/" + self.name + "/" + f
-                         for f in os.listdir(OUTPUT + "XSPEC/" + self.name) if ".xcm" not in f and ".fits" in f]
-            for fit in prev_fits:
-                fit_name = fit.split("/")[-1]
-                fit_info = fit_name.split("_")
-                storage_key = "_".join(fit_info[1:-1])
-                # Load in the results table
-                fit_data = FITS(fit)
-
-                # This bit is largely copied from xspec.py, sorry for my laziness
-                global_results = fit_data["RESULTS"][0]
-                model = global_results["MODEL"].strip(" ")
-
-                if "_ident" in storage_key:
-                    set_id, ann_id = storage_key.split("_ident")[-1].split("_")
-                    set_id = int(set_id)
-                    ann_id = int(ann_id)
-                    if set_id not in ann_results:
-                        ann_results[set_id] = {}
-                        ann_lums[set_id] = {}
-                        ann_obs_order[set_id] = {}
-
-                    if model not in ann_results[set_id]:
-                        ann_results[set_id][model] = {}
-                        ann_lums[set_id][model] = {}
-                        ann_obs_order[set_id][model] = {}
-
-                else:
-                    set_id = None
-                    ann_id = None
-
-                try:
-                    inst_lums = {}
-                    obs_order = []
-                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
-                        sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
-                        # Want to derive the spectra storage key from the file name, this strips off some
-                        #  unnecessary info
-                        sp_key = line["SPEC_PATH"].strip(" ").split("/")[-1].split('ra')[-1].split('_spec.fits')[0]
-
-                        # If its not an AnnularSpectra fit then we can just fetch the spectrum from the source
-                        #  the normal way
-                        if set_id is None:
-                            # This adds ra back on, and removes any ident information if it is there
-                            sp_key = 'ra' + sp_key
-                            # Finds the appropriate matching spectrum object for the current table line
-                            spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
+                        # Only if oversampling was applied will it appear in the filename
+                        if 'ovsamp' in sp.split('/')[-1]:
+                            over_sample = int(sp_info[-2].split('ovsamp')[-1])
                         else:
-                            sp_key = 'ra' + sp_key.split('_ident')[0]
-                            ann_spec = self.get_annular_spectra(set_id=set_id)
-                            spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
-                            obs_order.append([sp_info[0], sp_info[1]])
+                            over_sample = None
 
-                        # Adds information from this fit to the spectrum object.
-                        spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
+                        if "region" in sp.split('/')[-1]:
+                            region = True
+                        else:
+                            region = False
 
-                        # The add_fit_data method formats the luminosities nicely, so we grab them back out
-                        #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
-                        processed_lums = spec.get_luminosities(model)
-                        if spec.instrument not in inst_lums:
-                            inst_lums[spec.instrument] = processed_lums
+                        # I split the 'spec' part of the end of the name of the spectrum, and can use the parts of the
+                        #  file name preceding it to search for matching arf/rmf files
+                        sp_info_str = cur_d + sp.split('/')[-1].split('_spec')[0]
 
-                    # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
-                    #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
-                    #  consistent
-                    if "pn" in inst_lums:
-                        chosen_lums = inst_lums["pn"]
-                        # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
-                    elif "mos2" in inst_lums:
-                        chosen_lums = inst_lums["mos2"]
-                    elif "mos1" in inst_lums:
-                        chosen_lums = inst_lums["mos1"]
-                    else:
-                        chosen_lums = None
+                        # Fairly self explanatory, need to find all the separate products needed to define an XGA
+                        #  spectrum
+                        arf = [f for f in named if "arf" in f and "back" not in f and sp_info_str == f.split('.arf')[0]]
+                        rmf = [f for f in named if "rmf" in f and "back" not in f and sp_info_str == f.split('.rmf')[0]]
+                        # As RMFs can be generated for source and background spectra separately, or one for both,
+                        #  we need to check for matching RMFs to the spectrum we found
+                        if len(rmf) == 0:
+                            rmf = [f for f in named if "rmf" in f and "back" not in f and inst in f and "universal" in f]
 
-                    if set_id is not None:
-                        ann_results[set_id][model][spec.annulus_ident] = global_results
-                        ann_lums[set_id][model][spec.annulus_ident] = chosen_lums
-                        ann_obs_order[set_id][model][spec.annulus_ident] = obs_order
-                    else:
-                        # Push global fit results, luminosities etc. into the corresponding source object.
-                        self.add_fit_data(model, global_results, chosen_lums, sp_key)
-                except (OSError, NoProductAvailableError, IndexError, NotAssociatedError):
-                    chosen_lums = {}
-                    warnings.warn("{src} fit {f} could not be loaded in as there are no matching spectra "
-                                  "available".format(src=self.name, f=fit_name))
-                fit_data.close()
+                        # Exact same checks for the background spectrum
+                        back = [f for f in named if "backspec" in f and inst in f
+                                and sp_info_str == f.split('_backspec')[0]]
+                        back_arf = [f for f in named if "arf" in f and inst in f
+                                    and sp_info_str == f.split('_back.arf')[0] and "back" in f]
+                        back_rmf = [f for f in named if "rmf" in f and "back" in f and inst in f
+                                    and sp_info_str == f.split('_back.rmf')[0]]
+                        if len(back_rmf) == 0:
+                            back_rmf = rmf
 
-            if len(ann_results) != 0:
-                for set_id in ann_results:
+                        # If exactly one match has been found for all of the products, we define an XGA spectrum and
+                        #  add it the source object.
+                        if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and len(back_rmf) == 1:
+                            # Defining our XGA spectrum instance
+                            obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
+                                        grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf[0],
+                                        back_arf[0])
+
+                            if "ident" in sp.split('/')[-1]:
+                                set_id = int(sp.split('ident')[-1].split('_')[0])
+                                ann_id = int(sp.split('ident')[-1].split('_')[1])
+                                obj.annulus_ident = ann_id
+                                obj.set_ident = set_id
+                                if set_id not in ann_spec_constituents:
+                                    ann_spec_constituents[set_id] = []
+                                    ann_spec_usable[set_id] = True
+                                ann_spec_constituents[set_id].append(obj)
+                            else:
+                                # And adding it to the source storage structure, but only if its not a member
+                                #  of an AnnularSpectra
+                                try:
+                                    self.update_products(obj)
+                                except NotAssociatedError:
+                                    pass
+
+                        elif len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 0:
+                            # Defining our XGA spectrum instance
+                            obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
+                                        grouped, min_counts, min_sn, over_sample, "", "", "", region)
+
+                            if "ident" in sp.split('/')[-1]:
+                                set_id = int(sp.split('ident')[-1].split('_')[0])
+                                ann_id = int(sp.split('ident')[-1].split('_')[1])
+                                obj.annulus_ident = ann_id
+                                obj.set_ident = set_id
+                                if set_id not in ann_spec_constituents:
+                                    ann_spec_constituents[set_id] = []
+                                    ann_spec_usable[set_id] = True
+                                ann_spec_constituents[set_id].append(obj)
+                            else:
+                                # And adding it to the source storage structure, but only if its not a member
+                                #  of an AnnularSpectra
+                                try:
+                                    self.update_products(obj)
+                                except NotAssociatedError:
+                                    pass
+                        else:
+                            warnings.warn("{src} spectrum {sp} cannot be loaded in due to a mismatch in available"
+                                        " ancillary files".format(src=self.name, sp=sp))
+                            if "ident" in sp.split("/")[-1]:
+                                set_id = int(sp.split('ident')[-1].split('_')[0])
+                                ann_spec_usable[set_id] = False
+
+            os.chdir(og_dir)
+
+            # Here we will load in existing xga profile objects
+            os.chdir(OUTPUT + tscope + "/profiles/{}".format(self.name))
+            saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
+            for pf in saved_profs:
+                with open(pf, 'rb') as reado:
+                    temp_prof = pickle.load(reado)
                     try:
-                        rel_ann_spec = self.get_annular_spectra(set_id=set_id)
-                        for model in ann_results[set_id]:
-                            rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model],
-                                                      ann_obs_order[set_id][model])
-                            # if model == "constant*tbabs*apec":
-                            #     temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
-                            #     self.update_products(temp_prof)
-                            #
-                            #     # Normalisation profiles can be useful for many things, so we generate them too
-                            #     norm_prof = rel_ann_spec.generate_profile(model, 'norm', 'cm^-5')
-                            #     self.update_products(norm_prof)
-                            #
-                            #     if 'Abundanc' in rel_ann_spec.get_results(0, 'constant*tbabs*apec'):
-                            #         met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
-                            #         self.update_products(met_prof)
-                    except (NoProductAvailableError, ValueError):
-                        warnings.warn("A previous annular spectra profile fit for {src} was not successful, or no "
-                                      "matching spectrum has been loaded, so it cannot be read "
-                                      "in".format(src=self.name))
+                        self.update_products(temp_prof)
+                    except NotAssociatedError:
+                        pass
+            os.chdir(og_dir)
 
-        os.chdir(og_dir)
+            # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
+            #  those objects and add them to the storage structure
+            if len(ann_spec_constituents) != 0:
+                for set_id in ann_spec_constituents:
+                    if ann_spec_usable[set_id]:
+                        ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+                        if self._redshift is not None:
+                            # If we know the redshift we will add the radii to the annular spectra in proper distance units
+                            ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
+                        self.update_products(ann_spec_obj)
 
-        # And finally loading in any conversion factors that have been calculated using XGA's fakeit interface
-        if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
-            conv_factors = [OUTPUT + "XSPEC/" + self.name + "/" + f for f in os.listdir(OUTPUT + "XSPEC/" + self.name)
-                            if ".xcm" not in f and "conv_factors" in f]
-            for conv_path in conv_factors:
-                res_table = pd.read_csv(conv_path, dtype={"lo_en": str, "hi_en": str})
-                # Gets the model name from the file name of the output results table
-                model = conv_path.split("_")[-3]
+            # Here we load in any combined images and exposure maps that may have been generated
+            os.chdir(OUTPUT + tscope + '/combined')
+            cur_d = os.getcwd() + '/'
+            # This creates a set of observation-instrument strings that describe the current combinations associated
+            #  with this source, for testing against to make sure we're loading in combined images/expmaps that
+            #  do belong with this source
+            src_oi_set = set([o+i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
 
-                # We can infer the storage key from the name of the results table, just makes it easier to
-                #  grab the correct spectra
-                storage_key = conv_path.split('/')[-1].split(self.name)[-1][1:].split(model)[0][:-1]
+            # Loads in the inventory file for this ObsID
+            inven = pd.read_csv("inventory.csv", dtype=str)
+            rel_inven = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
+            for row_ind, row in rel_inven.iterrows():
+                o_split = row['obs_ids'].split('/')
+                i_split = row['insts'].split('/')
+                # Assemble a set of observations-instrument strings for the current row, to test against the
+                #  src_oi_set we assembled earlier
+                test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
+                # First we make sure the sets are the same length, if they're not then we know before starting that this
+                #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
+                #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they match
+                #  exactly and the product can be loaded
+                if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
+                    self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], merged=True))
 
-                # Grabs the ObsID+instrument combinations from the headers of the csv. Makes sure they are unique
-                #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
-                # First two columns are skipped because they are energy limits
-                combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
-                # Getting the spectra for each column, then assigning rates and luminosities.
-                # Due to the danger of a fit using a piece of data (an ObsID-instrument combo) that isn't currently
-                #  associated with the source, we first fetch the spectra, then in a second loop we assign the factors
-                rel_spec = []
-                try:
-                    for comb in combos:
-                        spec = self.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
-                        rel_spec.append(spec)
+            os.chdir(og_dir)
 
-                    for comb_ind, comb in enumerate(combos):
-                        rel_spec[comb_ind].add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
-                                                            res_table["rate_{}".format(comb)].values,
-                                                            res_table["Lx_{}".format(comb)].values, model)
+            # Now loading in previous fits
+            if os.path.exists(OUTPUT + tscope + "/XSPEC/" + self.name) and read_fits:
+                ann_obs_order = {}
+                ann_results = {}
+                ann_lums = {}
+                prev_fits = [OUTPUT + tscope + "/XSPEC/" + self.name + "/" + f
+                            for f in os.listdir(OUTPUT + tscope + "/XSPEC/" + self.name) if ".xcm" not in f and ".fits" in f]
+                for fit in prev_fits:
+                    fit_name = fit.split("/")[-1]
+                    fit_info = fit_name.split("_")
+                    storage_key = "_".join(fit_info[1:-1])
+                    # Load in the results table
+                    fit_data = FITS(fit)
 
-                # This triggers in the case of something like issue #738, where a previous fit used data that is
-                #  not loaded into this source (either because it was manually removed, or because the central
-                #  position has changed etc.)
-                except NotAssociatedError:
-                    warnings.warn("Existing fit for {s} could not be loaded due to a mismatch in available "
-                                  "data".format(s=self.name), stacklevel=2)
+                    # This bit is largely copied from xspec.py, sorry for my laziness
+                    global_results = fit_data["RESULTS"][0]
+                    model = global_results["MODEL"].strip(" ")
+
+                    if "_ident" in storage_key:
+                        set_id, ann_id = storage_key.split("_ident")[-1].split("_")
+                        set_id = int(set_id)
+                        ann_id = int(ann_id)
+                        if set_id not in ann_results:
+                            ann_results[set_id] = {}
+                            ann_lums[set_id] = {}
+                            ann_obs_order[set_id] = {}
+
+                        if model not in ann_results[set_id]:
+                            ann_results[set_id][model] = {}
+                            ann_lums[set_id][model] = {}
+                            ann_obs_order[set_id][model] = {}
+
+                    else:
+                        set_id = None
+                        ann_id = None
+
+                    try:
+                        inst_lums = {}
+                        obs_order = []
+                        for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                            sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                            # Want to derive the spectra storage key from the file name, this strips off some
+                            #  unnecessary info
+                            sp_key = line["SPEC_PATH"].strip(" ").split("/")[-1].split('ra')[-1].split('_spec.fits')[0]
+
+                            # If its not an AnnularSpectra fit then we can just fetch the spectrum from the source
+                            #  the normal way
+                            if set_id is None:
+                                # This adds ra back on, and removes any ident information if it is there
+                                sp_key = 'ra' + sp_key
+                                # Finds the appropriate matching spectrum object for the current table line
+                                spec[tscope] = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
+                            else:
+                                sp_key = 'ra' + sp_key.split('_ident')[0]
+                                # JESS_TODO change these two functions <3 
+                                ann_spec = self.get_annular_spectra(set_id=set_id)
+                                spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                                obs_order.append([sp_info[0], sp_info[1]])
+
+                            # Adds information from this fit to the spectrum object.
+                            # JESS_TODO and this function
+                            spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
+
+                            # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                            #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
+                            # JESS_TODO and this one
+                            processed_lums = spec.get_luminosities(model)
+                            if spec.instrument not in inst_lums:
+                                inst_lums[spec.instrument] = processed_lums
+
+                        # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                        #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                        #  consistent
+                        if tscope == 'xmm':
+                            if "pn" in inst_lums:
+                                chosen_lums = inst_lums["pn"]
+                                # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                            elif "mos2" in inst_lums:
+                                chosen_lums = inst_lums["mos2"]
+                            elif "mos1" in inst_lums:
+                                chosen_lums = inst_lums["mos1"]
+                            else:
+                                chosen_lums = None
+                        else:
+                            raise NotImplementedError("Only XMM is Supported")
+
+                        if set_id is not None:
+                            ann_results[set_id][model][spec.annulus_ident] = global_results
+                            ann_lums[set_id][model][spec.annulus_ident] = chosen_lums
+                            ann_obs_order[set_id][model][spec.annulus_ident] = obs_order
+                        else:
+                            # Push global fit results, luminosities etc. into the corresponding source object.
+                            # JESS_TODO hohoho and this function tooo
+                            self.add_fit_data(model, global_results, chosen_lums, sp_key)
+                    except (OSError, NoProductAvailableError, IndexError, NotAssociatedError):
+                        chosen_lums = {}
+                        warnings.warn("{src} fit {f} could not be loaded in as there are no matching spectra "
+                                    "available".format(src=self.name, f=fit_name))
+                    fit_data.close()
+
+                if len(ann_results) != 0:
+                    for set_id in ann_results:
+                        try:
+                            # JESS_TODO this function
+                            rel_ann_spec = self.get_annular_spectra(set_id=set_id)
+                            for model in ann_results[set_id]:
+                                rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model],
+                                                        ann_obs_order[set_id][model])
+                                # if model == "constant*tbabs*apec":
+                                #     temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
+                                #     self.update_products(temp_prof)
+                                #
+                                #     # Normalisation profiles can be useful for many things, so we generate them too
+                                #     norm_prof = rel_ann_spec.generate_profile(model, 'norm', 'cm^-5')
+                                #     self.update_products(norm_prof)
+                                #
+                                #     if 'Abundanc' in rel_ann_spec.get_results(0, 'constant*tbabs*apec'):
+                                #         met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
+                                #         self.update_products(met_prof)
+                        except (NoProductAvailableError, ValueError):
+                            warnings.warn("A previous annular spectra profile fit for {src} was not successful, or no "
+                                        "matching spectrum has been loaded, so it cannot be read "
+                                        "in".format(src=self.name))
+
+            os.chdir(og_dir)
+
+            # And finally loading in any conversion factors that have been calculated using XGA's fakeit interface
+            if os.path.exists(OUTPUT + tscope + "/XSPEC/" + self.name) and read_fits:
+                conv_factors = [OUTPUT + tscope + "/XSPEC/" + self.name + "/" + f for f in os.listdir(OUTPUT + tscope + "/XSPEC/" + self.name)
+                                if ".xcm" not in f and "conv_factors" in f]
+                for conv_path in conv_factors:
+                    res_table = pd.read_csv(conv_path, dtype={"lo_en": str, "hi_en": str})
+                    # Gets the model name from the file name of the output results table
+                    model = conv_path.split("_")[-3]
+
+                    # We can infer the storage key from the name of the results table, just makes it easier to
+                    #  grab the correct spectra
+                    storage_key = conv_path.split('/')[-1].split(self.name)[-1][1:].split(model)[0][:-1]
+
+                    # Grabs the ObsID+instrument combinations from the headers of the csv. Makes sure they are unique
+                    #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
+                    # First two columns are skipped because they are energy limits
+                    combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
+                    # Getting the spectra for each column, then assigning rates and luminosities.
+                    # Due to the danger of a fit using a piece of data (an ObsID-instrument combo) that isn't currently
+                    #  associated with the source, we first fetch the spectra, then in a second loop we assign the factors
+                    rel_spec = []
+                    try:
+                        for comb in combos:
+                            spec[tscope] = self.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
+                            rel_spec.append(spec)
+
+                        for comb_ind, comb in enumerate(combos):
+                            rel_spec[comb_ind].add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
+                                                                res_table["rate_{}".format(comb)].values,
+                                                                res_table["Lx_{}".format(comb)].values, model)
+
+                    # This triggers in the case of something like issue #738, where a previous fit used data that is
+                    #  not loaded into this source (either because it was manually removed, or because the central
+                    #  position has changed etc.)
+                    except NotAssociatedError:
+                        warnings.warn("Existing fit for {s} could not be loaded due to a mismatch in available "
+                                    "data".format(s=self.name), stacklevel=2)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
@@ -1149,7 +1162,7 @@ class BaseSource:
                 elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
                         and (extra_key in out or extra_key is None) and just_obj:
                     matches[tscope] = out[-1]
-            return matches
+        return matches
 
     def _load_regions(self, reg_paths) -> Tuple[dict, dict]:
         """
