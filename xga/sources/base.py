@@ -2872,10 +2872,14 @@ class BaseSource:
 
         # Adds on the extra information about grouping to the storage key
         spec_storage_name += extra_name
-        matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name)
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        matched_prods = {}
+        for tscope in self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name):
+            matched_prods[tscope] = self.get_products(
+                'spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name)[tscope]
+        # DAVID_QUESTION same as the get_annular_spectra question
+        #if len(matched_prods) == 1:
+            #matched_prods = matched_prods[0]
+        if sum([len(matched_prods[tscope]) for tscope in matched_prods.keys()]) == 0:
             raise NoProductAvailableError("Cannot find any spectra matching your input.")
 
         return matched_prods
