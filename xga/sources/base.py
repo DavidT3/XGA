@@ -483,7 +483,7 @@ class BaseSource:
                 obs_id = po.obs_id # DAVID_QUESTION i think these maybe become dictionaries with tscope keys
                 inst = po.instrument
                 p_type = po.type
-                # JESS_TODO need to telescope attribute to product class
+                # JESS_TODO need to telescope attribute to product class 
                 telescopes = po.telescope
 
                 if len(telescopes) != 1:
