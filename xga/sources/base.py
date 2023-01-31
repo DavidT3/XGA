@@ -762,7 +762,6 @@ class BaseSource:
                         # Fetches lines of the inventory which match the current ObsID and instrument
                         rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
                         for r_ind, r in rel_ims.iterrows():
-                            # JESS_TODO need to change the update_products function
                             self.update_products(parse_image_like(cur_d+r['file_name'], r['type']))
 
                     # For spectra we search for products that have the name of this object in, as they are for
@@ -1009,7 +1008,7 @@ class BaseSource:
                             else:
                                 sp_key = 'ra' + sp_key.split('_ident')[0]
                                 # JESS_TODO change these two functions <3 
-                                ann_spec = self.get_annular_spectra(set_id=set_id)
+                                ann_spec = self.get_annular_spectra(set_id=set_id)[tscope]
                                 spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
                                 obs_order.append([sp_info[0], sp_info[1]])
 
@@ -1169,7 +1168,6 @@ class BaseSource:
                 unpack_list(match)
                 # Only adds to matches dict if this particular match is for the obs_id and instrument passed to this method
                 # Though all matches will be returned if no obs_id/inst is passed
-                # DAVID_QUESTION confused about what matches contains?
                 if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
                         and (extra_key in out or extra_key is None) and not just_obj:
                     matches[tscope] = out
@@ -2941,17 +2939,21 @@ class BaseSource:
             matched_prods = self.get_products('combined_spectrum', extra_key=spec_storage_name)
         # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
         elif set_id is None and radii is None:
-            matched_prods = [p for p in self.get_products('combined_spectrum')
+            matched_prods = {}
+            for tscope in self.get_products('combined_spectrum'):
+                matched_prods[tscope] = [p for p in self.get_products('combined_spectrum')[tscope]
                              if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
         # However if they have passed a setID then this over-rides everything else
         else:
             # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
             #  whatever the user passed in
-            matched_prods = [p for p in self.get_products('combined_spectrum') if p.set_ident == set_id]
-
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+            matched_prods = {}
+            for tscope in self.get_products('combined_spectrum'):
+                matched_prods[tscope] = [p for p in self.get_products('combined_spectrum')[tscope] if p.set_ident == set_id]
+        # DAVID_QUESTION dont think i need this anymore?
+       # if len(matched_prods) == 1:
+           #  matched_prods = matched_prods[0]
+        if sum([len(matched_prods[tscope]) for tscope in matched_prods.keys()]) == 0:
             raise NoProductAvailableError("No matching AnnularSpectra can be found.")
 
         return matched_prods
