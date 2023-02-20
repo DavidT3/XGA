@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 13:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 20/02/2023, 14:02. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
@@ -123,9 +123,8 @@ def _on_obs_id(ra: float, dec: float, obs_id: Union[str, list, np.ndarray]) -> T
 
 
 def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                     distance: Quantity = Quantity(30.0, 'arcmin'),
-                     num_cores: int = NUM_CORES) -> Tuple[Union[DataFrame, List[DataFrame]],
-                                                          Union[DataFrame, List[DataFrame]]]:
+                     distance: Quantity = Quantity(30.0, 'arcmin'), num_cores: int = NUM_CORES) \
+        -> Tuple[Union[DataFrame, List[DataFrame]], Union[DataFrame, List[DataFrame]]]:
     """
     Returns ObsIDs within a given distance from the input ra and dec values.
 
