@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 16:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 16:30. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
@@ -8,18 +8,18 @@ import numpy as np
 import pandas as pd
 from astropy.units.quantity import Quantity
 from pandas import DataFrame
+from regions import read_ds9, PixelRegion
 from tqdm import tqdm
 
-from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT
-from ..exceptions import NoMatchFoundError, NoValidObservationsError
+from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT, xga_conf
+from ..exceptions import NoMatchFoundError, NoValidObservationsError, NoRegionsError
 
 
-def _assemble_null_source(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                          initial_results: Union[DataFrame, List[DataFrame]], num_cores: int):
+def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
+                        initial_results: Union[DataFrame, List[DataFrame]], num_cores: int):
     """
     An internal function that takes the results of a simple match and assembles a list of unique ObsIDs which are of
-    interest to the coordinate(s) we're searching for data for. A NullSource is then declared to enable the mass
-    generation of exposure maps for further investigations. Sets of RA and Decs that were found to be near XMM data by
+    interest to the coordinate(s) we're searching for data for.  Sets of RA and Decs that were found to be near XMM data by
     the initial simple match are also created and returned.
 
     :param float/np.ndarray src_ra: RA coordinate(s) of the source(s), in degrees. To find matches for multiple
@@ -29,16 +29,11 @@ def _assemble_null_source(src_ra: Union[float, np.ndarray], src_dec: Union[float
     :param DataFrame/List[DataFrame] initial_results:
     :param int num_cores: The number of cores to use when generating exposure maps.
     :return: The simple match initial results (normalised so that they are a list of dataframe, even if only one
-        source is being searched for), the NullSource that was declared, unique string representations generated from
-        RA and Dec for the positions we're looking at, an array of dataframes for those coordinates that are near an
+        source is being searched for), a list of  unique ObsIDs, unique string representations generated from RA and
+        Dec for the positions  we're looking at, an array of dataframes for those coordinates that are near an
         XMM observation according to the initial match,  and the RA and Decs that are near an XMM observation
         according to the initial simple match.
     """
-    # Boohoo local imports very sad very sad, but stops circular import errors. NullSource is a basic Source class
-    #  that allows for a list of ObsIDs to be passed rather than coordinates
-    from ..sources import NullSource
-    from ..sas import eexpmap
-
     # If only one coordinate was passed, the return from simple_xmm_match will just be a dataframe, and I want
     #  a list of dataframes because its iterable and easier to deal with more generally
     if isinstance(initial_results, pd.DataFrame):
@@ -80,17 +75,7 @@ def _assemble_null_source(src_ra: Union[float, np.ndarray], src_dec: Union[float
     obs_ids = [o for o in obs_ids if not os.path.exists(epath.format(o=o, i='pn'))
                and not os.path.exists(epath.format(o=o, i='mos1')) and not os.path.exists(epath.format(o=o, i='mos2'))]
 
-    try:
-        # Declaring the NullSource with all the ObsIDs that; a) we need to use to check whether coordinates fall on
-        #  an XMM camera, and b) don't already have exposure maps generated
-        obs_src = NullSource(obs_ids)
-        # Run exposure map generation for those ObsIDs
-        eexpmap(obs_src, num_cores=num_cores)
-    except NoValidObservationsError:
-        obs_src = None
-        pass
-
-    return initial_results, obs_src, all_repr, rel_res, rel_ra, rel_dec
+    return initial_results, obs_ids, all_repr, rel_res, rel_ra, rel_dec
 
 
 def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, float, DataFrame, DataFrame]:
@@ -330,6 +315,11 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
         array, a None value indicates that the coordinate did not fall on an XMM observation at all.
     :rtype: np.ndarray
     """
+    # Boohoo local imports very sad very sad, but stops circular import errors. NullSource is a basic Source class
+    #  that allows for a list of ObsIDs to be passed rather than coordinates
+    from ..sources import NullSource
+    from ..sas import eexpmap
+
     # Checks whether there are multiple input coordinates or just one. If one then the floats are turned into
     #  an array of length one to make later code easier to write (i.e. everything is iterable regardless)
     if isinstance(src_ra, float) and isinstance(src_dec, float):
@@ -351,7 +341,16 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
     #  match function, then sets up a NullSource and generate exposure maps that will be used to figure out if the
     #  sources are actually on an XMM pointing. Also returns cut down lists of RA, Decs etc. that are the sources
     #  which the simple match found to be near XMM data
-    init_res, obs_src, all_repr, rel_res, rel_ra, rel_dec = _assemble_null_source(src_ra, src_dec, init_res)
+    init_res, obs_ids, all_repr, rel_res, rel_ra, rel_dec = _process_init_match(src_ra, src_dec, init_res)
+
+    try:
+        # Declaring the NullSource with all the ObsIDs that; a) we need to use to check whether coordinates fall on
+        #  an XMM camera, and b) don't already have exposure maps generated
+        obs_src = NullSource(obs_ids)
+        # Run exposure map generation for those ObsIDs
+        eexpmap(obs_src, num_cores=num_cores)
+    except NoValidObservationsError:
+        pass
 
     # This is all the same deal as in simple_xmm_match, but calls the _on_obs_id internal function
     e_matches = {}
@@ -424,6 +423,8 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
 #     if xga_conf["XMM_FILES"]["region_file"] == "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg":
 #         raise NoRegionsError("The configuration file does not contain information on region files, so this function "
 #                              "cannot continue.")
+#
+#     for
 #
 #     sim_match, sim_match_bl = simple_xmm_match(src_ra, src_dec, num_cores=num_cores)
 #     with_obs_info = [len(obs_info) != 0 for obs_info in sim_match]
