@@ -1,17 +1,20 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/02/2023, 15:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/02/2023, 20:44. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
+from warnings import warn
 
 import numpy as np
 import pandas as pd
 from astropy.units.quantity import Quantity
 from pandas import DataFrame
+from regions import read_ds9
 from tqdm import tqdm
 
 from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT, xga_conf
 from ..exceptions import NoMatchFoundError, NoValidObservationsError, NoRegionsError, XGAConfigError
+from ..products import Image
 
 
 def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
@@ -427,29 +430,46 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         raise XGAConfigError("This function requires at least one set of images (PN, MOS1, or MOS2) be referenced in "
                              "the XGA configuration file.")
 
-
     s_match, s_match_bl = simple_xmm_match(src_ra, src_dec, num_cores=num_cores)
 
     s_match, uniq_obs_ids = _process_init_match(src_ra, src_dec, s_match)[:2]
     with_obs_info = [len(obs_info) != 0 for obs_info in s_match]
 
-    # has_reg_file = {}
-    # matched = []
-    # for src_ind, obs_info in enumerate(s_match):
-    #     if with_obs_info[src_ind]:
-    #         for row_ind, row in obs_info.iterrows():
-    #
-    #             obs_id = row['ObsID']
-    #             reg_path = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
-    #             if os.path.exists(reg_path):
-    #                 has_reg_file[obs_id] = True
-    #                 ds9_regs = read_ds9(reg_path)
-    #                 if any([isinstance(r, PixelRegion) for r in ds9_regs]):
-    #
-    #             else:
-    #                 has_reg_file[obs_id] = False
-    #     else:
-    #         matched.append(False)
+    has_reg_file = {}
+    matched = {}
+    for src_ind, obs_info in enumerate(s_match):
+        if with_obs_info[src_ind]:
+            for row_ind, row in obs_info.iterrows():
+
+                obs_id = row['ObsID']
+                reg_path = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
+                im_path = None
+                for key in ['pn_image', 'mos1_image', 'mos2_image']:
+                    for en_comb in zip(xga_conf["XMM_FILES"]["lo_en"], xga_conf["XMM_FILES"]["hi_en"]):
+                        cur_path = xga_conf["XMM_FILES"][key].format(obs_id=obs_id, lo_en=en_comb[0], hi_en=en_comb[1])
+                        if os.path.exists(cur_path):
+                            im_path = cur_path
+
+                if im_path is None:
+                    warn("None of the specified image files for {} can be located - skipping region match "
+                         "search.".format(obs_id))
+                    continue
+
+                if os.path.exists(reg_path):
+                    has_reg_file[obs_id] = True
+                    ds9_regs = read_ds9(reg_path)
+                    # Bodged declaration, the instrument and energy bounds don't matter
+                    im = Image(im_path, obs_id, '', '', '', '', Quantity(0, 'keV'), Quantity(1, 'keV'), )
+
+                    if im.radec_wcs is None:
+                        raise ValueError("There is no appropriate WCS in the configuration file supplied image.")
+                    # if any([isinstance(r, PixelRegion) for r in ds9_regs]):
+
+                else:
+                    has_reg_file[obs_id] = False
+        else:
+            # matched[](False)
+            pass
 
 
 
