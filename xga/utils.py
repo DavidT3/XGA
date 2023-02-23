@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 15:22. Copyright (c) The Contributors
 
 import json
 import os
@@ -435,6 +435,8 @@ else:
         except:
             XSPEC_VERSION = None
 
-
+    # This defines the meaning of different colours of region - this will eventually be user configurable in the
+    #  configuration file, but putting it here means that the user can still change the definitions programmatically
+    SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan", "yellow"]}
 
 
