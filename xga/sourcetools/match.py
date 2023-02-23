@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 16:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 16:37. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
@@ -428,7 +428,7 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
     if any([st not in SRC_REGION_COLOURS for st in src_type]):
         raise ValueError("The values supported for 'src_type' are "
-                         "{}".format(','.join(list(SRC_REGION_COLOURS.keys()))))
+                         "{}".format(', '.join(list(SRC_REGION_COLOURS.keys()))))
 
     allowed_colours = []
     for st in src_type:
@@ -488,7 +488,6 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
                     if any([isinstance(r, PixelRegion) for r in ds9_regs]):
                         ds9_regs = np.array([reg.to_sky(im.radec_wcs) for reg in ds9_regs])
 
-                    match_within = None
                     # Hopefully this bodge doesn't have any unforeseen consequences
                     if ds9_regs[0] is not None and len(ds9_regs) > 1:
                         # Quickly calculating distance between source and center of regions, then sorting
@@ -509,6 +508,8 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
                     elif ds9_regs[0] is not None and len(ds9_regs) == 1 and \
                             ds9_regs[0].contains(SkyCoord(ra, dec, unit='deg'), im.radec_wcs):
                         match_within = ds9_regs
+                    else:
+                        match_within = np.array([])
 
                     if len(match_within) == 0:
                         break
