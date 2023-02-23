@@ -1,9 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 15:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 16:07. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
-from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -15,8 +14,8 @@ from tqdm import tqdm
 
 from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT, xga_conf
 from ..exceptions import NoMatchFoundError, NoValidObservationsError, NoRegionsError, XGAConfigError
+from ..utils import SRC_REGION_COLOURS
 
-allowed_src_types = ['pnt', 'ext']
 
 def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                         initial_results: Union[DataFrame, List[DataFrame]]):
@@ -427,8 +426,13 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     if isinstance(src_type, str):
         src_type = [src_type]
 
-    if any([st not in allowed_src_types for st in src_type]):
-        raise ValueError("The values supported for 'src_type' are {}".format(','.join(allowed_src_types)))
+    if any([st not in SRC_REGION_COLOURS for st in src_type]):
+        raise ValueError("The values supported for 'src_type' are "
+                         "{}".format(','.join(list(SRC_REGION_COLOURS.keys()))))
+
+    allowed_colours = []
+    for st in src_type:
+        allowed_colours += SRC_REGION_COLOURS[st]
 
     if xga_conf["XMM_FILES"]["region_file"] == "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg":
         raise NoRegionsError("The configuration file does not contain information on region files, so this function "
@@ -446,10 +450,12 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
     has_reg_file = {}
     matched = {}
-    for src_ind, obs_info in enumerate(rel_res):
-        ra = rel_ra[src_ind]
-        dec = rel_dec[src_ind]
-        if with_obs_info[src_ind]:
+    with tqdm(desc="Searching for region matches", total=len(rel_res)) as onwards:
+        for src_ind, obs_info in enumerate(rel_res):
+            ra = rel_ra[src_ind]
+            dec = rel_dec[src_ind]
+            cur_repr = repr(ra) + repr(dec)
+
             for row_ind, row in obs_info.iterrows():
 
                 obs_id = row['ObsID']
@@ -461,12 +467,13 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
                         if os.path.exists(cur_path):
                             im_path = cur_path
 
-                if im_path is None:
-                    warn("None of the specified image files for {} can be located - skipping region match "
-                         "search.".format(obs_id))
-                    continue
-
                 if os.path.exists(reg_path):
+                    if im_path is None:
+                        onwards.write("None of the specified image files for {} can be located - skipping region match "
+                                      "search.".format(obs_id))
+                        # warn()
+                        continue
+
                     has_reg_file[obs_id] = True
                     ds9_regs = read_ds9(reg_path)
                     if len(ds9_regs) == 0:
@@ -506,93 +513,91 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
                     if len(match_within) == 0:
                         break
 
-                    # if source_type == "ext":
-                    #     allowed_colours = ["green", "magenta", "blue", "cyan", "yellow"]
-                    # elif source_type == "pnt":
-                    #     allowed_colours = ["red"]
-                    # else:
-                    #     raise ValueError("{} is not a recognised source type, please "
-                    #                      "don't use this internal function!".format(source_type))
-                    #
-                    # # Here we store the actual matched sources
-                    # results_dict = {}
-                    # # And in this one go all the sources that aren't the matched source, we'll need to subtract them.
-                    # anti_results_dict = {}
-                    # # Sources in this dictionary are within the target source region AND matched to initial coordinates,
-                    # # but aren't the chosen source.
-                    # alt_match_dict = {}
-                    # # Goes through all the ObsIDs associated with this source, and checks if they have regions
-                    # #  If not then Nones are added to the various dictionaries, otherwise you end up with a list of regions
-                    # #  with missing ObsIDs
-                    # for obs in self.obs_ids:
-                    #     if obs in self._initial_regions:
-                    #         # This sets up an array of matched regions, accounting for the problems that can occur when
-                    #         #  there is only one region in the region list (numpy's indexing gets very angry). The array
-                    #         #  of matched region(s) set up here is used in this method.
-                    #         if len(self._initial_regions[obs]) == 1 and not self._initial_region_matches[obs][0]:
-                    #             init_region_matches = np.array([])
-                    #         elif len(self._initial_regions[obs]) == 1 and self._initial_region_matches[obs][0]:
-                    #             init_region_matches = self._initial_regions[obs]
-                    #         elif len(self._initial_regions[obs][self._initial_region_matches[obs]]) == 0:
-                    #             init_region_matches = np.array([])
-                    #         else:
-                    #             init_region_matches = self._initial_regions[obs][self._initial_region_matches[obs]]
-                    #
-                    #         # If there are no matches then the returned result is just None.
-                    #         if len(init_region_matches) == 0:
-                    #             results_dict[obs] = None
-                    #         else:
-                    #             interim_reg = []
-                    #             # The only solution I could think of is to go by the XCS standard of region files, so green
-                    #             #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
-                    #             # for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
-                    #             for entry in init_region_matches:
-                    #                 if entry.visual["color"] in allowed_colours:
-                    #                     interim_reg.append(entry)
-                    #
-                    #             # Different matching possibilities
-                    #             if len(interim_reg) == 0:
-                    #                 results_dict[obs] = None
-                    #             elif len(interim_reg) == 1:
-                    #                 results_dict[obs] = interim_reg[0]
-                    #             # Matching to multiple sources would be very problematic, so throw an error
-                    #             elif len(interim_reg) > 1 and source_type == "pnt":
-                    #                 # I made the _load_regions method sort the outputted region dictionaries by distance from the
-                    #                 #  input coordinates, so I know that the 0th entry will be the closest to the source coords.
-                    #                 #  Hence I choose that one for pnt source multi-matches like this, see comment 2 of issue #639
-                    #                 #  for an example.
-                    #                 results_dict[obs] = interim_reg[0]
-                    #                 warnings.warn("{ns} matches for the point source {n} are found in the {o} region "
-                    #                               "file. The source nearest to the passed coordinates is accepted, all others "
-                    #                               "will be placed in the alternate match category and will not be removed "
-                    #                               "by masks.".format(o=obs, n=self.name, ns=len(interim_reg)))
-                    #
-                    #             elif len(interim_reg) > 1 and source_type == "ext":
-                    #                 raise MultipleMatchError("More than one match for {n} is found in the region file "
-                    #                                          "for observation {o}, this cannot yet be dealt with "
-                    #                                          "for extended sources.".format(o=obs, n=self.name))
-                    #
-                    #         # Alt match is used for when there is a secondary match to a point source
-                    #         alt_match_reg = [entry for entry in init_region_matches if entry != results_dict[obs]]
-                    #         alt_match_dict[obs] = alt_match_reg
-                    #
-                    #         # These are all the sources that aren't a match, and so should be removed from any analysis
-                    #         not_source_reg = [reg for reg in self._initial_regions[obs] if reg != results_dict[obs]
-                    #                           and reg not in alt_match_reg]
-                    #         anti_results_dict[obs] = not_source_reg
-                    #
-                    #     else:
-                    #         results_dict[obs] = None
-                    #         alt_match_dict[obs] = []
-                    #         anti_results_dict[obs] = []
+                    match_within = [r for r in ds9_regs if r.visual['color'] in allowed_colours]
+                    if len(match_within) != 0 and cur_repr in matched:
+                        matched[cur_repr][obs_id] = match_within
+                    elif len(match_within) != 0 and cur_repr not in matched:
+                        matched[cur_repr] = {obs_id: match_within}
+
                 else:
                     has_reg_file[obs_id] = False
-        else:
-            # matched[](False)
-            pass
+
+            onwards.update(1)
+
+    return matched
 
 
 
 
 
-
+# # # Here we store the actual matched sources
+#                     # results_dict = {}
+#                     # # And in this one go all the sources that aren't the matched source, we'll need to subtract them.
+#                     # anti_results_dict = {}
+#                     # # Sources in this dictionary are within the target source region AND matched to initial coordinates,
+#                     # # but aren't the chosen source.
+#                     # alt_match_dict = {}
+#                     # # Goes through all the ObsIDs associated with this source, and checks if they have regions
+#                     # #  If not then Nones are added to the various dictionaries, otherwise you end up with a list of regions
+#                     # #  with missing ObsIDs
+#                     # for obs in self.obs_ids:
+#                     #     if obs in self._initial_regions:
+#                     #         # This sets up an array of matched regions, accounting for the problems that can occur when
+#                     #         #  there is only one region in the region list (numpy's indexing gets very angry). The array
+#                     #         #  of matched region(s) set up here is used in this method.
+#                     #         if len(self._initial_regions[obs]) == 1 and not self._initial_region_matches[obs][0]:
+#                     #             init_region_matches = np.array([])
+#                     #         elif len(self._initial_regions[obs]) == 1 and self._initial_region_matches[obs][0]:
+#                     #             init_region_matches = self._initial_regions[obs]
+#                     #         elif len(self._initial_regions[obs][self._initial_region_matches[obs]]) == 0:
+#                     #             init_region_matches = np.array([])
+#                     #         else:
+#                     #             init_region_matches = self._initial_regions[obs][self._initial_region_matches[obs]]
+#                     #
+#                     #         # If there are no matches then the returned result is just None.
+#                     #         if len(init_region_matches) == 0:
+#                     #             results_dict[obs] = None
+#                     #         else:
+#                     #             interim_reg = []
+#                     #             # The only solution I could think of is to go by the XCS standard of region files, so green
+#                     #             #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
+#                     #             # for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
+#                     #             for entry in init_region_matches:
+#                     #                 if entry.visual["color"] in allowed_colours:
+#                     #                     interim_reg.append(entry)
+#                     #
+#                     #             # Different matching possibilities
+#                     #             if len(interim_reg) == 0:
+#                     #                 results_dict[obs] = None
+#                     #             elif len(interim_reg) == 1:
+#                     #                 results_dict[obs] = interim_reg[0]
+#                     #             # Matching to multiple sources would be very problematic, so throw an error
+#                     #             elif len(interim_reg) > 1 and source_type == "pnt":
+#                     #                 # I made the _load_regions method sort the outputted region dictionaries by distance from the
+#                     #                 #  input coordinates, so I know that the 0th entry will be the closest to the source coords.
+#                     #                 #  Hence I choose that one for pnt source multi-matches like this, see comment 2 of issue #639
+#                     #                 #  for an example.
+#                     #                 results_dict[obs] = interim_reg[0]
+#                     #                 warnings.warn("{ns} matches for the point source {n} are found in the {o} region "
+#                     #                               "file. The source nearest to the passed coordinates is accepted, all others "
+#                     #                               "will be placed in the alternate match category and will not be removed "
+#                     #                               "by masks.".format(o=obs, n=self.name, ns=len(interim_reg)))
+#                     #
+#                     #             elif len(interim_reg) > 1 and source_type == "ext":
+#                     #                 raise MultipleMatchError("More than one match for {n} is found in the region file "
+#                     #                                          "for observation {o}, this cannot yet be dealt with "
+#                     #                                          "for extended sources.".format(o=obs, n=self.name))
+#                     #
+#                     #         # Alt match is used for when there is a secondary match to a point source
+#                     #         alt_match_reg = [entry for entry in init_region_matches if entry != results_dict[obs]]
+#                     #         alt_match_dict[obs] = alt_match_reg
+#                     #
+#                     #         # These are all the sources that aren't a match, and so should be removed from any analysis
+#                     #         not_source_reg = [reg for reg in self._initial_regions[obs] if reg != results_dict[obs]
+#                     #                           and reg not in alt_match_reg]
+#                     #         anti_results_dict[obs] = not_source_reg
+#                     #
+#                     #     else:
+#                     #         results_dict[obs] = None
+#                     #         alt_match_dict[obs] = []
+#                     #         anti_results_dict[obs] = []
