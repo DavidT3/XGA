@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 12:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 15:28. Copyright (c) The Contributors
 import os
 from multiprocessing import Pool
 from typing import Union, Tuple, List
@@ -15,8 +15,8 @@ from tqdm import tqdm
 
 from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT, xga_conf
 from ..exceptions import NoMatchFoundError, NoValidObservationsError, NoRegionsError, XGAConfigError
-from ..products import Image
 
+allowed_src_types = ['pnt', 'ext']
 
 def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                         initial_results: Union[DataFrame, List[DataFrame]]):
@@ -418,9 +418,17 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         :param reg: A region object.
         :return: Distance between region centre and source position.
         """
-        ra = cur_reg.center.ra.value
-        dec = cur_reg.center.dec.value
-        return np.sqrt(abs(ra - search_ra) ** 2 + abs(dec - search_dec) ** 2)
+        r_ra = cur_reg.center.ra.value
+        r_dec = cur_reg.center.dec.value
+        return np.sqrt(abs(r_ra - search_ra) ** 2 + abs(r_dec - search_dec) ** 2)
+
+    from ..products import Image
+
+    if isinstance(src_type, str):
+        src_type = [src_type]
+
+    if any([st not in allowed_src_types for st in src_type]):
+        raise ValueError("The values supported for 'src_type' are {}".format(','.join(allowed_src_types)))
 
     if xga_conf["XMM_FILES"]["region_file"] == "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg":
         raise NoRegionsError("The configuration file does not contain information on region files, so this function "
@@ -433,12 +441,12 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
     s_match, s_match_bl = simple_xmm_match(src_ra, src_dec, num_cores=num_cores)
 
-    s_match, uniq_obs_ids, all_repr, rel_res, rel_ra, rel_dec = _process_init_match(src_ra, src_dec, s_match)[:2]
+    s_match, uniq_obs_ids, all_repr, rel_res, rel_ra, rel_dec = _process_init_match(src_ra, src_dec, s_match)
     with_obs_info = [len(obs_info) != 0 for obs_info in s_match]
 
     has_reg_file = {}
     matched = {}
-    for src_ind, obs_info in enumerate(s_match):
+    for src_ind, obs_info in enumerate(rel_res):
         ra = rel_ra[src_ind]
         dec = rel_dec[src_ind]
         if with_obs_info[src_ind]:
@@ -473,13 +481,12 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
                     if any([isinstance(r, PixelRegion) for r in ds9_regs]):
                         ds9_regs = np.array([reg.to_sky(im.radec_wcs) for reg in ds9_regs])
 
-                    match_dict = {}
-
+                    match_within = None
                     # Hopefully this bodge doesn't have any unforeseen consequences
                     if ds9_regs[0] is not None and len(ds9_regs) > 1:
                         # Quickly calculating distance between source and center of regions, then sorting
                         # and getting indices. Thus I only match to the closest 5 regions.
-                        diff_sort = np.array([dist_from_source(r) for r in ds9_regs]).argsort()
+                        diff_sort = np.array([dist_from_source(ra, dec, r) for r in ds9_regs]).argsort()
                         # Unfortunately due to a limitation of the regions module I think you need images
                         #  to do this contains match...
                         within = np.array([reg.contains(SkyCoord(ra, dec, unit='deg'), im.radec_wcs)
@@ -490,15 +497,14 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
                         # Expands it so it can be used as a mask on the whole set of regions for this observation
                         within = np.pad(within, [0, len(diff_sort) - len(within)])
-                        match_dict[obs_id] = within
+                        match_within = ds9_regs[within]
                     # In the case of only one region being in the list, we simplify the above expression
-                    elif ds9_regs[0] is not None and len(ds9_regs) == 1:
-                        if ds9_regs[0].contains(SkyCoord(ra, dec, unit='deg'), im.radec_wcs):
-                            match_dict[obs_id] = np.array([True])
-                        else:
-                            match_dict[obs_id] = np.array([False])
-                    else:
-                        match_dict[obs_id] = np.array([False])
+                    elif ds9_regs[0] is not None and len(ds9_regs) == 1 and \
+                            ds9_regs[0].contains(SkyCoord(ra, dec, unit='deg'), im.radec_wcs):
+                        match_within = ds9_regs
+
+                    if len(match_within) == 0:
+                        break
 
                     # if source_type == "ext":
                     #     allowed_colours = ["green", "magenta", "blue", "cyan", "yellow"]
@@ -579,7 +585,6 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
                     #         results_dict[obs] = None
                     #         alt_match_dict[obs] = []
                     #         anti_results_dict[obs] = []
-                    print(match_dict)
                 else:
                     has_reg_file[obs_id] = False
         else:
