@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 15:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 15:23. Copyright (c) The Contributors
 
 import json
 import os
@@ -437,6 +437,14 @@ else:
 
     # This defines the meaning of different colours of region - this will eventually be user configurable in the
     #  configuration file, but putting it here means that the user can still change the definitions programmatically
+    # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
+    #  University of Edinburgh - 2005.
+    # Red - Point source
+    # Green - Extended source
+    # Magenta - PSF-sized extended source
+    # Blue - Extended source with significant point source contribution
+    # Cyan - Extended source with significant Run1 contribution
+    # Yellow - Extended source with less than 10 counts
     SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan", "yellow"]}
 
 
