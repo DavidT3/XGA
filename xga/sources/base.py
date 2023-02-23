@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 15:28. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -31,7 +31,7 @@ from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, I
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
-from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
+from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -1381,18 +1381,17 @@ class BaseSource:
         :rtype: Tuple[Dict, Dict, Dict]
         """
         # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
-        #  University of Edinburgh - 2005.
+        #  University of Edinburgh - 2005. These are the default XGA colour meanings
         # Red - Point source
         # Green - Extended source
         # Magenta - PSF-sized extended source
         # Blue - Extended source with significant point source contribution
         # Cyan - Extended source with significant Run1 contribution
         # Yellow - Extended source with less than 10 counts
-        if source_type == "ext":
-            allowed_colours = ["green", "magenta", "blue", "cyan", "yellow"]
-        elif source_type == "pnt":
-            allowed_colours = ["red"]
-        else:
+        try:
+            # Gets the allowed colours for the current source type
+            allowed_colours = SRC_REGION_COLOURS[source_type]
+        except KeyError:
             raise ValueError("{} is not a recognised source type, please "
                              "don't use this internal function!".format(source_type))
 
