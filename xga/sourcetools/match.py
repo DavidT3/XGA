@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/03/2023, 21:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/03/2023, 21:33. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -532,8 +532,30 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
 
 
 def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                     src_type: Union[str, List[str]], num_cores: int = NUM_CORES):
+                     src_type: Union[str, List[str]], num_cores: int = NUM_CORES) -> np.ndarray:
+    """
+    A function which, if XGA has been configured with access to pre-generated region files, will search for region
+    matches for a set of source coordinates passed in by the user. A region match is defined as when a source
+    coordinate falls within a source region with a particular colour (largely used to represent point vs
+    extended) - the type of region that should be matched to can be defined using the src_type argument.
 
+    The simple_xmm_match function will be run before the source matching process, to narrow down the sources which
+    need to have the more expensive region matching performed, as well as to identify which ObsID(s) should be
+    examined for each source.
+
+    :param float/np.ndarray src_ra: RA coordinate(s) of the source(s), in degrees. To find matches for multiple
+        coordinate pairs, pass an array.
+    :param float/np.ndarray src_dec: Dec coordinate(s) of the source(s), in degrees. To find matches for multiple
+        coordinate pairs, pass an array.
+    :param str/List[str] src_type: The type(s) of region that should be matched to. Pass either 'ext' or 'pnt' or
+        a list containing both.
+    :param int num_cores: The number of cores that can be used for the matching process.
+    :return: An array the same length as the sets of input coordinates (ordering is the same). If there are no
+        matches for a source then the element will be None, if there are matches then the element will be a
+        dictionary, with the key(s) being ObsID(s) and the values being a list of region objects (or more
+        likely just one object).
+    :rtype: np.ndarray
+    """
     if isinstance(src_type, str):
         src_type = [src_type]
 
