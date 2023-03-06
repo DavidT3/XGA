@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/03/2023, 20:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/03/2023, 21:14. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -206,8 +206,22 @@ def _on_obs_id(ra: float, dec: float, obs_id: Union[str, list, np.ndarray]) -> T
     return ra, dec, det
 
 
-def _in_region(ra: Union[float, List[float]], dec: Union[float, List[float]], obs_id: str, allowed_colours: List[str]):
+def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List[float], np.ndarray], obs_id: str,
+               allowed_colours: List[str]) -> Tuple[str, dict]:
+    """
+    Internal function to search a particular ObsID's region files for matches to the sources defined in the RA
+    and Dec arguments. This is achieved using the Regions module, and a region is a 'match' to a source if the
+    source coordinates fall somewhere within the region, and the region is of an acceptable coloru (defined in
+    allowed_colours). This requires that both images and region files are properly setup in the XGA config file.
 
+    :param float/List[float]/np.ndarray ra: The set of source RA coords to match with the obs_id's regions.
+    :param float/List[float]/np.ndarray dec: The set of source DEC coords to match with the obs_id's regions.
+    :param str obs_id: The ObsID whose regions we are matching to.
+    :param List[str] allowed_colours: The colours of region that should be accepted as a match.
+    :return: The ObsID that was being searched, and a dictionary of matched regions (the keys are unique
+        representations of the sources passed in), and the values are lists of region objects.
+    :rtype: Tuple[str, dict]
+    """
     from ..products import Image
 
     if isinstance(ra, float):
