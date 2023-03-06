@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/03/2023, 21:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/03/2023, 21:48. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -556,17 +556,25 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         likely just one object).
     :rtype: np.ndarray
     """
+    # Checks the input src_type argument, and makes it a list even if it is just a single string - easier
+    #  to deal with it like that!
     if isinstance(src_type, str):
         src_type = [src_type]
 
+    # Also checks to make sure that no illegal values for src_type have been passed (SRC_REGION_COLOURS basically
+    #  maps from region colours to source types).
     if any([st not in SRC_REGION_COLOURS for st in src_type]):
         raise ValueError("The values supported for 'src_type' are "
                          "{}".format(', '.join(list(SRC_REGION_COLOURS.keys()))))
 
+    # Ugly but oh well, constructs the list of region colours that we can match to from the source types
+    # that the user chose
     allowed_colours = []
     for st in src_type:
         allowed_colours += SRC_REGION_COLOURS[st]
 
+    # Checks to make sure that the user has actually pointed XGA at a set of region files (and images they were
+    #  generated from, in case said region files are in pixel coordinates).
     if xga_conf["XMM_FILES"]["region_file"] == "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg":
         raise NoRegionsError("The configuration file does not contain information on region files, so this function "
                              "cannot continue.")
@@ -576,44 +584,61 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         raise XGAConfigError("This function requires at least one set of images (PN, MOS1, or MOS2) be referenced in "
                              "the XGA configuration file.")
 
+    # This runs the simple xmm match and gathers the results.
     s_match, s_match_bl = simple_xmm_match(src_ra, src_dec, num_cores=num_cores)
-
+    # The initial results are then processed into some more useful formats.
     s_match, uniq_obs_ids, all_repr, rel_res, rel_ra, rel_dec, \
         obs_id_srcs = _process_init_match(src_ra, src_dec, s_match)
 
+    # This is the dictionary in which matching information is stored
     reg_match_info = {rp: {} for rp in all_repr}
-
+    # If the user only wants us to use one core, then we don't make a Pool because that would just add overhead
     if num_cores == 1:
         with tqdm(desc="Searching for ObsID region matches", total=len(uniq_obs_ids)) as onwards:
+            # Here we iterate through the ObsIDs that the initial match found to possibly have sources on - I
+            #  considered this more efficient than iterating through the sources and possibly reading in WCS
+            #  information for the same ObsID in many different processes (the non-parallelised version just calls
+            #  the same internal function so its setup the same).
             for cur_obs_id in obs_id_srcs:
                 cur_ra_arr = obs_id_srcs[cur_obs_id][:, 0]
                 cur_dec_arr = obs_id_srcs[cur_obs_id][:, 1]
+                # Runs the matching function
                 match_inf = _in_region(cur_ra_arr, cur_dec_arr, cur_obs_id, allowed_colours)
+                # Adds to the match storage dictionary, but so that the top keys are source representations, and
+                #  the lower level keys are ObsIDs
                 for cur_repr in match_inf[1]:
                     reg_match_info[cur_repr][match_inf[0]] = match_inf[1][cur_repr]
                 onwards.update(1)
 
     else:
+        # This is to store exceptions that are raised in separate processes, so they can all be raised at the end.
         search_errors = []
+        # We setup a Pool with the number of cores the user specified (or the default).
         with tqdm(desc="Searching for ObsID region matches", total=len(uniq_obs_ids)) as onwards, Pool(
                 num_cores) as pool:
+            # This is called when a match process finished successfully, and the results need storing
             def match_loop_callback(match_info):
                 nonlocal onwards  # The progress bar will need updating
                 nonlocal reg_match_info
-
+                # Adds to the match storage dictionary, but so that the top keys are source representations, and
+                #  the lower level keys are ObsIDs
                 for cur_repr in match_info[1]:
                     reg_match_info[cur_repr][match_info[0]] = match_info[1][cur_repr]
 
-                # reg_match_info[match_info[0]] = match_info[1]
                 onwards.update(1)
 
+            # This is called when a process errors out.
             def error_callback(err):
                 nonlocal onwards
                 nonlocal search_errors
+                # Stores the exception object in a list for later.
                 search_errors.append(err)
                 onwards.update(1)
 
             for cur_obs_id in obs_id_srcs:
+                # Here we iterate through the ObsIDs that the initial match found to possibly have sources on - I
+                #  considered this more efficient than iterating through the sources and possibly reading in WCS
+                #  information for the same ObsID in many different processes.
                 cur_ra_arr = obs_id_srcs[cur_obs_id][:, 0]
                 cur_dec_arr = obs_id_srcs[cur_obs_id][:, 1]
                 pool.apply_async(_in_region, args=(cur_ra_arr, cur_dec_arr, cur_obs_id, allowed_colours),
@@ -622,9 +647,12 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
             pool.close()  # No more tasks can be added to the pool
             pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
+        # If any errors occurred during the matching process, they are all raised here as a grouped exception
         if len(search_errors) != 0:
             ExceptionGroup("The following exceptions were raised in the multi-threaded region finder", search_errors)
 
+    # This formats the match and no-match information so that the output is the same length and order as the input
+    #  source lists
     to_return = []
     for cur_repr in all_repr:
         if len(reg_match_info[cur_repr]) != 0:
@@ -632,6 +660,7 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         else:
             to_return.append(None)
 
+    # Makes it into an array rather than a list
     to_return = np.array(to_return)
 
     return to_return
