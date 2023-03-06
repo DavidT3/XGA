@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/03/2023, 20:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/03/2023, 20:54. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from astropy.coordinates import SkyCoord
 from astropy.units.quantity import Quantity
+from exceptiongroup import ExceptionGroup
 from pandas import DataFrame
 from regions import read_ds9, PixelRegion
 from tqdm import tqdm
@@ -543,33 +544,50 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
     s_match, uniq_obs_ids, all_repr, rel_res, rel_ra, rel_dec, \
         obs_id_srcs = _process_init_match(src_ra, src_dec, s_match)
-    with_obs_info = [len(obs_info) != 0 for obs_info in s_match]
 
     reg_match_info = {rp: {} for rp in all_repr}
-    with tqdm(desc="Searching for ObsID region matches", total=len(uniq_obs_ids)) as onwards, Pool(num_cores) as pool:
-        def match_loop_callback(match_info):
-            nonlocal onwards  # The progress bar will need updating
-            nonlocal reg_match_info
 
-            for cur_repr in match_info[1]:
-                reg_match_info[cur_repr][match_info[0]] = match_info[1][cur_repr]
+    if num_cores == 1:
+        with tqdm(desc="Searching for ObsID region matches", total=len(uniq_obs_ids)) as onwards:
+            for cur_obs_id in obs_id_srcs:
+                cur_ra_arr = obs_id_srcs[cur_obs_id][:, 0]
+                cur_dec_arr = obs_id_srcs[cur_obs_id][:, 1]
+                match_inf = _in_region(cur_ra_arr, cur_dec_arr, cur_obs_id, allowed_colours)
+                for cur_repr in match_inf[1]:
+                    reg_match_info[cur_repr][match_inf[0]] = match_inf[1][cur_repr]
+                onwards.update(1)
 
-            # reg_match_info[match_info[0]] = match_info[1]
-            onwards.update(1)
+    else:
+        search_errors = []
+        with tqdm(desc="Searching for ObsID region matches", total=len(uniq_obs_ids)) as onwards, Pool(
+                num_cores) as pool:
+            def match_loop_callback(match_info):
+                nonlocal onwards  # The progress bar will need updating
+                nonlocal reg_match_info
 
-        def error_callback(err):
-            nonlocal onwards
-            print(err, '\n')
-            onwards.update(1)
+                for cur_repr in match_info[1]:
+                    reg_match_info[cur_repr][match_info[0]] = match_info[1][cur_repr]
 
-        for cur_obs_id in obs_id_srcs:
-            cur_ra_arr = obs_id_srcs[cur_obs_id][:, 0]
-            cur_dec_arr = obs_id_srcs[cur_obs_id][:, 1]
-            pool.apply_async(_in_region, args=(cur_ra_arr, cur_dec_arr, cur_obs_id, allowed_colours),
-                             callback=match_loop_callback, error_callback=error_callback)
+                # reg_match_info[match_info[0]] = match_info[1]
+                onwards.update(1)
 
-        pool.close()  # No more tasks can be added to the pool
-        pool.join()  # Joins the pool, the code will only move on once the pool is empty.
+            def error_callback(err):
+                nonlocal onwards
+                nonlocal search_errors
+                search_errors.append(err)
+                onwards.update(1)
+
+            for cur_obs_id in obs_id_srcs:
+                cur_ra_arr = obs_id_srcs[cur_obs_id][:, 0]
+                cur_dec_arr = obs_id_srcs[cur_obs_id][:, 1]
+                pool.apply_async(_in_region, args=(cur_ra_arr, cur_dec_arr, cur_obs_id, allowed_colours),
+                                 callback=match_loop_callback, error_callback=error_callback)
+
+            pool.close()  # No more tasks can be added to the pool
+            pool.join()  # Joins the pool, the code will only move on once the pool is empty.
+
+        if len(search_errors) != 0:
+            ExceptionGroup("The following exceptions were raised in the multi-threaded region finder", search_errors)
 
     to_return = []
     for cur_repr in all_repr:
