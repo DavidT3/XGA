@@ -1,6 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 16:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/03/2023, 20:19. Copyright (c) The Contributors
+import gc
 import os
+from copy import deepcopy
 from multiprocessing import Pool
 from typing import Union, Tuple, List
 
@@ -15,6 +17,19 @@ from tqdm import tqdm
 from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT, xga_conf
 from ..exceptions import NoMatchFoundError, NoValidObservationsError, NoRegionsError, XGAConfigError
 from ..utils import SRC_REGION_COLOURS
+
+
+def _dist_from_source(search_ra: float, search_dec: float, cur_reg):
+    """
+    Calculates the euclidean distance between the centre of a supplied region, and the
+    position of the source.
+
+    :param reg: A region object.
+    :return: Distance between region centre and source position.
+    """
+    r_ra = cur_reg.center.ra.value
+    r_dec = cur_reg.center.dec.value
+    return np.sqrt(abs(r_ra - search_ra) ** 2 + abs(r_dec - search_dec) ** 2)
 
 
 def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
@@ -32,8 +47,9 @@ def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, 
     :return: The simple match initial results (normalised so that they are a list of dataframe, even if only one
         source is being searched for), a list of  unique ObsIDs, unique string representations generated from RA and
         Dec for the positions  we're looking at, an array of dataframes for those coordinates that are near an
-        XMM observation according to the initial match,  and the RA and Decs that are near an XMM observation
-        according to the initial simple match.
+        XMM observation according to the initial match, and the RA and Decs that are near an XMM observation
+        according to the initial simple match. The final output is a dictionary with ObsIDs as keys, and arrays of
+        source coordinates that are an initial match with them.
     """
     # If only one coordinate was passed, the return from simple_xmm_match will just be a dataframe, and I want
     #  a list of dataframes because its iterable and easier to deal with more generally
@@ -69,7 +85,16 @@ def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, 
     # This is just used to know what exposure maps need to be generated
     obs_ids = list(set([o for t in initial_results for o in t['ObsID'].values]))
 
-    return initial_results, obs_ids, all_repr, rel_res, rel_ra, rel_dec
+    # This assembles a big numpy array with every source coordinate and its ObsIDs (source coordinate will have one
+    #  entry per ObsID associated with them).
+    repeats = [len(cur_res) for cur_res in rel_res]
+    full_info = np.vstack([np.concatenate([cur_res['ObsID'].to_numpy() for cur_res in rel_res]),
+                           np.repeat(rel_ra, repeats), np.repeat(rel_dec, repeats)]).T
+
+    # This assembles a dictionary that links source coordinates to ObsIDs (ObsIDs are the keys)
+    obs_id_srcs = {o: full_info[np.where(full_info[:, 0] == o)[0], :][:, 1:] for o in obs_ids}
+
+    return initial_results, obs_ids, all_repr, rel_res, rel_ra, rel_dec, obs_id_srcs
 
 
 def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, float, DataFrame, DataFrame]:
@@ -178,6 +203,191 @@ def _on_obs_id(ra: float, dec: float, obs_id: Union[str, list, np.ndarray]) -> T
         det = np.array(det)
 
     return ra, dec, det
+
+
+def _other_in_region(ra: Union[float, List[float]], dec: Union[float, List[float]], obs_id: str,
+                     allowed_colours: List[str]):
+
+    from ..products import Image
+
+    if isinstance(ra, float):
+        ra = [ra]
+        dec = [dec]
+
+    # From that ObsID construct a path to the relevant region file using the XGA config
+    reg_path = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
+    im_path = None
+    # We need to check whether any of the images in the config file exist for this ObsID - have to use the
+    #  pre-configured images in case the region files are in pixel coordinates
+    for key in ['pn_image', 'mos1_image', 'mos2_image']:
+        for en_comb in zip(xga_conf["XMM_FILES"]["lo_en"], xga_conf["XMM_FILES"]["hi_en"]):
+            cur_path = xga_conf["XMM_FILES"][key].format(obs_id=obs_id, lo_en=en_comb[0], hi_en=en_comb[1])
+            if os.path.exists(cur_path):
+                im_path = cur_path
+
+    # This dictionary stores the match regions for each coordinate
+    matched = {}
+
+    # If there is a region file to search then we can proceed
+    if os.path.exists(reg_path) and im_path is not None:
+        # onwards.write("None of the specified image files for {} can be located - skipping region match "
+        #               "search.".format(obs_id))
+
+        # Reading in the region file using the Regions module
+        og_ds9_regs = read_ds9(reg_path)
+
+        # Bodged declaration, the instrument and energy bounds don't matter - all I need this for is the
+        #  nice way it extracts the WCS information that I need
+        im = Image(im_path, obs_id, '', '', '', '', Quantity(0, 'keV'), Quantity(1, 'keV'), )
+
+        # There's nothing for us to do if there are no regions in the region file, so we continue onto the next
+        #  possible ObsID match (if there is one) - same deal if there is no WCS information in the image
+        if len(og_ds9_regs) != 0 and im.radec_wcs is not None:
+
+            # Make sure to convert the regions to sky coordinates if they in pixels (just on principle in case
+            #  any DO match and are returned to the user, I would much give them image agnostic regions).
+            if any([isinstance(r, PixelRegion) for r in og_ds9_regs]):
+                og_ds9_regs = np.array([reg.to_sky(im.radec_wcs) for reg in og_ds9_regs])
+
+            # This cycles through every ObsID in the possible matches for the current object
+            for r_ind, cur_ra in enumerate(ra):
+                cur_dec = dec[r_ind]
+                cur_repr = repr(cur_ra) + repr(cur_dec)
+
+                # Make a local (to this iteration) copy as this array is modified during the checking process
+                ds9_regs = deepcopy(og_ds9_regs)
+
+                # Hopefully this bodge doesn't have any unforeseen consequences
+                if ds9_regs[0] is not None and len(ds9_regs) > 1:
+                    # Quickly calculating distance between source and center of regions, then sorting
+                    # and getting indices. Thus I only match to the closest 5 regions.
+                    diff_sort = np.array([_dist_from_source(cur_ra, cur_dec, r) for r in ds9_regs]).argsort()
+                    # Unfortunately due to a limitation of the regions module I think you need images
+                    #  to do this contains match...
+                    within = np.array([reg.contains(SkyCoord(cur_ra, cur_dec, unit='deg'), im.radec_wcs)
+                                       for reg in ds9_regs[diff_sort[0:5]]])
+
+                    # Make sure to re-order the region list to match the sorted within array
+                    ds9_regs = ds9_regs[diff_sort]
+
+                    # Expands it so it can be used as a mask on the whole set of regions for this observation
+                    within = np.pad(within, [0, len(diff_sort) - len(within)])
+                    match_within = ds9_regs[within]
+                # In the case of only one region being in the list, we simplify the above expression
+                elif ds9_regs[0] is not None and len(ds9_regs) == 1 and \
+                        ds9_regs[0].contains(SkyCoord(cur_ra, cur_dec, unit='deg'), im.radec_wcs):
+                    match_within = ds9_regs
+                else:
+                    match_within = np.array([])
+
+                match_within = [r for r in match_within if r.visual['color'] in allowed_colours]
+                if len(match_within) != 0:
+                    matched[cur_repr] = match_within
+
+        del im
+
+    gc.collect()
+    return obs_id, matched
+
+
+def _in_region(ra: float, dec: float, obs_info: pd.DataFrame, allowed_colours: List[str]):
+    """
+
+    :param float ra:
+    :param float dec:
+    :param pd.DataFrame obs_info:
+    :param List[str] allowed_colours:
+    :return:
+    :rtype:
+    """
+    from ..products import Image
+
+    # This is a unique representation used as a key, made up of the ra and dec coordinates
+    cur_repr = repr(ra) + repr(dec)
+
+    # This dictionary stores the match regions for each ObsID
+    matched = {}
+    # This cycles through every ObsID in the possible matches for the current object
+    for row_ind, row in obs_info.iterrows():
+        # Read out the current ObsID
+        obs_id = row['ObsID']
+        # From that ObsID construct a path to the relevant region file using the XGA config
+        reg_path = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
+        im_path = None
+        # We need to check whether any of the images in the config file exist for this ObsID - have to use the
+        #  pre-configured images in case the region files are in pixel coordinates
+        for key in ['pn_image', 'mos1_image', 'mos2_image']:
+            for en_comb in zip(xga_conf["XMM_FILES"]["lo_en"], xga_conf["XMM_FILES"]["hi_en"]):
+                cur_path = xga_conf["XMM_FILES"][key].format(obs_id=obs_id, lo_en=en_comb[0], hi_en=en_comb[1])
+                if os.path.exists(cur_path):
+                    im_path = cur_path
+
+        # If there is a region file to search then we can proceed
+        if os.path.exists(reg_path):
+            # But not if there is no accompanying image! This is because the regions module requires a WCS even
+            #  if the regions are in sky coordinates (which is not a given).
+            if im_path is None:
+                # onwards.write("None of the specified image files for {} can be located - skipping region match "
+                #               "search.".format(obs_id))
+                # warn()
+                continue
+
+            # Reading in the region file using the Regions module
+            ds9_regs = read_ds9(reg_path)
+            # There's nothing for us to do if there are no regions in the region file, so we continue onto the next
+            #  possible ObsID match (if there is one)
+            if len(ds9_regs) == 0:
+                continue
+
+            # Bodged declaration, the instrument and energy bounds don't matter - all I need this for is the
+            #  nice way it extracts the WCS information that I need
+            im = Image(im_path, obs_id, '', '', '', '', Quantity(0, 'keV'), Quantity(1, 'keV'), )
+
+            # However if that WCS information isn't extracted like it should be, then we can't do anything, so
+            #  we continue
+            if im.radec_wcs is None:
+                del im
+                continue
+                # raise ValueError("There is no appropriate WCS in the configuration file supplied image.")
+
+            # Make sure to convert the regions to sky coordinates if they in pixels (just on principle in case
+            #  any DO match and are returned to the user, I would much give them image agnostic regions).
+            if any([isinstance(r, PixelRegion) for r in ds9_regs]):
+                ds9_regs = np.array([reg.to_sky(im.radec_wcs) for reg in ds9_regs])
+
+            # Hopefully this bodge doesn't have any unforeseen consequences
+            if ds9_regs[0] is not None and len(ds9_regs) > 1:
+                # Quickly calculating distance between source and center of regions, then sorting
+                # and getting indices. Thus I only match to the closest 5 regions.
+                diff_sort = np.array([_dist_from_source(ra, dec, r) for r in ds9_regs]).argsort()
+                # Unfortunately due to a limitation of the regions module I think you need images
+                #  to do this contains match...
+                within = np.array([reg.contains(SkyCoord(ra, dec, unit='deg'), im.radec_wcs)
+                                   for reg in ds9_regs[diff_sort[0:5]]])
+
+                # Make sure to re-order the region list to match the sorted within array
+                ds9_regs = ds9_regs[diff_sort]
+
+                # Expands it so it can be used as a mask on the whole set of regions for this observation
+                within = np.pad(within, [0, len(diff_sort) - len(within)])
+                match_within = ds9_regs[within]
+            # In the case of only one region being in the list, we simplify the above expression
+            elif ds9_regs[0] is not None and len(ds9_regs) == 1 and \
+                    ds9_regs[0].contains(SkyCoord(ra, dec, unit='deg'), im.radec_wcs):
+                match_within = ds9_regs
+            else:
+                match_within = np.array([])
+
+            if len(match_within) == 0:
+                del im
+                continue
+
+            match_within = [r for r in ds9_regs if r.visual['color'] in allowed_colours]
+            if len(match_within) != 0:
+                matched[obs_id] = match_within
+
+            del im
+    return cur_repr, matched
 
 
 def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
@@ -409,19 +619,6 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
 
 def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                      src_type: Union[str, List[str]], num_cores: int = NUM_CORES):
-    def dist_from_source(search_ra: float, search_dec: float, cur_reg):
-        """
-        Calculates the euclidean distance between the centre of a supplied region, and the
-        position of the source.
-
-        :param reg: A region object.
-        :return: Distance between region centre and source position.
-        """
-        r_ra = cur_reg.center.ra.value
-        r_dec = cur_reg.center.dec.value
-        return np.sqrt(abs(r_ra - search_ra) ** 2 + abs(r_dec - search_dec) ** 2)
-
-    from ..products import Image
 
     if isinstance(src_type, str):
         src_type = [src_type]
@@ -445,87 +642,49 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
     s_match, s_match_bl = simple_xmm_match(src_ra, src_dec, num_cores=num_cores)
 
-    s_match, uniq_obs_ids, all_repr, rel_res, rel_ra, rel_dec = _process_init_match(src_ra, src_dec, s_match)
+    s_match, uniq_obs_ids, all_repr, rel_res, rel_ra, rel_dec, \
+        obs_id_srcs = _process_init_match(src_ra, src_dec, s_match)
     with_obs_info = [len(obs_info) != 0 for obs_info in s_match]
 
-    has_reg_file = {}
-    matched = {}
-    with tqdm(desc="Searching for region matches", total=len(rel_res)) as onwards:
-        for src_ind, obs_info in enumerate(rel_res):
-            ra = rel_ra[src_ind]
-            dec = rel_dec[src_ind]
-            cur_repr = repr(ra) + repr(dec)
+    reg_match_info = {rp: {} for rp in all_repr}
+    bodge_errs = []
+    with tqdm(desc="Searching for ObsID region matches", total=len(uniq_obs_ids)) as onwards, Pool(num_cores) as pool:
+        def match_loop_callback(match_info):
+            nonlocal onwards  # The progress bar will need updating
+            nonlocal reg_match_info
 
-            for row_ind, row in obs_info.iterrows():
+            for cur_repr in match_info[1]:
+                reg_match_info[cur_repr][match_info[0]] = match_info[1][cur_repr]
 
-                obs_id = row['ObsID']
-                reg_path = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
-                im_path = None
-                for key in ['pn_image', 'mos1_image', 'mos2_image']:
-                    for en_comb in zip(xga_conf["XMM_FILES"]["lo_en"], xga_conf["XMM_FILES"]["hi_en"]):
-                        cur_path = xga_conf["XMM_FILES"][key].format(obs_id=obs_id, lo_en=en_comb[0], hi_en=en_comb[1])
-                        if os.path.exists(cur_path):
-                            im_path = cur_path
-
-                if os.path.exists(reg_path):
-                    if im_path is None:
-                        onwards.write("None of the specified image files for {} can be located - skipping region match "
-                                      "search.".format(obs_id))
-                        # warn()
-                        continue
-
-                    has_reg_file[obs_id] = True
-                    ds9_regs = read_ds9(reg_path)
-                    if len(ds9_regs) == 0:
-                        break
-
-                    # Bodged declaration, the instrument and energy bounds don't matter
-                    im = Image(im_path, obs_id, '', '', '', '', Quantity(0, 'keV'), Quantity(1, 'keV'), )
-
-                    if im.radec_wcs is None:
-                        raise ValueError("There is no appropriate WCS in the configuration file supplied image.")
-
-                    if any([isinstance(r, PixelRegion) for r in ds9_regs]):
-                        ds9_regs = np.array([reg.to_sky(im.radec_wcs) for reg in ds9_regs])
-
-                    # Hopefully this bodge doesn't have any unforeseen consequences
-                    if ds9_regs[0] is not None and len(ds9_regs) > 1:
-                        # Quickly calculating distance between source and center of regions, then sorting
-                        # and getting indices. Thus I only match to the closest 5 regions.
-                        diff_sort = np.array([dist_from_source(ra, dec, r) for r in ds9_regs]).argsort()
-                        # Unfortunately due to a limitation of the regions module I think you need images
-                        #  to do this contains match...
-                        within = np.array([reg.contains(SkyCoord(ra, dec, unit='deg'), im.radec_wcs)
-                                           for reg in ds9_regs[diff_sort[0:5]]])
-
-                        # Make sure to re-order the region list to match the sorted within array
-                        ds9_regs = ds9_regs[diff_sort]
-
-                        # Expands it so it can be used as a mask on the whole set of regions for this observation
-                        within = np.pad(within, [0, len(diff_sort) - len(within)])
-                        match_within = ds9_regs[within]
-                    # In the case of only one region being in the list, we simplify the above expression
-                    elif ds9_regs[0] is not None and len(ds9_regs) == 1 and \
-                            ds9_regs[0].contains(SkyCoord(ra, dec, unit='deg'), im.radec_wcs):
-                        match_within = ds9_regs
-                    else:
-                        match_within = np.array([])
-
-                    if len(match_within) == 0:
-                        break
-
-                    match_within = [r for r in ds9_regs if r.visual['color'] in allowed_colours]
-                    if len(match_within) != 0 and cur_repr in matched:
-                        matched[cur_repr][obs_id] = match_within
-                    elif len(match_within) != 0 and cur_repr not in matched:
-                        matched[cur_repr] = {obs_id: match_within}
-
-                else:
-                    has_reg_file[obs_id] = False
-
+            # reg_match_info[match_info[0]] = match_info[1]
             onwards.update(1)
 
-    return matched
+        def error_callback(err):
+            nonlocal onwards
+            nonlocal bodge_errs
+            bodge_errs.append(err)
+            print(err, '\n')
+            onwards.update(1)
+
+        for cur_obs_id in obs_id_srcs:
+            cur_ra_arr = obs_id_srcs[cur_obs_id][:, 0]
+            cur_dec_arr = obs_id_srcs[cur_obs_id][:, 1]
+            pool.apply_async(_other_in_region, args=(cur_ra_arr, cur_dec_arr, cur_obs_id, allowed_colours),
+                             callback=match_loop_callback, error_callback=error_callback)
+
+        pool.close()  # No more tasks can be added to the pool
+        pool.join()  # Joins the pool, the code will only move on once the pool is empty.
+
+    to_return = []
+    for cur_repr in all_repr:
+        if len(reg_match_info[cur_repr]) != 0:
+            to_return.append(reg_match_info[cur_repr])
+        else:
+            to_return.append(None)
+
+    to_return = np.array(to_return)
+
+    return to_return
 
 
 
