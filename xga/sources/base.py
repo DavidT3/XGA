@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 16:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 17:09. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -886,12 +886,17 @@ class BaseSource:
         os.chdir(OUTPUT + "profiles/{}".format(self.name))
         saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
         for pf in saved_profs:
-            with open(pf, 'rb') as reado:
-                temp_prof = pickle.load(reado)
-                try:
-                    self.update_products(temp_prof, update_inv=False)
-                except NotAssociatedError:
-                    pass
+            try:
+                with open(pf, 'rb') as reado:
+                    temp_prof = pickle.load(reado)
+                    try:
+                        self.update_products(temp_prof, update_inv=False)
+                    except NotAssociatedError:
+                        pass
+            except (EOFError, pickle.UnpicklingError):
+                # If these errors have been raised then I think that the pickle file has been broken (see issue #935)
+                warnings.warn("A profile save ({}) appears to be corrupted, it has not been "
+                              "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf), stacklevel=2)
         os.chdir(og_dir)
 
         # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
