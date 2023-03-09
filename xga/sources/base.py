@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 15:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 16:04. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -557,7 +557,6 @@ class BaseSource:
 
                 if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
                     po.save()
-
                 # Here we make sure to store a record of the added product in the relevant inventory file
                 if isinstance(po, BaseProduct) and po.obs_id != 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "{}/inventory.csv".format(po.obs_id), dtype=str)
@@ -583,8 +582,9 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, po.obs_id, po.instrument, info_key, s_name, po.type],
                                          ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
-                    # Appends the series
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+
                     # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
                     #  if it did I think it would cause problems so better to be safe and add this.
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
@@ -618,7 +618,8 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, po.type],
                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), index=False)
 
@@ -637,7 +638,8 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), index=False)
 
@@ -656,7 +658,8 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), index=False)
 
