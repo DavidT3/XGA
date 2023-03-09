@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 15:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 15:10. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -428,8 +428,9 @@ class BaseSource:
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict
 
-    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D,
-                                              List[BaseProduct], List[BaseAggregateProduct], List[BaseProfile1D]]):
+    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D, List[BaseProduct],
+                                              List[BaseAggregateProduct], List[BaseProfile1D]],
+                        update_inv: bool = True):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
         but will overwrite existing products. Raises errors if the ObsID is not associated
@@ -440,6 +441,9 @@ class BaseSource:
 
         :param BaseProduct/BaseAggregateProduct/BaseProfile1D/List[BaseProduct]/List[BaseProfile1D] prod_obj: The
             new product object(s) to be added to the source object.
+        :param bool update_inv: This flag is to avoid unnecessary read-writes when this method is called by a method
+            (such as _existing_xga_products) which want to add products to the source storage structure, but don't
+            want the inventory file altered (as they know the product is already in there).
         """
         # Aggregate products are things like PSF grids and sets of annular spectra.
         if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D, list)) and prod_obj is not None:
@@ -555,7 +559,7 @@ class BaseSource:
                     po.save()
 
                 # Here we make sure to store a record of the added product in the relevant inventory file
-                if isinstance(po, BaseProduct) and po.obs_id != 'combined':
+                if isinstance(po, BaseProduct) and po.obs_id != 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "{}/inventory.csv".format(po.obs_id), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -587,7 +591,7 @@ class BaseSource:
                     # Saves the updated inventory file
                     inven.to_csv(OUTPUT + "{}/inventory.csv".format(po.obs_id), index=False)
 
-                elif isinstance(po, BaseProduct) and po.obs_id == 'combined':
+                elif isinstance(po, BaseProduct) and po.obs_id == 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -618,7 +622,7 @@ class BaseSource:
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), index=False)
 
-                elif isinstance(po, BaseProfile1D) and po.obs_id != 'combined':
+                elif isinstance(po, BaseProfile1D) and po.obs_id != 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -637,7 +641,7 @@ class BaseSource:
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), index=False)
 
-                elif isinstance(po, BaseProfile1D) and po.obs_id == 'combined':
+                elif isinstance(po, BaseProfile1D) and po.obs_id == 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -735,7 +739,7 @@ class BaseSource:
                     # Fetches lines of the inventory which match the current ObsID and instrument
                     rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
                     for r_ind, r in rel_ims.iterrows():
-                        self.update_products(parse_image_like(cur_d+r['file_name'], r['type']))
+                        self.update_products(parse_image_like(cur_d+r['file_name'], r['type']), update_inv=False)
 
                 # For spectra we search for products that have the name of this object in, as they are for
                 #  specific parts of the observation.
@@ -841,7 +845,7 @@ class BaseSource:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
                             try:
-                                self.update_products(obj)
+                                self.update_products(obj, update_inv=False)
                             except NotAssociatedError:
                                 pass
 
@@ -863,7 +867,7 @@ class BaseSource:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
                             try:
-                                self.update_products(obj)
+                                self.update_products(obj, update_inv=False)
                             except NotAssociatedError:
                                 pass
                     else:
@@ -882,7 +886,7 @@ class BaseSource:
             with open(pf, 'rb') as reado:
                 temp_prof = pickle.load(reado)
                 try:
-                    self.update_products(temp_prof)
+                    self.update_products(temp_prof, update_inv=False)
                 except NotAssociatedError:
                     pass
         os.chdir(og_dir)
@@ -896,7 +900,7 @@ class BaseSource:
                     if self._redshift is not None:
                         # If we know the redshift we will add the radii to the annular spectra in proper distance units
                         ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
-                    self.update_products(ann_spec_obj)
+                    self.update_products(ann_spec_obj, update_inv=False)
 
         # Here we load in any combined images and exposure maps that may have been generated
         os.chdir(OUTPUT + 'combined')
@@ -920,7 +924,8 @@ class BaseSource:
             #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they match
             #  exactly and the product can be loaded
             if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], merged=True))
+                self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], merged=True),
+                                     update_inv=False)
 
         os.chdir(og_dir)
 
