@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 17:18. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -87,8 +87,7 @@ class BaseSample:
                         ra_dec = Quantity(np.array([r, d]), 'deg')
                         n = coord_to_name(ra_dec)
 
-                    warn("Source {n} does not appear to have any XMM data, and will not be included in the "
-                         "sample.".format(n=n))
+                    # We record that a particular source name was not successfully declared
                     self._failed_sources[n] = "NoMatch"
                 dec_base.update(1)
 
@@ -97,6 +96,17 @@ class BaseSample:
         if len(self._sources) == 0:
             raise NoValidObservationsError("No sources have been declared, likely meaning that none of the sample have"
                                            " valid XMM data.")
+
+        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        #  to make sure that are some sources because in that case this warning is redundant.
+        # HOWEVER - I only want this warning to appear in certain circumstances. For instance I wouldn't want it
+        #  to be triggered here for a ClusterSample declaration that has called the super init (this method), as that
+        #  class declaration does its own (somewhat different) check on which sources have data
+        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch']
+        # If there are names in that list, then we do the warning
+        if len(no_data) != 0 and type(self) == BaseSample:
+            warn("The following do not appear to have any XMM data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)))
 
     # These next few properties are all quantities passed in by the user on init, then used to
     #  declare source objects - as such they cannot ever be set by the user.
