@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:41. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -503,6 +503,17 @@ class BaseSample:
         #  that will need to be deleted.
         self._del_data(key)
 
+    def _check_source_warnings(self):
+        """
+        This method checks the suppressed_warnings property of the member sources, and if any have had warnings
+        suppressed then it itself raises a warning that instructs the user to look at the suppressed_warnings
+        property of the sample. It doesn't print them all because that could lead to a confusing mess. This method
+        is to be called at the end of every sub-class init.
+        """
+        if any([len(src.suppressed_warnings) > 0 for src in self._sources.values()]):
+            warn("Non-fatal warnings occurred during the declaration of some sources, to access them please use the"
+                 "suppressed_warnings property of this sample.", stacklevel=2)
+
     def _del_data(self, key: int):
         """
         This function will be replaced in subclasses that store more information about sources
@@ -511,6 +522,3 @@ class BaseSample:
         :param int key: The index or name of the source to delete.
         """
         pass
-
-
-
