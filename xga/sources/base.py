@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:37. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -23,7 +23,8 @@ from regions import read_ds9, PixelRegion
 
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
-    NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+    NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
+    NotSampleMemberError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -3562,6 +3563,21 @@ class BaseSource:
         :rtype: bool
         """
         return self._use_peak
+
+    @property
+    def suppressed_warnings(self) -> List[str]:
+        """
+        A property getter (with no setter) for the warnings that have been suppressed from display to the user as
+        the source was declared as a member of a sample.
+
+        :return: The list of suppressed warnings for this source.
+        :rtype: List[str]
+        """
+        if not self._samp_member:
+            raise NotSampleMemberError("The source for {n} is not a member of a sample, and as such warnings have "
+                                       "not been suppressed.".format(n=self.name))
+        else:
+            return self._supp_warn
 
     def info(self):
         """
