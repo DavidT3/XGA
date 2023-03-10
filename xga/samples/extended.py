@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 21:48. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -91,6 +91,8 @@ class ClusterSample(BaseSample):
         # We have this final names list in case so that we don't need to remove elements of self.names if one of the
         #  clusters doesn't pass the observation cleaning stage.
         final_names = []
+        # This records which clusters had a failed peak finding attempt, for a warning at the end of the declaration
+        failed_peak_find = []
         with tqdm(desc="Setting up Galaxy Clusters", total=len(self.names), disable=no_prog_bar) as dec_lb:
             for ind, r in enumerate(ra):
                 # Just splitting out relevant values for this particular cluster so the object declaration isn't
@@ -146,8 +148,7 @@ class ClusterSample(BaseSample):
 
                     except PeakConvergenceFailedError:
                         try:
-                            warn("The peak finding algorithm has not converged for {}, using user "
-                                 "supplied coordinates".format(n))
+                            failed_peak_find.append(n)
                             self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr,
                                                              False, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                              back_out_rad_factor, cosmology, True, load_fits, clean_obs,
@@ -155,18 +156,18 @@ class ClusterSample(BaseSample):
                                                              peak_find_method)
                             final_names.append(n)
                         except NoValidObservationsError:
-                            warn("After a failed attempt to find an X-ray peak, and after applying the criteria for "
-                                 "the minimum amount of cluster required on an observation, {} cannot be declared as "
-                                 "all potential observations were removed".format(n))
+                            # warn("After a failed attempt to find an X-ray peak, and after applying the criteria for "
+                            #      "the minimum amount of cluster required on an observation, {} cannot be declared as "
+                            #      "all potential observations were removed".format(n))
                             self._failed_sources[n] = "Failed ObsClean"
 
                     except NoValidObservationsError:
-                        warn("After applying the criteria for the minimum amount of cluster required on an "
-                             "observation, {} cannot be declared as all potential observations were removed".format(n))
+                        # warn("After applying the criteria for the minimum amount of cluster required on an "
+                        #      "observation, {} cannot be declared as all potential observations were removed".format(n))
                         # Note we don't append n to the final_names list here, as it is effectively being
                         #  removed from the sample
                         self._failed_sources[n] = "Failed ObsClean"
-                dec_lb.update(1)
+                    dec_lb.update(1)
 
         self._names = final_names
 
@@ -193,6 +194,25 @@ class ClusterSample(BaseSample):
         if psf_corr:
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
+
+        # It is possible (especially if someone is using the Sample classes as a way to check whether things have
+        #  XMM data) that no sources will have been declared by this point, in which case it should fail now
+        if len(self._sources) == 0:
+            raise NoValidObservationsError(
+                "No GalaxyClusters have been declared, none of the sample passed the cleaning steps.")
+
+        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        #  to make sure that are some sources because in that case this warning is redundant.
+        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch']
+        # If there are names in that list, then we do the warning
+        if len(no_data) != 0:
+            warn("The following do not appear to have any XMM data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
+
+        # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
+        if len(failed_peak_find) != 0:
+            warn("Peak finding did not converge for the following; {n}, using user "
+                 "supplied coordinates".format(n=', '.join(failed_peak_find)), stacklevel=2)
 
     @property
     def r200_snr(self) -> np.ndarray:
