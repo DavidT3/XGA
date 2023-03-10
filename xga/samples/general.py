@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:07. Copyright (c) The Contributors
 
 from warnings import warn
 
@@ -83,6 +83,8 @@ class ExtendedSample(BaseSample):
         #  attributes can be cleaned up later
         final_names = []
         self._custom_radii = []
+        # This records which sources had a failed peak finding attempt, for a warning at the end of the declaration
+        failed_peak_find = []
         with tqdm(desc="Setting up Extended Sources", total=len(self._accepted_inds), disable=no_prog_bar) as dec_lb:
             for ind in range(len(self._accepted_inds)):
                 r, d = ra[self._accepted_inds[ind]], dec[self._accepted_inds[ind]]
@@ -129,6 +131,25 @@ class ExtendedSample(BaseSample):
             # Trying to see if this stops a circular import issue I've been having
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
+
+        # It is possible (especially if someone is using the Sample classes as a way to check whether things have
+        #  XMM data) that no sources will have been declared by this point, in which case it should fail now
+        if len(self._sources) == 0:
+            raise NoValidObservationsError(
+                "No Extended Sources have been declared, none of the sample passed the cleaning steps.")
+
+        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        #  to make sure that are some sources because in that case this warning is redundant.
+        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch']
+        # If there are names in that list, then we do the warning
+        if len(no_data) != 0:
+            warn("The following do not appear to have any XMM data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
+
+        # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
+        if len(failed_peak_find) != 0:
+            warn("Peak finding did not converge for the following; {n}, using user "
+                 "supplied coordinates".format(n=', '.join(failed_peak_find)), stacklevel=2)
 
     @property
     def custom_radii(self) -> Quantity:
@@ -228,6 +249,8 @@ class PointSample(BaseSample):
         #  attributes can be cleaned up later
         final_names = []
         self._point_radii = []
+        # This records which sources had a failed peak finding attempt, for a warning at the end of the declaration
+        failed_peak_find = []
         with tqdm(desc="Setting up Point Sources", total=len(self._accepted_inds), disable=no_prog_bar) as dec_lb:
             for ind in range(len(self._accepted_inds)):
                 r, d = ra[self._accepted_inds[ind]], dec[self._accepted_inds[ind]]
@@ -272,6 +295,25 @@ class PointSample(BaseSample):
             # Trying to see if this stops a circular import issue I've been having
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
+
+        # It is possible (especially if someone is using the Sample classes as a way to check whether things have
+        #  XMM data) that no sources will have been declared by this point, in which case it should fail now
+        if len(self._sources) == 0:
+            raise NoValidObservationsError(
+                "No Point Sources have been declared, none of the sample passed the cleaning steps.")
+
+        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        #  to make sure that are some sources because in that case this warning is redundant.
+        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch']
+        # If there are names in that list, then we do the warning
+        if len(no_data) != 0:
+            warn("The following do not appear to have any XMM data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
+
+        # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
+        if len(failed_peak_find) != 0:
+            warn("Peak finding did not converge for the following; {n}, using user "
+                 "supplied coordinates".format(n=', '.join(failed_peak_find)), stacklevel=2)
 
     @property
     def point_radii(self) -> Quantity:

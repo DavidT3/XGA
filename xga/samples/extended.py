@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 21:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:07. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -199,7 +199,7 @@ class ClusterSample(BaseSample):
         #  XMM data) that no sources will have been declared by this point, in which case it should fail now
         if len(self._sources) == 0:
             raise NoValidObservationsError(
-                "No GalaxyClusters have been declared, none of the sample passed the cleaning steps.")
+                "No Galaxy Clusters have been declared, none of the sample passed the cleaning steps.")
 
         # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
