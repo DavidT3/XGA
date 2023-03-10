@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:49. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -140,15 +140,19 @@ class ClusterSample(BaseSample):
                     # Will definitely load products (the True in this call), because I just made sure I generated a
                     #  bunch to make GalaxyCluster declaration quicker
                     try:
+                        # Declare the galaxy cluster, telling it is a part of a sample with in_sample=True
                         self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr,
                                                          use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                          back_out_rad_factor, cosmology, True, load_fits, clean_obs,
-                                                         clean_obs_reg, clean_obs_threshold, False, peak_find_method)
+                                                         clean_obs_reg, clean_obs_threshold, False, peak_find_method,
+                                                         True)
                         final_names.append(n)
 
                     except PeakConvergenceFailedError:
                         try:
                             failed_peak_find.append(n)
+                            # If the peak finding failed, we need to re-declare the galaxy cluster, telling it is
+                            #  a part of a sample with in_sample=True
                             self._sources[n] = GalaxyCluster(r, d, z, n, r2, r5, r25, lam, lam_err, wlm, wlm_err, cr,
                                                              False, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                              back_out_rad_factor, cosmology, True, load_fits, clean_obs,

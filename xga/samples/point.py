@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:49. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -126,7 +126,8 @@ class StarSample(BaseSample):
                 #  thrown I have to catch it and not add that source to this sample.
                 try:
                     self._sources[n] = Star(r, d, di, n, pm, pr, match_radius, use_peak, peak_lo_en, peak_hi_en,
-                                            back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits, False)
+                                            back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits,
+                                            False, True)
                     self._point_radii.append(pr.value)
                     self._distances.append(di)
                     self._proper_motions.append(pm)

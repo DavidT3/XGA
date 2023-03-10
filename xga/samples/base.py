@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 17:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:49. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -73,7 +73,9 @@ class BaseSample:
                     z = None
 
                 try:
-                    temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits)
+                    # We declare the source object, making sure to tell it that its part of a sample
+                    #  using in_sample=True
+                    temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits, True)
                     n = temp.name
                     self._sources[n] = temp
                     self._names.append(n)
