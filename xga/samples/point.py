@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:11. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -161,7 +161,8 @@ class StarSample(BaseSample):
 
         # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
-        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch']
+        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch' or
+                   self._failed_sources[name] == 'Failed ObsClean']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
             warn("The following do not appear to have any XMM data, and will not be included in the "
