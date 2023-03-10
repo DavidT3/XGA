@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:44. Copyright (c) The Contributors
 
 from typing import Tuple, Dict
 
@@ -47,13 +47,52 @@ class Star(PointSource):
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
         True. This option is here so that sample objects can regenerate all merged products at once, which is
         more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
+    :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+        to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+        is False. User should only set to True to remove warnings.
     """
     def __init__(self, ra: float, dec: float, distance: Quantity = None, name: str = None,
                  proper_motion: Quantity = None, point_radius: Quantity = Quantity(30, 'arcsec'),
                  match_radius: Quantity = Quantity(10, 'arcsec'), use_peak: bool = False,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
-                 load_products: bool = True, load_fits: bool = False, regen_merged: bool = True):
+                 load_products: bool = True, load_fits: bool = False, regen_merged: bool = True,
+                 in_sample: bool = False):
+        """
+        An init of the XGA Star source class.
+
+        :param float ra: The right-ascension of the star, in degrees.
+        :param float dec: The declination of the star, in degrees.
+        :param Quantity distance: A proper distance to the star. Default is None.
+        :param Quantity proper_motion: An astropy quantity describing the star's movement across the sky. This may
+            have either one (for the magnitude of proper motion) or two (for an RA Dec proper motion vector)
+            components. It must be in units that can be converted to arcseconds per year. Default is None.
+        :param str name: The name of the star, optional. If no names are supplied then they will be constructed
+            from the supplied coordinates.
+        :param Quantity point_radius: The point source analysis region radius for this sample. An astropy quantity
+            containing the radius should be passed; default is 30 arcsecond radius.
+        :param Quantity match_radius: The radius within which point source regions are accepted as a match to the
+            RA and Dec passed by the user. The default value is 10 arcseconds.
+        :param bool use_peak: Whether peak position should be found and used. For Star the 'simple' peak
+            finding method is the only one available.
+        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
+            position from. Default is 0.5keV.
+        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak
+            position from. Default is 2.0keV.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
+        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param bool load_products: Whether existing products should be loaded from disk.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
+            True. This option is here so that sample objects can regenerate all merged products at once, which is
+            more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
+        :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+            to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+            is False. User should only set to True to remove warnings.
+        """
 
         # This is before the super init call so that the changed _source_type_match method has a matching radius
         #  attribute to use
@@ -70,7 +109,7 @@ class Star(PointSource):
 
         # Run the init of the PointSource superclass
         super().__init__(ra, dec, None, name, point_radius, use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
-                         back_out_rad_factor, cosmology, load_products, load_fits, regen_merged)
+                         back_out_rad_factor, cosmology, load_products, load_fits, regen_merged, in_sample)
 
         # Checking that the distance argument (as redshift isn't really valid for objects within our galaxy) is
         #  in a unit that we understand and approve of

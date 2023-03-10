@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:44. Copyright (c) The Contributors
 
 import warnings
 from typing import Union, List, Tuple, Dict
@@ -62,6 +62,9 @@ class GalaxyCluster(ExtendedSource):
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
     :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
         is hierarchical, simple may also be passed.
+    :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+        to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+        is False. User should only set to True to remove warnings.
     """
     def __init__(self, ra, dec, redshift, name=None, r200: Quantity = None, r500: Quantity = None,
                  r2500: Quantity = None, richness: float = None, richness_err: float = None,
@@ -69,9 +72,46 @@ class GalaxyCluster(ExtendedSource):
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False,
                  clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3, regen_merged: bool = True,
-                 peak_find_method: str = "hierarchical"):
+                 peak_find_method: str = "hierarchical", in_sample: bool = False):
         """
         The init of the GalaxyCluster specific XGA class, takes information on the cluster to enable analyses.
+
+        :param float ra: The right-ascension of the cluster, in degrees.
+        :param float dec: The declination of the cluster, in degrees.
+        :param float redshift: The redshift of the cluster, required for cluster analysis.
+        :param str name: The name of the cluster, optional. Name will be constructed from position if None.
+        :param Quantity r200: A value for the R200 of the source. At least one overdensity radius must be passed.
+        :param Quantity r500: A value for the R500 of the source. At least one overdensity radius must be passed.
+        :param Quantity r2500: A value for the R2500 of the source. At least one overdensity radius must be passed.
+        :param richness: An optical richness of the cluster, optional.
+        :param richness_err: An uncertainty on the optical richness of the cluster, optional.
+        :param Quantity wl_mass: A weak lensing mass of the cluster, optional.
+        :param Quantity wl_mass_err: An uncertainty on the weak lensing mass of the cluster, optional.
+        :param Quantity custom_region_radius: A custom analysis region radius for this cluster, optional.
+        :param bool use_peak: Whether peak position should be found and used.
+        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak position
+            from. Default is 0.5keV
+        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak position
+            from. Default is 2.0keV.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
+        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param bool load_products: Whether existing products should be loaded from disk.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+            is hierarchical, simple may also be passed.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+        :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
+        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+            is hierarchical, simple may also be passed.
+        :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+            to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+            is False. User should only set to True to remove warnings.
         """
         self._radii = {}
         if r200 is None and r500 is None and r2500 is None:
@@ -112,7 +152,7 @@ class GalaxyCluster(ExtendedSource):
 
         super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
                          back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits,
-                         peak_find_method)
+                         peak_find_method, in_sample)
 
         # Reading observables into their attributes, if the user doesn't pass a value for a particular observable
         #  it will be None.

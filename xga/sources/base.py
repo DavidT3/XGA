@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 17:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:44. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -56,12 +56,30 @@ class BaseSource:
         is True.
     :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
         load_products is True. Default is False.
+    :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+        to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+        is False. User should only set to True to remove warnings.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None, cosmology=Planck15,
-                 load_products: bool = True, load_fits: bool = False):
+                 load_products: bool = True, load_fits: bool = False, in_sample: bool = False):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others.
+
+        :param float ra: The right ascension (in degrees) of the source.
+        :param float dec: The declination (in degrees) of the source.
+        :param float redshift: The redshift of the source, default is None. Not supplying a redshift means that
+            proper distance units such as kpc cannot be used.
+        :param str name: The name of the source, default is None in which case a name will be assembled from the
+            coordinates given.
+        :param cosmology: An astropy cosmology object to use for analysis of this source, default is Planck15.
+        :param bool load_products: Should existing XGA generated products for this source be loaded in, default
+            is True.
+        :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
+            load_products is True. Default is False.
+        :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or
+            not, setting to True suppresses some warnings so that they can be displayed at the end of the sample
+            progress bar. Default is False. User should only set to True to remove warnings.
         """
         self._ra_dec = np.array([ra, dec])
         if name is not None:
@@ -282,6 +300,12 @@ class BaseSource:
         #  run _existing_xga_products again, same for load_products
         self._load_fits = load_fits
         self._load_products = load_products
+
+        # This tells the source that it is a part of a sample, which we will check to see whether to suppress warnings
+        self._samp_member = in_sample
+        # This is what the warnings (or warning codes) are stored in instead, so an external process working on the
+        #  sample (or in the sample init) can look up what warnings are there.
+        self._supp_warn = {}
 
     @property
     def ra_dec(self) -> Quantity:
