@@ -528,7 +528,7 @@ class BaseSample:
         is to be called at the end of every sub-class init.
         """
         if any([len(src.suppressed_warnings) > 0 for src in self._sources.values()]):
-            warn("Non-fatal warnings occurred during the declaration of some sources, to access them please use the"
+            warn("Non-fatal warnings occurred during the declaration of some sources, to access them please use the "
                  "suppressed_warnings property of this sample.", stacklevel=2)
 
     def _del_data(self, key: int):
