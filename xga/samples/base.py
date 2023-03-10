@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:50. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -232,6 +232,18 @@ class BaseSample:
         :rtype: Dict[str, str]
         """
         return self._failed_sources
+
+    @property
+    def suppressed_warnings(self) -> Dict[str, List[str]]:
+        """
+        A property getter for a dictionary of the suppressed warnings that occurred during the declaration of
+        sources for this sample.
+
+        :return: A dictionary with source name as keys, and lists of warning text as values. Sources are
+            only included if they have had suppressed warnings.
+        :rtype: Dict[str, List[str]]
+        """
+        return {n: s.suppressed_warnings for n, s in self._sources if len(s.suppressed_warnings) > 0}
 
     def Lx(self, outer_radius: Union[str, Quantity], model: str,
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
