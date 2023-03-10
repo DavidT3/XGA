@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:43. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -109,6 +109,11 @@ class BaseSample:
         if len(no_data) != 0 and type(self) == BaseSample:
             warn("The following do not appear to have any XMM data, and will not be included in the "
                  "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)))
+
+        # This calls the method that checks for suppressed source-level warnings that occurred during declaration, but
+        #  only if this init has been called for a BaseSample declaration, rather than by a sub-class
+        if type(self) == BaseSample:
+            self._check_source_warnings()
 
     # These next few properties are all quantities passed in by the user on init, then used to
     #  declare source objects - as such they cannot ever be set by the user.
