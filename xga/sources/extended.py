@@ -1,8 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:22. Copyright (c) The Contributors
 
-import warnings
 from typing import Union, List, Tuple, Dict
+from warnings import warn, simplefilter
 
 import numpy as np
 from astropy import wcs
@@ -19,7 +19,7 @@ from ..sourcetools import ang_to_rad, rad_to_ang
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
-warnings.simplefilter('ignore', wcs.FITSFixedWarning)
+simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class GalaxyCluster(ExtendedSource):
@@ -257,14 +257,23 @@ class GalaxyCluster(ExtendedSource):
                 #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
                 #  cool core and allow it to stay in the analysis
                 if reg_obj.visual["color"] == 'red' and dist < check_rad:
-                    # We do print a warning though
-                    warnings.warn("A point source has been detected in {o} and is very close to the user supplied "
-                                  "coordinates of {s}. It will not be excluded from analysis due to the possibility "
-                                  "of a mis-identified cool core".format(s=self.name, o=obs))
+                    warn_text = "A point source has been detected in {o} and is very close to the user supplied " \
+                                "coordinates of {s}. It will not be excluded from analysis due to the possibility " \
+                                "of a mis-identified cool core".format(s=self.name, o=obs)
+                    if not self._samp_member:
+                        # We do print a warning though
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
+
                 elif reg_obj.visual["color"] == "magenta" and dist < check_rad:
-                    warnings.warn("A PSF sized extended source has been detected in {o} and is very close to the "
-                                  "user supplied coordinates of {s}. It will not be excluded from analysis due "
-                                  "to the possibility of a mis-identified cool core".format(s=self.name, o=obs))
+                    warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
+                                "user supplied coordinates of {s}. It will not be excluded from analysis due " \
+                                "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
                 else:
                     new_anti_results[obs].append(reg_obj)
 
