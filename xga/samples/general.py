@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:45. Copyright (c) The Contributors
 
 from warnings import warn
 
@@ -153,6 +153,10 @@ class ExtendedSample(BaseSample):
         if len(failed_peak_find) != 0:
             warn("Peak finding did not converge for the following; {n}, using user "
                  "supplied coordinates".format(n=', '.join(failed_peak_find)), stacklevel=2)
+
+        # This shows a warning that tells the user how to see any suppressed warnings that occurred during source
+        #  declarations, but only if there actually were any.
+        self._check_source_warnings()
 
     @property
     def custom_radii(self) -> Quantity:
@@ -318,6 +322,10 @@ class PointSample(BaseSample):
         if len(failed_peak_find) != 0:
             warn("Peak finding did not converge for the following; {n}, using user "
                  "supplied coordinates".format(n=', '.join(failed_peak_find)), stacklevel=2)
+
+        # This shows a warning that tells the user how to see any suppressed warnings that occurred during source
+        #  declarations, but only if there actually were any.
+        self._check_source_warnings()
 
     @property
     def point_radii(self) -> Quantity:
