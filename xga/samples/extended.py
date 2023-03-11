@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/03/2023, 15:26. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -157,7 +157,7 @@ class ClusterSample(BaseSample):
                                                              False, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                              back_out_rad_factor, cosmology, True, load_fits, clean_obs,
                                                              clean_obs_reg, clean_obs_threshold, False,
-                                                             peak_find_method)
+                                                             peak_find_method, True)
                             final_names.append(n)
                         except NoValidObservationsError:
                             # warn("After a failed attempt to find an X-ray peak, and after applying the criteria for "
