@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/03/2023, 15:21. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -135,7 +135,7 @@ class ExtendedSource(BaseSource):
             if len(self._alt_match_regions[o]) > 0:
                 warn_text = "There are {0} alternative matches for observation {1}, associated with " \
                             "source {2}".format(len(self._alt_match_regions[o]), o, self.name)
-                if self._samp_member:
+                if not self._samp_member:
                     warn(warn_text, stacklevel=2)
                 else:
                     self._supp_warn.append(warn_text)
@@ -164,7 +164,7 @@ class ExtendedSource(BaseSource):
         elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is not None:
             warn_text = "{n} has not been detected in ANY region files, so generating and fitting products" \
                         " with the 'region' reg_type will not work".format(n=self.name)
-            if self._samp_member:
+            if not self._samp_member:
                 warn(warn_text, stacklevel=2)
             else:
                 self._supp_warn.append(warn_text)
