@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/03/2023, 11:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/03/2023, 11:28. Copyright (c) The Contributors
 
 
 import os
@@ -219,8 +219,12 @@ class Spectrum(BaseProduct):
         elif which_spec == "back" and self.usable:
             with fits.open(self._back_spec, mode='update') as spec_fits:
                 if self._back_rmf is not None:
+                    if 'RESPFILE' in spec_fits["SPECTRUM"].header:
+                        del spec_fits["SPECTRUM"].header["RESPFILE"]
                     spec_fits["SPECTRUM"].header["RESPFILE"] = self._back_rmf
                 if self._back_arf is not None:
+                    if 'ANCRFILE' in spec_fits["SPECTRUM"].header:
+                        del spec_fits["SPECTRUM"].header["ANCRFILE"]
                     spec_fits["SPECTRUM"].header["ANCRFILE"] = self._back_arf
 
     @property
