@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/03/2023, 16:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/03/2023, 11:10. Copyright (c) The Contributors
 
 
 import os
@@ -202,9 +202,14 @@ class Spectrum(BaseProduct):
             with fits.open(self._path, mode='update') as spec_fits:
                 # I delete the headers first, as I've found issues with XSPEC not being able to read the
                 #  path if the SAS version I'm using adds entries for the headers before I do. See issue #745
-                del spec_fits["SPECTRUM"].header["RESPFILE"]
-                del spec_fits["SPECTRUM"].header["ANCRFILE"]
-                del spec_fits["SPECTRUM"].header["BACKFILE"]
+                # Do have to check that the offending headers are actually present, as they won't be introduced by
+                #  all versions of SAS
+                if "RESPFILE" in spec_fits["SPECTRUM"].header:
+                    del spec_fits["SPECTRUM"].header["RESPFILE"]
+                if "ANCRFILE" in spec_fits["SPECTRUM"].header:
+                    del spec_fits["SPECTRUM"].header["ANCRFILE"]
+                if "BACKFILE" in spec_fits["SPECTRUM"].header:
+                    del spec_fits["SPECTRUM"].header["BACKFILE"]
 
                 # This writes the new response file paths to the headers.
                 spec_fits["SPECTRUM"].header["RESPFILE"] = self._rmf
