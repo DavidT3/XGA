@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2023, 00:10. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -73,7 +73,9 @@ class BaseSample:
                     z = None
 
                 try:
-                    temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits)
+                    # We declare the source object, making sure to tell it that its part of a sample
+                    #  using in_sample=True
+                    temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits, True)
                     n = temp.name
                     self._sources[n] = temp
                     self._names.append(n)
@@ -87,8 +89,7 @@ class BaseSample:
                         ra_dec = Quantity(np.array([r, d]), 'deg')
                         n = coord_to_name(ra_dec)
 
-                    warn("Source {n} does not appear to have any XMM data, and will not be included in the "
-                         "sample.".format(n=n))
+                    # We record that a particular source name was not successfully declared
                     self._failed_sources[n] = "NoMatch"
                 dec_base.update(1)
 
@@ -97,6 +98,22 @@ class BaseSample:
         if len(self._sources) == 0:
             raise NoValidObservationsError("No sources have been declared, likely meaning that none of the sample have"
                                            " valid XMM data.")
+
+        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        #  to make sure that are some sources because in that case this warning is redundant.
+        # HOWEVER - I only want this warning to appear in certain circumstances. For instance I wouldn't want it
+        #  to be triggered here for a ClusterSample declaration that has called the super init (this method), as that
+        #  class declaration does its own (somewhat different) check on which sources have data
+        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch']
+        # If there are names in that list, then we do the warning
+        if len(no_data) != 0 and type(self) == BaseSample:
+            warn("The following do not appear to have any XMM data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)))
+
+        # This calls the method that checks for suppressed source-level warnings that occurred during declaration, but
+        #  only if this init has been called for a BaseSample declaration, rather than by a sub-class
+        if type(self) == BaseSample:
+            self._check_source_warnings()
 
     # These next few properties are all quantities passed in by the user on init, then used to
     #  declare source objects - as such they cannot ever be set by the user.
@@ -215,6 +232,18 @@ class BaseSample:
         :rtype: Dict[str, str]
         """
         return self._failed_sources
+
+    @property
+    def suppressed_warnings(self) -> Dict[str, List[str]]:
+        """
+        A property getter for a dictionary of the suppressed warnings that occurred during the declaration of
+        sources for this sample.
+
+        :return: A dictionary with source name as keys, and lists of warning text as values. Sources are
+            only included if they have had suppressed warnings.
+        :rtype: Dict[str, List[str]]
+        """
+        return {n: s.suppressed_warnings for n, s in self._sources.items() if len(s.suppressed_warnings) > 0}
 
     def Lx(self, outer_radius: Union[str, Quantity], model: str,
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
@@ -491,6 +520,17 @@ class BaseSample:
         #  that will need to be deleted.
         self._del_data(key)
 
+    def _check_source_warnings(self):
+        """
+        This method checks the suppressed_warnings property of the member sources, and if any have had warnings
+        suppressed then it itself raises a warning that instructs the user to look at the suppressed_warnings
+        property of the sample. It doesn't print them all because that could lead to a confusing mess. This method
+        is to be called at the end of every sub-class init.
+        """
+        if any([len(src.suppressed_warnings) > 0 for src in self._sources.values()]):
+            warn("Non-fatal warnings occurred during the declaration of some sources, to access them please use the "
+                 "suppressed_warnings property of this sample.", stacklevel=2)
+
     def _del_data(self, key: int):
         """
         This function will be replaced in subclasses that store more information about sources
@@ -499,6 +539,3 @@ class BaseSample:
         :param int key: The index or name of the source to delete.
         """
         pass
-
-
-

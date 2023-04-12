@@ -1,13 +1,13 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 06/01/2023, 12:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:37. Copyright (c) The Contributors
 
 import os
 import pickle
-import warnings
 from copy import deepcopy
 from itertools import product
 from shutil import copyfile
 from typing import Tuple, List, Dict, Union
+from warnings import warn, simplefilter
 
 import numpy as np
 import pandas as pd
@@ -23,7 +23,8 @@ from regions import read_ds9, PixelRegion
 
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
-    NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+    NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
+    NotSampleMemberError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -31,11 +32,11 @@ from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, I
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
-from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
+from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
-warnings.simplefilter('ignore', wcs.FITSFixedWarning)
+simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class BaseSource:
@@ -56,13 +57,38 @@ class BaseSource:
         is True.
     :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
         load_products is True. Default is False.
+    :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+        to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+        is False. User should only set to True to remove warnings.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None, cosmology=Planck15,
-                 load_products: bool = True, load_fits: bool = False):
+                 load_products: bool = True, load_fits: bool = False, in_sample: bool = False):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others.
+
+        :param float ra: The right ascension (in degrees) of the source.
+        :param float dec: The declination (in degrees) of the source.
+        :param float redshift: The redshift of the source, default is None. Not supplying a redshift means that
+            proper distance units such as kpc cannot be used.
+        :param str name: The name of the source, default is None in which case a name will be assembled from the
+            coordinates given.
+        :param cosmology: An astropy cosmology object to use for analysis of this source, default is Planck15.
+        :param bool load_products: Should existing XGA generated products for this source be loaded in, default
+            is True.
+        :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
+            load_products is True. Default is False.
+        :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or
+            not, setting to True suppresses some warnings so that they can be displayed at the end of the sample
+            progress bar. Default is False. User should only set to True to remove warnings.
         """
+        # This tells the source that it is a part of a sample, which we will check to see whether to suppress warnings
+        self._samp_member = in_sample
+        # This is what the warnings (or warning codes) are stored in instead, so an external process working on the
+        #  sample (or in the sample init) can look up what warnings are there.
+        self._supp_warn = []
+
+        # This sets up the user-defined coordinate attribute
         self._ra_dec = np.array([ra, dec])
         if name is not None:
             # We don't be liking spaces in source names, we also don't like underscores
@@ -428,8 +454,9 @@ class BaseSource:
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict
 
-    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D,
-                                              List[BaseProduct], List[BaseAggregateProduct], List[BaseProfile1D]]):
+    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D, List[BaseProduct],
+                                              List[BaseAggregateProduct], List[BaseProfile1D]],
+                        update_inv: bool = True):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
         but will overwrite existing products. Raises errors if the ObsID is not associated
@@ -440,6 +467,9 @@ class BaseSource:
 
         :param BaseProduct/BaseAggregateProduct/BaseProfile1D/List[BaseProduct]/List[BaseProfile1D] prod_obj: The
             new product object(s) to be added to the source object.
+        :param bool update_inv: This flag is to avoid unnecessary read-writes when this method is called by a method
+            (such as _existing_xga_products) which want to add products to the source storage structure, but don't
+            want the inventory file altered (as they know the product is already in there).
         """
         # Aggregate products are things like PSF grids and sets of annular spectra.
         if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D, list)) and prod_obj is not None:
@@ -553,9 +583,8 @@ class BaseSource:
 
                 if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
                     po.save()
-
                 # Here we make sure to store a record of the added product in the relevant inventory file
-                if isinstance(po, BaseProduct) and po.obs_id != 'combined':
+                if isinstance(po, BaseProduct) and po.obs_id != 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "{}/inventory.csv".format(po.obs_id), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -579,15 +608,16 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, po.obs_id, po.instrument, info_key, s_name, po.type],
                                          ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
-                    # Appends the series
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+
                     # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
                     #  if it did I think it would cause problems so better to be safe and add this.
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     # Saves the updated inventory file
                     inven.to_csv(OUTPUT + "{}/inventory.csv".format(po.obs_id), index=False)
 
-                elif isinstance(po, BaseProduct) and po.obs_id == 'combined':
+                elif isinstance(po, BaseProduct) and po.obs_id == 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -614,11 +644,12 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, po.type],
                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), index=False)
 
-                elif isinstance(po, BaseProfile1D) and po.obs_id != 'combined':
+                elif isinstance(po, BaseProfile1D) and po.obs_id != 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -633,11 +664,12 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), index=False)
 
-                elif isinstance(po, BaseProfile1D) and po.obs_id == 'combined':
+                elif isinstance(po, BaseProfile1D) and po.obs_id == 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -652,7 +684,8 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), index=False)
 
@@ -735,7 +768,7 @@ class BaseSource:
                     # Fetches lines of the inventory which match the current ObsID and instrument
                     rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
                     for r_ind, r in rel_ims.iterrows():
-                        self.update_products(parse_image_like(cur_d+r['file_name'], r['type']))
+                        self.update_products(parse_image_like(cur_d+r['file_name'], r['type']), update_inv=False)
 
                 # For spectra we search for products that have the name of this object in, as they are for
                 #  specific parts of the observation.
@@ -841,7 +874,7 @@ class BaseSource:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
                             try:
-                                self.update_products(obj)
+                                self.update_products(obj, update_inv=False)
                             except NotAssociatedError:
                                 pass
 
@@ -863,12 +896,16 @@ class BaseSource:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
                             try:
-                                self.update_products(obj)
+                                self.update_products(obj, update_inv=False)
                             except NotAssociatedError:
                                 pass
                     else:
-                        warnings.warn("{src} spectrum {sp} cannot be loaded in due to a mismatch in available"
-                                      " ancillary files".format(src=self.name, sp=sp))
+                        warn_text = "{src} spectrum {sp} cannot be loaded in due to a mismatch in available" \
+                                    " ancillary files".format(src=self.name, sp=sp)
+                        if not self._samp_member:
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
                         if "ident" in sp.split("/")[-1]:
                             set_id = int(sp.split('ident')[-1].split('_')[0])
                             ann_spec_usable[set_id] = False
@@ -879,12 +916,21 @@ class BaseSource:
         os.chdir(OUTPUT + "profiles/{}".format(self.name))
         saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
         for pf in saved_profs:
-            with open(pf, 'rb') as reado:
-                temp_prof = pickle.load(reado)
-                try:
-                    self.update_products(temp_prof)
-                except NotAssociatedError:
-                    pass
+            try:
+                with open(pf, 'rb') as reado:
+                    temp_prof = pickle.load(reado)
+                    try:
+                        self.update_products(temp_prof, update_inv=False)
+                    except NotAssociatedError:
+                        pass
+            except (EOFError, pickle.UnpicklingError):
+                warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
+                            "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf)
+                if not self._samp_member:
+                    # If these errors have been raised then I think that the pickle file has been broken (see issue #935)
+                    warn(warn_text, stacklevel=2)
+                else:
+                    self._supp_warn.append(warn_text)
         os.chdir(og_dir)
 
         # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
@@ -896,7 +942,7 @@ class BaseSource:
                     if self._redshift is not None:
                         # If we know the redshift we will add the radii to the annular spectra in proper distance units
                         ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
-                    self.update_products(ann_spec_obj)
+                    self.update_products(ann_spec_obj, update_inv=False)
 
         # Here we load in any combined images and exposure maps that may have been generated
         os.chdir(OUTPUT + 'combined')
@@ -920,7 +966,8 @@ class BaseSource:
             #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they match
             #  exactly and the product can be loaded
             if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], merged=True))
+                self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], merged=True),
+                                     update_inv=False)
 
         os.chdir(og_dir)
 
@@ -1013,8 +1060,12 @@ class BaseSource:
                         self.add_fit_data(model, global_results, chosen_lums, sp_key)
                 except (OSError, NoProductAvailableError, IndexError, NotAssociatedError):
                     chosen_lums = {}
-                    warnings.warn("{src} fit {f} could not be loaded in as there are no matching spectra "
-                                  "available".format(src=self.name, f=fit_name))
+                    warn_text = "{src} fit {f} could not be loaded in as there are no matching spectra " \
+                                "available".format(src=self.name, f=fit_name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
                 fit_data.close()
 
             if len(ann_results) != 0:
@@ -1036,9 +1087,13 @@ class BaseSource:
                             #         met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
                             #         self.update_products(met_prof)
                     except (NoProductAvailableError, ValueError):
-                        warnings.warn("A previous annular spectra profile fit for {src} was not successful, or no "
-                                      "matching spectrum has been loaded, so it cannot be read "
-                                      "in".format(src=self.name))
+                        warn_text = "A previous annular spectra profile fit for {src} was not successful, or no " \
+                                    "matching spectrum has been loaded, so it cannot be read " \
+                                    "in".format(src=self.name)
+                        if not self._samp_member:
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
 
         os.chdir(og_dir)
 
@@ -1077,8 +1132,12 @@ class BaseSource:
                 #  not loaded into this source (either because it was manually removed, or because the central
                 #  position has changed etc.)
                 except NotAssociatedError:
-                    warnings.warn("Existing fit for {s} could not be loaded due to a mismatch in available "
-                                  "data".format(s=self.name), stacklevel=2)
+                    warn_text = "Existing fit for {s} could not be loaded due to a mismatch in available " \
+                                "data".format(s=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
@@ -1389,18 +1448,17 @@ class BaseSource:
         :rtype: Tuple[Dict, Dict, Dict]
         """
         # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
-        #  University of Edinburgh - 2005.
+        #  University of Edinburgh - 2005. These are the default XGA colour meanings
         # Red - Point source
         # Green - Extended source
         # Magenta - PSF-sized extended source
         # Blue - Extended source with significant point source contribution
         # Cyan - Extended source with significant Run1 contribution
         # Yellow - Extended source with less than 10 counts
-        if source_type == "ext":
-            allowed_colours = ["green", "magenta", "blue", "cyan", "yellow"]
-        elif source_type == "pnt":
-            allowed_colours = ["red"]
-        else:
+        try:
+            # Gets the allowed colours for the current source type
+            allowed_colours = SRC_REGION_COLOURS[source_type]
+        except KeyError:
             raise ValueError("{} is not a recognised source type, please "
                              "don't use this internal function!".format(source_type))
 
@@ -1452,10 +1510,14 @@ class BaseSource:
                         #  Hence I choose that one for pnt source multi-matches like this, see comment 2 of issue #639
                         #  for an example.
                         results_dict[obs] = interim_reg[0]
-                        warnings.warn("{ns} matches for the point source {n} are found in the {o} region "
-                                      "file. The source nearest to the passed coordinates is accepted, all others "
-                                      "will be placed in the alternate match category and will not be removed "
-                                      "by masks.".format(o=obs, n=self.name, ns=len(interim_reg)))
+                        warn_text = "{ns} matches for the point source {n} are found in the {o} region " \
+                                    "file. The source nearest to the passed coordinates is accepted, all others " \
+                                    "will be placed in the alternate match category and will not be removed " \
+                                    "by masks.".format(o=obs, n=self.name, ns=len(interim_reg))
+                        if not self._samp_member:
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
 
                     elif len(interim_reg) > 1 and source_type == "ext":
                         raise MultipleMatchError("More than one match for {n} is found in the region file "
@@ -1517,7 +1579,7 @@ class BaseSource:
         # Doing an initial check so I can throw a warning if the user wants a region-list region AND has supplied
         #  custom central coordinates
         if reg_type == "region" and central_coord is not None:
-            warnings.warn("You cannot use custom central coordinates with a region from supplied region files")
+            warn("You cannot use custom central coordinates with a region from supplied region files", stacklevel=2)
 
         if central_coord is None:
             central_coord = self._default_coord
@@ -2602,14 +2664,14 @@ class BaseSource:
         # Iterating through the keys (ObsIDs) in to_remove
         for o in to_remove:
             if o not in self.obs_ids:
-                warnings.warn("{o} data cannot be removed from {s} as they are not associated with "
-                              "it.".format(o=o, s=self.name))
+                warn("{o} data cannot be removed from {s} as they are not associated with "
+                              "it.".format(o=o, s=self.name), stacklevel=2)
             # Check to see whether any of the instruments for o are not actually associated with the source
             elif any([i not in self.instruments[o] for i in to_remove[o]]):
                 bad_list = [i for i in to_remove[o] if i not in self.instruments[o]]
                 bad_str = "/".join(bad_list)
-                warnings.warn("{o}-{ib} data cannot be removed from {s} as they are not associated "
-                              "with it.".format(o=o, ib=bad_str, s=self.name))
+                warn("{o}-{ib} data cannot be removed from {s} as they are not associated "
+                              "with it.".format(o=o, ib=bad_str, s=self.name), stacklevel=2)
 
         # Sets the attribute that tells us whether any data has been removed
         if not self._disassociated:
@@ -3297,9 +3359,9 @@ class BaseSource:
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
         if "profile" in profile_type:
-            warnings.warn("The profile_type you passed contains the word 'profile', which is appended onto "
+            warn("The profile_type you passed contains the word 'profile', which is appended onto "
                           "a profile type by XGA, you need to try this again without profile on the end, unless"
-                          " you gave a generic profile a type with 'profile' in.")
+                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
 
         search_key = profile_type + "_profile"
         if all([obs_id is None, inst is None]):
@@ -3307,8 +3369,8 @@ class BaseSource:
 
         search_key = profile_type + "_profile"
         if search_key not in ALLOWED_PRODUCTS:
-            warnings.warn("{} seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.".format(search_key))
+            warn("{} seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
 
         matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en)
         if len(matched_prods) == 1:
@@ -3340,15 +3402,15 @@ class BaseSource:
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
         if "profile" in profile_type:
-            warnings.warn("The profile_type you passed contains the word 'profile', which is appended onto "
+            warn("The profile_type you passed contains the word 'profile', which is appended onto "
                           "a profile type by XGA, you need to try this again without profile on the end, unless"
-                          " you gave a generic profile a type with 'profile' in.")
+                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
 
         search_key = "combined_" + profile_type + "_profile"
 
         if search_key not in ALLOWED_PRODUCTS:
-            warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.")
+            warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.", stacklevel=2)
 
         matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en, hi_en)
         if len(matched_prods) == 1:
@@ -3509,6 +3571,21 @@ class BaseSource:
         :rtype: bool
         """
         return self._use_peak
+
+    @property
+    def suppressed_warnings(self) -> List[str]:
+        """
+        A property getter (with no setter) for the warnings that have been suppressed from display to the user as
+        the source was declared as a member of a sample.
+
+        :return: The list of suppressed warnings for this source.
+        :rtype: List[str]
+        """
+        if not self._samp_member:
+            raise NotSampleMemberError("The source for {n} is not a member of a sample, and as such warnings have "
+                                       "not been suppressed.".format(n=self.name))
+        else:
+            return self._supp_warn
 
     def info(self):
         """

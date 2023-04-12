@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 16:06. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -173,7 +173,7 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray
     new_line = sm_prod.inventory_entry
 
     # Add the new product to the inventory, even if it already existed
-    inven = inven.append(new_line, ignore_index=True)
+    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
     # Drop any duplicates in the inventory, which corrects the extra added in the last step if the file
     #  already existed
     inven = inven.drop_duplicates(subset='file_name', keep='first', ignore_index=True)
