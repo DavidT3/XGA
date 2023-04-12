@@ -1245,22 +1245,30 @@ class BaseSource:
             else:
                 ds9_regs = [None]
 
+            # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
+            #  where they were generated with different resolutions).
+            #  TODO see issue #908, figure out how to support different resolutions of image
+            try:
+                ims = self.get_images(obs_id)
+            except NoProductAvailableError:
+                raise NoProductAvailableError("There is no image available for observation {o}, associated "
+                                              "with {n}. An image is currently required to check for sky coordinates "
+                                              "being present within a sky region - though hopefully no-one will ever "
+                                              "see this because I'll have fixed it!".format(o=obs_id, n=self.name))
+                w = None
+            else:
+                w = ims[0].radec_wcs
+
             if isinstance(ds9_regs[0], PixelRegion):
                 # If regions exist in pixel coordinates, we need an image WCS to convert them to RA-DEC, so we need
                 #  one of the images supplied in the config file, not anything that XGA generates.
                 #  But as this method is only run once, before XGA generated products are loaded in, it
                 #  should be fine
-                inst = [k for k in self._products[obs_id] if k in ["pn", "mos1", "mos2"]][0]
-                en = [k for k in self._products[obs_id][inst] if "-" in k][0]
-                # Making an assumption here, that if there are regions there will be images
-                # Getting the radec_wcs property from the Image object
-                im = [i for i in self.get_products("image", obs_id, inst, just_obj=False) if en in i]
-
-                if len(im) != 1:
+                if w is None:
                     raise NoProductAvailableError("There is no image available for observation {o}, associated "
-                                                  "with {n}. An image is require to translate pixel regions "
+                                                  "with {n}. An image is currently required to translate pixel regions "
                                                   "to RA-DEC.".format(o=obs_id, n=self.name))
-                w = im[0][-1].radec_wcs
+
                 sky_regs = [reg.to_sky(w) for reg in ds9_regs]
                 reg_dict[obs_id] = np.array(sky_regs)
             elif isinstance(ds9_regs[0], SkyRegion):
