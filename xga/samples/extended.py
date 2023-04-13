@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/03/2023, 15:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 14:51. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -117,8 +117,10 @@ class ClusterSample(BaseSample):
                         r25 = r2500[ind]
                     else:
                         r25 = None
-                    if custom_region_radius is not None:
+                    if custom_region_radius is not None and not custom_region_radius.isscalar:
                         cr = custom_region_radius[ind]
+                    elif custom_region_radius is not None and custom_region_radius.isscalar:
+                        cr = custom_region_radius
                     else:
                         cr = None
 
