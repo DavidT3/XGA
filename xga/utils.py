@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/02/2023, 15:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 15:12. Copyright (c) The Contributors
 
 import json
 import os
@@ -12,6 +12,7 @@ from warnings import warn
 import pandas as pd
 import pkg_resources
 from astropy.constants import m_p, m_e
+from astropy.cosmology import LambdaCDM
 from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import read_header
@@ -92,6 +93,9 @@ MEAN_MOL_WEIGHT = 0.61
 
 # A centralised constant to define what radius labels are allowed
 RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
+
+# Adding a default concordance cosmology set up here - this replaces the original default choice of Planck15
+DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
 
 
 def xmm_obs_id_test(test_string: str) -> bool:
