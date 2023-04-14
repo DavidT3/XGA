@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 15:26. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -145,7 +145,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
 
     # These are crucial, to generate an exposure map one must have a ccf.cif calibration file, and a reference
     # image. If they do not already exist, these commands should generate them.
-    cifbuild(sources, disable_progress=disable_progress)
+    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
     sources = evselect_image(sources, lo_en, hi_en)
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
