@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 15:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 16:36. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -318,6 +318,40 @@ class ClusterSample(BaseSample):
 
         return Quantity(wlm, wlm_unit)
 
+    def _get_overdens_rad_checks(self, rad_name: str) -> Quantity:
+        """
+        An internal method to retrieve particular named overdensity radii from the constituent GalaxyCluster instances
+        of this class - basically because the process is exactly the same for the three implemented overdensity
+        radii, and there was no point repeating things. This method also performs checks to ensure that every entry
+        isn't just empty.
+
+        :param str rad_name: The overdensity radius name to retrieve; i.e. 'r2500', 'r500', 'r200'.
+        :return: The requested radii.
+        :rtype: Quantity
+        """
+        # For the radii to be stored in as they are pulled out of the individual GalaxyCluster instances
+        rads = []
+        # Iterating through the galaxy cluster objects
+        for gcs in self._sources.values():
+            # Using the get radius method to ensure that all retrieved radii are in kpc units
+            rad = gcs.get_radius(rad_name, 'kpc')
+            # Result could be None, if the radius wasn't set for that clusters, have to account for that
+            if rad is None:
+                rads.append(np.NaN)
+            else:
+                rads.append(rad)
+
+        # Turn list back into something nicer to work with
+        rads = Quantity(rads)
+        # Select only those radii which are not NaN - only to check, the whole set is returned (even NaN values)
+        #  if even one of the values is not NaN
+        check_rads = rads[~np.isnan(rads)]
+        if len(check_rads) == 0:
+            raise ValueError("All {} values appear to be NaN.".format(rad_name.upper()))
+
+        # Return the radii
+        return rads
+
     @property
     def r200(self) -> Quantity:
         """
@@ -326,20 +360,8 @@ class ClusterSample(BaseSample):
         :return: A quantity of R200 values.
         :rtype: Quantity
         """
-        rads = []
-        for gcs in self._sources.values():
-            rad = gcs.get_radius('r200', 'kpc')
-            if rad is None:
-                rads.append(np.NaN)
-            else:
-                rads.append(rad.value)
 
-        rads = np.array(rads)
-        check_rads = rads[~np.isnan(rads)]
-        if len(check_rads) == 0:
-            raise ValueError("All R200 values appear to be NaN.")
-
-        return Quantity(rads, 'kpc')
+        return self._get_overdens_rad_checks('r200')
 
     @property
     def r500(self) -> Quantity:
@@ -349,20 +371,8 @@ class ClusterSample(BaseSample):
         :return: A quantity of R500 values.
         :rtype: Quantity
         """
-        rads = []
-        for gcs in self._sources.values():
-            rad = gcs.get_radius('r500', 'kpc')
-            if rad is None:
-                rads.append(np.NaN)
-            else:
-                rads.append(rad.value)
 
-        rads = np.array(rads)
-        check_rads = rads[~np.isnan(rads)]
-        if len(check_rads) == 0:
-            raise ValueError("All R500 values appear to be NaN.")
-
-        return Quantity(rads, 'kpc')
+        return self._get_overdens_rad_checks('r500')
 
     @property
     def r2500(self) -> Quantity:
@@ -372,20 +382,7 @@ class ClusterSample(BaseSample):
         :return: A quantity of R2500 values.
         :rtype: Quantity
         """
-        rads = []
-        for gcs in self._sources.values():
-            rad = gcs.get_radius('r2500', 'kpc')
-            if rad is None:
-                rads.append(np.NaN)
-            else:
-                rads.append(rad.value)
-
-        rads = np.array(rads)
-        check_rads = rads[~np.isnan(rads)]
-        if len(check_rads) == 0:
-            raise ValueError("All R2500 values appear to be NaN.")
-
-        return Quantity(rads, 'kpc')
+        return self._get_overdens_rad_checks('r2500')
 
     def Lx(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
