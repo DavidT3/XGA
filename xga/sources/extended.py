@@ -1,15 +1,16 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:08. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
 
 import numpy as np
 from astropy import wcs
-from astropy.cosmology import Planck15
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitConversionError, kpc
 
 from .general import ExtendedSource
+from .. import DEFAULT_COSMO
 from ..exceptions import NoRegionsError, NoProductAvailableError
 from ..imagetools import radial_brightness
 from ..products import Spectrum, BaseProfile1D
@@ -70,7 +71,7 @@ class GalaxyCluster(ExtendedSource):
                  r2500: Quantity = None, richness: float = None, richness_err: float = None,
                  wl_mass: Quantity = None, wl_mass_err: Quantity = None, custom_region_radius=None, use_peak=True,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
-                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False,
+                 back_out_rad_factor=1.5, cosmology: Cosmology = DEFAULT_COSMO, load_products=True, load_fits=False,
                  clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3, regen_merged: bool = True,
                  peak_find_method: str = "hierarchical", in_sample: bool = False):
         """
