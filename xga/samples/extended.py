@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 16:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 17:09. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -106,18 +106,27 @@ class ClusterSample(BaseSample):
                 #  So we want to check that the current object name is in the list of objects that have data
                 if n in self.names:
                     # I know this code is a bit ugly, but oh well
-                    if r200 is not None:
+                    if r200 is not None and not r200.isscalar:
                         r2 = r200[ind]
+                    elif r200 is not None and r200.isscalar:
+                        r2 = r200
                     else:
                         r2 = None
-                    if r500 is not None:
+
+                    if r500 is not None and not r500.isscalar:
                         r5 = r500[ind]
+                    elif r500 is not None and r500.isscalar:
+                        r5 = r500
                     else:
                         r5 = None
-                    if r2500 is not None:
+
+                    if r2500 is not None and not r2500.isscalar:
                         r25 = r2500[ind]
+                    elif r2500 is not None and r2500.isscalar:
+                        r25 = r2500
                     else:
                         r25 = None
+
                     if custom_region_radius is not None and not custom_region_radius.isscalar:
                         cr = custom_region_radius[ind]
                     elif custom_region_radius is not None and custom_region_radius.isscalar:
