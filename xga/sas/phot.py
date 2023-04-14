@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 15:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 15:27. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -253,10 +253,10 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
 
     # To make a mosaic we need to have the individual products in the first place
     if to_mosaic == "image":
-        sources = evselect_image(sources, lo_en, hi_en, disable_progress=disable_progress)
+        sources = evselect_image(sources, lo_en, hi_en, disable_progress=disable_progress, num_cores=num_cores)
         for_name = "img"
     elif to_mosaic == "expmap":
-        sources = eexpmap(sources, lo_en, hi_en, disable_progress=disable_progress)
+        sources = eexpmap(sources, lo_en, hi_en, disable_progress=disable_progress, num_cores=num_cores)
         for_name = "expmap"
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
