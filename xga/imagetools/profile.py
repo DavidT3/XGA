@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:33. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -124,7 +124,7 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
     :param UnitBase rad_units: The output units for the centres of the annulli returned by
         this function. The inner and outer radii will always be in pixels.
-    :param Cosmology cosmo: An instance of an astropy cosmology, the default is Planck15.
+    :param Cosmology cosmo: An instance of an astropy cosmology, the default is a concordance flat LambdaCDM model.
     :param int start_pix_rad: The pixel radius at which the innermost annulus starts, default is zero.
     :param int min_central_pix_rad: The minimum radius of the innermost circular annulus (will only
         be used if start_pix_rad is 0, otherwise the innermost annulus is not a circle), default is three.
