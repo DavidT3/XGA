@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 16:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 16:58. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -352,6 +352,24 @@ class ClusterSample(BaseSample):
         # Return the radii
         return rads
 
+    def _set_overdens_rad_checks(self, rad_name: str, new_val: Quantity):
+        """
+        An internal method that does some checks on the new radii being used to set overdensity radii for clusters
+        in this sample - other checks are done on an individual level by the property setter of GalaxyCluster.
+
+        :param str rad_name: The overdensity radius name to retrieve; i.e. 'r2500', 'r500', 'r200'.
+        :param Quantity new_val: The new overdensity radius values
+        """
+        # Throw an error if the new value is scalar, because a ClusterSample should always contain multiple clusters
+        #  and so passing a single value of radius is daft
+        if new_val.isscalar:
+            raise ValueError("Setting a sample {} with a single radius value is not allowed.".format(rad_name.upper()))
+        # Need to check that the passed quantity has the expected number of entries
+        elif len(new_val) != len(self):
+            raise ValueError("The new {r} quantity does not have the same number of entries ({nl}) as there are "
+                             "clusters in this sample ({cl}).".format(nl=len(new_val), cl=len(self),
+                                                                      r=rad_name.upper()))
+
     @property
     def r200(self) -> Quantity:
         """
@@ -360,8 +378,22 @@ class ClusterSample(BaseSample):
         :return: A quantity of R200 values.
         :rtype: Quantity
         """
-
         return self._get_overdens_rad_checks('r200')
+
+    @r200.setter
+    def r200(self, new_val: Quantity):
+        """
+        The property setter for R200 for the galaxy clusters in this sample.
+
+        :param Quantity new_val: An quantity array (i.e. non-scalar) of new radius values.
+        """
+        # This will throw an error if there is an obvious problem with new_val
+        self._set_overdens_rad_checks('r200', new_val)
+
+        # If we get here then we can start setting the radii in the constituent GalaxyCluster objects
+        #  by iterating through them!
+        for gcs_ind, gcs in enumerate(self._sources.values()):
+            gcs.r200 = new_val[gcs_ind]
 
     @property
     def r500(self) -> Quantity:
@@ -371,8 +403,22 @@ class ClusterSample(BaseSample):
         :return: A quantity of R500 values.
         :rtype: Quantity
         """
-
         return self._get_overdens_rad_checks('r500')
+
+    @r500.setter
+    def r500(self, new_val: Quantity):
+        """
+        The property setter for R500 for the galaxy clusters in this sample.
+
+        :param Quantity new_val: An quantity array (i.e. non-scalar) of new radius values.
+        """
+        # This will throw an error if there is an obvious problem with new_val
+        self._set_overdens_rad_checks('r500', new_val)
+
+        # If we get here then we can start setting the radii in the constituent GalaxyCluster objects
+        #  by iterating through them!
+        for gcs_ind, gcs in enumerate(self._sources.values()):
+            gcs.r500 = new_val[gcs_ind]
 
     @property
     def r2500(self) -> Quantity:
@@ -383,6 +429,21 @@ class ClusterSample(BaseSample):
         :rtype: Quantity
         """
         return self._get_overdens_rad_checks('r2500')
+
+    @r2500.setter
+    def r2500(self, new_val: Quantity):
+        """
+        The property setter for R2500 for the galaxy clusters in this sample.
+
+        :param Quantity new_val: An quantity array (i.e. non-scalar) of new radius values.
+        """
+        # This will throw an error if there is an obvious problem with new_val
+        self._set_overdens_rad_checks('r2500', new_val)
+
+        # If we get here then we can start setting the radii in the constituent GalaxyCluster objects
+        #  by iterating through them!
+        for gcs_ind, gcs in enumerate(self._sources.values()):
+            gcs.r2500 = new_val[gcs_ind]
 
     def Lx(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
