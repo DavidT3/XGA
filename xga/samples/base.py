@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:13. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -30,7 +30,7 @@ class BaseSample:
     :param ndarray redshift: The redshifts of the sources, optional. Default is None
     :param ndarray name: The names of the sources, optional. Default is None, in which case the names will be
         constructed from the coordinates.
-    :param cosmology: An astropy cosmology object to be used in distance calculations and analyses.
+    :param Cosmology cosmology: An astropy cosmology object to be used in distance calculations and analyses.
     :param bool load_products: Whether existing products should be loaded from disk.
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param bool no_prog_bar: Whether a progress bar should be shown as sources are declared.
