@@ -372,7 +372,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                          " probably take too long...".format(bins))
 
     # Need a valid CIF for this task, so run cifbuild first
-    cifbuild(sources, disable_progress=disable_progress)
+    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
