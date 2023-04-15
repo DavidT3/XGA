@@ -1,6 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 15:14. Copyright (c) The Contributors
-
+#  Last modified by David J Turner (turne540@msu.edu) 15/04/2023, 12:11. Copyright (c) The Contributors
+import numpy as np
 import pandas as pd
 from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
@@ -8,12 +8,15 @@ from astropy.units import Quantity, Unit, UnitConversionError
 from xga import DEFAULT_COSMO, NUM_CORES
 from xga.products import ScalingRelation
 from xga.relations.clusters.RT import arnaud_r500
+# This just sets the data columns that MUST be present in the sample data passed by the user
+from xga.samples import ClusterSample
+from xga.xspec import single_temp_apec
 
 LT_REQUIRED_COLS = ['ra', 'dec', 'name', 'redshift']
 
 
-def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Quantity, min_iter: int = 3,
-                                    convergence_frac: float = 0.1, rad_temp_rel: ScalingRelation = arnaud_r500,
+def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Quantity, convergence_frac: float = 0.1,
+                                    min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
                                     cosmo: Cosmology = DEFAULT_COSMO, num_cores: int = NUM_CORES):
 
     # I want the sample to be passed in as a DataFrame, so I can easily extract the information I need
@@ -41,15 +44,65 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                   "rad_temp_rel relation is {bu}. It cannot be converted to "
                                   "kpc.".format(bu=rad_temp_rel.y_unit.to_string()))
 
+    # I'm going to make sure that the user isn't allowed to request that it not iterate at all
+    if min_iter < 2:
+        raise ValueError("The minimum number of iterations set by 'min_iter' must be 2 or more.")
+
+    # Also have to make sure the user hasn't something daft like make min_iter larger than max_iter
+    if max_iter <= min_iter:
+        raise ValueError("The max_iter value ({mai}) is less than or equal to the min_iter value "
+                         "({mii}).".format(mai=max_iter, mii=min_iter))
+
+    # Just want to ensure this dataframe is separate (in memory) from the data that has been passed in
+    cur_sample_data = sample_data.copy()
+    # And will keep a copy that won't be modified, probably to return alongside a ClusterSample
     all_sample_data = sample_data.copy()
 
-    # while sample_data.shape[0] != 0:
-    #     samp = ClusterSample(sample_data['ra'].values, sample_data['dec'].values, sample_data['redshift'].values,
-    #                          sample_data['name'].values, r500=start_aperture, use_peak=False, clean_obs_threshold=0.7)
-    #     single_temp_apec(samp, samp.r500, one_rmf=False, num_cores=num_cores)
-    #
-    #     # TODO Check the rad_temp_rel, what the axes are, whether I accounted for E(z) in it, etc.
-    #     rad_temp_rel.
+    # Keeps track of the current iteration number
+    iter_num = 0
+
+    # Set up the ClusterSample to be used for this process (I did consider setting up a new one each time but that
+    #  adds overhead and I think that this way should work fine).
+    samp = ClusterSample(sample_data['ra'].values, sample_data['dec'].values, sample_data['redshift'].values,
+                         sample_data['name'].values, r500=start_aperture, use_peak=False, clean_obs_threshold=0.7)
+
+    # This is a boolean array of whether the current radius has been accepted or not - starts off False
+    acc_rad = np.full(len(samp), False)
+
+    # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
+    #  accepted OR until we reach the maximum number  of iterations
+    while acc_rad.sum() != len(samp) or iter_num < max_iter:
+
+        # We generate and fit spectra for the current value of R500
+        single_temp_apec(samp, samp.r500, one_rmf=False, num_cores=num_cores)
+
+        # Just reading out the temperatures, not the uncertainties at the moment
+        txs = samp.Tx(quality_checks=False)[:, 0]
+        # This uses the scaling relation to predict R500 from the measured temperatures
+        pr_rs = rad_temp_rel.predict(txs)
+
+        # The basis of this method is that we measure a temperature, starting in some user-specified fixed aperture,
+        #  and then use that to predict an overdensity radius (something far more useful than a fixed aperture). This
+        #  process is repeated until the radius fraction converges to within the user-specified limit.
+        # It should also be noted that each cluster is made to iterate at least `min_iter` times, nothing will be
+        #  allowed to just accept the first result
+        rad_rat = pr_rs / samp.r500
+
+        # Make a copy of the new R500s inferred from the scaling relation - this will be modified by replacing new
+        new_rads = pr_rs.copy()
+
+        # We need to be checking to see if there are some
+        if iter_num > min_iter:
+            acc_rad *= (rad_rat > 1 - convergence_frac) & (rad_rat < 1 + convergence_frac)
+
+        # Use the new radius value inferred from the temperature + scaling relation and add it to the ClusterSample (or
+        #  just re-adding the same value as is already here if that radius has converged and been accepted).
+        samp.r500 = pr_rs[~acc_rad]
+
+        # Got to increment the counter otherwise the while loop may go on and on forever :O
+        iter_num += 1
+
+    return samp
 
 
 
