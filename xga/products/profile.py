@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 16:56. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -510,7 +510,7 @@ class GasDensity3D(BaseProfile1D):
         #  covered by the data
         if outer_rad >= self.radii[-1]:
             warn("The outer radius you supplied is greater than or equal to the outer radius covered by the data, so"
-                 " you are effectively extrapolating using the model.")
+                 " you are effectively extrapolating using the model.", stacklevel=2)
 
         # The next step is setting up radius distributions, if the radius error is not None. The outer_rad
         #  and inner_rad (if applicable) variables will be overwritten with a distribution, which will be picked up
@@ -1192,9 +1192,9 @@ class HydrostaticMass(BaseProfile1D):
             raise ValueError("The temperature and density profiles do not have the same central coordinate.")
         # Same reasoning with the ObsID and instrument
         elif temperature_profile.obs_id != density_profile.obs_id:
-            warn("The temperature and density profiles do not have the same associated ObsID.")
+            warn("The temperature and density profiles do not have the same associated ObsID.", stacklevel=2)
         elif temperature_profile.instrument != density_profile.instrument:
-            warn("The temperature and density profiles do not have the same associated instrument.")
+            warn("The temperature and density profiles do not have the same associated instrument.", stacklevel=2)
 
         # We see if either of the profiles have an associated spectrum
         if temperature_profile.set_ident is None and density_profile.set_ident is None:
@@ -1208,8 +1208,8 @@ class HydrostaticMass(BaseProfile1D):
             set_store = temperature_profile.associated_set_storage_key
         elif temperature_profile.set_ident is not None and density_profile.set_ident is not None:
             if temperature_profile.set_ident != density_profile.set_ident:
-                warn("The temperature and density profile you passed where generated from different sets of annular"
-                     " spectra, the mass profiles associated set ident will be set to None.")
+                warn("The temperature and density profile you passed were generated from different sets of annular"
+                     " spectra, the mass profiles associated set ident will be set to None.", stacklevel=2)
                 set_id = None
                 set_store = None
             else:
@@ -1846,7 +1846,6 @@ class HydrostaticMass(BaseProfile1D):
 
         plt.close('all')
 
-
     @property
     def temperature_profile(self) -> GasTemperature3D:
         """
@@ -1901,7 +1900,304 @@ class HydrostaticMass(BaseProfile1D):
         if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) \
                 or (self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()):
             warn("Some radii are outside the data range covered by the temperature or density profiles, as such "
-                 "you will be extrapolating based on the model fits.")
+                 "you will be extrapolating based on the model fits.", stacklevel=2)
+
+
+class SpecificEntropy(BaseProfile1D):
+    """
+    A profile product which uses input GasTemperature3D and GasDensity3D profiles to generate a specific entropy
+    profile. Functionally this is extremely similar to the HydrostaticMass profile class, as it calculates the y
+    values itself, rather than them being part of the declaration.
+
+    :param GasTemperature3D temperature_profile: The XGA 3D temperature profile to take temperature
+        information from.
+    :param str/BaseModel1D temperature_model: The model to fit to the temperature profile, either a name or an
+        instance of an XGA temperature model class.
+    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
+    :param str/BaseModel1D density_model: The model to fit to the density profile, either a name or an
+        instance of an XGA density model class.
+    :param Quantity radii: The radii at which to measure the entropy for the declaration of the profile.
+    :param Quantity radii_err: The uncertainties on the radii.
+    :param Quantity deg_radii: The radii values, but in units of degrees. This is required to set up a storage key
+        for the profile to be filed in an XGA source.
+    :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
+    :param int num_walkers: If the fit method is 'mcmc' then this will set the number of walkers for the emcee
+        sampler to set up.
+    :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler to
+        take. If a single number is passed then that number of steps is used for both profiles, otherwise if a list
+        is passed the first entry is used for the temperature fit, and the second for the density fit.
+    :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
+    :param bool show_warn: Should warnings thrown during the fitting processes be shown.
+    :param bool progress: Should fit progress bars be shown.
+    """
+    def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
+                 density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
+                 radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
+                 num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
+                 progress: bool = True):
+        """
+            The init method for the SpecificEntropy profile class, uses temperature and density profiles, along with
+            models, to set up the entropy profile.
+
+            A profile product which uses input GasTemperature3D and GasDensity3D profiles to generate a specific
+            entropy profile. Functionally this is extremely similar to the HydrostaticMass profile class, as it
+            calculates the y values itself, rather than them being part of the declaration.
+
+            :param GasTemperature3D temperature_profile: The XGA 3D temperature profile to take temperature
+                information from.
+            :param str/BaseModel1D temperature_model: The model to fit to the temperature profile, either a name or an
+                instance of an XGA temperature model class.
+            :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
+            :param str/BaseModel1D density_model: The model to fit to the density profile, either a name or an
+                instance of an XGA density model class.
+            :param Quantity radii: The radii at which to measure the entropy for the declaration of the profile.
+            :param Quantity radii_err: The uncertainties on the radii.
+            :param Quantity deg_radii: The radii values, but in units of degrees. This is required to set up a
+                storage key for the profile to be filed in an XGA source.
+            :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
+            :param int num_walkers: If the fit method is 'mcmc' then this will set the number of walkers for the emcee
+                sampler to set up.
+            :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler
+                to take. If a single number is passed then that number of steps is used for both profiles, otherwise
+                if a list is passed the first entry is used for the temperature fit, and the second for the
+                density fit.
+            :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
+            :param bool show_warn: Should warnings thrown during the fitting processes be shown.
+            :param bool progress: Should fit progress bars be shown.
+            """
+        # This init is unfortunately almost identical to HydrostaticMass, there is a lot of duplicated code.
+
+        # We check whether the temperature profile passed is actually the type of profile we need
+        if type(temperature_profile) != GasTemperature3D:
+            raise TypeError("Only a GasTemperature3D instance may be passed for temperature_profile, check "
+                            "you haven't accidentally passed a ProjectedGasTemperature1D.")
+
+        # We repeat this process with the density profile and model
+        if type(density_profile) != GasDensity3D:
+            raise TypeError("Only a GasDensity3D instance may be passed for density_profile, check you haven't "
+                            "accidentally passed a GasDensity1D.")
+
+        # We also need to check that someone hasn't done something dumb like pass profiles from two different
+        #  clusters, so we'll compare source names.
+        if temperature_profile.src_name != density_profile.src_name:
+            raise ValueError("You have passed temperature and density profiles from two different "
+                             "sources, any resulting entropy measurements would not be valid, so this is not "
+                             "allowed.")
+        # And check they were generated with the same central coordinate, otherwise they may not be valid. I
+        #  considered only raising a warning, but I need a consistent central coordinate to pass to the super init
+        elif np.any(temperature_profile.centre != density_profile.centre):
+            raise ValueError("The temperature and density profiles do not have the same central coordinate.")
+        # Same reasoning with the ObsID and instrument
+        elif temperature_profile.obs_id != density_profile.obs_id:
+            warn("The temperature and density profiles do not have the same associated ObsID.", stacklevel=2)
+        elif temperature_profile.instrument != density_profile.instrument:
+            warn("The temperature and density profiles do not have the same associated instrument.", stacklevel=2)
+
+        # We see if either of the profiles have an associated spectrum
+        if temperature_profile.set_ident is None and density_profile.set_ident is None:
+            set_id = None
+            set_store = None
+        elif temperature_profile.set_ident is None and density_profile.set_ident is not None:
+            set_id = density_profile.set_ident
+            set_store = density_profile.associated_set_storage_key
+        elif temperature_profile.set_ident is not None and density_profile.set_ident is None:
+            set_id = temperature_profile.set_ident
+            set_store = temperature_profile.associated_set_storage_key
+        elif temperature_profile.set_ident is not None and density_profile.set_ident is not None:
+            if temperature_profile.set_ident != density_profile.set_ident:
+                warn("The temperature and density profile you passed were generated from different sets of annular"
+                     " spectra, the entropy profile's associated set ident will be set to None.", stacklevel=2)
+                set_id = None
+                set_store = None
+            else:
+                set_id = temperature_profile.set_ident
+                set_store = temperature_profile.associated_set_storage_key
+
+        self._temp_prof = temperature_profile
+        self._dens_prof = density_profile
+
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+        else:
+            radii = radii.to('kpc')
+            radii_err = radii_err.to('kpc')
+        # This will be overwritten by the super() init call, but it allows rad_check to work
+        self._radii = radii
+
+        # We won't REQUIRE that the profiles have data point generated at the same radii, as we're gonna
+        #  measure entropy from the models, but I do need to check that the passed radii are within the radii of the
+        #  and warn the user if they aren't
+        self.rad_check(radii)
+
+        if isinstance(num_steps, int):
+            temp_steps = num_steps
+            dens_steps = num_steps
+        elif isinstance(num_steps, list) and len(num_steps) == 2:
+            temp_steps = num_steps[0]
+            dens_steps = num_steps[1]
+        else:
+            raise ValueError("If a list is passed for num_steps then it must have two entries, the first for the "
+                             "temperature profile fit and the second for the density profile fit")
+
+        # Make sure the model fits have been run, and retrieve the model objects
+        temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps, num_walkers,
+                                                    progress, show_warn)
+        density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps, num_walkers, progress,
+                                            show_warn)
+
+        # Have to check whether the fits were actually successful, as the fit method will return a model instance
+        #  either way
+        if not temperature_model.success:
+            raise XGAFitError("The fit to the temperature was unsuccessful, cannot define entropy profile.")
+        if not density_model.success:
+            raise XGAFitError("The fit to the density was unsuccessful, cannot define entropy profile.")
+
+        self._temp_model = temperature_model
+        self._dens_model = density_model
+
+        ent, ent_dist = self.entropy(radii, conf_level=68)
+        ent_vals = ent[0, :]
+        ent_errs = np.mean(ent[1:, :], axis=0)
+
+        super().__init__(radii, ent_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
+                         self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii)
+
+        # Need a custom storage key for this entropy profile, incorporating all the information we have about what
+        #  went into it, density profile, temperature profile, radii, density and temperature models - identical to
+        #  the form used by HydrostaticMass profiles.
+        dens_part = "dprof_{}".format(self._dens_prof.storage_key)
+        temp_part = "tprof_{}".format(self._temp_prof.storage_key)
+        cur_part = self.storage_key
+        new_part = "tm{t}_dm{d}".format(t=self._temp_model.name, d=self._dens_model.name)
+        whole_new = "{n}_{c}_{t}_{d}".format(n=new_part, c=cur_part, t=temp_part, d=dens_part)
+        self._storage_key = whole_new
+
+        # Setting the type
+        self._prof_type = "specific_entropy"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = r"K$_{\rm{X}}$"
+
+        # Setting up a dictionary to store entropy results in.
+        self._entropies = {}
+
+    def entropy(self, radius: Quantity, conf_level: float = 68.2) -> Union[Quantity, Quantity]:
+        """
+        A method which will measure a specific entropy and specific entropy uncertainty within the given
+        radius/radii.
+
+        If the models for temperature and density have analytical solutions to their derivative wrt to radius then
+        those will be used to calculate the gradients at radius, but if not then a numerical method will be used for
+        which dx will be set to radius/1e+6.
+
+        :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
+            mass within.
+        :param float conf_level: The confidence level for the entropy uncertainties, the default is 68.2% (~1σ).
+        :return: An astropy quantity containing the entropy/entropies, lower and upper uncertainties, and another
+            containing the mass realisation distribution.
+        :rtype: Union[Quantity, Quantity]
+        """
+        upper = 50 + (conf_level / 2)
+        lower = 50 - (conf_level / 2)
+
+        # Prints a warning if the radius at which to calculate the entropy is outside the range of the data
+        self.rad_check(radius)
+
+        if radius.isscalar and radius in self._entropies:
+            already_run = True
+            ent_dist = self._entropies[radius]
+        else:
+            already_run = False
+
+        if not already_run and self._dens_model.success and self._temp_model.success:
+            # This grabs gas density values from the density model, need to check whether the model is in units
+            #  of mass or number density
+            if self._dens_model.y_unit.is_equivalent('1/cm^3'):
+                dens = self._dens_model.get_realisations(radius)
+            else:
+                dens = self._dens_model.get_realisations(radius) / (MEAN_MOL_WEIGHT*m_p)
+
+            # We do the same for the temperature vals, again need to check the units
+            if self._temp_model.y_unit.is_equivalent("keV"):
+                temp = self._temp_model.get_realisations(radius)
+            else:
+                temp = (self._temp_model.get_realisations(radius)*k_B).to('keV')
+
+            ent_dist = (temp / dens**(2/3)).T
+
+            if radius.isscalar:
+                self._entropies[radius] = ent_dist
+
+        elif not self._temp_model.success or not self._dens_model.success:
+            raise XGAFitError("One or both of the fits to the temperature model and density profiles were "
+                              "not successful")
+
+        ent_med = np.percentile(ent_dist, 50, axis=0)
+        ent_lower = ent_med - np.percentile(ent_dist, lower, axis=0)
+        ent_upper = np.percentile(ent_dist, upper, axis=0) - ent_med
+
+        ent_res = Quantity(np.array([ent_med.value, ent_lower.value, ent_upper.value]), ent_dist.unit)
+
+        if np.any(ent_res[0] < 0):
+            raise ValueError("A specific entropy of less than zero has been measured, which is not physical.")
+
+        return ent_res, ent_dist
+
+    @property
+    def temperature_profile(self) -> GasTemperature3D:
+        """
+        A method to provide access to the 3D temperature profile used to generate this entropy profile.
+
+        :return: The input temperature profile.
+        :rtype: GasTemperature3D
+        """
+        return self._temp_prof
+
+    @property
+    def density_profile(self) -> GasDensity3D:
+        """
+        A method to provide access to the 3D density profile used to generate this entropy profile.
+
+        :return: The input density profile.
+        :rtype: GasDensity3D
+        """
+        return self._dens_prof
+
+    @property
+    def temperature_model(self) -> BaseModel1D:
+        """
+        A method to provide access to the model that was fit to the temperature profile.
+
+        :return: The fit temperature model.
+        :rtype: BaseModel1D
+        """
+        return self._temp_model
+
+    @property
+    def density_model(self) -> BaseModel1D:
+        """
+        A method to provide access to the model that was fit to the density profile.
+
+        :return: The fit density profile.
+        :rtype: BaseModel1D
+        """
+        return self._dens_model
+
+    def rad_check(self, rad: Quantity):
+        """
+        Very simple method that prints a warning if the radius is outside the range of data covered by the
+        density or temperature profiles.
+
+        :param Quantity rad: The radius to check.
+        """
+        if not rad.unit.is_equivalent(self.radii_unit):
+            raise UnitConversionError("You can only check radii in units convertible to the radius units of "
+                                      "the profile ({})".format(self.radii_unit.to_string()))
+
+        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) \
+                or (self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()):
+            warn("Some radii are outside the data range covered by the temperature or density profiles, as such "
+                 "you will be extrapolating based on the model fits.", stacklevel=2)
 
 
 class Generic1D(BaseProfile1D):
