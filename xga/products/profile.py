@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 16:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 18:07. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -2142,6 +2142,52 @@ class SpecificEntropy(BaseProfile1D):
             raise ValueError("A specific entropy of less than zero has been measured, which is not physical.")
 
         return ent_res, ent_dist
+
+    def view_entropy_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8),
+                          bins: Union[str, int] = 'auto', colour: str = "lightslategrey"):
+        """
+        A method which will generate a histogram of the entropy distribution that resulted from the entropy calculation
+        at the supplied radius. If the entropy for the passed radius has already been measured it, and the entropy
+        distribution, will be retrieved from the storage of this product rather than re-calculated.
+
+        :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
+            entropy at.
+        :param float conf_level: The confidence level for the entropy uncertainties, the default is 68.2% (~1σ).
+        :param int/str bins: The argument to be passed to plt.hist, either a number of bins or a binning
+            algorithm name.
+        :param str colour: The desired colour of the histogram.
+        :param tuple figsize: The desired size of the histogram figure.
+        """
+        if not radius.isscalar:
+            raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
+                             "arrays of radii are not supported.")
+
+        # Grabbing out the mass distribution, as well as the single result that describes the entropy distribution.
+        ent, ent_dist = self.entropy(radius, conf_level)
+        # Setting up the figure
+        plt.figure(figsize=figsize)
+        ax = plt.gca()
+        # Includes nicer ticks
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        # And removing the yaxis tick labels as it's just a number of values per bin
+        ax.yaxis.set_ticklabels([])
+
+        # Plot the histogram and set up labels
+        plt.hist(ent_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
+        plt.xlabel(self._y_axis_name + '[' + self.values_unit.to_string() + ']')
+        plt.title("Entropy Distribution at {}".format(radius.to_string()))
+
+        vals_label = str(ent[0].round(2).value) + "^{+" + str(ent[2].round(2).value) + "}" + \
+                     "_{-" + str(ent[1].round(2).value) + "}"
+        res_label = r"$K$_{\rm{X}}$} = " + vals_label + '[' + self.values_unit.to_string() + ']'
+
+        # And this just plots the 'result' on the distribution as a series of vertical lines
+        plt.axvline(ent[0].value, color='red', label=res_label)
+        plt.axvline(ent[0].value-ent[1].value, color='red', linestyle='dashed')
+        plt.axvline(ent[0].value+ent[2].value, color='red', linestyle='dashed')
+        plt.legend(loc='best', prop={'size': 12})
+        plt.tight_layout()
+        plt.show()
 
     @property
     def temperature_profile(self) -> GasTemperature3D:
