@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 16:32. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -67,7 +67,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                              temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = "angr",
                              temp_lo_en: Quantity = Quantity(0.3, 'keV'), temp_hi_en: Quantity = Quantity(7.9, 'keV'),
                              group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
-                             over_sample: float = None, num_cores: int = NUM_CORES,
+                             over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                              show_warn: bool = True) -> List[HydrostaticMass]:
     """
     A convenience function that should allow the user to easily measure hydrostatic masses of a sample of galaxy
@@ -138,6 +138,9 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
         To disable minimum signal to noise set this parameter to None.
     :param bool over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
     :param int num_cores: The number of cores on your local machine which this function is allowed, default is
         90% of the cores in your system.
     :param bool show_warn: Should profile fit warnings be shown, or only stored in the profile models.
@@ -170,9 +173,9 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     # Attempt to measure their 3D temperature profiles
     temp_profs = onion_deproj_temp_prof(cut_sources, cut_rads, temp_annulus_method, temp_min_snr, temp_min_cnt,
                                         temp_min_width, temp_use_combined, temp_use_worst, min_counts=spec_min_counts,
-                                        min_sn=spec_min_sn, over_sample=over_sample, abund_table=abund_table,
-                                        num_cores=num_cores, freeze_met=freeze_met, temp_lo_en=temp_lo_en,
-                                        temp_hi_en=temp_hi_en)
+                                        min_sn=spec_min_sn, over_sample=over_sample, one_rmf=one_rmf,
+                                        abund_table=abund_table, num_cores=num_cores, freeze_met=freeze_met,
+                                        temp_lo_en=temp_lo_en, temp_hi_en=temp_hi_en)
 
     # This just allows us to quickly lookup the temperature profile we need later
     temp_prof_dict = {str(cut_sources[p_ind]): p for p_ind, p in enumerate(temp_profs)}
