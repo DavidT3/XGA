@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 12:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 15:49. Copyright (c) The Contributors
 import numpy as np
 import pandas as pd
 from astropy.cosmology import Cosmology
@@ -66,7 +66,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  adds overhead, and I think that this way should work fine).
     samp = ClusterSample(sample_data['ra'].values, sample_data['dec'].values, sample_data['redshift'].values,
                          sample_data['name'].values, r500=start_aperture, use_peak=False, clean_obs_threshold=0.7,
-                         load_fits=True)
+                         load_fits=True, cosmology=cosmo)
 
     # This is a boolean array of whether the current radius has been accepted or not - starts off False
     acc_rad = np.full(len(samp), False)
@@ -79,7 +79,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     while acc_rad.sum() != len(samp) or iter_num < max_iter:
 
         # We generate and fit spectra for the current value of R500
-        single_temp_apec(samp, samp.r500, one_rmf=False, num_cores=num_cores, timeout = timeout)
+        single_temp_apec(samp, samp.r500, one_rmf=False, num_cores=num_cores, timeout=timeout)
 
         # Just reading out the temperatures, not the uncertainties at the moment
         txs = samp.Tx(samp.r500, quality_checks=False)[:, 0]
@@ -93,7 +93,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  as we're going to do the same for the clusters in the sample
         bad_pr_rs = np.where(np.isnan(pr_rs))[0]
         # pr_rs[bad_pr_rs] = samp.r500[bad_pr_rs]
-        pr_rs = samp.r500[bad_pr_rs]
+        pr_rs = np.delete(pr_rs, bad_pr_rs)
+        acc_rad = np.delete(acc_rad, bad_pr_rs)
         fail_names += list(samp.names[bad_pr_rs])
         # I am also actually going to remove the clusters with NaN results from the sample - if the NaN was caused
         #  by something like a fit not converging then it's going to keep trying over and over again and that could
@@ -107,17 +108,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # It should also be noted that each cluster is made to iterate at least `min_iter` times, nothing will be
         #  allowed to just accept the first result
         rad_rat = pr_rs / samp.r500
-        print(rad_rat)
 
         # Make a copy of the currently set radius values from the sample - these will then be modified with the
         #  new predicted values if the particular cluster's radius isn't already considered 'accepted' - i.e. it
         #  reached the required convergence in a previous iteration
         new_rads = samp.r500.copy()
-        print(new_rads)
         # The clusters which DON'T have previously accepted radii have their radii updated from those predicted from
         #  temperature
         new_rads[~acc_rad] = pr_rs[~acc_rad]
-        print(new_rads)
         # Use the new radius value inferred from the temperature + scaling relation and add it to the ClusterSample (or
         #  just re-adding the same value as is already here if that radius has converged and been accepted).
         samp.r500 = new_rads
@@ -127,7 +125,6 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  be changed the next time around.
         if iter_num > min_iter:
             acc_rad *= (rad_rat > (1 - convergence_frac)) & (rad_rat < (1 + convergence_frac))
-        print(acc_rad.sum(), '\n')
         # Got to increment the counter otherwise the while loop may go on and on forever :O
         iter_num += 1
 
