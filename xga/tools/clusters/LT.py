@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 15:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 17:28. Copyright (c) The Contributors
 import numpy as np
 import pandas as pd
 from astropy.cosmology import Cosmology
@@ -76,7 +76,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
     #  accepted OR until we reach the maximum number  of iterations
-    while acc_rad.sum() != len(samp) or iter_num < max_iter:
+    while acc_rad.sum() != len(samp) and iter_num < max_iter:
 
         # We generate and fit spectra for the current value of R500
         single_temp_apec(samp, samp.r500, one_rmf=False, num_cores=num_cores, timeout=timeout)
@@ -123,8 +123,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # If there have been enough iterations, then we need to start checking whether any of the radii have
         #  converged to within the user-specified fraction. If they have then we accept them and those radii won't
         #  be changed the next time around.
-        if iter_num > min_iter:
-            acc_rad *= (rad_rat > (1 - convergence_frac)) & (rad_rat < (1 + convergence_frac))
+        if iter_num >= min_iter:
+            acc_rad = ((rad_rat > (1 - convergence_frac)) & (rad_rat < (1 + convergence_frac))) | acc_rad
+
         # Got to increment the counter otherwise the while loop may go on and on forever :O
         iter_num += 1
 
