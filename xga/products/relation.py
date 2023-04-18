@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 20:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 21:18. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -592,7 +592,8 @@ class ScalingRelation:
 
         plt.show()
 
-    def predict(self, x_values: Quantity, redshift: float = None, cosmo: Cosmology = None) -> Quantity:
+    def predict(self, x_values: Quantity, redshift: Union[float, np.ndarray] = None,
+                cosmo: Cosmology = None) -> Quantity:
         """
         This method allows for the prediction of y values from this scaling relation, you just need to pass in an
         appropriate set of x values. If a power of E(z) was applied to the y-axis data before fitting, and that
