@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 21:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 16:10. Copyright (c) The Contributors
 import numpy as np
 import pandas as pd
 from astropy.cosmology import Cosmology
@@ -17,9 +17,29 @@ LT_REQUIRED_COLS = ['ra', 'dec', 'name', 'redshift']
 
 def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Quantity, convergence_frac: float = 0.1,
                                     min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
-                                    cosmo: Cosmology = DEFAULT_COSMO, timeout: Quantity = Quantity(1, 'hr'),
-                                    num_cores: int = NUM_CORES):
+                                    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+                                    core_excised: bool = False, cosmo: Cosmology = DEFAULT_COSMO,
+                                    timeout: Quantity = Quantity(1, 'hr'), num_cores: int = NUM_CORES,
+                                    save_samp_results_path: str = None, save_rad_history_path: str = None):
+    """
 
+
+    :param pd.DataFrame sample_data:
+    :param Quantity start_aperture:
+    :param float convergence_frac:
+    :param int min_iter:
+    :param int max_iter:
+    :param ScalingRelation rad_temp_rel:
+    :param Quantity lum_en:
+    :param bool core_excised:
+    :param Cosmology cosmo:
+    :param Quantity timeout:
+    :param int num_cores:
+    :param str save_samp_results_path:
+    :param str save_rad_history_path:
+    :return:
+    :rtype:
+    """
     # I want the sample to be passed in as a DataFrame, so I can easily extract the information I need
     if not isinstance(sample_data, pd.DataFrame):
         raise TypeError("The sample_data argument must be a Pandas DataFrame, with the following columns; "
@@ -79,7 +99,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
 
         # We generate and fit spectra for the current value of R500
-        single_temp_apec(samp, samp.r500, one_rmf=False, num_cores=num_cores, timeout=timeout)
+        single_temp_apec(samp, samp.r500, one_rmf=False, num_cores=num_cores, timeout=timeout, lum_en=lum_en)
 
         # Just reading out the temperatures, not the uncertainties at the moment
         txs = samp.Tx(samp.r500, quality_checks=False)[:, 0]
@@ -128,6 +148,15 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
         # Got to increment the counter otherwise the while loop may go on and on forever :O
         iter_num += 1
+
+    # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
+    #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
+    single_temp_apec(samp, samp.r500, one_rmf=False, lum_en=lum_en)
+
+    # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
+    #  just multiply the current radius by 0.15 and use that for the inner radius.
+    if core_excised:
+        single_temp_apec(samp, samp.r500, samp.r500*0.15, one_rmf=False, lum_en=lum_en)
 
     return samp
 
