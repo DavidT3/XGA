@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 20:34. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -45,6 +45,9 @@ class ScalingRelation:
         inferred from an astropy Quantity.
     :param str y_name: The name to be used for the y-axis of the plot (DON'T include the unit, that will be
         inferred from an astropy Quantity.
+    :param float/int dim_hubb_ind: This is used to tell the ScalingRelation which power of E(z) has been applied
+        to the y-axis data, this can then be used by the predict method to remove the E(z) contribution from
+        predictions. The default is None.
     :param str fit_method: The method used to fit this data, if known.
     :param Quantity x_data: The x-data used to fit this scaling relation, if available. This should be
         the raw, un-normalised data.
@@ -74,7 +77,7 @@ class ScalingRelation:
         to be set for every view method, and it will be remembered when multiple relations are viewed together.
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
-                 x_name: str, y_name: str, fit_method: str = 'unknown', x_data: Quantity = None,
+                 x_name: str, y_name: str, dim_hubb_ind=None, fit_method: str = 'unknown', x_data: Quantity = None,
                  y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None, x_lims: Quantity = None,
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
                  relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = '',
@@ -100,6 +103,10 @@ class ScalingRelation:
         # These are also required, otherwise any plots we make are going to look a bit dumb with no x or y axis labels
         self._x_name = x_name
         self._y_name = y_name
+
+        # Wanted the relation to know if it had some power of E(z) applied to the y-axis data - this is quite common
+        #  in galaxy cluster scaling relations to account for cosmological evolution of certain parameters
+        self._ez_power = dim_hubb_ind
 
         # The default fit method is 'unknown', as we may not know the method of any relation from literature, but
         #  if the fit was performed by XGA then something more useful can be passed
@@ -234,6 +241,18 @@ class ScalingRelation:
         :rtype: str
         """
         return self._y_name
+
+    @property
+    def dimensionless_hubble_parameter(self) -> Union[float, int]:
+        """
+        This property should be set on the declaration of a scaling relation, and exists to tell the relation what
+        power of E(z) has been applied to the y-axis data before fitting. This also helps the predict method remove
+        the E(z) contribution (if any) from predictions.
+
+        :return: The power of E(z) applied to the y-axis data before fitting. Default is None.
+        :rtype: float/int
+        """
+        return self._ez_power
 
     @property
     def x_norm(self) -> Quantity:

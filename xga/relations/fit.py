@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 20:34. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple
@@ -166,9 +166,9 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
                                  absolute_sigma=True, p0=start_pars)
     fit_par_err = np.sqrt(np.diagonal(fit_cov))
 
-    sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, 'Curve Fit',
-                         x_fit_data * x_norm, y_fit_data * y_norm, x_fit_errs * x_norm, y_fit_errs * y_norm,
-                         x_lims=x_lims)
+    sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, fit_method='Curve Fit',
+                         x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
+                         y_err=y_fit_errs * y_norm, x_lims=x_lims)
 
     return sr
 
@@ -246,8 +246,9 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
     fit_par = fit_results.beta
     fit_par_err = fit_results.sd_beta
 
-    sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, 'ODR', x_fit_data*x_norm,
-                         y_fit_data*y_norm, x_fit_errs*x_norm, y_fit_errs*y_norm, odr_output=fit_results, x_lims=x_lims)
+    sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, fit_method='ODR',
+                         x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
+                         y_err=y_fit_errs * y_norm, x_lims=x_lims, odr_output=fit_results)
 
     return sr
 
@@ -349,10 +350,10 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     xga_chains = np.concatenate([beta_par_chain.reshape(len(beta_par_chain), 1),
                                  alpha_par_chain.reshape(len(alpha_par_chain), 1)], axis=1)
 
-    sr = ScalingRelation(fit_par, fit_par_err, power_law, x_norm, y_norm, x_name, y_name, 'LIRA', x_fit_data * x_norm,
-                         y_fit_data * y_norm, x_fit_errs * x_norm, y_fit_errs * y_norm, chains=xga_chains,
-                         x_lims=x_lims, scatter_par=np.array([sigma_par_val, sigma_par_err]),
-                         scatter_chain=sigma_par_chain)
+    sr = ScalingRelation(fit_par, fit_par_err, power_law, x_norm, y_norm, x_name, y_name, fit_method='LIRA',
+                         x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
+                         y_err=y_fit_errs * y_norm, x_lims=x_lims, chains=xga_chains,
+                         scatter_par=np.array([sigma_par_val, sigma_par_err]), scatter_chain=sigma_par_chain)
 
     return sr
 
