@@ -1,5 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 16:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 16:27. Copyright (c) The Contributors
+from warnings import warn
+
 import numpy as np
 import pandas as pd
 from astropy.cosmology import Cosmology
@@ -74,9 +76,27 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         raise ValueError("The max_iter value ({mai}) is less than or equal to the min_iter value "
                          "({mii}).".format(mai=max_iter, mii=min_iter))
 
+    # Trying to determine the targeted overdensity based on the name of the scaling relation y-axis label
+    y_name = rad_temp_rel.y_name.lower()
+    if 'r' in y_name and '2500' in y_name:
+        o_dens = 'r2500'
+    elif 'r' in y_name and '500' in y_name:
+        o_dens = 'r500'
+    elif 'r' in y_name and '200' in y_name:
+        o_dens = 'r200'
+    else:
+        raise ValueError("The y-axis label of the scaling relation ({ya}) does not seem to contain 2500, 500, or "
+                         "200; it has not been possible to determine the overdensity.".format(ya=rad_temp_rel.y_name))
+
+    # Overdensity radius argument for the declaration of the sample
+    o_dens_arg = {o_dens: start_aperture}
+
+    if core_excised and o_dens == 'r2500':
+        warn("You may not measure reliable core-excised results when iterating on R2500 - the radii can be small "
+             " enough that multiplying by 0.15 for an inner radius will result in too small of a "
+             "radius.", stacklevel=2)
+
     # Just want to ensure this dataframe is separate (in memory) from the data that has been passed in
-    cur_sample_data = sample_data.copy()
-    # And will keep a copy that won't be modified, probably to return alongside a ClusterSample
     all_sample_data = sample_data.copy()
 
     # Keeps track of the current iteration number
@@ -85,8 +105,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # Set up the ClusterSample to be used for this process (I did consider setting up a new one each time but that
     #  adds overhead, and I think that this way should work fine).
     samp = ClusterSample(sample_data['ra'].values, sample_data['dec'].values, sample_data['redshift'].values,
-                         sample_data['name'].values, r500=start_aperture, use_peak=False, clean_obs_threshold=0.7,
-                         load_fits=True, cosmology=cosmo)
+                         sample_data['name'].values, use_peak=False, clean_obs_threshold=0.7, load_fits=True,
+                         cosmology=cosmo, **o_dens_arg)
 
     # This is a boolean array of whether the current radius has been accepted or not - starts off False
     acc_rad = np.full(len(samp), False)
@@ -157,6 +177,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  just multiply the current radius by 0.15 and use that for the inner radius.
     if core_excised:
         single_temp_apec(samp, samp.r500, samp.r500*0.15, one_rmf=False, lum_en=lum_en)
+
+    # Now to assemble the final sample information dataframe
+
+    # Finally, we put together the radius history throughout the iteration-convergence process
+
+    # if save_samp_results_path is not None:
+
 
     return samp
 

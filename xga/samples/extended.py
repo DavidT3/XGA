@@ -1,7 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 17:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 16:27. Copyright (c) The Contributors
 
-from typing import Union, List
+from typing import List
 
 import numpy as np
 from astropy.cosmology import Cosmology
@@ -453,6 +453,26 @@ class ClusterSample(BaseSample):
         #  by iterating through them!
         for gcs_ind, gcs in enumerate(self._sources.values()):
             gcs.r2500 = new_val[gcs_ind]
+
+    def get_radius(self, rad_name: str) -> Quantity:
+        """
+        Similar to the BaseSource get_radius method, but more limited in that it cannot convert radii to the desired
+        unit, this method will retrieve named overdensity radii in kpc.
+
+        :param str rad_name: The name of the overdensity radii to retrieve; i.e. 'r2500', 'r500', or 'r200'.
+        :return: A quantity containing the overdensity radii in kpc.
+        :rtype: Quantity
+        """
+        # Simple enough, use the properties depending on the radius name passed
+        if rad_name == 'r2500':
+            return self.r2500
+        elif rad_name == 'r500':
+            return self.r500
+        elif rad_name == 'r200':
+            return self.r200
+        # And if we don't recognise the radius name then we throw an error.
+        else:
+            raise ValueError("Please pass either 'r2500', 'r500', or 'r200'.")
 
     def Lx(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
