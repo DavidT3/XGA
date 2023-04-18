@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 16:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 17:33. Copyright (c) The Contributors
 
 from typing import List
 
@@ -1439,3 +1439,22 @@ class ClusterSample(BaseSample):
                              '{a}'.format(e=fit_method, a=' '.join(ALLOWED_FIT_METHODS)))
 
         return scale_rel
+
+    def __getitem__(self, key: Union[int, str]) -> GalaxyCluster:
+        """
+        This returns the relevant source when a sample is addressed using the name of a source as the key,
+        or using an integer index. This overrides the BaseSample return but is functionally identical, only the
+        type hint changes.
+
+        :param int/str key: The index or name of the source to fetch.
+        :return: The relevant Source object.
+        :rtype: GalaxyCluster
+        """
+        if isinstance(key, (int, np.integer)):
+            src = self._sources[self._names[key]]
+        elif isinstance(key, str):
+            src = self._sources[key]
+        else:
+            src = None
+            raise ValueError("Only a source name or integer index may be used to address a sample object")
+        return src
