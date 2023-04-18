@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 17:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 21:20. Copyright (c) The Contributors
 import numpy as np
 import pandas as pd
 from astropy.cosmology import Cosmology
@@ -85,7 +85,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         txs = samp.Tx(samp.r500, quality_checks=False)[:, 0]
 
         # This uses the scaling relation to predict R500 from the measured temperatures
-        pr_rs = rad_temp_rel.predict(txs)
+        pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
 
         # It is possible that some of these radius entries are going to be NaN - the result of NaN temperature values
         #  passed through the 'predict' method of the scaling relation. As such we identify any NaN results, flag
