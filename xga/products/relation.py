@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 20:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 20:57. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -11,6 +11,7 @@ from warnings import warn
 import matplotlib.colors as mcolors
 import numpy as np
 import scipy.odr as odr
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 from cycler import cycler
 from getdist import plots, MCSamples
@@ -591,13 +592,19 @@ class ScalingRelation:
 
         plt.show()
 
-    def predict(self, x_values: Quantity) -> Quantity:
+    def predict(self, x_values: Quantity, redshift: float = None, cosmo: Cosmology = None) -> Quantity:
         """
         This method allows for the prediction of y values from this scaling relation, you just need to pass in an
-        appropriate set of x values.
+        appropriate set of x values. If a power of E(z) was applied to the y-axis data before fitting, and that
+        information was passed on declaration (using 'dim_hubb_ind'), then a redshift and cosmology are required
+        to remove out the E(z) contribution.
 
         :param Quantity x_values: The x values to predict y values for.
-        :return: The predicted y values
+        :param float/np.ndarray redshift: The redshift(s) of the objects for which we wish to predict values. This is
+            only necessary if the 'dim_hubb_ind' argument was set on declaration. Default is None.
+        :param Cosmology cosmo: The cosmology in which we wish to predict values. This is only necessary if the
+            'dim_hubb_ind' argument was set on declaration. Default is None.
+        :return: The predicted y values.
         :rtype: Quantity
         """
         # Got to check that people aren't passing any nonsense x quantities in
@@ -612,12 +619,27 @@ class ScalingRelation:
             warn("Some of the x values you have passed are outside the validity range of this relation "
                  "({l}-{h}{u}).".format(l=self.x_lims[0].value, h=self.x_lims[1].value, u=self.x_unit.to_string()))
 
+        # Need to check if any power of E(z) was applied to the y-axis data before fitting, if so (and no
+        #  cosmo/redshift was passed) then it's time to throw an error.
+        if (redshift is None or cosmo is None) and self._ez_power is not None:
+            raise ValueError("A power of E(z) was applied to the y-axis data before fitting, as such you must pass"
+                             " redshift and cosmology information to this predict method.")
+        elif self._ez_power is not None and isinstance(redshift, float) and not x_values.isscalar:
+            raise ValueError("You must supply one redshift for every entry in x_values.")
+        elif self._ez_power is not None and isinstance(redshift, np.ndarray) and len(x_values) != len(redshift):
+            raise ValueError("The x_values argument has {x} entries, and the redshift argument has {z} entries; "
+                             "please supply one redshift per x_value.".format(x=len(x_values), z=len(redshift)))
+
         # Units that are convertible to the x-units of this relation are allowed, so we make sure we convert
         #  to the exact units the fit was done in. This includes dividing by the x_norm value
         x_values = x_values.to(self.x_unit) / self.x_norm
         # Then we just pass the x_values into the model, along with fit parameters. Then multiply by
         #  the y normalisation
         predicted_y = self._model_func(x_values.value, *self.pars[:, 0]) * self.y_norm
+
+        # If there was a power of E(z) applied to the data, we undo it for the prediction.
+        if self._ez_power is not None:
+            predicted_y /= (cosmo.efunc(redshift)**self._ez_power)
 
         return predicted_y
 
