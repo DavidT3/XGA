@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 16:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 16:31. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -119,10 +119,11 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
 
         # We generate and fit spectra for the current value of R500
-        single_temp_apec(samp, samp.r500, one_rmf=False, num_cores=num_cores, timeout=timeout, lum_en=lum_en)
+        single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, num_cores=num_cores, timeout=timeout,
+                         lum_en=lum_en)
 
         # Just reading out the temperatures, not the uncertainties at the moment
-        txs = samp.Tx(samp.r500, quality_checks=False)[:, 0]
+        txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False)[:, 0]
 
         # This uses the scaling relation to predict R500 from the measured temperatures
         pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
@@ -147,18 +148,23 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  process is repeated until the radius fraction converges to within the user-specified limit.
         # It should also be noted that each cluster is made to iterate at least `min_iter` times, nothing will be
         #  allowed to just accept the first result
-        rad_rat = pr_rs / samp.r500
+        rad_rat = pr_rs / samp.get_radius(o_dens)
 
         # Make a copy of the currently set radius values from the sample - these will then be modified with the
         #  new predicted values if the particular cluster's radius isn't already considered 'accepted' - i.e. it
         #  reached the required convergence in a previous iteration
-        new_rads = samp.r500.copy()
+        new_rads = samp.get_radius(o_dens).copy()
         # The clusters which DON'T have previously accepted radii have their radii updated from those predicted from
         #  temperature
         new_rads[~acc_rad] = pr_rs[~acc_rad]
         # Use the new radius value inferred from the temperature + scaling relation and add it to the ClusterSample (or
         #  just re-adding the same value as is already here if that radius has converged and been accepted).
-        samp.r500 = new_rads
+        if o_dens == 'r500':
+            samp.r500 = new_rads
+        elif o_dens == 'r2500':
+            samp.r2500 = new_rads
+        elif o_dens == 'r200':
+            samp.r200 = new_rads
 
         # If there have been enough iterations, then we need to start checking whether any of the radii have
         #  converged to within the user-specified fraction. If they have then we accept them and those radii won't
@@ -171,19 +177,18 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
-    single_temp_apec(samp, samp.r500, one_rmf=False, lum_en=lum_en)
+    single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, lum_en=lum_en)
 
     # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
     #  just multiply the current radius by 0.15 and use that for the inner radius.
     if core_excised:
-        single_temp_apec(samp, samp.r500, samp.r500*0.15, one_rmf=False, lum_en=lum_en)
+        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens)*0.15, one_rmf=False, lum_en=lum_en)
 
     # Now to assemble the final sample information dataframe
 
     # Finally, we put together the radius history throughout the iteration-convergence process
 
     # if save_samp_results_path is not None:
-
 
     return samp
 
