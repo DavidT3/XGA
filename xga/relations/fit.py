@@ -1,8 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 20:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 21:55. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
-from typing import Tuple
+from typing import Tuple, Union
 from warnings import warn
 
 import numpy as np
@@ -130,7 +130,7 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
 def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
                                x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
                                x_lims: Quantity = None, start_pars: list = None, y_name: str = 'Y',
-                               x_name: str = 'X') -> ScalingRelation:
+                               x_name: str = 'X', dim_hubb_ind: Union[float, int] = None) -> ScalingRelation:
     """
     A function to fit a scaling relation with the scipy non-linear least squares implementation (curve fit), generate
     an XGA ScalingRelation product, and return it.
@@ -155,6 +155,9 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
         will be inferred from the astropy Quantity.
     :param str x_name: The name to be used for the x-axis of the scaling relation (DON'T include the unit, that
         will be inferred from the astropy Quantity.
+    :param float/int dim_hubb_ind: This is used to tell the ScalingRelation which power of E(z) has been applied
+        to the y-axis data, this can then be used by the predict method to remove the E(z) contribution from
+        predictions. The default is None.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
@@ -168,7 +171,7 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
 
     sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, fit_method='Curve Fit',
                          x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
-                         y_err=y_fit_errs * y_norm, x_lims=x_lims)
+                         y_err=y_fit_errs * y_norm, x_lims=x_lims, dim_hubb_ind=dim_hubb_ind)
 
     return sr
 
@@ -176,7 +179,7 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
 def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
                          x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
                          x_lims: Quantity = None, start_pars: list = None, y_name: str = 'Y',
-                         x_name: str = 'X') -> ScalingRelation:
+                         x_name: str = 'X', dim_hubb_ind: Union[float, int] = None) -> ScalingRelation:
     """
     A function to fit a scaling relation with the scipy orthogonal distance regression implementation, generate
     an XGA ScalingRelation product, and return it.
@@ -203,6 +206,9 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
         will be inferred from the astropy Quantity.
     :param str x_name: The name to be used for the x-axis of the scaling relation (DON'T include the unit, that
         will be inferred from the astropy Quantity.
+    :param float/int dim_hubb_ind: This is used to tell the ScalingRelation which power of E(z) has been applied
+        to the y-axis data, this can then be used by the predict method to remove the E(z) contribution from
+        predictions. The default is None.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
@@ -248,15 +254,15 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
 
     sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, fit_method='ODR',
                          x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
-                         y_err=y_fit_errs * y_norm, x_lims=x_lims, odr_output=fit_results)
+                         y_err=y_fit_errs * y_norm, x_lims=x_lims, odr_output=fit_results, dim_hubb_ind=dim_hubb_ind)
 
     return sr
 
 
 def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
                           y_norm: Quantity = None, x_norm: Quantity = None, x_lims: Quantity = None, y_name: str = 'Y',
-                          x_name: str = 'X', num_steps: int = 100000, num_chains: int = 4, num_burn_in: int = 10000) \
-        -> ScalingRelation:
+                          x_name: str = 'X', num_steps: int = 100000, num_chains: int = 4, num_burn_in: int = 10000,
+                          dim_hubb_ind: Union[float, int] = None) -> ScalingRelation:
     """
     A function to fit a power law scaling relation with the excellent R fitting package LIRA
     (https://doi.org/10.1093/mnras/stv2374), this function requires a valid R installation, along with LIRA (and its
@@ -281,6 +287,9 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     :param int num_chains: The number of chains to run.
     :param int num_burn_in: The number of steps to discard as a burn in period. This is also used as the adapt
         parameter of the LIRA fit.
+    :param float/int dim_hubb_ind: This is used to tell the ScalingRelation which power of E(z) has been applied
+        to the y-axis data, this can then be used by the predict method to remove the E(z) contribution from
+        predictions. The default is None.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
@@ -353,7 +362,8 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     sr = ScalingRelation(fit_par, fit_par_err, power_law, x_norm, y_norm, x_name, y_name, fit_method='LIRA',
                          x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
                          y_err=y_fit_errs * y_norm, x_lims=x_lims, chains=xga_chains,
-                         scatter_par=np.array([sigma_par_val, sigma_par_err]), scatter_chain=sigma_par_chain)
+                         scatter_par=np.array([sigma_par_val, sigma_par_err]), scatter_chain=sigma_par_chain,
+                         dim_hubb_ind=dim_hubb_ind)
 
     return sr
 
