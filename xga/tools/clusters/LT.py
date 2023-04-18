@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 16:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 17:36. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -8,6 +8,7 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 
 from xga import DEFAULT_COSMO, NUM_CORES
+from xga.exceptions import ModelNotAssociatedError
 from xga.products import ScalingRelation
 from xga.relations.clusters.RT import arnaud_r500
 # This just sets the data columns that MUST be present in the sample data passed by the user
@@ -53,7 +54,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         raise KeyError("Not all required columns ({}) are present in the sample_data "
                        "DataFrame.".format(', '.join(LT_REQUIRED_COLS)))
 
-    if (sample_data['name'].str.contains(' ') or sample_data['name'].str.contains('_')).any():
+    if (sample_data['name'].str.contains(' ') | sample_data['name'].str.contains('_')).any():
         warn("One or more cluster name has been modified. Empty spaces (' ') are removed, and underscores ('_') are "
              "replaced with hyphens ('-').")
         sample_data['name'] = sample_data['name'].apply(lambda x: x.replace(" ", "").replace("_", "-"))
@@ -193,16 +194,52 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
     #  original entries in sample_data might have been deleted from the sample object itself
-    # for row_ind, row in sample_data.iterrows():
-    #     if row['']
-    #     try:
-    #         tx, tx_mi, tx_pl =
+    for row_ind, row in sample_data.iterrows():
+        if row['name'] in samp.names:
+            rel_src = samp[row['name']]
+            vals = []
+            cols = []
+
+            try:
+                vals += list(rel_src.get_temperature(rel_src.get_radius(o_dens, 'kpc')).value)
+                cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+
+                for lum_name, lum in rel_src.get_luminosities(rel_src.get_radius(o_dens, 'kpc')):
+                    vals += list(lum.value)
+                    cols += ['Lx' + o_dens[1:] + lum_name.split('bound')[-1] + p_fix for p_fix in ['', '-', '+']]
+
+            except ModelNotAssociatedError:
+                # For the temperature that apparently failed
+                # vals += [np.NaN, np.NaN, np.NaN]
+                pass
+
+            if core_excised:
+                try:
+                    vals += list(rel_src.get_temperature(rel_src.get_radius(o_dens, 'kpc'),
+                                                         inner_radius=0.15*rel_src.get_radius(o_dens, 'kpc')).value)
+                    cols += ['Tx' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
+
+                    for lum_name, lum in rel_src.get_luminosities(rel_src.get_radius(o_dens, 'kpc'),
+                                                                  inner_radius=0.15*rel_src.get_radius(o_dens, 'kpc')):
+                        vals += list(lum.value)
+                        cols += ['Lx' + o_dens[1:] + 'ce' + lum_name.split('bound')[-1] + p_fix
+                                 for p_fix in ['', '-', '+']]
+
+                except ModelNotAssociatedError:
+                    # For the core-excised temperature that apparently failed
+                    # vals += [np.NaN, np.NaN, np.NaN]
+                    pass
+
+            if len(vals) != 0:
+                sample_data.iloc[row_ind, cols] = vals
 
     # Finally, we put together the radius history throughout the iteration-convergence process
 
-    # if save_samp_results_path is not None:
+    # If the user wants to save the resulting dataframe to disk then we do so
+    if save_samp_results_path is not None:
+        sample_data.to_csv(save_samp_results_path, index=False)
 
-    return samp
+    return samp, sample_data
 
 
 
