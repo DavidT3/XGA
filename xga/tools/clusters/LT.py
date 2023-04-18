@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 16:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 16:51. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -53,6 +53,11 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         raise KeyError("Not all required columns ({}) are present in the sample_data "
                        "DataFrame.".format(', '.join(LT_REQUIRED_COLS)))
 
+    if (sample_data['name'].str.contains(' ') or sample_data['name'].str.contains('_')).any():
+        warn("One or more cluster name has been modified. Empty spaces (' ') are removed, and underscores ('_') are "
+             "replaced with hyphens ('-').")
+        sample_data['name'] = sample_data['name'].apply(lambda x: x.replace(" ", "").replace("_", "-"))
+
     # A key part of this process is a relation between the temperature we measure, and the overdensity radius. As
     #  scaling relations can be between basically any two parameters, and I want this relation object to be an XGA
     #  scaling relation instance, I need to check some things with the rad_temp_rel passed by the user
@@ -91,6 +96,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # Overdensity radius argument for the declaration of the sample
     o_dens_arg = {o_dens: start_aperture}
 
+    # Just a little warning to a user who may have made a silly decision
     if core_excised and o_dens == 'r2500':
         warn("You may not measure reliable core-excised results when iterating on R2500 - the radii can be small "
              " enough that multiplying by 0.15 for an inner radius will result in too small of a "
@@ -118,14 +124,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  accepted OR until we reach the maximum number  of iterations
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
 
-        # We generate and fit spectra for the current value of R500
+        # We generate and fit spectra for the current value of the overdensity radius
         single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, num_cores=num_cores, timeout=timeout,
                          lum_en=lum_en)
 
         # Just reading out the temperatures, not the uncertainties at the moment
         txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False)[:, 0]
 
-        # This uses the scaling relation to predict R500 from the measured temperatures
+        # This uses the scaling relation to predict the overdensity radius from the measured temperatures
         pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
 
         # It is possible that some of these radius entries are going to be NaN - the result of NaN temperature values
@@ -184,7 +190,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     if core_excised:
         single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens)*0.15, one_rmf=False, lum_en=lum_en)
 
-    # Now to assemble the final sample information dataframe
+    # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
+    #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
+    #  original entries in sample_data might have been deleted from the sample object itself
+    # for row_ind, row in sample_data.iterrows():
+    #     if row['']
+    #     try:
+    #         tx, tx_mi, tx_pl =
 
     # Finally, we put together the radius history throughout the iteration-convergence process
 
