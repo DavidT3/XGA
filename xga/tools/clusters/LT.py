@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 23:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 23:32. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -28,7 +28,25 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     timeout: Quantity = Quantity(1, 'hr'), num_cores: int = NUM_CORES) \
         -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
     """
+     This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
+     radii, for a sample of clusters. No knowledge of the overdensity radii of the clusters is required
+     beforehand, only the position and redshift of the objects. A name is also required for each of them.
 
+     The pipeline works by measuring a temperature from a spectrum generated with radius equal to the
+     'start_aperture', and the using the radius temperature relation ('rad_temp_rel') to infer a value for the
+     overdensity radius you are targeting. The cluster's overdensity radius is set equal to the new radius estimate
+     and we repeat the process.
+
+     A cluster radius measurement is accepted if the 'current' estimate of the radius is considered to be converged
+     with the last estimate. For instance if 'convergence_frac' is set to 0.1, convergence occurs when a change of
+     less than 10% from the last radius estimate is measured. The radii cannot be assessed for convergence until
+     at least 'min_iter' iterations have been passed, and the iterative process will end if the number of iterations
+     reaches 'max_iter'.
+
+     This pipeline will only work for clusters that we can successfully measure temperatures for, which requires a
+     minimum data quality - as such you may find that some do not achieve successful radius measurements with this
+     pipeline. In these cases the pipeline should not error, but the failure will be recorded in the results and
+     radius history dataframes returned from the function (and optionally written to CSV files).
 
     :param pd.DataFrame sample_data: A dataframe of information on the galaxy clusters. The columns 'ra', 'dec',
         'name', and 'redshift' are required for this pipeline to work.
