@@ -1,10 +1,10 @@
 tools
 =======
 
-tools.clusters module
+tools.clusters.LT module
 -------------------
 
-.. automodule:: xga.tools.clusters
+.. automodule:: xga.tools.clusters.LT
    :members:
    :undoc-members:
    :show-inheritance:
