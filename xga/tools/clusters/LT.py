@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 21:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 21:48. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -254,7 +254,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             # And if any values were successfully read out, we add them into the dataframe with their corresponding
             #  columns
             if len(vals) != 0:
-                sample_data.iloc[row_ind, cols] = vals
+                sample_data.loc[row_ind, cols] = vals
 
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:
