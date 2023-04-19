@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 20:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 21:32. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -118,8 +118,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # This is a boolean array of whether the current radius has been accepted or not - starts off False
     acc_rad = np.full(len(samp), False)
 
-    # Here we keep track of the clusters which have had some sort of failure during the iterative process
-    fail_names = []
+    # In this dictionary we're going to keep a record of the radius history for all clusters for each step. The
+    #  keys are names, and the initial setup will have the start aperture as the first entry in the list of
+    #  radii for each cluster
+    rad_hist = {n: [start_aperture] for n in samp.names}
 
     # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
     #  accepted OR until we reach the maximum number  of iterations
@@ -136,14 +138,12 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
 
         # It is possible that some of these radius entries are going to be NaN - the result of NaN temperature values
-        #  passed through the 'predict' method of the scaling relation. As such we identify any NaN results, flag
-        #  those clusters by storing their name in the 'fail_names' list, and remove the radii from the pr_rs array
-        #  as we're going to do the same for the clusters in the sample
+        #  passed through the 'predict' method of the scaling relation. As such we identify any NaN results and
+        #  remove the radii from the pr_rs array as we're going to do the same for the clusters in the sample
         bad_pr_rs = np.where(np.isnan(pr_rs))[0]
         # pr_rs[bad_pr_rs] = samp.r500[bad_pr_rs]
         pr_rs = np.delete(pr_rs, bad_pr_rs)
         acc_rad = np.delete(acc_rad, bad_pr_rs)
-        fail_names += list(samp.names[bad_pr_rs])
         # I am also actually going to remove the clusters with NaN results from the sample - if the NaN was caused
         #  by something like a fit not converging then it's going to keep trying over and over again and that could
         #  slow everything down.
@@ -179,6 +179,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         if iter_num >= min_iter:
             acc_rad = ((rad_rat > (1 - convergence_frac)) & (rad_rat < (1 + convergence_frac))) | acc_rad
 
+        rad_hist = {n: vals + [samp[n].get_radius(o_dens, 'kpc')] for n, vals in rad_hist.items()
+                    if n in samp.names}
         # Got to increment the counter otherwise the while loop may go on and on forever :O
         iter_num += 1
 
@@ -201,6 +203,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         if row['name'] in samp.names:
             # Grab the relevant source out of the ClusterSample object
             rel_src = samp[row['name']]
+            rel_rad = rel_src.get_radius(o_dens, 'kpc')
             # These will be to store the read-out temperature and luminosity values, and their corresponding
             #  column names for the dataframe
             vals = []
@@ -211,13 +214,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             #  cluster will be NaN
             try:
                 # The temperature measured within the overdensity radius, with its - and + uncertainties are read out
-                vals += list(rel_src.get_temperature(rel_src.get_radius(o_dens, 'kpc')).value)
+                vals += list(rel_src.get_temperature(rel_rad).value)
                 # We add columns with informative names
                 cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
                 # Cycle through every available luminosity, this will return all luminosities in all energy bands
                 #  requested by the user with lum_en
-                for lum_name, lum in rel_src.get_luminosities(rel_src.get_radius(o_dens, 'kpc')).items():
+                for lum_name, lum in rel_src.get_luminosities(rel_rad).items():
                     # The luminosity and its uncertainties gets added to the values list
                     vals += list(lum.value)
                     # Then the column names get added
@@ -232,14 +235,12 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             if core_excised:
                 try:
                     # Adding temperature value and uncertainties
-                    vals += list(rel_src.get_temperature(rel_src.get_radius(o_dens, 'kpc'),
-                                                         inner_radius=0.15*rel_src.get_radius(o_dens, 'kpc')).value)
+                    vals += list(rel_src.get_temperature(rel_rad, inner_radius=0.15*rel_rad).value)
                     # Corresponding column names (with ce now included to indicate core-excised).
                     cols += ['Tx' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                     # The same process again for core-excised luminosities
-                    lce_res = rel_src.get_luminosities(rel_src.get_radius(o_dens, 'kpc'),
-                                                       inner_radius=0.15*rel_src.get_radius(o_dens, 'kpc'))
+                    lce_res = rel_src.get_luminosities(rel_rad, inner_radius=0.15*rel_rad)
                     for lum_name, lum in lce_res.items():
                         vals += list(lum.value)
                         cols += ['Lx' + o_dens[1:] + 'ce' + lum_name.split('bound')[-1] + p_fix
@@ -255,13 +256,17 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             if len(vals) != 0:
                 sample_data.iloc[row_ind, cols] = vals
 
-    # Finally, we put together the radius history throughout the iteration-convergence process
-
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:
         sample_data.to_csv(save_samp_results_path, index=False)
 
-    return samp, sample_data
+    # Finally, we put together the radius history throughout the iteration-convergence process
+    radius_hist_df = pd.DataFrame.from_dict(rad_hist, orient='index')
+    # And if the user wants this saved as well they can
+    if save_rad_history_path is not None:
+        radius_hist_df.to_csv(save_rad_history_path, index=False)
+
+    return samp, sample_data, radius_hist_df
 
 
 
