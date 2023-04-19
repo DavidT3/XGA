@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/04/2023, 10:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/04/2023, 10:27. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -333,7 +333,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     for row_ind, row in loaded_samp_data.iterrows():
         if row['name'] in samp.names:
             # Did this radius converge?
-            converged = acc_rad[np.argwhere(samp.names == row['name'])]
+            converged = acc_rad[np.argwhere(samp.names == row['name'])[0][0]]
         else:
             converged = False
         rad_hist_acc_rad.append(converged)
