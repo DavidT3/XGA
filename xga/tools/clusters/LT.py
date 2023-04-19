@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 22:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 22:35. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -179,8 +179,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         if iter_num >= min_iter:
             acc_rad = ((rad_rat > (1 - convergence_frac)) & (rad_rat < (1 + convergence_frac))) | acc_rad
 
-        rad_hist = {n: vals + [samp[n].get_radius(o_dens, 'kpc').value] for n, vals in rad_hist.items()
-                    if n in samp.names}
+        rad_hist = {n: vals + [samp[n].get_radius(o_dens, 'kpc').value] if n in samp.names else vals
+                    for n, vals in rad_hist.items()}
         # Got to increment the counter otherwise the while loop may go on and on forever :O
         iter_num += 1
 
