@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 17:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 20:45. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -195,17 +195,32 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
     #  original entries in sample_data might have been deleted from the sample object itself
     for row_ind, row in sample_data.iterrows():
+        # We're iterating through the rows of the sample information passed in, because we want there to be an
+        #  entry even if the LT pipeline didn't succeed. As such we have to check if the current row's cluster
+        #  is actually still a part of the sample
         if row['name'] in samp.names:
+            # Grab the relevant source out of the ClusterSample object
             rel_src = samp[row['name']]
+            # These will be to store the read-out temperature and luminosity values, and their corresponding
+            #  column names for the dataframe
             vals = []
             cols = []
 
+            # We have to use try-excepts here, because even at this stage it is possible that we have a failed
+            #  spectral fit to contend with - if there are no successful fits then the entry for the current
+            #  cluster will be NaN
             try:
+                # The temperature measured within the overdensity radius, with its - and + uncertainties are read out
                 vals += list(rel_src.get_temperature(rel_src.get_radius(o_dens, 'kpc')).value)
+                # We add columns with informative names
                 cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
-                for lum_name, lum in rel_src.get_luminosities(rel_src.get_radius(o_dens, 'kpc')):
+                # Cycle through every available luminosity, this will return all luminosities in all energy bands
+                #  requested by the user with lum_en
+                for lum_name, lum in rel_src.get_luminosities(rel_src.get_radius(o_dens, 'kpc')).items():
+                    # The luminosity and its uncertainties gets added to the values list
                     vals += list(lum.value)
+                    # Then the column names get added
                     cols += ['Lx' + o_dens[1:] + lum_name.split('bound')[-1] + p_fix for p_fix in ['', '-', '+']]
 
             except ModelNotAssociatedError:
@@ -213,14 +228,19 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 # vals += [np.NaN, np.NaN, np.NaN]
                 pass
 
+            # Now we repeat the above process, but only if we know the user requested core-excised values as well
             if core_excised:
                 try:
+                    # Adding temperature value and uncertainties
                     vals += list(rel_src.get_temperature(rel_src.get_radius(o_dens, 'kpc'),
                                                          inner_radius=0.15*rel_src.get_radius(o_dens, 'kpc')).value)
+                    # Corresponding column names (with ce now included to indicate core-excised).
                     cols += ['Tx' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
-                    for lum_name, lum in rel_src.get_luminosities(rel_src.get_radius(o_dens, 'kpc'),
-                                                                  inner_radius=0.15*rel_src.get_radius(o_dens, 'kpc')):
+                    # The same process again for core-excised luminosities
+                    lce_res = rel_src.get_luminosities(rel_src.get_radius(o_dens, 'kpc'),
+                                                       inner_radius=0.15*rel_src.get_radius(o_dens, 'kpc'))
+                    for lum_name, lum in lce_res.items():
                         vals += list(lum.value)
                         cols += ['Lx' + o_dens[1:] + 'ce' + lum_name.split('bound')[-1] + p_fix
                                  for p_fix in ['', '-', '+']]
@@ -230,6 +250,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     # vals += [np.NaN, np.NaN, np.NaN]
                     pass
 
+            # And if any values were successfully read out, we add them into the dataframe with their corresponding
+            #  columns
             if len(vals) != 0:
                 sample_data.iloc[row_ind, cols] = vals
 
