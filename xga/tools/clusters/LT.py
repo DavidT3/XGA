@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/04/2023, 15:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/04/2023, 15:28. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -176,7 +176,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # In this dictionary we're going to keep a record of the radius history for all clusters for each step. The
     #  keys are names, and the initial setup will have the start aperture as the first entry in the list of
     #  radii for each cluster
-    rad_hist = {n: [start_aperture] for n in samp.names}
+    rad_hist = {n: [start_aperture.value] for n in samp.names}
 
     # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
     #  accepted OR until we reach the maximum number  of iterations
