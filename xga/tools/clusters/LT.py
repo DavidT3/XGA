@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 22:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 22:16. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -206,8 +206,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             rel_rad = rel_src.get_radius(o_dens, 'kpc')
             # These will be to store the read-out temperature and luminosity values, and their corresponding
             #  column names for the dataframe
-            vals = []
-            cols = []
+            vals = [rel_src.get_radius(o_dens, 'kpc').value]
+            cols = [o_dens.upper()]
 
             # We have to use try-excepts here, because even at this stage it is possible that we have a failed
             #  spectral fit to contend with - if there are no successful fits then the entry for the current
@@ -251,10 +251,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     # vals += [np.NaN, np.NaN, np.NaN]
                     pass
 
-            # And if any values were successfully read out, we add them into the dataframe with their corresponding
-            #  columns
-            if len(vals) != 0:
-                sample_data.loc[row_ind, cols] = vals
+            # We know that at least the radius will always be there to be added to the dataframe, so we add the
+            #  information in vals and cols
+            sample_data.loc[row_ind, cols] = vals
 
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:
