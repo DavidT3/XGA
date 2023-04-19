@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 23:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/04/2023, 10:00. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -12,10 +12,10 @@ from xga import DEFAULT_COSMO, NUM_CORES
 from xga.exceptions import ModelNotAssociatedError
 from xga.products import ScalingRelation
 from xga.relations.clusters.RT import arnaud_r500
-# This just sets the data columns that MUST be present in the sample data passed by the user
 from xga.samples import ClusterSample
 from xga.xspec import single_temp_apec
 
+# This just sets the data columns that MUST be present in the sample data passed by the user
 LT_REQUIRED_COLS = ['ra', 'dec', 'name', 'redshift']
 
 
@@ -47,6 +47,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
      minimum data quality - as such you may find that some do not achieve successful radius measurements with this
      pipeline. In these cases the pipeline should not error, but the failure will be recorded in the results and
      radius history dataframes returned from the function (and optionally written to CSV files).
+
+     As with all XGA sources and samples, the XGA luminosity-temperature pipeline DOES NOT require all objects
+     passed in the sample_data to have X-ray observations. Those that do not will simply be filtered out.
 
     :param pd.DataFrame sample_data: A dataframe of information on the galaxy clusters. The columns 'ra', 'dec',
         'name', and 'redshift' are required for this pipeline to work.
@@ -152,9 +155,6 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
              " enough that multiplying by 0.15 for an inner radius will result in too small of a "
              "radius.", stacklevel=2)
 
-    # Just want to ensure this dataframe is separate (in memory) from the data that has been passed in
-    all_sample_data = sample_data.copy()
-
     # Keeps track of the current iteration number
     iter_num = 0
 
@@ -162,7 +162,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  adds overhead, and I think that this way should work fine).
     samp = ClusterSample(sample_data['ra'].values, sample_data['dec'].values, sample_data['redshift'].values,
                          sample_data['name'].values, use_peak=use_peak, peak_find_method=peak_find_method,
-                         clean_obs_threshold=0.7, load_fits=True, cosmology=cosmo, **o_dens_arg,)
+                         clean_obs_threshold=0.7, load_fits=True, cosmology=cosmo, **o_dens_arg)
+
+    # As it is possible some clusters in the sample_data dataframe don't actually have X-ray data, we copy
+    #  the sample_data and cut it down, so it only contains entries for clusters that were loaded in the sample at the
+    #  beginning of this process
+    loaded_samp_data = sample_data.copy()
+    loaded_samp_data = loaded_samp_data[loaded_samp_data['name'].isin(samp.names)]
 
     # This is a boolean array of whether the current radius has been accepted or not - starts off False
     acc_rad = np.full(len(samp), False)
@@ -250,7 +256,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
     #  original entries in sample_data might have been deleted from the sample object itself
-    for row_ind, row in all_sample_data.iterrows():
+    for row_ind, row in loaded_samp_data.iterrows():
         # We're iterating through the rows of the sample information passed in, because we want there to be an
         #  entry even if the LT pipeline didn't succeed. As such we have to check if the current row's cluster
         #  is actually still a part of the sample
@@ -288,8 +294,6 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     cols += ['Lx' + o_dens[1:] + lum_name.split('bound')[-1] + p_fix for p_fix in ['', '-', '+']]
 
             except ModelNotAssociatedError:
-                # For the temperature that apparently failed
-                # vals += [np.NaN, np.NaN, np.NaN]
                 pass
 
             # Now we repeat the above process, but only if we know the user requested core-excised values as well
@@ -308,13 +312,11 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                  for p_fix in ['', '-', '+']]
 
                 except ModelNotAssociatedError:
-                    # For the core-excised temperature that apparently failed
-                    # vals += [np.NaN, np.NaN, np.NaN]
                     pass
 
             # We know that at least the radius will always be there to be added to the dataframe, so we add the
             #  information in vals and cols
-            all_sample_data.loc[row_ind, cols] = vals
+            loaded_samp_data.loc[row_ind, cols] = vals
 
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:
@@ -322,9 +324,28 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     # Finally, we put together the radius history throughout the iteration-convergence process
     radius_hist_df = pd.DataFrame.from_dict(rad_hist, orient='index')
+
+    # There is already an array detailing whether particular radii have been 'accepted' (i.e. converged) or not, but
+    #  it only contains entries for those clusters which are still loaded in the ClusterSample - in the next part
+    #  of this pipeline I assemble a radius history dataframe (for all clusters that were initially in the
+    #  ClusterSample), and want the final column to declare if they converged or not.
+    rad_hist_acc_rad = []
+    for row_ind, row in loaded_samp_data.iterrows():
+        if row['name'] in samp.names:
+            # Did this radius converge?
+            converged = acc_rad[np.argwhere(samp.names == row['name'])]
+        else:
+            converged = False
+        rad_hist_acc_rad.append(converged)
+
+    # We add the final column which just tells the user whether the radius was converged or not
+    radius_hist_df['converged'] = rad_hist_acc_rad
+
     # And if the user wants this saved as well they can
     if save_rad_history_path is not None:
-        radius_hist_df.to_csv(save_rad_history_path, index=False)
+        # This one I keep indexing set to True, because the names of the clusters are acting as the index for
+        #  this dataframe
+        radius_hist_df.to_csv(save_rad_history_path, index=True, index_label='name')
 
     return samp, sample_data, radius_hist_df
 
