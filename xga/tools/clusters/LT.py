@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 23:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 23:34. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -250,7 +250,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
     #  original entries in sample_data might have been deleted from the sample object itself
-    for row_ind, row in sample_data.iterrows():
+    for row_ind, row in all_sample_data.iterrows():
         # We're iterating through the rows of the sample information passed in, because we want there to be an
         #  entry even if the LT pipeline didn't succeed. As such we have to check if the current row's cluster
         #  is actually still a part of the sample
@@ -314,7 +314,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
             # We know that at least the radius will always be there to be added to the dataframe, so we add the
             #  information in vals and cols
-            sample_data.loc[row_ind, cols] = vals
+            all_sample_data.loc[row_ind, cols] = vals
 
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:
