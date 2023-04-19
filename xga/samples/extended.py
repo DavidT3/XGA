@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 17:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 23:19. Copyright (c) The Contributors
 
 from typing import List
 
@@ -53,7 +53,8 @@ class ClusterSample(BaseSample):
     :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
     :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
     :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
-        is hierarchical, simple may also be passed.
+        is 'hierarchical' (uses XGA's hierarchical clustering peak finder), 'simple' may also be passed in which
+        case the brightest unmasked pixel within the source region will be selected.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray, name: np.ndarray, r200: Quantity = None,
                  r500: Quantity = None, r2500: Quantity = None, richness: np.ndarray = None,

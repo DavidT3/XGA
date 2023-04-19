@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 22:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 23:19. Copyright (c) The Contributors
+from typing import Tuple
 from warnings import warn
 
 import numpy as np
@@ -18,12 +19,14 @@ from xga.xspec import single_temp_apec
 LT_REQUIRED_COLS = ['ra', 'dec', 'name', 'redshift']
 
 
-def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Quantity, convergence_frac: float = 0.1,
+def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
+                                    peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
                                     min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
                                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                    core_excised: bool = False, cosmo: Cosmology = DEFAULT_COSMO,
-                                    timeout: Quantity = Quantity(1, 'hr'), num_cores: int = NUM_CORES,
-                                    save_samp_results_path: str = None, save_rad_history_path: str = None):
+                                    core_excised: bool = False, save_samp_results_path: str = None,
+                                    save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
+                                    timeout: Quantity = Quantity(1, 'hr'), num_cores: int = NUM_CORES) \
+        -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
     """
 
 
@@ -31,21 +34,45 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         'name', and 'redshift' are required for this pipeline to work.
     :param Quantity start_aperture: This is the radius used to generate the first set of spectra for each
         cluster, which in turn are fit to produce the first temperature estimate.
+    :param bool use_peak: If True then XGA will measure an X-ray peak coordinate and use that as the centre for
+        spectrum generation and fitting, and the peak coordinate will be included in the results dataframe/csv.
+        If False then the coordinate in sample_data will be used. Default is False.
+    :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default is
+        'hierarchical' (uses XGA's hierarchical clustering peak finder), 'simple' may also be passed in which
+        case the brightest unmasked pixel within the source region will be selected.
     :param float convergence_frac: This defines how close a current radii estimate must be to the last
         radii measurement for it to count as converged. The default value is 0.1, which means the current-to-last
         estimate ratio must be between 0.9 and 1.1.
-    :param int min_iter: The minimum number of iterations before a radius can converge and be accepted.
-    :param int max_iter: The maximum number of iterations
-    :param ScalingRelation rad_temp_rel:
-    :param Quantity lum_en:
-    :param bool core_excised:
-    :param Cosmology cosmo:
-    :param Quantity timeout:
-    :param int num_cores:
-    :param str save_samp_results_path:
-    :param str save_rad_history_path:
-    :return:
-    :rtype:
+    :param int min_iter: The minimum number of iterations before a radius can converge and be accepted. The
+        default is 3.
+    :param int max_iter: The maximum number of iterations before the loop exits and the pipeline moves on. This
+        makes sure that the loop has an exit condition and won't continue on forever. The default is 10.
+    :param ScalingRelation rad_temp_rel: The scaling relation used to convert a cluster temperature measurement
+        for into an estimate of an overdensity radius. The y-axis must be radii, and the x-axis must be temperature.
+        The pipeline will attempt to determine the overdensity radius you are attempting to measure for by checking
+        the name of the y-axis; it must contain 2500, 500, or 200 to indicate the overdensity. The default is the
+        R500-Tx Arnaud et al. 2005 relation.
+    :param Quantity lum_en: The energy bands in which to measure luminosity. The default is
+        Quantity([[0.5, 2.0], [0.01, 100.0]], 'keV'), corresponding to the 0.5-2.0keV and bolometric bands.
+    :param bool core_excised: Should final measurements of temperature and luminosity be made with core-excision in
+        addition to measurements within the overdensity radius specified by the scaling relation. This will involve
+        multiplying the radii by 0.15 to determine the inner radius. Default is False.
+    :param str save_samp_results_path: The path to save the final results (temperatures, luminosities, radii) to.
+        The default is None, in which case no file will be created. This information is also returned from this
+        function.
+    :param str save_rad_history_path: The path to save the radii history for all clusters. This specifies what the
+        estimated radius was for each cluster at each iteration step, in kpc. The default is None, in which case no
+        file will be created. This information is also returned from this function.
+    :param Cosmology cosmo: The cosmology to use for sample declaration, and thus for all analysis. The default
+        cosmology is a flat LambdaCDM concordance model.
+    :param Quantity timeout: This sets the amount of time an XSPEC fit can run before it is timed out, the default
+        is 1 hour.
+    :param int num_cores: The number of cores that can be used for spectrum generation and fitting. The default is
+        90% of the cores detected on the system.
+    :return: The GalaxyCluster sample object used for this analysis, the dataframe of results for all input
+        objects (even those for which the pipeline was unsuccessful), and the radius history dataframe for the
+        clusters.
+    :rtype: Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]
     """
     # I want the sample to be passed in as a DataFrame, so I can easily extract the information I need
     if not isinstance(sample_data, pd.DataFrame):
@@ -116,8 +143,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # Set up the ClusterSample to be used for this process (I did consider setting up a new one each time but that
     #  adds overhead, and I think that this way should work fine).
     samp = ClusterSample(sample_data['ra'].values, sample_data['dec'].values, sample_data['redshift'].values,
-                         sample_data['name'].values, use_peak=False, clean_obs_threshold=0.7, load_fits=True,
-                         cosmology=cosmo, **o_dens_arg)
+                         sample_data['name'].values, use_peak=use_peak, peak_find_method=peak_find_method,
+                         clean_obs_threshold=0.7, load_fits=True, cosmology=cosmo, **o_dens_arg,)
 
     # This is a boolean array of whether the current radius has been accepted or not - starts off False
     acc_rad = np.full(len(samp), False)
@@ -213,10 +240,17 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             # Grab the relevant source out of the ClusterSample object
             rel_src = samp[row['name']]
             rel_rad = rel_src.get_radius(o_dens, 'kpc')
+
             # These will be to store the read-out temperature and luminosity values, and their corresponding
-            #  column names for the dataframe
-            vals = [rel_src.get_radius(o_dens, 'kpc').value]
+            #  column names for the dataframe - we make sure that the measure radius is present in the data
+            vals = [rel_rad.value]
             cols = [o_dens.upper()]
+
+            # If the user let XGA determine a peak coordinate for the cluster, we will need to add it to the results
+            #  as all the spectra for the cluster were generated with that as the central point
+            if use_peak:
+                vals += [*rel_src.ra_dec.value]
+                cols += ['peak_ra', 'peak_dec']
 
             # We have to use try-excepts here, because even at this stage it is possible that we have a failed
             #  spectral fit to contend with - if there are no successful fits then the entry for the current
