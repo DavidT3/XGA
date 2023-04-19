@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 22:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 22:48. Copyright (c) The Contributors
 from warnings import warn
 
 import numpy as np
@@ -27,11 +27,15 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     """
 
 
-    :param pd.DataFrame sample_data:
-    :param Quantity start_aperture:
-    :param float convergence_frac:
-    :param int min_iter:
-    :param int max_iter:
+    :param pd.DataFrame sample_data: A dataframe of information on the galaxy clusters. The columns 'ra', 'dec',
+        'name', and 'redshift' are required for this pipeline to work.
+    :param Quantity start_aperture: This is the radius used to generate the first set of spectra for each
+        cluster, which in turn are fit to produce the first temperature estimate.
+    :param float convergence_frac: This defines how close a current radii estimate must be to the last
+        radii measurement for it to count as converged. The default value is 0.1, which means the current-to-last
+        estimate ratio must be between 0.9 and 1.1.
+    :param int min_iter: The minimum number of iterations before a radius can converge and be accepted.
+    :param int max_iter: The maximum number of iterations
     :param ScalingRelation rad_temp_rel:
     :param Quantity lum_en:
     :param bool core_excised:
@@ -183,6 +187,11 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     for n, vals in rad_hist.items()}
         # Got to increment the counter otherwise the while loop may go on and on forever :O
         iter_num += 1
+
+    # Throw a warning if the maximum number of iterations being reached was the reason the loop exited
+    if iter_num == max_iter:
+        warn("The radius measurement process reached the maximum number of iterations; as such one or more clusters "
+             "may have unconverged radii.")
 
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
