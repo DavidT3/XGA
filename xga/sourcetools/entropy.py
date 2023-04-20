@@ -7,42 +7,49 @@ from warnings import warn
 from astropy.units import Quantity
 from tqdm import tqdm
 
-from ._common import _setup_inv_abel_dens_onion_temp
 from .. import NUM_CORES
 from ..exceptions import XGAFitError
 from ..models import BaseModel1D
-from ..products.profile import HydrostaticMass
+from ..products.profile import SpecificEntropy
 from ..samples import ClusterSample
 from ..sources import GalaxyCluster
+from ..sourcetools._common import _setup_inv_abel_dens_onion_temp
 
 
-def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
-                             sb_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
-                             dens_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
-                             temp_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]], global_radius: Quantity,
-                             fit_method: str = "mcmc", num_walkers: int = 20, num_steps: int = 20000,
-                             sb_pix_step: int = 1, sb_min_snr: Union[int, float] = 0.0, inv_abel_method: str = None,
-                             temp_annulus_method: str = 'min_snr', temp_min_snr: float = 30,
-                             temp_min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
-                             temp_min_width: Quantity = Quantity(20, 'arcsec'), temp_use_combined: bool = True,
-                             temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = "angr",
-                             temp_lo_en: Quantity = Quantity(0.3, 'keV'), temp_hi_en: Quantity = Quantity(7.9, 'keV'),
-                             group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
-                             over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                             show_warn: bool = True) -> Union[List[HydrostaticMass], HydrostaticMass]:
+def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
+                                     sb_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
+                                     dens_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
+                                     temp_model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
+                                     global_radius: Quantity,
+                                     fit_method: str = "mcmc", num_walkers: int = 20, num_steps: int = 20000,
+                                     sb_pix_step: int = 1, sb_min_snr: Union[int, float] = 0.0,
+                                     inv_abel_method: str = None,
+                                     temp_annulus_method: str = 'min_snr', temp_min_snr: float = 30,
+                                     temp_min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
+                                     temp_min_width: Quantity = Quantity(20, 'arcsec'), temp_use_combined: bool = True,
+                                     temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = "angr",
+                                     temp_lo_en: Quantity = Quantity(0.3, 'keV'),
+                                     temp_hi_en: Quantity = Quantity(7.9, 'keV'),
+                                     group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
+                                     over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
+                                     show_warn: bool = True) -> Union[List[SpecificEntropy], SpecificEntropy]:
     """
-    A convenience function that should allow the user to easily measure hydrostatic masses of a sample of galaxy
-    clusters, elegantly dealing with any sources that have inadequate data or aren't fit properly. For the sake
-    of convenience, I have taken away a lot of choices that can be passed into the density and temperature
-    measurement routines, and if you would like more control then please manually define a hydrostatic mass profile
+    A convenience function that should allow the user to easily measure specific entropy profiles for a sample of
+    galaxy clusters, elegantly dealing with any sources that have inadequate data or aren't fit properly. For
+    the sake of convenience, I have taken away a lot of choices that can be passed into the density and temperature
+    measurement routines, and if you would like more control then please manually define a specific entropy profile
     object.
 
     This function uses the inv_abel_fitted_model density measurement function, and the onion_deproj_temp_prof
     temperature measurement function (with the minimum signal to noise criteria for deciding on the annular
     spectra sizes).
 
+    The bulk of this code is the same as the hydrostatic mass measurement convenience function that also uses the
+    inverse Abel density method, and the onion peeling temperature method, as the same physical information is
+    required to measure the entropy.
+
     :param GalaxyCluster/ClusterSample sources: The galaxy cluster, or sample of galaxy clusters, that you wish to
-        measure hydrostatic masses for.
+        measure specific entropy profiles for.
     :param str/Quantity outer_radius: The radius out to which you wish to measure gas density and temperature
         profiles. This can either be a string radius name (like 'r500') or an astropy quantity. That quantity should
         have as many entries as there are sources.
@@ -105,13 +112,13 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     :param int num_cores: The number of cores on your local machine which this function is allowed, default is
         90% of the cores in your system.
     :param bool show_warn: Should profile fit warnings be shown, or only stored in the profile models.
-    :return: A list of the hydrostatic mass profiles measured by this function, though if the measurement was not
+    :return: A list of the specific entropy profiles measured by this function, though if the measurement was not
         successful an entry of None will be added to the list.
-    :rtype: List[HydrostaticMass]/HydrostaticMass
+    :rtype: List[SpecificEntropy]/SpecificEntropy
     """
     # Call this common function which checks for whether temperature profiles/density profiles exist, if not creates
     #  them, and tries to fit the requested models to them - implemented like this because it is an identical process
-    #  to that required by the specific entropy function of similar name
+    #  to that required by the hydrostatic mass function of similar name
     sources, dens_prof_dict, temp_prof_dict, dens_model_dict, \
         temp_model_dict = _setup_inv_abel_dens_onion_temp(sources, outer_radius, sb_model, dens_model, temp_model,
                                                           global_radius, fit_method, num_walkers, num_steps,
@@ -122,13 +129,13 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                                                           over_sample, one_rmf, num_cores, show_warn)
 
     # So I can return a list of profiles, a tad more elegant than fetching them from the sources sometimes
-    final_mass_profs = []
-    # Better to use a with statement for tqdm, so its shut down if something fails inside
-    prog_desc = "Generating {} hydrostatic mass profile"
+    final_entropy_profs = []
+    # Better to use a with statement for tqdm, so it shut down if something fails inside
+    prog_desc = "Generating {} specific entropy profile"
     with tqdm(desc=prog_desc.format("None"), total=len(sources)) as onwards:
         for src in sources:
             onwards.set_description(prog_desc.format(src.name))
-            # If every stage of this analysis has worked then we setup the hydro mass profile
+            # If every stage of this analysis has worked then we setup the entropy profile
             if str(src) in dens_prof_dict and dens_prof_dict[str(src)] is not None:
                 # This fetches out the correct density and temperature profiles
                 d_prof = dens_prof_dict[str(src)]
@@ -138,56 +145,35 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                 d_model = dens_model_dict[str(src)]
                 t_model = temp_model_dict[str(src)]
 
-                # Set up the hydrogen mass profile using the temperature radii as they will tend to be spaced a lot
+                # Set up the specific entropy profile using the temperature radii as they will tend to be spaced a lot
                 #  wider than the density radii.
                 try:
                     rads = t_prof.radii.copy()[1:]
                     rad_errs = t_prof.radii_err.copy()[1:]
                     deg_rads = src.convert_radius(rads, 'deg')
-                    hy_mass = HydrostaticMass(t_prof, t_model, d_prof, d_model, rads, rad_errs, deg_rads, fit_method,
+                    entropy = SpecificEntropy(t_prof, t_model, d_prof, d_model, rads, rad_errs, deg_rads, fit_method,
                                               num_walkers, num_steps, show_warn=show_warn, progress=False)
                     # Add the profile to the source storage structure
-                    src.update_products(hy_mass)
+                    src.update_products(entropy)
                     # Also put it into a list for returning
-                    final_mass_profs.append(hy_mass)
+                    final_entropy_profs.append(entropy)
                 except XGAFitError:
-                    warn("A fit failure occurred in the hydrostatic mass profile definition.", stacklevel=2)
-                    final_mass_profs.append(None)
-                except ValueError:
-                    warn("A mass of less than zero was measured by a hydrostatic mass profile, this is not physical"
-                         " and the profile is not valid.", stacklevel=2)
-                    final_mass_profs.append(None)
+                    warn("A fit failure occurred in the specific entropy profile definition.", stacklevel=2)
+                    final_entropy_profs.append(None)
 
             # If the density generation failed we give a warning here
             elif str(src) in dens_prof_dict:
                 warn("The density profile for {} could not be generated".format(src.name), stacklevel=2)
-                # No density means no mass, so we append None to the list
-                final_mass_profs.append(None)
+                # No density means no entropy, so we append None to the list
+                final_entropy_profs.append(None)
             else:
                 # And again this is a failure state, so we append a None to the list
-                final_mass_profs.append(None)
+                final_entropy_profs.append(None)
 
             onwards.update(1)
         onwards.set_description("Complete")
 
     # In case only one source is being analysed
-    if len(final_mass_profs) == 1:
-        final_mass_profs = final_mass_profs[0]
-    return final_mass_profs
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    if len(final_entropy_profs) == 1:
+        final_entropy_profs = final_entropy_profs[0]
+    return final_entropy_profs
