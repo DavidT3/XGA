@@ -33,3 +33,10 @@ sas.spec module
    :undoc-members:
    :show-inheritance:
 
+sas.lightcurve module
+---------------
+
+.. automodule:: xga.sas.lightcurve
+   :members:
+   :undoc-members:
+   :show-inheritance:
