@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 18:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/04/2023, 11:55. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -2174,12 +2174,12 @@ class SpecificEntropy(BaseProfile1D):
 
         # Plot the histogram and set up labels
         plt.hist(ent_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
-        plt.xlabel(self._y_axis_name + '[' + self.values_unit.to_string() + ']')
+        plt.xlabel(self._y_axis_name + '[' + self.values_unit.to_string('latex') + ']')
         plt.title("Entropy Distribution at {}".format(radius.to_string()))
 
-        vals_label = str(ent[0].round(2).value) + "^{+" + str(ent[2].round(2).value) + "}" + \
-                     "_{-" + str(ent[1].round(2).value) + "}"
-        res_label = r"$K$_{\rm{X}}$} = " + vals_label + '[' + self.values_unit.to_string() + ']'
+        vals_label = '$' + str(ent[0].round(2).value) + "^{+" + str(ent[2].round(2).value) + "}" + \
+                     "_{-" + str(ent[1].round(2).value) + "}$"
+        res_label = r"$K_{\rm{X}}$ = " + vals_label + '[' + self.values_unit.to_string('latex') + ']'
 
         # And this just plots the 'result' on the distribution as a series of vertical lines
         plt.axvline(ent[0].value, color='red', label=res_label)
