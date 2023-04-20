@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/04/2023, 13:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/04/2023, 14:15. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -7,16 +7,13 @@ from warnings import warn
 from astropy.units import Quantity
 from tqdm import tqdm
 
-from .misc import model_check
 from .. import NUM_CORES
 from ..exceptions import XGAFitError
 from ..models import BaseModel1D
 from ..products.profile import SpecificEntropy
 from ..samples import ClusterSample
 from ..sources import GalaxyCluster
-from ..sourcetools.density import inv_abel_fitted_model
-from ..sourcetools.mass import _setup_global
-from ..sourcetools.temperature import onion_deproj_temp_prof
+from ..sourcetools._common import _setup_inv_abel_dens_onion_temp
 
 
 def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
@@ -119,58 +116,17 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
         successful an entry of None will be added to the list.
     :rtype: List[SpecificEntropy]/SpecificEntropy
     """
-    sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, abund_table, group_spec,
-                                                       spec_min_counts, spec_min_sn, over_sample, num_cores)
-    rads_dict = {str(sources[r_ind]): r for r_ind, r in enumerate(outer_rads)}
-
-    # This checks and sets up a predictable structure for the models needed for this measurement.
-    sb_model = model_check(sources, sb_model)
-    dens_model = model_check(sources, dens_model)
-    temp_model = model_check(sources, temp_model)
-
-    # I also set up dictionaries, so that models for specific clusters (as you can pass individual model instances
-    #  for different clusters) are assigned to the right source when we start cutting down the sources based on
-    #  whether a measurement has been successful
-    sb_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(sb_model)}
-    dens_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(dens_model)}
-    temp_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(temp_model)}
-
-    # Here we take only the sources that have a successful global temperature measurement
-    cut_sources = [src for src_ind, src in enumerate(sources) if has_glob_temp[src_ind]]
-    cut_rads = Quantity([rads_dict[str(src)] for src in cut_sources])
-    if len(cut_sources) == 0:
-        raise ValueError("No sources have a successful global temperature measurement.")
-
-    # Attempt to measure their 3D temperature profiles
-    temp_profs = onion_deproj_temp_prof(cut_sources, cut_rads, temp_annulus_method, temp_min_snr, temp_min_cnt,
-                                        temp_min_width, temp_use_combined, temp_use_worst, min_counts=spec_min_counts,
-                                        min_sn=spec_min_sn, over_sample=over_sample, one_rmf=one_rmf,
-                                        abund_table=abund_table, num_cores=num_cores, freeze_met=freeze_met,
-                                        temp_lo_en=temp_lo_en, temp_hi_en=temp_hi_en)
-
-    # This just allows us to quickly lookup the temperature profile we need later
-    temp_prof_dict = {str(cut_sources[p_ind]): p for p_ind, p in enumerate(temp_profs)}
-
-    # Now we take only the sources that have successful 3D temperature profiles. We do the temperature profile
-    #  stuff first because its more difficult, and why should we waste time on a density profile if the temperature
-    #  profile cannot even be measured.
-    cut_cut_sources = [cut_sources[prof_ind] for prof_ind, prof in enumerate(temp_profs) if prof is not None]
-    cut_cut_rads = Quantity([rads_dict[str(src)] for src in cut_cut_sources])
-
-    # And checking again if this stage of the measurement worked out
-    if len(cut_cut_sources) == 0:
-        raise ValueError("No sources have a successful temperature profile measurement.")
-
-    # We also need to setup the sb model list for our cut sample
-    sb_models_cut = [sb_model_dict[str(src)] for src in cut_cut_sources]
-    # Now we run the inverse abel density profile generator
-    dens_profs = inv_abel_fitted_model(cut_cut_sources, sb_models_cut, fit_method, cut_cut_rads, pix_step=sb_pix_step,
-                                       min_snr=sb_min_snr, abund_table=abund_table, num_steps=num_steps,
-                                       num_walkers=num_walkers, group_spec=group_spec, min_counts=spec_min_counts,
-                                       min_sn=spec_min_sn, over_sample=over_sample, conv_outer_radius=global_radius,
-                                       inv_abel_method=inv_abel_method, num_cores=num_cores, show_warn=show_warn)
-    # Set this up to lookup density profiles based on source
-    dens_prof_dict = {str(cut_cut_sources[p_ind]): p for p_ind, p in enumerate(dens_profs)}
+    # Call this common function which checks for whether temperature profiles/density profiles exist, if not creates
+    #  them, and tries to fit the requested models to them - implemented like this because it is an identical process
+    #  to that required by the hydrostatic mass function of similar name
+    sources, dens_prof_dict, temp_prof_dict, dens_model_dict, \
+        temp_model_dict = _setup_inv_abel_dens_onion_temp(sources, outer_radius, sb_model, dens_model, temp_model,
+                                                          global_radius, fit_method, num_walkers, sb_pix_step,
+                                                          sb_pix_step, sb_min_snr, inv_abel_method, temp_annulus_method,
+                                                          temp_min_snr, temp_min_cnt, temp_min_width, temp_use_combined,
+                                                          temp_use_worst, freeze_met, abund_table, temp_lo_en,
+                                                          temp_hi_en, group_spec, spec_min_counts, spec_min_sn,
+                                                          over_sample, one_rmf, num_cores, show_warn)
 
     # So I can return a list of profiles, a tad more elegant than fetching them from the sources sometimes
     final_entropy_profs = []
