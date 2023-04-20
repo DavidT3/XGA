@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/04/2023, 14:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/04/2023, 15:07. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -121,7 +121,7 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
     #  to that required by the hydrostatic mass function of similar name
     sources, dens_prof_dict, temp_prof_dict, dens_model_dict, \
         temp_model_dict = _setup_inv_abel_dens_onion_temp(sources, outer_radius, sb_model, dens_model, temp_model,
-                                                          global_radius, fit_method, num_walkers, sb_pix_step,
+                                                          global_radius, fit_method, num_walkers, num_steps,
                                                           sb_pix_step, sb_min_snr, inv_abel_method, temp_annulus_method,
                                                           temp_min_snr, temp_min_cnt, temp_min_width, temp_use_combined,
                                                           temp_use_worst, freeze_met, abund_table, temp_lo_en,
