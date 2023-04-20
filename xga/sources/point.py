@@ -1,13 +1,14 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 22:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:13. Copyright (c) The Contributors
 
 from typing import Tuple, Dict
 
 import numpy as np
-from astropy.cosmology import Planck15
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitConversionError
 
 from .general import PointSource
+from .. import DEFAULT_COSMO
 
 
 class Star(PointSource):
@@ -41,7 +42,7 @@ class Star(PointSource):
         radius for the background region. Default is 1.05.
     :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
         radius for the background region. Default is 1.5.
-    :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+    :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_products: Whether existing products should be loaded from disk.
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
@@ -55,9 +56,9 @@ class Star(PointSource):
                  proper_motion: Quantity = None, point_radius: Quantity = Quantity(30, 'arcsec'),
                  match_radius: Quantity = Quantity(10, 'arcsec'), use_peak: bool = False,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
-                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
-                 load_products: bool = True, load_fits: bool = False, regen_merged: bool = True,
-                 in_sample: bool = False):
+                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
+                 regen_merged: bool = True, in_sample: bool = False):
         """
         An init of the XGA Star source class.
 

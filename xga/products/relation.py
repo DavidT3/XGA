@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 21:18. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -11,6 +11,7 @@ from warnings import warn
 import matplotlib.colors as mcolors
 import numpy as np
 import scipy.odr as odr
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 from cycler import cycler
 from getdist import plots, MCSamples
@@ -45,6 +46,9 @@ class ScalingRelation:
         inferred from an astropy Quantity.
     :param str y_name: The name to be used for the y-axis of the plot (DON'T include the unit, that will be
         inferred from an astropy Quantity.
+    :param float/int dim_hubb_ind: This is used to tell the ScalingRelation which power of E(z) has been applied
+        to the y-axis data, this can then be used by the predict method to remove the E(z) contribution from
+        predictions. The default is None.
     :param str fit_method: The method used to fit this data, if known.
     :param Quantity x_data: The x-data used to fit this scaling relation, if available. This should be
         the raw, un-normalised data.
@@ -74,7 +78,7 @@ class ScalingRelation:
         to be set for every view method, and it will be remembered when multiple relations are viewed together.
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
-                 x_name: str, y_name: str, fit_method: str = 'unknown', x_data: Quantity = None,
+                 x_name: str, y_name: str, dim_hubb_ind=None, fit_method: str = 'unknown', x_data: Quantity = None,
                  y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None, x_lims: Quantity = None,
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
                  relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = '',
@@ -100,6 +104,10 @@ class ScalingRelation:
         # These are also required, otherwise any plots we make are going to look a bit dumb with no x or y axis labels
         self._x_name = x_name
         self._y_name = y_name
+
+        # Wanted the relation to know if it had some power of E(z) applied to the y-axis data - this is quite common
+        #  in galaxy cluster scaling relations to account for cosmological evolution of certain parameters
+        self._ez_power = dim_hubb_ind
 
         # The default fit method is 'unknown', as we may not know the method of any relation from literature, but
         #  if the fit was performed by XGA then something more useful can be passed
@@ -234,6 +242,18 @@ class ScalingRelation:
         :rtype: str
         """
         return self._y_name
+
+    @property
+    def dimensionless_hubble_parameter(self) -> Union[float, int]:
+        """
+        This property should be set on the declaration of a scaling relation, and exists to tell the relation what
+        power of E(z) has been applied to the y-axis data before fitting. This also helps the predict method remove
+        the E(z) contribution (if any) from predictions.
+
+        :return: The power of E(z) applied to the y-axis data before fitting. Default is None.
+        :rtype: float/int
+        """
+        return self._ez_power
 
     @property
     def x_norm(self) -> Quantity:
@@ -572,13 +592,20 @@ class ScalingRelation:
 
         plt.show()
 
-    def predict(self, x_values: Quantity) -> Quantity:
+    def predict(self, x_values: Quantity, redshift: Union[float, np.ndarray] = None,
+                cosmo: Cosmology = None) -> Quantity:
         """
         This method allows for the prediction of y values from this scaling relation, you just need to pass in an
-        appropriate set of x values.
+        appropriate set of x values. If a power of E(z) was applied to the y-axis data before fitting, and that
+        information was passed on declaration (using 'dim_hubb_ind'), then a redshift and cosmology are required
+        to remove out the E(z) contribution.
 
         :param Quantity x_values: The x values to predict y values for.
-        :return: The predicted y values
+        :param float/np.ndarray redshift: The redshift(s) of the objects for which we wish to predict values. This is
+            only necessary if the 'dim_hubb_ind' argument was set on declaration. Default is None.
+        :param Cosmology cosmo: The cosmology in which we wish to predict values. This is only necessary if the
+            'dim_hubb_ind' argument was set on declaration. Default is None.
+        :return: The predicted y values.
         :rtype: Quantity
         """
         # Got to check that people aren't passing any nonsense x quantities in
@@ -593,12 +620,27 @@ class ScalingRelation:
             warn("Some of the x values you have passed are outside the validity range of this relation "
                  "({l}-{h}{u}).".format(l=self.x_lims[0].value, h=self.x_lims[1].value, u=self.x_unit.to_string()))
 
+        # Need to check if any power of E(z) was applied to the y-axis data before fitting, if so (and no
+        #  cosmo/redshift was passed) then it's time to throw an error.
+        if (redshift is None or cosmo is None) and self._ez_power is not None:
+            raise ValueError("A power of E(z) was applied to the y-axis data before fitting, as such you must pass"
+                             " redshift and cosmology information to this predict method.")
+        elif self._ez_power is not None and isinstance(redshift, float) and not x_values.isscalar:
+            raise ValueError("You must supply one redshift for every entry in x_values.")
+        elif self._ez_power is not None and isinstance(redshift, np.ndarray) and len(x_values) != len(redshift):
+            raise ValueError("The x_values argument has {x} entries, and the redshift argument has {z} entries; "
+                             "please supply one redshift per x_value.".format(x=len(x_values), z=len(redshift)))
+
         # Units that are convertible to the x-units of this relation are allowed, so we make sure we convert
         #  to the exact units the fit was done in. This includes dividing by the x_norm value
         x_values = x_values.to(self.x_unit) / self.x_norm
         # Then we just pass the x_values into the model, along with fit parameters. Then multiply by
         #  the y normalisation
         predicted_y = self._model_func(x_values.value, *self.pars[:, 0]) * self.y_norm
+
+        # If there was a power of E(z) applied to the data, we undo it for the prediction.
+        if self._ez_power is not None:
+            predicted_y /= (cosmo.efunc(redshift)**self._ez_power)
 
         return predicted_y
 

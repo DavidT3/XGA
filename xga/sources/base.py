@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/04/2023, 12:10. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 from astropy import wcs
 from astropy.coordinates import SkyCoord
-from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase, Unit, UnitConversionError, deg
 from fitsio import FITS
@@ -32,7 +31,8 @@ from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, I
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
-from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS
+from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS, \
+    DEFAULT_COSMO
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -52,7 +52,8 @@ class BaseSource:
         proper distance units such as kpc cannot be used.
     :param str name: The name of the source, default is None in which case a name will be assembled from the
         coordinates given.
-    :param cosmology: An astropy cosmology object to use for analysis of this source, default is Planck15.
+    :param Cosmology cosmology: An astropy cosmology object to use for analysis of this source, default is a
+        concordance flat LambdaCDM model.
     :param bool load_products: Should existing XGA generated products for this source be loaded in, default
         is True.
     :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
@@ -61,8 +62,9 @@ class BaseSource:
         to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
         is False. User should only set to True to remove warnings.
     """
-    def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None, cosmology=Planck15,
-                 load_products: bool = True, load_fits: bool = False, in_sample: bool = False):
+    def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
+                 in_sample: bool = False):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others.
@@ -73,7 +75,8 @@ class BaseSource:
             proper distance units such as kpc cannot be used.
         :param str name: The name of the source, default is None in which case a name will be assembled from the
             coordinates given.
-        :param cosmology: An astropy cosmology object to use for analysis of this source, default is Planck15.
+        :param Cosmology cosmology: An astropy cosmology object to use for analysis of this source, default is a
+            concordance flat LambdaCDM model.
         :param bool load_products: Should existing XGA generated products for this source be loaded in, default
             is True.
         :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
@@ -1237,6 +1240,20 @@ class BaseSource:
         for obs_id in reg_paths:
             if reg_paths[obs_id] is not None:
                 ds9_regs = read_ds9(reg_paths[obs_id])
+                # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
+                #  where they were generated with different resolutions).
+                #  TODO see issue #908, figure out how to support different resolutions of image
+                try:
+                    ims = self.get_images(obs_id)
+                except NoProductAvailableError:
+                    raise NoProductAvailableError("There is no image available for observation {o}, associated "
+                                                  "with {n}. An image is currently required to check for sky "
+                                                  "coordinates being present within a sky region - though hopefully "
+                                                  "no-one will ever see this because I'll have fixed "
+                                                  "it!".format(o=obs_id, n=self.name))
+                    w = None
+                else:
+                    w = ims[0].radec_wcs
                 # Apparently can happen that there are no regions in a region file, so if that is the case
                 #  then I just set the ds9_regs to [None] because I know the rest of the code can deal with that.
                 #  It can't deal with an empty list
@@ -1244,20 +1261,6 @@ class BaseSource:
                     ds9_regs = [None]
             else:
                 ds9_regs = [None]
-
-            # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
-            #  where they were generated with different resolutions).
-            #  TODO see issue #908, figure out how to support different resolutions of image
-            try:
-                ims = self.get_images(obs_id)
-            except NoProductAvailableError:
-                raise NoProductAvailableError("There is no image available for observation {o}, associated "
-                                              "with {n}. An image is currently required to check for sky coordinates "
-                                              "being present within a sky region - though hopefully no-one will ever "
-                                              "see this because I'll have fixed it!".format(o=obs_id, n=self.name))
-                w = None
-            else:
-                w = ims[0].radec_wcs
 
             if isinstance(ds9_regs[0], PixelRegion):
                 # If regions exist in pixel coordinates, we need an image WCS to convert them to RA-DEC, so we need

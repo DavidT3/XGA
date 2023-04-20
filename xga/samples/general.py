@@ -1,14 +1,15 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 15:21. Copyright (c) The Contributors
 
 from warnings import warn
 
 import numpy as np
-from astropy.cosmology import Planck15
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit
 from tqdm import tqdm
 
 from .base import BaseSample
+from .. import DEFAULT_COSMO
 from ..exceptions import NoValidObservationsError, PeakConvergenceFailedError
 from ..sources.general import PointSource, ExtendedSource
 
@@ -34,7 +35,7 @@ class ExtendedSample(BaseSample):
         radius for the background region. Default is 1.05.
     :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
         radius for the background region. Default is 1.5.
-    :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+    :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
     :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
@@ -44,9 +45,9 @@ class ExtendedSample(BaseSample):
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
-                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
-                 load_fits: bool = False, no_prog_bar: bool = False, psf_corr: bool = False,
-                 peak_find_method: str = "hierarchical"):
+                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, no_prog_bar: bool = False,
+                 psf_corr: bool = False, peak_find_method: str = "hierarchical"):
         """
         The init method of the ExtendedSample class.
         """
@@ -212,7 +213,7 @@ class PointSample(BaseSample):
         radius for the background region. Default is 1.05.
     :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
         radius for the background region. Default is 1.5.
-    :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+    :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
     :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
@@ -221,7 +222,8 @@ class PointSample(BaseSample):
                  point_radius: Quantity = Quantity(30, 'arcsec'), use_peak: bool = False,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
-                 cosmology=Planck15, load_fits: bool = False, no_prog_bar: bool = False, psf_corr: bool = False):
+                 cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, no_prog_bar: bool = False,
+                 psf_corr: bool = False):
         """
         The init method of the PointSample class.
         """

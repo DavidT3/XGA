@@ -1,16 +1,17 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2023, 00:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:13. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
 
 import numpy as np
-from astropy.cosmology import Planck15
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, arcmin, UnitConversionError
 from matplotlib import pyplot as plt
 from numpy import ndarray
 from tqdm import tqdm
 
+from .. import DEFAULT_COSMO
 from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..exceptions import NoValidObservationsError
 from ..sources.base import BaseSource
@@ -29,13 +30,14 @@ class BaseSample:
     :param ndarray redshift: The redshifts of the sources, optional. Default is None
     :param ndarray name: The names of the sources, optional. Default is None, in which case the names will be
         constructed from the coordinates.
-    :param cosmology: An astropy cosmology object to be used in distance calculations and analyses.
+    :param Cosmology cosmology: An astropy cosmology object to be used in distance calculations and analyses.
     :param bool load_products: Whether existing products should be loaded from disk.
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param bool no_prog_bar: Whether a progress bar should be shown as sources are declared.
     """
-    def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None, cosmology=Planck15,
-                 load_products: bool = True, load_fits: bool = False, no_prog_bar: bool = False):
+    def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
+                 no_prog_bar: bool = False):
         if len(ra) == 0:
             raise ValueError("You have passed an empty array for the RA values.")
 
