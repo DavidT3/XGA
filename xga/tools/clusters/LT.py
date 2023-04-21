@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 17:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 17:20. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -47,7 +47,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
      This pipeline will only work for clusters that we can successfully measure temperatures for, which requires a
      minimum data quality - as such you may find that some do not achieve successful radius measurements with this
      pipeline. In these cases the pipeline should not error, but the failure will be recorded in the results and
-     radius history dataframes returned from the function (and optionally written to CSV files).
+     radius history dataframes returned from the function (and optionally written to CSV files). The pipeline will
+     also gracefully handle SAS spectrum generation failures, removing the offending clusters from the sample being
+     analysed and warning the user of the failure.
 
      As with all XGA sources and samples, the XGA luminosity-temperature pipeline DOES NOT require all objects
      passed in the sample_data to have X-ray observations. Those that do not will simply be filtered out.
