@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/04/2023, 15:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 18:17. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -9,10 +9,11 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 
 from xga import DEFAULT_COSMO, NUM_CORES
-from xga.exceptions import ModelNotAssociatedError
+from xga.exceptions import ModelNotAssociatedError, SASGenerationError
 from xga.products import ScalingRelation
 from xga.relations.clusters.RT import arnaud_r500
 from xga.samples import ClusterSample
+from xga.sas import evselect_spectrum
 from xga.xspec import single_temp_apec
 
 # This just sets the data columns that MUST be present in the sample data passed by the user
@@ -46,7 +47,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
      This pipeline will only work for clusters that we can successfully measure temperatures for, which requires a
      minimum data quality - as such you may find that some do not achieve successful radius measurements with this
      pipeline. In these cases the pipeline should not error, but the failure will be recorded in the results and
-     radius history dataframes returned from the function (and optionally written to CSV files).
+     radius history dataframes returned from the function (and optionally written to CSV files). The pipeline will
+     also gracefully handle SAS spectrum generation failures, removing the offending clusters from the sample being
+     analysed and warning the user of the failure.
 
      As with all XGA sources and samples, the XGA luminosity-temperature pipeline DOES NOT require all objects
      passed in the sample_data to have X-ray observations. Those that do not will simply be filtered out.
@@ -181,6 +184,39 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
     #  accepted OR until we reach the maximum number  of iterations
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
+        # I setup a quantity the same length as the sample (AS IT IS NOW) for predicted radii, but full of NaNs. This
+        #  is because there are two reasons (and spots in the code) that sources can be removed from the sample. It
+        #  can either happen up here, because spectral generation failed for a source, or lower down where no
+        #  temperature was measured so a new predicted temp cannot be measured. As such, if we didn't create the
+        #  pr_rs quantity up here, it could end up being the same length as the samples after sources have been
+        #  removed for spectral generation failing, which would break some indexing
+        pr_rs = Quantity(np.full(len(samp), np.NaN), 'kpc')
+
+        # We have a try-except looking for SAS generation errors - they will only be thrown once all the spectrum
+        #  generation processes have finished, so we know that the spectra that didn't throw an error exist and
+        #  are fine
+        try:
+            # Run the spectrum generation for the current values of the over density radius
+            evselect_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False)
+            # If the end of evselect_spectrum doesn't throw a SASGenerationError then we know we're all good, so we
+            #  define the not_bad_gen_ind to just contain an index for all the clusters
+            not_bad_gen_ind = np.nonzero(samp.names)
+        except SASGenerationError as err:
+            # Otherwise if something went wrong we can parse the error messages and extract the names of the sources
+            #  for which the error occurred
+            bad_gen = list(set([me.message.split(' is the associated source')[0].split('- ')[-1]
+                                for i_err in err.message for me in i_err]))
+
+            # We define the indices that WON'T have been removed from the sample (so these can be used to address
+            #  things like the pr_rs quantity we defined up top
+            not_bad_gen_ind = np.nonzero(~np.isin(samp.names, bad_gen))
+
+            # Then we can cycle through those names and delete the sources from the sample (throwing a hopefully
+            #  useful warning as well).
+            for bad_name in bad_gen:
+                del samp[bad_name]
+            warn("Some sources ({}) have been removed because of spectrum generation "
+                 "failures.".format(', '.join(bad_gen)), stacklevel=2)
 
         # We generate and fit spectra for the current value of the overdensity radius
         single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, num_cores=num_cores, timeout=timeout,
@@ -190,19 +226,21 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False)[:, 0]
 
         # This uses the scaling relation to predict the overdensity radius from the measured temperatures
-        pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
+        pr_rs[not_bad_gen_ind] = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
 
         # It is possible that some of these radius entries are going to be NaN - the result of NaN temperature values
         #  passed through the 'predict' method of the scaling relation. As such we identify any NaN results and
         #  remove the radii from the pr_rs array as we're going to do the same for the clusters in the sample
         bad_pr_rs = np.where(np.isnan(pr_rs))[0]
-        # pr_rs[bad_pr_rs] = samp.r500[bad_pr_rs]
         pr_rs = np.delete(pr_rs, bad_pr_rs)
         acc_rad = np.delete(acc_rad, bad_pr_rs)
+
         # I am also actually going to remove the clusters with NaN results from the sample - if the NaN was caused
         #  by something like a fit not converging then it's going to keep trying over and over again and that could
         #  slow everything down.
-        for name in samp.names[bad_pr_rs]:
+        # I make sure not to try to remove clusters which I've ALREADY removed further up because their spectral
+        #  generation failed.
+        for name in samp.names[bad_pr_rs[np.isin(bad_pr_rs, not_bad_gen_ind)]]:
             del samp[name]
 
         # The basis of this method is that we measure a temperature, starting in some user-specified fixed aperture,
@@ -246,12 +284,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
-    single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, lum_en=lum_en)
+    single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, lum_en=lum_en, num_cores=num_cores)
 
     # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
     #  just multiply the current radius by 0.15 and use that for the inner radius.
     if core_excised:
-        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens)*0.15, one_rmf=False, lum_en=lum_en)
+        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens)*0.15, one_rmf=False, lum_en=lum_en,
+                         num_cores=num_cores)
 
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
@@ -320,7 +359,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:
-        sample_data.to_csv(save_samp_results_path, index=False)
+        loaded_samp_data.to_csv(save_samp_results_path, index=False)
 
     # Finally, we put together the radius history throughout the iteration-convergence process
     radius_hist_df = pd.DataFrame.from_dict(rad_hist, orient='index')
