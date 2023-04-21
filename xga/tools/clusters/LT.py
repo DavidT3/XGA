@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 17:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 18:17. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -359,7 +359,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:
-        sample_data.to_csv(save_samp_results_path, index=False)
+        loaded_samp_data.to_csv(save_samp_results_path, index=False)
 
     # Finally, we put together the radius history throughout the iteration-convergence process
     radius_hist_df = pd.DataFrame.from_dict(rad_hist, orient='index')
