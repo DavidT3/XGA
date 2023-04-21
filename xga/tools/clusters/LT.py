@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 12:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 12:43. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -189,7 +189,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             evselect_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False)
             bad_gen = []
         except SASGenerationError as err:
-            bad_gen = list(set([me.split(' is the associated source')[0].split('- ')[-1] for me in err.message]))
+            bad_gen = list(set([me.message.split(' is the associated source')[0].split('- ')[-1]
+                                for i_err in err.message for me in i_err]))
+
             for bad_name in bad_gen:
                 del samp[bad_name]
             warn("Some sources ({}) have been removed because of spectrum generation "
