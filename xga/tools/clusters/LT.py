@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 14:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 15:31. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -182,23 +182,40 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
     #  accepted OR until we reach the maximum number  of iterations
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
-        # I setup a quantity the same length as the sample (AS IT IS NOW) for predicted radii, current radii, and new
-        #  radii to be added to the sample object. This is necessary because there are two places that
+        # I setup a quantity the same length as the sample (AS IT IS NOW) for predicted radii, but full of NaNs. This
+        #  is because there are two reasons (and spots in the code) that sources can be removed from the sample. It
+        #  can either happen up here, because spectral generation failed for a source, or lower down where no
+        #  temperature was measured so a new predicted temp cannot be measured. As such, if we didn't create the
+        #  pr_rs quantity up here, it could end up being the same length as the samples after sources have been
+        #  removed for spectral generation failing, which would break some indexing
         pr_rs = Quantity(np.full(len(samp), np.NaN), 'kpc')
 
+        # We have a try-except looking for SAS generation errors - they will only be thrown once all the spectrum
+        #  generation processes have finished, so we know that the spectra that didn't throw an error exist and
+        #  are fine
         try:
+            # Run the spectrum generation for the current values of the over density radius
             evselect_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False)
-            bad_gen = []
+            # If the end of evselect_spectrum doesn't throw a SASGenerationError then we know we're all good, so we
+            #  define the not_bad_gen_ind to just contain an index for all the clusters
+            not_bad_gen_ind = np.nonzero(samp.names)
         except SASGenerationError as err:
+            # Otherwise if something went wrong we can parse the error messages and extract the names of the sources
+            #  for which the error occurred
             bad_gen = list(set([me.message.split(' is the associated source')[0].split('- ')[-1]
                                 for i_err in err.message for me in i_err]))
 
+            # We define the indices that WON'T have been removed from the sample (so these can be used to address
+            #  things like the pr_rs quantity we defined up top
+            not_bad_gen_ind = np.nonzero(~np.isin(samp.names, bad_gen))
+
+            # Then we can cycle through those names and delete the sources from the sample (throwing a hopefully
+            #  useful warning as well).
             for bad_name in bad_gen:
                 del samp[bad_name]
             warn("Some sources ({}) have been removed because of spectrum generation "
                  "failures.".format(', '.join(bad_gen)), stacklevel=2)
 
-        not_bad_gen_ind = np.nonzero(~np.isin(samp.names, bad_gen))
         print(not_bad_gen_ind)
 
         # We generate and fit spectra for the current value of the overdensity radius
@@ -221,7 +238,6 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # I am also actually going to remove the clusters with NaN results from the sample - if the NaN was caused
         #  by something like a fit not converging then it's going to keep trying over and over again and that could
         #  slow everything down.
-        print(samp.names[bad_pr_rs[np.isin(bad_pr_rs, not_bad_gen_ind)]])
         for name in samp.names[bad_pr_rs[np.isin(bad_pr_rs, not_bad_gen_ind)]]:
             del samp[name]
 
