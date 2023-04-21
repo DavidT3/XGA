@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 14:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 14:53. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -182,10 +182,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
     #  accepted OR until we reach the maximum number  of iterations
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
-        # Setting up the predicted
+        # I setup a quantity the same length as the sample (AS IT IS NOW) for predicted radii, current radii, and new
+        #  radii to be added to the sample object. This is necessary because there are two places that
         pr_rs = Quantity(np.full(len(samp), np.NaN), 'kpc')
-        cur_rs = Quantity(np.full(len(samp), np.NaN), 'kpc')
-        new_rads = Quantity(np.full(len(samp), np.NaN), 'kpc')
 
         try:
             evselect_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False)
@@ -200,6 +199,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                  "failures.".format(', '.join(bad_gen)), stacklevel=2)
 
         not_bad_gen_ind = np.nonzero(~np.isin(samp.names, bad_gen))
+        print(not_bad_gen_ind)
 
         # We generate and fit spectra for the current value of the overdensity radius
         single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, num_cores=num_cores, timeout=timeout,
@@ -221,22 +221,21 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # I am also actually going to remove the clusters with NaN results from the sample - if the NaN was caused
         #  by something like a fit not converging then it's going to keep trying over and over again and that could
         #  slow everything down.
+        print(samp.names[bad_pr_rs[np.isin(bad_pr_rs, not_bad_gen_ind)]])
         for name in samp.names[bad_pr_rs[np.isin(bad_pr_rs, not_bad_gen_ind)]]:
             del samp[name]
-
-        cur_rs[not_bad_gen_ind] = samp.get_radius(o_dens)
 
         # The basis of this method is that we measure a temperature, starting in some user-specified fixed aperture,
         #  and then use that to predict an overdensity radius (something far more useful than a fixed aperture). This
         #  process is repeated until the radius fraction converges to within the user-specified limit.
         # It should also be noted that each cluster is made to iterate at least `min_iter` times, nothing will be
         #  allowed to just accept the first result
-        rad_rat = pr_rs / cur_rs
+        rad_rat = pr_rs / samp.get_radius(o_dens)
 
         # Make a copy of the currently set radius values from the sample - these will then be modified with the
         #  new predicted values if the particular cluster's radius isn't already considered 'accepted' - i.e. it
         #  reached the required convergence in a previous iteration
-        new_rads[not_bad_gen_ind] = samp.get_radius(o_dens).copy()
+        new_rads = samp.get_radius(o_dens).copy()
         # The clusters which DON'T have previously accepted radii have their radii updated from those predicted from
         #  temperature
         new_rads[~acc_rad] = pr_rs[~acc_rad]
