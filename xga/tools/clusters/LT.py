@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 14:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 14:32. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -218,11 +218,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         pr_rs = np.delete(pr_rs, bad_pr_rs)
         acc_rad = np.delete(acc_rad, bad_pr_rs)
 
-        bad_pr_rs = bad_pr_rs[np.isin(bad_pr_rs, not_bad_gen_ind)]
         # I am also actually going to remove the clusters with NaN results from the sample - if the NaN was caused
         #  by something like a fit not converging then it's going to keep trying over and over again and that could
         #  slow everything down.
-        for name in samp.names[bad_pr_rs]:
+        for name in samp.names[bad_pr_rs[np.isin(bad_pr_rs, not_bad_gen_ind)]]:
             del samp[name]
 
         cur_rs[not_bad_gen_ind] = samp.get_radius(o_dens)
