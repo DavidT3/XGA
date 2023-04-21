@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/04/2023, 15:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 12:16. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -9,10 +9,11 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 
 from xga import DEFAULT_COSMO, NUM_CORES
-from xga.exceptions import ModelNotAssociatedError
+from xga.exceptions import ModelNotAssociatedError, SASGenerationError
 from xga.products import ScalingRelation
 from xga.relations.clusters.RT import arnaud_r500
 from xga.samples import ClusterSample
+from xga.sas import evselect_spectrum
 from xga.xspec import single_temp_apec
 
 # This just sets the data columns that MUST be present in the sample data passed by the user
@@ -181,6 +182,20 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
     #  accepted OR until we reach the maximum number  of iterations
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
+        # Setting up the predicted
+        pr_rs = Quantity(np.full(len(samp), np.NaN), 'kpc')
+
+        try:
+            evselect_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False)
+            bad_gen = []
+        except SASGenerationError as err:
+            bad_gen = list(set([me.split(' is the associated source')[0].split('- ')[-1] for me in err.message]))
+            for bad_name in bad_gen:
+                del samp[bad_name]
+            warn("Some sources ({}) have been removed because of spectrum generation "
+                 "failures.".format(', '.join(bad_gen)), stacklevel=2)
+
+        not_bad_gen_ind = np.nonzero(~np.isin(samp.names, bad_gen))
 
         # We generate and fit spectra for the current value of the overdensity radius
         single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, num_cores=num_cores, timeout=timeout,
@@ -190,13 +205,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False)[:, 0]
 
         # This uses the scaling relation to predict the overdensity radius from the measured temperatures
-        pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
+        pr_rs[not_bad_gen_ind] = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
 
         # It is possible that some of these radius entries are going to be NaN - the result of NaN temperature values
         #  passed through the 'predict' method of the scaling relation. As such we identify any NaN results and
         #  remove the radii from the pr_rs array as we're going to do the same for the clusters in the sample
         bad_pr_rs = np.where(np.isnan(pr_rs))[0]
-        # pr_rs[bad_pr_rs] = samp.r500[bad_pr_rs]
+        bad_pr_rs = bad_pr_rs[np.isin(bad_pr_rs, not_bad_gen_ind)]
         pr_rs = np.delete(pr_rs, bad_pr_rs)
         acc_rad = np.delete(acc_rad, bad_pr_rs)
         # I am also actually going to remove the clusters with NaN results from the sample - if the NaN was caused
@@ -246,12 +261,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
-    single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, lum_en=lum_en)
+    single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, lum_en=lum_en, num_cores=num_cores)
 
     # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
     #  just multiply the current radius by 0.15 and use that for the inner radius.
     if core_excised:
-        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens)*0.15, one_rmf=False, lum_en=lum_en)
+        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens)*0.15, one_rmf=False, lum_en=lum_en,
+                         num_cores=num_cores)
 
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
