@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 12:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 13:14. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -184,6 +184,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
         # Setting up the predicted
         pr_rs = Quantity(np.full(len(samp), np.NaN), 'kpc')
+        cur_rs = Quantity(np.full(len(samp), np.NaN), 'kpc')
+        new_rads = Quantity(np.full(len(samp), np.NaN), 'kpc')
 
         try:
             evselect_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False)
@@ -222,17 +224,19 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         for name in samp.names[bad_pr_rs]:
             del samp[name]
 
+        cur_rs[not_bad_gen_ind] = samp.get_radius(o_dens)
+
         # The basis of this method is that we measure a temperature, starting in some user-specified fixed aperture,
         #  and then use that to predict an overdensity radius (something far more useful than a fixed aperture). This
         #  process is repeated until the radius fraction converges to within the user-specified limit.
         # It should also be noted that each cluster is made to iterate at least `min_iter` times, nothing will be
         #  allowed to just accept the first result
-        rad_rat = pr_rs / samp.get_radius(o_dens)
+        rad_rat = pr_rs / cur_rs
 
         # Make a copy of the currently set radius values from the sample - these will then be modified with the
         #  new predicted values if the particular cluster's radius isn't already considered 'accepted' - i.e. it
         #  reached the required convergence in a previous iteration
-        new_rads = samp.get_radius(o_dens).copy()
+        new_rads[not_bad_gen_ind] = samp.get_radius(o_dens).copy()
         # The clusters which DON'T have previously accepted radii have their radii updated from those predicted from
         #  temperature
         new_rads[~acc_rad] = pr_rs[~acc_rad]
