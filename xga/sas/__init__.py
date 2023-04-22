@@ -1,8 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 00:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 01:01. Copyright (c) The Contributors
 
 from .lightcurve import *
-from .misc import *
 from .phot import *
 from .spec import *
 
