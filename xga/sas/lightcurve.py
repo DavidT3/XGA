@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 23:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 00:25. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -8,6 +8,7 @@ from typing import Union
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
 
+from . import sas_call
 from ._common import region_setup, check_pattern
 from .. import OUTPUT, NUM_CORES
 from ..samples.base import BaseSample
@@ -67,7 +68,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
     # Have to make sure that the user hasn't done anything daft here, hi_en must be larger than lo_en
     if lo_en >= hi_en:
-        raise ValueError("lo_en cannot be greater than hi_en")
+        raise ValueError("The 'lo_en' argument cannot be greater than 'hi_en'.")
     else:
         # Calls a useful little function that takes an astropy energy quantity to the XMM channels
         # required by SAS commands
@@ -89,7 +90,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize " \
                "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 withyranges=yes {ex}"
 
-    lccorr_cmd = "epiclccorr srctslist={lc} eventlist={e} outset={clc} bkgtslist={blc} withbkglist=yes " \
+    lccorr_cmd = "epiclccorr srctslist={lc} eventlist={e} outset={clc} bkgtslist={blc} withbkgset=yes " \
                  "applyabsolutecorrections=yes"
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
@@ -221,7 +222,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                            ex=extra_name)
 
-            b_lc = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_{ex}_backlcurve.fits"
+            b_lc = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_backlcurve.fits"
             b_lc = b_lc.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                ex=extra_name)
@@ -244,6 +245,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
             # Fills out the evselect command to make the source and background light curves
             lc_cmd_str = lc_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, r=lc, tbs=time_bin_size, ex=expr)
+
             lcb_cmd_str = lc_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, r=b_lc, tbs=time_bin_size, ex=b_expr)
 
             # Then we fill out the command which performs all the corrections (using source and background LC
@@ -255,8 +257,10 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             b_dim_cmd_str = debug_im.format(e=evt_list.path, ex=b_expr, i=b_dim)
 
             # Adds clean up commands to move all generated files and remove temporary directory
-            cmd_str = '; '.join([lc_cmd_str, lcb_cmd_str, corr_lc_str, dim_cmd_str, b_dim_cmd_str])
-            cmd_str += "; mv * ../; cd ..;" # rm -r {d}".format(d=dest_dir)
+            # cmd_str = '; '.join([lc_cmd_str, lcb_cmd_str, corr_lc_str, dim_cmd_str, b_dim_cmd_str])
+            cmd_str = '; '.join([lc_cmd_str, lcb_cmd_str, corr_lc_str])
+            cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+
             cmds.append(cmd_str)  # Adds the full command to the set
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
@@ -288,7 +292,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 #     default inner radius is zero, so by default this function will produce circular spectra out to the outer_radius.
 #     It is possible to generate both grouped and ungrouped spectra using this function, with the degree
 #     of grouping set by the min_counts, min_sn, and oversample parameters.
-# @sas_call
+@sas_call
 def evselect_lightcurve(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                         lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 15:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 00:25. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -47,7 +47,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
 
     # Don't do much value checking in this module, but this one is so fundamental that I will do it
     if lo_en > hi_en:
-        raise ValueError("lo_en cannot be greater than hi_en")
+        raise ValueError("The 'lo_en' argument cannot be greater than 'hi_en'.")
     else:
         # Calls a useful little function that takes an astropy energy quantity to the XMM channels
         # required by SAS commands
