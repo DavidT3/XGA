@@ -1,16 +1,18 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 17:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 17:33. Copyright (c) The Contributors
 
 from astropy.units import Quantity
 
 from xga.products import BaseProduct
-from xga.sas import check_pattern
 
 
 class LightCurve(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, lo_en: Quantity, hi_en: Quantity,
                  time_bin_size: Quantity, pattern_expr: str, region: bool = False):
+        # Unfortunate local import to avoid circular import errors
+        from xga.sas import check_pattern
+
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
 
         self._prod_type = "lightcurve"
@@ -65,3 +67,46 @@ class LightCurve(BaseProduct):
         :rtype: str
         """
         return self._storage_key
+
+    @property
+    def central_coord(self) -> Quantity:
+        """
+        This property provides the central coordinates (RA-Dec) of the region that this light curve
+        was generated from.
+
+        :return: Astropy quantity object containing the central coordinate in degrees.
+        :rtype: Quantity
+        """
+        return self._central_coord
+
+    @property
+    def shape(self) -> str:
+        """
+        Returns the shape of the outer edge of the region this light curve was generated from.
+
+        :return: The shape (either circular or elliptical).
+        :rtype: str
+        """
+        return self._shape
+
+    @property
+    def inner_rad(self) -> Quantity:
+        """
+        Gives the inner radius (if circular) or radii (if elliptical - semi-major, semi-minor) of the
+        region in which this light curve was generated.
+
+        :return: The inner radius(ii) of the region.
+        :rtype: Quantity
+        """
+        return self._inner_rad
+
+    @property
+    def outer_rad(self):
+        """
+        Gives the outer radius (if circular) or radii (if elliptical - semi-major, semi-minor) of the
+        region in which this light curve was generated.
+
+        :return: The outer radius(ii) of the region.
+        :rtype: Quantity
+        """
+        return self._outer_rad
