@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 15:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 17:13. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -67,7 +67,9 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
                        extra_info["instrument"], out, err, cmd)
     elif p_type == 'light curve' and "NullSource" not in src:
         prod = LightCurve(p_path[0],  extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                          extra_info["lo_en"], extra_info["hi_en"], extra_info['time_bin'], extra_info['pattern'])
+                          extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
+                          extra_info["lo_en"], extra_info["hi_en"], extra_info['time_bin'], extra_info['pattern'],
+                          extra_info["from_region"])
     elif "NullSource" in src:
         prod = None
     else:
