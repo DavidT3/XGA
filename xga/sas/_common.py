@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 23:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 00:00. Copyright (c) The Contributors
 
 import warnings
 from typing import Union, Tuple, List
@@ -130,8 +130,8 @@ def check_pattern(pattern: Union[str, int]) -> Tuple[str, str]:
     :rtype: Tuple[str, str]
     """
 
-    if isinstance(pattern, str):
-        pattern = '==' + pattern
+    if isinstance(pattern, int):
+        pattern = '==' + str(pattern)
     elif not isinstance(pattern, str):
         raise TypeError("Pattern arguments must be either an integer (we then assume only events with that pattern "
                         "should be selected) or a SAS selection command (e.g. 'in [1:4]' or '<= 4').")
