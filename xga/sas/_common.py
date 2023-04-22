@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 22:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 23:46. Copyright (c) The Contributors
 
 import warnings
 from typing import Union, Tuple, List
@@ -120,13 +120,14 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
     return sources, final_inner, final_outer
 
 
-def check_pattern(pattern: Union[str, int]) -> str:
+def check_pattern(pattern: Union[str, int]) -> Tuple[str, str]:
     """
     A very simple (and not exhaustive) checker for XMM SAS pattern expressions.
 
     :param str/int pattern: The pattern selection expression to be checked.
-    :return: A string pattern selection expression.
-    :rtype: str
+    :return: A string pattern selection expression, and a pattern representation that should be safe for naming
+        SAS files with.
+    :rtype: Tuple[str, str]
     """
 
     if isinstance(pattern, str):
@@ -155,4 +156,9 @@ def check_pattern(pattern: Union[str, int]) -> str:
         raise ValueError("If a pattern statement uses 'in', either a ':' must be present in the statement to separate "
                          "lower and upper limits.")
 
-    return pattern
+    # SAS doesn't like having file names with special characters, so I am trying to come up with safe replacements
+    #  that still convey what the pattern selection was
+    patt_file_name = pattern.replace(' ', '').replace('<=', 'lteq').replace('>=', 'gteq').replace('==', 'eq')\
+        .replace('<=', 'lteq').replace('<', 'lt').replace('>', 'gt').replace('in', '')
+
+    return pattern, patt_file_name
