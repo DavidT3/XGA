@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 23:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 23:48. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -11,7 +11,6 @@ from astropy.units import Quantity, UnitConversionError
 from ._common import region_setup, check_pattern
 from .. import OUTPUT, NUM_CORES
 from ..samples.base import BaseSample
-from ..sas.run import sas_call
 from ..sources import BaseSource
 #     An internal function to generate all the commands necessary to produce an evselect spectrum, but is not
 #     decorated by the sas_call function, so the commands aren't immediately run. This means it can be used for
@@ -75,8 +74,8 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         lo_chan = energy_to_channel(lo_en)
         hi_chan = energy_to_channel(hi_en)
 
-    pn_patt = check_pattern(pn_patt)
-    mos_patt = check_pattern(mos_patt)
+    pn_patt, pn_patt_name = check_pattern(pn_patt)
+    mos_patt, mos_patt_name = check_pattern(mos_patt)
 
     extra_name = "_timebin{tb}_{l}-{u}keV".format(tb=time_bin_size, l=lo_en.value, u=hi_en.value)
 
@@ -187,14 +186,14 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
             # Some settings depend on the instrument
             if "pn" in inst:
-                extra_name = "_pattern{p}".format(p=pn_patt.replace(' ', '')) + extra_name
+                extra_name = "_pattern{p}".format(p=pn_patt_name) + extra_name
                 expr = "expression='#XMMEA_EP && (PATTERN {p}) && (FLAG .eq. 0) && (PI in [{l}:{u}]) && " \
                        "{s}'".format(s=reg, p=pn_patt, l=lo_chan, u=hi_chan)
                 b_expr = "expression='#XMMEA_EP && (PATTERN {p}) && (FLAG .eq. 0) && (PI in [{l}:{u}]) && " \
                          "{s}'".format(s=b_reg, p=pn_patt, l=lo_chan, u=hi_chan)
 
             elif "mos" in inst:
-                extra_name = "_pattern{p}".format(p=mos_patt.replace(' ', '')) + extra_name
+                extra_name = "_pattern{p}".format(p=mos_patt_name) + extra_name
 
                 expr = "expression='#XMMEA_EM && (PATTERN {p}) && (FLAG .eq. 0) && (PI in [{l}:{u}]) && " \
                        "{s}'".format(s=reg, p=mos_patt, l=lo_chan, u=hi_chan)
@@ -257,7 +256,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
             # Adds clean up commands to move all generated files and remove temporary directory
             cmd_str = '; '.join([lc_cmd_str, lcb_cmd_str, corr_lc_str, dim_cmd_str, b_dim_cmd_str])
-            cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+            cmd_str += "; mv * ../; cd ..;" # rm -r {d}".format(d=dest_dir)
             cmds.append(cmd_str)  # Adds the full command to the set
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
@@ -289,7 +288,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 #     default inner radius is zero, so by default this function will produce circular spectra out to the outer_radius.
 #     It is possible to generate both grouped and ungrouped spectra using this function, with the degree
 #     of grouping set by the min_counts, min_sn, and oversample parameters.
-@sas_call
+# @sas_call
 def evselect_lightcurve(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                         lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
