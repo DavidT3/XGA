@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/04/2023, 18:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 22:45. Copyright (c) The Contributors
 
 import warnings
 from typing import Union, Tuple, List
@@ -118,3 +118,41 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
     cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
 
     return sources, final_inner, final_outer
+
+
+def check_pattern(pattern: Union[str, int]) -> str:
+    """
+    A very simple (and not exhaustive) checker for XMM SAS pattern expressions.
+
+    :param str/int pattern: The pattern selection expression to be checked.
+    :return: A string pattern selection expression.
+    :rtype: str
+    """
+
+    if isinstance(pattern, str):
+        pattern = '==' + pattern
+    elif not isinstance(pattern, str):
+        raise TypeError("Pattern arguments must be either an integer (we then assume only events with that pattern "
+                        "should be selected) or a SAS selection command (e.g. 'in [1:4]' or '<= 4').")
+
+    # First off I remove whitespace from the beginning and end of the term
+    pattern = pattern.strip()
+    # pattern = pattern.replace(' ', '')
+
+    # Then we check for understandable selection commands; inequalities, equals, and 'in'
+    if pattern[:2] not in ['in', '<=', '>=', '=='] and pattern[:1] not in ['<', '>']:
+        raise ValueError("First part of a pattern statement must be either 'in', '<=', '>=', '==', '<', or '>'.")
+
+    if pattern[:2] == 'in' and '[' not in pattern and '(' not in pattern:
+        raise ValueError("If a pattern statement uses 'in', either a '[' (for inclusive lower limit) or '(' (for "
+                         "exclusive lower limit) must be in the statement.")
+
+    if pattern[:2] == 'in' and ']' not in pattern and ')' not in pattern:
+        raise ValueError("If a pattern statement uses 'in', either a ']' (for inclusive upper limit) or ')' (for "
+                         "exclusive upper limit) must be in the statement.")
+
+    if pattern[:2] == 'in' and ':' not in pattern:
+        raise ValueError("If a pattern statement uses 'in', either a ':' must be present in the statement to separate "
+                         "lower and upper limits.")
+
+    return pattern
