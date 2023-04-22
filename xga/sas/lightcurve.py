@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 00:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 00:51. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -13,10 +13,6 @@ from ._common import region_setup, check_pattern
 from .. import OUTPUT, NUM_CORES
 from ..samples.base import BaseSample
 from ..sources import BaseSource
-#     An internal function to generate all the commands necessary to produce an evselect spectrum, but is not
-#     decorated by the sas_call function, so the commands aren't immediately run. This means it can be used for
-#     evselect functions that generate custom sets of spectra (like a set of annular spectra for instance), as well
-#     as for things like the standard evselect_spectrum function which produce relatively boring spectra.
 from ..utils import energy_to_channel
 
 
@@ -26,22 +22,31 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
              pn_patt: str = '<= 4', mos_patt: str = '<= 12', num_cores: int = NUM_CORES,
              disable_progress: bool = False, force_gen: bool = False):
     """
-
+    This is an internal function which sets up the commands necessary to generate light curves from XMM data - and
+    can be used both to generate them from simple circular regions and also from annular regions. The light curves
+    are corrected for background, vignetting, and PSF concerns.
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
-        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
-        'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
+        the light curve (for instance 'point' would be acceptable for a Star or PointSource). If 'region' is chosen
+        (to use the regions in region files), then any inner radius will be ignored. If you are generating for
+        multiple sources then you can also pass a Quantity with one entry per source.
     :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
-        the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
-        default this is zero arcseconds, resulting in a circular spectrum.
-    :param Quantity time_bin_size:
-    :param str pn_patt:
-    :param str mos_patt:
+        the light curve. By default this is zero arcseconds, resulting in a light curve from a circular region. If
+        you are generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param Quantity lo_en: The lower energy boundary for the light curve, in units of keV. The default is 0.5 keV.
+    :param Quantity hi_en: The upper energy boundary for the light curve, in units of keV. The default is 2.0 keV.
+    :param Quantity time_bin_size: The bin size to be used for the creation of the light curve, in
+        seconds. The default is 100 s.
+    :param str pn_patt: The event selection pattern that should be applied for PN data. This should be a string
+        containing the selection expression of a valid XMM SAS pattern definition. For instance, the default for PN
+        is <= 4.
+    :param str mos_patt: The event selection pattern that should be applied for MOS data. This should be a string
+        containing the selection expression of a valid XMM SAS pattern definition. For instance, the default for MOS
+        is <= 12.
     :param int num_cores: The number of cores to use (if running locally), default is set to
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
-    :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
@@ -52,7 +57,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress,
                                                          '', num_cores)
     else:
-        # This is used in the extra information dictionary for when the XGA spectrum object is defined
+        # This is used in the extra information dictionary for when the XGA light curve object is defined
         from_region = True
 
     if not isinstance(time_bin_size, Quantity) and isinstance(time_bin_size, (float, int)):
@@ -85,7 +90,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
              "rateset={r} energycolumn=PI timebinsize={tbs} maketimecolumn=yes makeratecolumn=yes {ex}"
 
     # This command just makes a standard XCS image, but will be used to generate images to debug the drilling
-    #  out of regions, as the spectrum expression will be supplied so we can see exactly what data has been removed.
+    #  out of regions, as the light curve expression will be supplied, so we can see exactly what data has been removed.
     debug_im = "evselect table={e} imageset={i} xcolumn=X ycolumn=Y ximagebinsize=87 " \
                "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize " \
                "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 withyranges=yes {ex}"
@@ -210,8 +215,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
             # Just grabs the event list object
             evt_list = pack[-1]
-            # Sets up the file names of the output files, adding a random number so that the
-            #  function for generating annular spectra doesn't clash and try to use the same folder
+            # Sets up the file names of the output files, adding a random number
             dest_dir = OUTPUT + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
 
             # We know that this is where the calibration index file lives
@@ -257,8 +261,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             b_dim_cmd_str = debug_im.format(e=evt_list.path, ex=b_expr, i=b_dim)
 
             # Adds clean up commands to move all generated files and remove temporary directory
-            # cmd_str = '; '.join([lc_cmd_str, lcb_cmd_str, corr_lc_str, dim_cmd_str, b_dim_cmd_str])
-            cmd_str = '; '.join([lc_cmd_str, lcb_cmd_str, corr_lc_str])
+            cmd_str = '; '.join([lc_cmd_str, lcb_cmd_str, corr_lc_str, dim_cmd_str, b_dim_cmd_str])
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
 
             cmds.append(cmd_str)  # Adds the full command to the set
@@ -286,12 +289,6 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
-#     A wrapper for all of the SAS processes necessary to generate an XMM spectrum that can be analysed
-#     in XSPEC. Every observation associated with this source, and every instrument associated with that
-#     observation, will have a spectrum generated using the specified outer and inner radii as a boundary. The
-#     default inner radius is zero, so by default this function will produce circular spectra out to the outer_radius.
-#     It is possible to generate both grouped and ungrouped spectra using this function, with the degree
-#     of grouping set by the min_counts, min_sn, and oversample parameters.
 @sas_call
 def evselect_lightcurve(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
@@ -299,23 +296,34 @@ def evselect_lightcurve(sources: Union[BaseSource, BaseSample], outer_radius: Un
                         time_bin_size: Quantity = Quantity(100, 's'), pn_patt: str = '<= 4',
                         mos_patt: str = '<= 12', num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
-
+    A wrapper for all the SAS processes necessary to generate XMM light curves for a specified region.
+     Every observation associated with this source, and every instrument associated with that
+    observation, will have a light curve generated using the specified outer and inner radii as a boundary. The
+    default inner radius is zero, so by default this function will produce light curves in a circular region out
+    to the outer_radius.
+    The light curves are corrected for background, vignetting, and PSF concerns using the SAS 'epiclccorr' tool.
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
-        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
-        'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
-        generating for multiple sources then you can also pass a Quantity with one entry per source.
+        the light curve (for instance 'point' would be acceptable for a Star or PointSource). If 'region' is chosen
+        (to use the regions in region files), then any inner radius will be ignored. If you are generating for
+        multiple sources then you can also pass a Quantity with one entry per source.
     :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
-        the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
-        default this is zero arcseconds, resulting in a circular spectrum. If you are
-        generating for multiple sources then you can also pass a Quantity with one entry per source.
-    :param Quantity time_bin_size:
+        the light curve. By default this is zero arcseconds, resulting in a light curve from a circular region. If
+        you are generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param Quantity lo_en: The lower energy boundary for the light curve, in units of keV. The default is 0.5 keV.
+    :param Quantity hi_en: The upper energy boundary for the light curve, in units of keV. The default is 2.0 keV.
+    :param Quantity time_bin_size: The bin size to be used for the creation of the light curve, in
+        seconds. The default is 100 s.
+    :param str pn_patt: The event selection pattern that should be applied for PN data. This should be a string
+        containing the selection expression of a valid XMM SAS pattern definition. For instance, the default for PN
+        is <= 4.
+    :param str mos_patt: The event selection pattern that should be applied for MOS data. This should be a string
+        containing the selection expression of a valid XMM SAS pattern definition. For instance, the default for MOS
+        is <= 12.
     :param int num_cores: The number of cores to use (if running locally), default is set to
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
-    # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
-    #  can also use them
     return _lc_cmds(sources, outer_radius, inner_radius, lo_en, hi_en, time_bin_size, pn_patt, mos_patt,
                     num_cores, disable_progress)
