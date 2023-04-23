@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 20:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 20:40. Copyright (c) The Contributors
 from astropy.units import Quantity
 from fitsio import FITS
 
@@ -60,22 +60,30 @@ class LightCurve(BaseProduct):
         # Here we set up attributes to store the various information we can pull from a light curve file - they
         #  are all initially set to None because we only read the information into memory if the user actually
         #  calls one of the properties which uses one of these attributes
-        # This should store the values (in counts/per second) for the background-subtracted, instrumental-
-        #  effect-corrected, count-rate of the light curve
-        self._fin_cnt_rate = None
+        # This should store the values (in counts/per second) for the source, instrumental-effect-corrected, count-
+        #  rate of the light curve
+        self._src_cnt_rate = None
         # The count-rate should be accompanied by uncertainties, and they will live in this attribute
-        self._fin_cnt_rate_err = None
+        self._src_cnt_rate_err = None
         # Here we store the x-axis, the time steps which the count-rates are attributed to
         self._time = None
         # The fractional exposure time of the livetime for each data point
         self._frac_exp = None
-        # The background count-rate and count-rate uncertainty
+        # The background count-rate and count-rate uncertainty, scaled to account for the area difference between
+        #  the source and background regions
         self._bck_cnt_rate = None
         self._bck_cnt_rate_err = None
 
-
+        # These attributes store 2D quantities that describe the start and end points of the good-time-intervals for
+        #  the source and background light-curves. The zeroth column is start, and the other column is stop
         self._src_gti = None
         self._bck_gti = None
+
+        # In these attributes we store the XMM recorded start and stop times for this light curve, as well as the
+        #  place where the time values were assigned (i.e. relative to satellite or barycentre of the solar system)
+        self._time_start = None
+        self._time_stop = None
+        self._time_assign = None
 
         # This just stores whether the data have been read into memory or not (set by the _read_on_demand method)
         self._read_in = False
@@ -137,11 +145,11 @@ class LightCurve(BaseProduct):
         return self._outer_rad
 
     @property
-    def count_rate(self) -> Quantity:
+    def src_count_rate(self) -> Quantity:
         """
-        Returns the background-subtracted and instrumental-effect-corrected count-rates for this light curve.
+        Returns the source instrumental-effect-corrected count-rates for this light curve.
 
-        :return: Background-subtracted and instrumental-effect-corrected count-rates, in units of ct/s.
+        :return: Source instrumental-effect-corrected count-rates, in units of ct/s.
         :rtype: Quantity
         """
         # The version of read on demand for this class will itself check to see if the data have already been
@@ -149,15 +157,14 @@ class LightCurve(BaseProduct):
         #  XGA product instance
         self._read_on_demand()
 
-        return self._fin_cnt_rate
+        return self._src_cnt_rate
 
     @property
-    def count_rate_err(self) -> Quantity:
+    def src_count_rate_err(self) -> Quantity:
         """
-        Returns the background-subtracted and instrumental-effect-corrected count-rate uncertainties for this
-        light curve.
+        Returns the source instrumental-effect-corrected count-rate uncertainties for this light curve.
 
-        :return: Background-subtracted and instrumental-effect-corrected count-rate uncertainties, in units of ct/s.
+        :return: Source instrumental-effect-corrected count-rate uncertainties, in units of ct/s.
         :rtype: Quantity
         """
         # The version of read on demand for this class will itself check to see if the data have already been
@@ -165,7 +172,7 @@ class LightCurve(BaseProduct):
         #  XGA product instance
         self._read_on_demand()
 
-        return self._fin_cnt_rate_err
+        return self._src_cnt_rate_err
 
     @property
     def time(self) -> Quantity:
@@ -266,8 +273,8 @@ class LightCurve(BaseProduct):
             with FITS(self.path) as all_lc:
                 # This chunk reads out the various columns of the 'RATE' entry in the light curve file, storing
                 #  them in suitably unit-ed astropy quantities
-                self._fin_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
-                self._fin_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+                self._src_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
+                self._src_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
                 self._time = Quantity(all_lc['RATE'].read_column('TIME'), 's')
                 self._frac_exp = Quantity(all_lc['RATE'].read_column('FRACEXP'))
                 self._bck_cnt_rate = Quantity(all_lc['RATE'].read_column('BACKV'), 'ct/s')
@@ -278,6 +285,13 @@ class LightCurve(BaseProduct):
                                           all_lc['SRC_GTIS'].read_column('STOP')], 's').T
                 self._bck_gti = Quantity([all_lc['BKG_GTIS'].read_column('START'),
                                           all_lc['BKG_GTIS'].read_column('STOP')], 's').T
+
+                # Grab the start, stop, and time assign values from the overall header of the light curve
+                hdr = all_lc['RATE'].read_header()
+                self._time_start = Quantity(hdr['TSTART'], 's')
+                self._time_stop = Quantity(hdr['TSTOP'], 's')
+                self._time_assign = hdr['TASSIGN']
+
             # And set this attribute to make sure that no further reading in is done
             self._read_in = True
 
