@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 22:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 22:26. Copyright (c) The Contributors
 from typing import Union
 
 import matplotlib.pyplot as plt
@@ -167,7 +167,7 @@ class LightCurve(BaseProduct):
         #  XGA product instance
         self._read_on_demand()
 
-        return self._src_cnt_rate
+        return self._bck_sub_cnt_rate
 
     @property
     def count_rate_err(self) -> Quantity:
@@ -182,7 +182,7 @@ class LightCurve(BaseProduct):
         #  XGA product instance
         self._read_on_demand()
 
-        return self._src_cnt_rate_err
+        return self._bck_sub_cnt_rate_err
 
     @property
     def src_count_rate(self) -> Quantity:
@@ -401,7 +401,7 @@ class LightCurve(BaseProduct):
             plt.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
                          color=bck_colour, label='Background')
         else:
-            plt.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
+            plt.errorbar(time_x.value, self.count_rate.value, yerr=self.count_rate_err.value, capsize=2,
                          color=colour, label='Background subtracted')
 
         plt.xlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
