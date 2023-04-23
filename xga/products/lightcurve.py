@@ -1,6 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 20:44. Copyright (c) The Contributors
-from astropy.units import Quantity
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 22:17. Copyright (c) The Contributors
+from typing import Union
+
+import matplotlib.pyplot as plt
+from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS
 
 from xga.exceptions import FailedProductError
@@ -10,7 +13,7 @@ from xga.products import BaseProduct
 class LightCurve(BaseProduct):
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, lo_en: Quantity, hi_en: Quantity,
-                 time_bin_size: Quantity, pattern_expr: str, region: bool = False):
+                 time_bin_size: Quantity, pattern_expr: str, region: bool = False, is_back_sub: bool = True):
         # Unfortunate local import to avoid circular import errors
         from xga.sas import check_pattern
 
@@ -57,9 +60,16 @@ class LightCurve(BaseProduct):
         # And we save the completed key to an attribute
         self._storage_key = lc_storage_name
 
+        # The definition of this product has defined whether the data in 'RATE' are background subtracted or not, and
+        #  that info is stored in this attribute - changes how we read in data
+        self._is_back_sub = is_back_sub
+
         # Here we set up attributes to store the various information we can pull from a light curve file - they
         #  are all initially set to None because we only read the information into memory if the user actually
         #  calls one of the properties which uses one of these attributes
+        # This will store the background subtracted count rate and uncertainty
+        self._bck_sub_cnt_rate = None
+        self._bck_sub_cnt_rate_err = None
         # This should store the values (in counts/per second) for the source, instrumental-effect-corrected, count-
         #  rate of the light curve
         self._src_cnt_rate = None
@@ -143,6 +153,36 @@ class LightCurve(BaseProduct):
         :rtype: Quantity
         """
         return self._outer_rad
+
+    @property
+    def count_rate(self) -> Quantity:
+        """
+        Returns the background-subtracted instrumental-effect-corrected count-rates for this light curve.
+
+        :return: Background-subtracted instrumental-effect-corrected count-rates, in units of ct/s.
+        :rtype: Quantity
+        """
+        # The version of read on demand for this class will itself check to see if the data have already been
+        #  read in, so we don't need to check that here - this method will read our LC data from disk into this
+        #  XGA product instance
+        self._read_on_demand()
+
+        return self._src_cnt_rate
+
+    @property
+    def count_rate_err(self) -> Quantity:
+        """
+        Returns the background-subtracted instrumental-effect-corrected count-rate uncertainties for this light curve.
+
+        :return: Background-subtracted instrumental-effect-corrected count-rate uncertainties, in units of ct/s.
+        :rtype: Quantity
+        """
+        # The version of read on demand for this class will itself check to see if the data have already been
+        #  read in, so we don't need to check that here - this method will read our LC data from disk into this
+        #  XGA product instance
+        self._read_on_demand()
+
+        return self._src_cnt_rate_err
 
     @property
     def src_count_rate(self) -> Quantity:
@@ -306,8 +346,14 @@ class LightCurve(BaseProduct):
             with FITS(self.path) as all_lc:
                 # This chunk reads out the various columns of the 'RATE' entry in the light curve file, storing
                 #  them in suitably unit-ed astropy quantities
-                self._src_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
-                self._src_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+                if self._is_back_sub:
+                    self._bck_sub_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
+                    self._bck_sub_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+                else:
+                    # If we weren't told that the rate data are background subtracted when the light curve was
+                    #  declared, then we store the values in the source count rate attributes
+                    self._src_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
+                    self._src_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
                 self._time = Quantity(all_lc['RATE'].read_column('TIME'), 's')
                 self._frac_exp = Quantity(all_lc['RATE'].read_column('FRACEXP'))
                 self._bck_cnt_rate = Quantity(all_lc['RATE'].read_column('BACKV'), 'ct/s')
@@ -325,6 +371,8 @@ class LightCurve(BaseProduct):
                 self._time_stop = Quantity(hdr['TSTOP'], 's')
                 self._time_assign = hdr['TASSIGN']
 
+            # TODO add calculation for error prop of src-bck or bck+bckcorr
+
             # And set this attribute to make sure that no further reading in is done
             self._read_in = True
 
@@ -334,3 +382,31 @@ class LightCurve(BaseProduct):
                                      "data from it; reason give is {}.".format(reasons))
 
     # Then define user-facing methods
+    def view(self, figsize: tuple = (14, 6), time_unit: Union[str, Unit] = Unit('s'), colour: str = 'tab:cyan',
+             plot_sep: bool = False, src_colour: str = 'black', bck_colour: str = 'firebrick',
+             custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18):
+
+        if isinstance(time_unit, str):
+            time_unit = Unit(time_unit)
+
+        if not self.time.unit.is_equivalent(time_unit):
+            raise UnitConversionError("You have supplied a 'time_unit' that cannot be converted to seconds.")
+
+        time_x = self.time.to(time_unit)
+
+        plt.figure(figsize=figsize)
+        if plot_sep:
+            plt.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
+                         color=src_colour, label='Source')
+            plt.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
+                         color=bck_colour, label='Background')
+        else:
+            plt.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
+                         color=colour, label='Background subtracted')
+
+        plt.xlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
+        plt.ylabel("Count-rate [{}]".format(self.src_count_rate.unit.to_string('latex')), fontsize=label_font_size)
+        plt.legend(loc='best')
+        plt.tight_layout()
+        plt.show()
+        plt.close('all')
