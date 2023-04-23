@@ -1,8 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 17:33. Copyright (c) The Contributors
-
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 20:17. Copyright (c) The Contributors
 from astropy.units import Quantity
+from fitsio import FITS
 
+from xga.exceptions import FailedProductError
 from xga.products import BaseProduct
 
 
@@ -56,6 +57,30 @@ class LightCurve(BaseProduct):
         # And we save the completed key to an attribute
         self._storage_key = lc_storage_name
 
+        # Here we set up attributes to store the various information we can pull from a light curve file - they
+        #  are all initially set to None because we only read the information into memory if the user actually
+        #  calls one of the properties which uses one of these attributes
+        # This should store the values (in counts/per second) for the background-subtracted, instrumental-
+        #  effect-corrected, count-rate of the light curve
+        self._fin_cnt_rate = None
+        # The count-rate should be accompanied by uncertainties, and they will live in this attribute
+        self._fin_cnt_rate_err = None
+        # Here we store the x-axis, the time steps which the count-rates are attributed to
+        self._time = None
+        # The fractional exposure time of the livetime for each data point
+        self._frac_exp = None
+        # The background count-rate and count-rate uncertainty
+        self._bck_cnt_rate = None
+        self._bck_cnt_rate_err = None
+
+
+        self._src_gti = None
+        self._bck_gti = None
+
+        # This just stores whether the data have been read into memory or not (set by the _read_on_demand method)
+        self._read_in = False
+
+    # Defining properties first
     @property
     def storage_key(self) -> str:
         """
@@ -110,3 +135,155 @@ class LightCurve(BaseProduct):
         :rtype: Quantity
         """
         return self._outer_rad
+
+    @property
+    def count_rate(self) -> Quantity:
+        """
+        Returns the background-subtracted and instrumental-effect-corrected count-rates for this light curve.
+
+        :return: Background-subtracted and instrumental-effect-corrected count-rates, in units of ct/s.
+        :rtype: Quantity
+        """
+        # The version of read on demand for this class will itself check to see if the data have already been
+        #  read in, so we don't need to check that here - this method will read our LC data from disk into this
+        #  XGA product instance
+        self._read_on_demand()
+
+        return self._fin_cnt_rate
+
+    @property
+    def count_rate_err(self) -> Quantity:
+        """
+        Returns the background-subtracted and instrumental-effect-corrected count-rate uncertainties for this
+        light curve.
+
+        :return: Background-subtracted and instrumental-effect-corrected count-rate uncertainties, in units of ct/s.
+        :rtype: Quantity
+        """
+        # The version of read on demand for this class will itself check to see if the data have already been
+        #  read in, so we don't need to check that here - this method will read our LC data from disk into this
+        #  XGA product instance
+        self._read_on_demand()
+
+        return self._fin_cnt_rate_err
+
+    @property
+    def time(self) -> Quantity:
+        """
+        Returns the time steps that correspond to the count-rates measured for this light curve
+
+        :return: Background-subtracted and instrumental-effect-corrected count-rate uncertainties, in units of seconds.
+        :rtype: Quantity
+        """
+        # The version of read on demand for this class will itself check to see if the data have already been
+        #  read in, so we don't need to check that here - this method will read our LC data from disk into this
+        #  XGA product instance
+        self._read_on_demand()
+
+        return self._time
+
+    @property
+    def bck_count_rate(self) -> Quantity:
+        """
+        Returns the background count-rates for this light curve.
+
+        :return: Background count-rates, in units of ct/s.
+        :rtype: Quantity
+        """
+        # The version of read on demand for this class will itself check to see if the data have already been
+        #  read in, so we don't need to check that here - this method will read our LC data from disk into this
+        #  XGA product instance
+        self._read_on_demand()
+
+        return self._bck_cnt_rate
+
+    @property
+    def bck_count_rate_err(self) -> Quantity:
+        """
+        Returns the background count-rate uncertainties for this light curve.
+
+        :return: Background count-rate uncertainties, in units of ct/s.
+        :rtype: Quantity
+        """
+        # The version of read on demand for this class will itself check to see if the data have already been
+        #  read in, so we don't need to check that here - this method will read our LC data from disk into this
+        #  XGA product instance
+        self._read_on_demand()
+
+        return self._bck_cnt_rate_err
+
+    @property
+    def frac_exp(self) -> Quantity:
+        """
+        The fractional exposure time for each entry in this light curve.
+
+        :return: Fractional exposure.
+        :rtype: Quantity
+        """
+        # Make sure the file is read in
+        self._read_on_demand()
+        return self._frac_exp
+
+    @property
+    def src_gti(self) -> Quantity:
+        """
+        Returns a 2D quantity with start (column 0) and end (column 1) times for the good-time-intervals of the
+        source light curve.
+
+        :return: A 2D astropy quantity with start (column 0) and end (column 1) times for the source
+            good-time-intervals (in seconds).
+        :rtype: Quantity
+        """
+        # Make sure the GTI information is read into memory
+        self._read_on_demand()
+        return self._src_gti
+
+    @property
+    def bck_gti(self) -> Quantity:
+        """
+        Returns a 2D quantity with start (column 0) and end (column 1) times for the good-time-intervals of the
+        background light curve.
+
+        :return: A 2D astropy quantity with start (column 0) and end (column 1) times for the background
+            good-time-intervals (in seconds).
+        :rtype: Quantity
+        """
+        # Make sure the GTI information is read into memory
+        self._read_on_demand()
+        return self._bck_gti
+
+    # Then define internal methods
+    def _read_on_demand(self):
+        """
+        This method is called by properties that deliver data to the user, either directly or via other methods of
+        this class, such as view(). It will ensure that the data haven't already been read from the source file into
+        memory, and that the source file has actually been classed as usable, and then read the relevant data into
+        attributes of this class.
+        """
+        # Usable flag to check that nothing went wrong in the light-curve generation, and the _read_in flag to
+        #  check that we haven't already read this in to memory - no sense doing it again
+        if self.usable and not self._read_in:
+            with FITS(self.path) as all_lc:
+                # This chunk reads out the various columns of the 'RATE' entry in the light curve file, storing
+                #  them in suitably unit-ed astropy quantities
+                self._fin_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
+                self._fin_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+                self._time = Quantity(all_lc['RATE'].read_column('TIME'), 's')
+                self._frac_exp = Quantity(all_lc['RATE'].read_column('FRACEXP'))
+                self._bck_cnt_rate = Quantity(all_lc['RATE'].read_column('BACKV'), 'ct/s')
+                self._bck_cnt_rate_err = Quantity(all_lc['RATE'].read_column('BACKE'), 'ct/s')
+
+                # Here we read out the beginning and end times of the GTIs for source and background
+                self._src_gti = Quantity([all_lc['SRC_GTIS'].read_column('START'),
+                                          all_lc['SRC_GTIS'].read_column('STOP')], 's').T
+                self._bck_gti = Quantity([all_lc['BKG_GTIS'].read_column('START'),
+                                          all_lc['BKG_GTIS'].read_column('STOP')], 's').T
+            # And set this attribute to make sure that no further reading in is done
+            self._read_in = True
+
+        elif not self.usable:
+            reasons = ", ".join(self.not_usable_reasons)
+            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
+                                     "data from it; reason give is {}.".format(reasons))
+
+    # Then define user-facing methods
