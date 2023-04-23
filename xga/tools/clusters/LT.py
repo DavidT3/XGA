@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2023, 18:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 14:08. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -184,14 +184,6 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
     #  accepted OR until we reach the maximum number  of iterations
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
-        # I setup a quantity the same length as the sample (AS IT IS NOW) for predicted radii, but full of NaNs. This
-        #  is because there are two reasons (and spots in the code) that sources can be removed from the sample. It
-        #  can either happen up here, because spectral generation failed for a source, or lower down where no
-        #  temperature was measured so a new predicted temp cannot be measured. As such, if we didn't create the
-        #  pr_rs quantity up here, it could end up being the same length as the samples after sources have been
-        #  removed for spectral generation failing, which would break some indexing
-        pr_rs = Quantity(np.full(len(samp), np.NaN), 'kpc')
-
         # We have a try-except looking for SAS generation errors - they will only be thrown once all the spectrum
         #  generation processes have finished, so we know that the spectra that didn't throw an error exist and
         #  are fine
@@ -207,9 +199,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             bad_gen = list(set([me.message.split(' is the associated source')[0].split('- ')[-1]
                                 for i_err in err.message for me in i_err]))
 
+            # Just to be safe I'm adding a check to make sure bad_gen has entries
+            if len(bad_gen) == 0:
+                raise SASGenerationError("Failed to identify sources for which SAS spectrum generation failed.")
+
             # We define the indices that WON'T have been removed from the sample (so these can be used to address
             #  things like the pr_rs quantity we defined up top
             not_bad_gen_ind = np.nonzero(~np.isin(samp.names, bad_gen))
+            acc_rad = acc_rad[not_bad_gen_ind]
 
             # Then we can cycle through those names and delete the sources from the sample (throwing a hopefully
             #  useful warning as well).
@@ -226,7 +223,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False)[:, 0]
 
         # This uses the scaling relation to predict the overdensity radius from the measured temperatures
-        pr_rs[not_bad_gen_ind] = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
+        pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
 
         # It is possible that some of these radius entries are going to be NaN - the result of NaN temperature values
         #  passed through the 'predict' method of the scaling relation. As such we identify any NaN results and
@@ -240,7 +237,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  slow everything down.
         # I make sure not to try to remove clusters which I've ALREADY removed further up because their spectral
         #  generation failed.
-        for name in samp.names[bad_pr_rs[np.isin(bad_pr_rs, not_bad_gen_ind)]]:
+        for name in samp.names[bad_pr_rs]:
             del samp[name]
 
         # The basis of this method is that we measure a temperature, starting in some user-specified fixed aperture,
