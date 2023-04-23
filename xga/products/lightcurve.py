@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 20:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 20:44. Copyright (c) The Contributors
 from astropy.units import Quantity
 from fitsio import FITS
 
@@ -258,6 +258,39 @@ class LightCurve(BaseProduct):
         # Make sure the GTI information is read into memory
         self._read_on_demand()
         return self._bck_gti
+
+    @property
+    def start_time(self) -> Quantity:
+        """
+        A property getter to access the recorded start time for this light curve.
+
+        :return: Light curve start time, in seconds.
+        :rtype: Quantity
+        """
+        self._read_on_demand()
+        return self._time_start
+
+    @property
+    def stop_time(self) -> Quantity:
+        """
+        A property getter to access the recorded stop time for this light curve.
+
+        :return: Light curve stop time, in seconds.
+        :rtype: Quantity
+        """
+        self._read_on_demand()
+        return self._time_stop
+
+    @property
+    def time_assign(self) -> str:
+        """
+        A property getter to access the physical location that the assigned times are based on.
+
+        :return: The TASSIGN entry of the light curve file.
+        :rtype: str
+        """
+        self._read_on_demand()
+        return self._time_assign
 
     # Then define internal methods
     def _read_on_demand(self):
