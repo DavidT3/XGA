@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 17:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 17:35. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -678,7 +678,7 @@ class ScalingRelation:
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
              save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
-             point_label_size: int = 10):
+             point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01)):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -709,6 +709,14 @@ class ScalingRelation:
             None in which case they are determined automatically.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
+        :param bool label_points: If True, and source name information for each point was passed on the declaration of
+            this scaling relation, then points will be accompanied by an index that can be used with the 'point_names'
+            property to retrieve the source name for a point. Default is False.
+        :param str point_label_colour: The colour of the label text.
+        :param int point_label_size: The fontsize of the label text.
+        :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
+            data point coordinates to determine the location a label should be added. You can use this to fine-tune
+            the label positions relative to their data point.
         """
         # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
@@ -767,10 +775,23 @@ class ScalingRelation:
                 #  ID for these points) to the axes - the user can then look at the number and use that to retrieve
                 #  the name.
                 if not np.isnan(cur_x) and not np.isnan(cur_y):
+                    # This measures the x_size of the plot in display coordinates (TRANSFORMED from data, thus avoiding
+                    #  any issues with the scaling of the axis)
                     x_size = ax.transData.transform((x_lims[1], 0))[0] - ax.transData.transform((x_lims[0], 0))[0]
+                    # This does the same thing with the y-data
+                    y_dat_lims = ax.get_ylim()
+                    y_size = ax.transData.transform((0, y_dat_lims[1]))[1] - \
+                                ax.transData.transform((0, y_dat_lims[0]))[1]
+                    # Then we convert the current data coordinate into display coordinate system
                     cur_fig_coord = ax.transData.transform((cur_x, cur_y))
-                    lab_data_coord = ax.transData.inverted().transform((cur_fig_coord[0]+0.01*x_size, cur_fig_coord[1]))
-                    plt.text(lab_data_coord[0], lab_data_coord[1], str(ind), fontsize=point_label_size, color=point_label_colour)
+                    # And make a label coordinate by offsetting the x and y data coordinate by some fraction of the
+                    #  overall size of the axis, in display coordinates, with the final coordinate transformed back
+                    #  to data coordinates.
+                    inv_tran = ax.transData.inverted()
+                    lab_data_coord = inv_tran.transform((cur_fig_coord[0]+(point_label_offset[0]*x_size),
+                                                         cur_fig_coord[1]+(point_label_offset[0]*y_size)))
+                    plt.text(lab_data_coord[0], lab_data_coord[1], str(ind), fontsize=point_label_size,
+                             color=point_label_colour)
 
         # Need to randomly sample from the fitted model
         num_rand = 10000
