@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 17:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 18:08. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1109,7 +1109,7 @@ class AggregateScalingRelation:
              colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
              fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
              y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
-             data_shape_list: list = None):
+             data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -1140,9 +1140,13 @@ class AggregateScalingRelation:
             data points. This should be used when you want data points to be a different colour to their model.
         :param list data_shape_list: A list of matplotlib format shapes, to manually set the shapes of plotted
             data points.
+        :param str custom_x_label: Passing a string to this variable will override the x-axis label of this
+            plot, including the unit string.
+        :param str custom_y_label: Passing a string to this variable will override the y-axis label of this
+            plot, including the unit string.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
-        #  was the easiest way of setting this up so I think the duplication is justified.
+        #  was the easiest way of setting this up, so I think the duplication is justified.
 
         # Grabs the colours that may have been set for each relation, uses a set to check that there are
         #  no duplicates
@@ -1283,9 +1287,19 @@ class AggregateScalingRelation:
         if y_unit == r"$\left[\\mathrm{}\right]$" or y_unit == r'$\left[\mathrm{}\right]$':
             y_unit = ''
 
-        # The scaling relation object knows what its x and y axes are called
-        plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=fontsize)
-        plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=fontsize)
+        # The user is allowed to define their own x and y axis labels if they want, otherwise we construct it
+        #  from the relations in this aggregate scaling relation.
+        if custom_x_label is None:
+            # The scaling relation object knows what its x-axis is called
+            plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=fontsize)
+        else:
+            plt.xlabel(custom_x_label, fontsize=fontsize)
+
+        if custom_y_label is None:
+            # The scaling relation object knows what its y-axis is called
+            plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=fontsize)
+        else:
+            plt.ylabel(custom_y_label, fontsize=fontsize)
 
         # The user can also pass a plot title, but if they don't then I construct one automatically
         if plot_title is None:
