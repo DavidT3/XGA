@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 15:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 16:13. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -754,11 +754,17 @@ class ScalingRelation:
             ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
                         fmt="x", color=data_colour, capsize=2)
 
-        #
-        if len(self.point_names) != 0 and label_points:
+        # This will check a) if the scaling relation knows the source names associated with the points, and b) if the
+        #  user wants us to label them
+        if self.point_names is not None and label_points:
+            # If both those conditions are satisfied then we will start to iterate through the data points
             for ind in range(len(self.point_names)):
+                # These are the current points being read out to help position the overlaid text
                 cur_x = self._x_data[ind]
                 cur_y = self._y_data[ind]
+                # Then we check to make sure neither coord is None, and add the index (which is used as the short
+                #  ID for these points) to the axes - the user can then look at the number and use that to retrieve
+                #  the name.
                 if not np.isnan(cur_x) and not np.isnan(cur_y):
                     plt.text(cur_x, cur_y, str(ind))
 
