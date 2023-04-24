@@ -1,6 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/04/2023, 20:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/04/2023, 23:16. Copyright (c) The Contributors
 from typing import Union
+from warnings import warn
 
 import matplotlib.pyplot as plt
 from astropy.units import Quantity, Unit, UnitConversionError
@@ -336,8 +337,6 @@ class LightCurve(BaseProduct):
         self._read_on_demand()
         return self._time_assign
 
-    # This absolutely doesn't get a setter considering its the header object with all the information
-    #  about the image in.
     @property
     def header(self) -> FITSHDR:
         """
@@ -405,9 +404,11 @@ class LightCurve(BaseProduct):
                                      "data from it; reason given is {}.".format(reasons))
 
     # Then define user-facing methods
-    def view(self, figsize: tuple = (14, 6), time_unit: Union[str, Unit] = Unit('s'), colour: str = 'tab:cyan',
-             plot_sep: bool = False, src_colour: str = 'black', bck_colour: str = 'firebrick',
-             custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18):
+    def view(self, figsize: tuple = (14, 6), time_unit: Union[str, Unit] = Unit('s'),
+             lo_time_lim: Quantity = None, hi_time_lim: Quantity = None, colour: str = 'black',
+             plot_sep: bool = False, src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick',
+             custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
+             highlight_gti: bool = True):
 
         if isinstance(time_unit, str):
             time_unit = Unit(time_unit)
@@ -415,23 +416,54 @@ class LightCurve(BaseProduct):
         if not self.time.unit.is_equivalent(time_unit):
             raise UnitConversionError("You have supplied a 'time_unit' that cannot be converted to seconds.")
 
-        time_x = self.time.to(time_unit)
+        time_x = self.time.to(time_unit) - self.start_time.to(time_unit)
+
+        if lo_time_lim is None:
+            lo_time_lim = time_x.min()
+        elif lo_time_lim is not None and lo_time_lim.unit.is_equivalent(time_unit):
+            lo_time_lim = lo_time_lim.to(time_unit)
+
+        if hi_time_lim is None:
+            hi_time_lim = time_x.max()
+        elif hi_time_lim is not None and hi_time_lim.unit.is_equivalent(time_unit):
+            hi_time_lim = hi_time_lim.to(time_unit)
 
         plt.figure(figsize=figsize)
         if plot_sep:
             plt.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
-                         color=src_colour, label='Source')
+                         color=src_colour, label='Source', fmt='x')
             plt.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
-                         color=bck_colour, label='Background')
+                         color=bck_colour, label='Background', fmt='x')
         else:
             plt.errorbar(time_x.value, self.count_rate.value, yerr=self.count_rate_err.value, capsize=2,
-                         color=colour, label='Background subtracted')
+                         color=colour, label='Background subtracted', fmt='x')
+
+        if highlight_gti:
+            for ind in range(len(self.src_gti)-1):
+                cur_start = self.src_gti[ind, 0] - self.start_time.to(time_unit)
+                cur_stop = self.src_gti[ind, 1] - self.start_time.to(time_unit)
+                plt.axvspan(cur_start.value, cur_stop.value, color='seagreen', alpha=0.3)
+            plt.axvspan(self.src_gti[-1, 0].value, self.src_gti[-1, 1].value, color='seagreen', alpha=0.3,
+                        label='Good time interval')
 
         if custom_title is not None:
             plt.title(custom_title, fontsize=title_font_size)
         else:
             pass
-        plt.xlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
+
+        if lo_time_lim < time_x.min():
+            warn('The lower time limit is smaller than the lowest time value, it has been set to the '
+                 'lowest available value.')
+            lo_time_lim = time_x.min()
+        if hi_time_lim > time_x.max():
+            warn('The upper time limit is higher than the greatest time value, it has been set to the '
+                 'greatest available value.')
+            hi_time_lim = time_x.max()
+
+        # Setting the axis limits
+        plt.xlim(lo_time_lim.value, hi_time_lim.value)
+
+        plt.xlabel(" Relative Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
         plt.ylabel("Count-rate [{}]".format(self.count_rate.unit.to_string('latex')), fontsize=label_font_size)
         plt.legend(loc='best')
         plt.tight_layout()
