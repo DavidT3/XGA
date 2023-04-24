@@ -1,10 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/04/2023, 11:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/04/2023, 20:34. Copyright (c) The Contributors
 from typing import Union
 
 import matplotlib.pyplot as plt
 from astropy.units import Quantity, Unit, UnitConversionError
-from fitsio import FITS
+from fitsio import FITS, FITSHDR, read_header
 
 from xga.exceptions import FailedProductError
 from xga.products import BaseProduct
@@ -97,6 +97,10 @@ class LightCurve(BaseProduct):
 
         # This just stores whether the data have been read into memory or not (set by the _read_on_demand method)
         self._read_in = False
+
+        # This is used to store the header of the main data table, but again it is only read in its entirety if the
+        #  user actually asks for it through the 'header' property
+        self._header = None
 
     # Defining properties first
     @property
@@ -332,6 +336,25 @@ class LightCurve(BaseProduct):
         self._read_on_demand()
         return self._time_assign
 
+    # This absolutely doesn't get a setter considering its the header object with all the information
+    #  about the image in.
+    @property
+    def header(self) -> FITSHDR:
+        """
+        Property getter allowing access to the main fits header of the light curve.
+
+        :return: The header of the primary data table (RATE) of the light curve that was read in.
+        :rtype: FITSHDR
+        """
+        if self._header is None and self.usable:
+            self._header = read_header(self.path)
+        elif not self.usable:
+            reasons = ", ".join(self.not_usable_reasons)
+            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
+                                     "the header from it; reason given is {}.".format(reasons))
+
+        return self._header
+
     # Then define internal methods
     def _read_on_demand(self):
         """
@@ -379,7 +402,7 @@ class LightCurve(BaseProduct):
         elif not self.usable:
             reasons = ", ".join(self.not_usable_reasons)
             raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-                                     "data from it; reason give is {}.".format(reasons))
+                                     "data from it; reason given is {}.".format(reasons))
 
     # Then define user-facing methods
     def view(self, figsize: tuple = (14, 6), time_unit: Union[str, Unit] = Unit('s'), colour: str = 'tab:cyan',
