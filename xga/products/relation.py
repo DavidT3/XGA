@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 15:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 15:59. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -209,7 +209,7 @@ class ScalingRelation:
         if (x_data is None or y_data is None) and point_names is not None:
             raise ValueError("You cannot set the 'point_names' argument if you have not passed data to "
                              "x_data and y_data.")
-        elif len(point_names) != len(x_data):
+        elif point_names is not None and len(point_names) != len(x_data):
             raise ValueError("You have passed a 'point_names' argument that has a different number of entries ({dn}) "
                              "than the data given to this scaling relation ({d}).".format(dn=len(point_names),
                                                                                           d=len(x_data)))
@@ -677,7 +677,7 @@ class ScalingRelation:
              data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
-             save_path: str = None):
+             save_path: str = None, label_points: bool = False):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -753,6 +753,14 @@ class ScalingRelation:
         if len(self.x_data) != 0:
             ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
                         fmt="x", color=data_colour, capsize=2)
+
+        #
+        if len(self.point_names) != 0 and label_points:
+            for ind in range(len(self.point_names)):
+                cur_x = self._x_data[ind]
+                cur_y = self._y_data[ind]
+                if not np.isnan(cur_x) and not np.isnan(cur_y):
+                    plt.text(cur_x, cur_y, str(ind))
 
         # Need to randomly sample from the fitted model
         num_rand = 10000
