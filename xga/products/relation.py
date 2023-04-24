@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 16:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 16:18. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -77,7 +77,7 @@ class ScalingRelation:
         when plotting. Setting it at definition or setting the property means that the colour doesn't have
         to be set for every view method, and it will be remembered when multiple relations are viewed together.
     :param np.ndarray/list point_names: The source names associated with the data points passed in to this scaling
-        relation, can be used for diagnostic purposes (i.e. identifying which source an outlier belongs too).
+        relation, can be used for diagnostic purposes (i.e. identifying which source an outlier belongs to).
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, dim_hubb_ind=None, fit_method: str = 'unknown', x_data: Quantity = None,
