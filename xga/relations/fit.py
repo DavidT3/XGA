@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 16:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 16:26. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -20,8 +20,9 @@ ALLOWED_FIT_METHODS = ["curve_fit", "odr", "lira", "emcee"]
 
 
 def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
-                    y_norm: Quantity = None, x_norm: Quantity = None, log_data: bool = False) \
-        -> Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity]:
+                    y_norm: Quantity = None, x_norm: Quantity = None, log_data: bool = False,
+                    point_names: Union[np.ndarray, list] = None) \
+        -> Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray]:
     """
     A handy little function that prepares the data for fitting with the chosen method.
 
@@ -35,8 +36,8 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     :param Quantity x_norm: Quantity to normalise the x data by.
     :param bool log_data: This parameter controls whether the data is logged before being returned. The
         default is False as it isn't likely to be used often - its included because LIRA wants logged data.
-    :return: The x data, x errors, y data, and y errors. Also the x_norm, y_norm.
-    :rtype: Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity]
+    :return: The x data, x errors, y data, and y errors. Also the x_norm, y_norm, and the names of non-NaN points.
+    :rtype: Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray]
     """
     # Check the lengths of the value and uncertainty quantities
     if len(x_values) != len(y_values):
@@ -124,7 +125,15 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
             # I know I'm setting something that already exists, but I want errors of 0 to be passed out
             x_fit_err = Quantity(np.zeros(len(x_values)), x_values.unit)
 
-    return x_fit_data, x_fit_err, y_fit_data, y_fit_err, x_norm, y_norm
+    # Make sure point_names actually is an array (if supplied) and remove the NaN entry equivalents
+    if point_names is not None:
+        if isinstance(point_names, list):
+            point_names = np.array(point_names)
+        point_names = point_names[all_not_nans]
+    elif point_names is None:
+        point_names = None
+
+    return x_fit_data, x_fit_err, y_fit_data, y_fit_err, x_norm, y_norm, point_names
 
 
 def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
@@ -165,8 +174,8 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
         predict method.
     :rtype: ScalingRelation
     """
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm = _fit_initialise(y_values, y_errs, x_values,
-                                                                                     x_errs, y_norm, x_norm)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, \
+        point_names = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names)
 
     fit_par, fit_cov = curve_fit(model_func, x_fit_data.value, y_fit_data.value, sigma=y_fit_errs.value,
                                  absolute_sigma=True, p0=start_pars)
@@ -225,8 +234,8 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
         start_pars = np.ones(num_par)
 
     # Standard data preparation
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm = _fit_initialise(y_values, y_errs, x_values,
-                                                                                     x_errs, y_norm, x_norm)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, \
+        point_names = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names)
 
     # Immediately faced with a problem, because scipy's ODR is naff and wants functions defined like
     #  blah(par_vector, x_values), which is completely different to my standard definition of models in this module.
@@ -327,8 +336,8 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
                                          'the LIRA fitting package to your R environment')
 
     # Slightly different data preparation to the other fitting methods, this one returns logged data and errors
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm = _fit_initialise(y_values, y_errs, x_values,
-                                                                                     x_errs, y_norm, x_norm, True)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, \
+        point_names = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, True, point_names)
 
     # And now we have to make some R objects so that we can pass it through our R interface to the LIRA package
     x_fit_data = robjects.FloatVector(x_fit_data.value)
@@ -362,8 +371,8 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
 
     # This call to the fit initialisation function DOESN'T produce logged data, do this so the plot works
     #  properly - it expects non logged data
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm = _fit_initialise(y_values, y_errs, x_values,
-                                                                                     x_errs, y_norm, x_norm)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, \
+        point_names = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names)
 
     # I'm re-formatting the chains into a shape that the ScalingRelation class will understand.
     xga_chains = np.concatenate([beta_par_chain.reshape(len(beta_par_chain), 1),
