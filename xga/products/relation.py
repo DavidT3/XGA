@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 16:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 17:14. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -677,7 +677,8 @@ class ScalingRelation:
              data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
-             save_path: str = None, label_points: bool = False):
+             save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
+             point_label_size: int = 10):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -760,13 +761,16 @@ class ScalingRelation:
             # If both those conditions are satisfied then we will start to iterate through the data points
             for ind in range(len(self.point_names)):
                 # These are the current points being read out to help position the overlaid text
-                cur_x = self._x_data[ind]
-                cur_y = self._y_data[ind]
+                cur_x = self._x_data[ind].value
+                cur_y = self._y_data[ind].value
                 # Then we check to make sure neither coord is None, and add the index (which is used as the short
                 #  ID for these points) to the axes - the user can then look at the number and use that to retrieve
                 #  the name.
                 if not np.isnan(cur_x) and not np.isnan(cur_y):
-                    plt.text(cur_x, cur_y, str(ind))
+                    x_size = ax.transData.transform((x_lims[1], 0))[0] - ax.transData.transform((x_lims[0], 0))[0]
+                    cur_fig_coord = ax.transData.transform((cur_x, cur_y))
+                    lab_data_coord = ax.transData.inverted().transform((cur_fig_coord[0]+0.01*x_size, cur_fig_coord[1]))
+                    plt.text(lab_data_coord[0], lab_data_coord[1], str(ind), fontsize=point_label_size, color=point_label_colour)
 
         # Need to randomly sample from the fitted model
         num_rand = 10000
