@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2023, 21:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 15:45. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -76,13 +76,16 @@ class ScalingRelation:
     :param str model_colour: This variable can be used to set the colour that the fit should be displayed in
         when plotting. Setting it at definition or setting the property means that the colour doesn't have
         to be set for every view method, and it will be remembered when multiple relations are viewed together.
+    :param np.ndarray/list point_names: The source names associated with the data points passed in to this scaling
+        relation, can be used for diagnostic purposes (i.e. identifying which source an outlier belongs too).
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, dim_hubb_ind=None, fit_method: str = 'unknown', x_data: Quantity = None,
                  y_data: Quantity = None, x_err: Quantity = None, y_err: Quantity = None, x_lims: Quantity = None,
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
                  relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = '',
-                 scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None, model_colour: str = None):
+                 scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None, model_colour: str = None,
+                 point_names: Union[np.ndarray, list] = None):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -200,6 +203,18 @@ class ScalingRelation:
         # This sets an internal colour attribute so the default plotting colour is always the one that the
         #  user defined
         self._model_colour = model_colour
+
+        # This checks the input for 'point_names', which can be used to associate each data point in this scaling
+        #  relation with a source name so that outliers can be properly investigated.
+        if (x_data is None or y_data is None) and point_names is not None:
+            raise ValueError("You cannot set the 'point_names' argument if you have not passed data to "
+                             "x_data and y_data.")
+        elif len(point_names) != len(x_data):
+            raise ValueError("You have passed a 'point_names' argument that has a different number of entries ({dn}) "
+                             "than the data given to this scaling relation ({d}).".format(dn=len(point_names),
+                                                                                          d=len(x_data)))
+        else:
+            self._point_names = point_names
 
     @property
     def pars(self) -> np.ndarray:
@@ -500,6 +515,20 @@ class ScalingRelation:
                              "following; {cn}".format(c=new_colour, cn=all_names))
         else:
             self._model_colour = new_colour
+
+    @property
+    def point_names(self) -> Union[np.ndarray, None]:
+        """
+        Returns an array of point names, with one entry per data point, and in the same order (unless the user passes
+        a differently ordered name array than data array, there is no way we can detect that).
+
+        :return: The names associated with the data points, if supplied on initialization. The default is None.
+        :rtype: np.ndarray/None
+        """
+        if isinstance(self._point_names, list):
+            return np.ndarray(self._point_names)
+        else:
+            return self._point_names
 
     def view_chains(self, figsize: tuple = None, colour: str = None):
         """
