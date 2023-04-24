@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 16:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 16:31. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -372,7 +372,7 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     # This call to the fit initialisation function DOESN'T produce logged data, do this so the plot works
     #  properly - it expects non logged data
     x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, \
-        throw_away = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names)
+        throw_away = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm)
 
     # I'm re-formatting the chains into a shape that the ScalingRelation class will understand.
     xga_chains = np.concatenate([beta_par_chain.reshape(len(beta_par_chain), 1),
