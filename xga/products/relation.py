@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 18:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:18. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -78,6 +78,8 @@ class ScalingRelation:
         to be set for every view method, and it will be remembered when multiple relations are viewed together.
     :param np.ndarray/list point_names: The source names associated with the data points passed in to this scaling
         relation, can be used for diagnostic purposes (i.e. identifying which source an outlier belongs to).
+    :param np.ndarray/Quantity third_dim_info:
+    :param str third_dim_name:
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, dim_hubb_ind=None, fit_method: str = 'unknown', x_data: Quantity = None,
@@ -85,7 +87,8 @@ class ScalingRelation:
                  odr_output: odr.Output = None, chains: np.ndarray = None, relation_name: str = None,
                  relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = '',
                  scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None, model_colour: str = None,
-                 point_names: Union[np.ndarray, list] = None):
+                 point_names: Union[np.ndarray, list] = None, third_dim_info: Union[np.ndarray, Quantity] = None,
+                 third_dim_name: str = None):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -215,6 +218,27 @@ class ScalingRelation:
                                                                                           d=len(x_data)))
         else:
             self._point_names = point_names
+
+        # The user is allowed to pass information that can be used to colour the data points of a scaling relation
+        #  when it is viewed. Here we check that, if present, the extra data are the right shape
+        if (x_data is None or y_data is None) and third_dim_info is not None:
+            raise ValueError("You cannot set the 'third_dim_info' argument if you have not passed data to "
+                             "x_data and y_data.")
+        elif third_dim_info is not None and len(third_dim_info) != len(x_data):
+            raise ValueError("You have passed a 'third_dim_info' argument that has a different number of "
+                             "entries ({dn}) than the data given to this scaling relation "
+                             "({d}).".format(dn=len(third_dim_info), d=len(x_data)))
+        elif third_dim_info is not None and third_dim_name is None:
+            raise ValueError("If 'third_dim_info' is set, then the 'third_dim_name' argument must be as well.")
+        elif third_dim_info is None and third_dim_name is not None:
+            # If the user accidentally passed a name but no data then I will just null the name and let them carry on
+            #  with a warning
+            third_dim_name = None
+            warn("A value was passed to 'third_dim_name' without a corresponding 'third_dim_info' "
+                 "value, 'third_dim_name' has been set to None.", stacklevel=2)
+        # Setting the attributes, if we've gotten this far then there are no problems
+        self._third_dim_info = third_dim_info
+        self._third_dim_name = third_dim_name
 
     @property
     def pars(self) -> np.ndarray:
@@ -529,6 +553,32 @@ class ScalingRelation:
             return np.ndarray(self._point_names)
         else:
             return self._point_names
+
+    @property
+    def third_dimension_data(self) -> Union[Quantity, None]:
+        """
+        Returns a Quantity containing a third dimension of data associated with the data points (this can be used to
+        colour the points in the view method), with one entry per data point, and in the same order (unless the
+        user passes a differently ordered name array than data array, there is no way we can detect that).
+
+        :return: The third dimension data associated with the data points, if supplied on initialization. The
+            default is None.
+        :rtype: Quantity/None
+        """
+        if isinstance(self._point_names, (list, np.ndarray)):
+            return Quantity(self._third_dim_info)
+        else:
+            return self._third_dim_info
+
+    @property
+    def third_dimension_name(self) -> Union[str, None]:
+        """
+        Returns the name of the third data dimension passed to this relation on initialization.
+
+        :return: The name of the third dimension, if supplied on initialization. The default is None.
+        :rtype: Quantity/None
+        """
+        return self._third_dim_name
 
     def view_chains(self, figsize: tuple = None, colour: str = None):
         """
