@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:50. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -41,13 +41,22 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     :return: The x data, x errors, y data, and y errors. Also the x_norm, y_norm, and the names of non-NaN points.
     :rtype: Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray, Quantity]
     """
-    # Check the lengths of the value and uncertainty quantities
+    # Check the lengths of the value and uncertainty quantities, as well as the extra information that can also
+    #  flow through this function
     if len(x_values) != len(y_values):
         raise ValueError("The x and y quantities must have the same number of entries!")
     elif len(y_errs) != len(y_values):
         raise ValueError("Uncertainty quantities must have the same number of entries as the value quantities.")
     elif x_errs is not None and len(x_errs) != len(x_values):
         raise ValueError("Uncertainty quantities must have the same number of entries as the value quantities.")
+    # Not involved in the fitting process, but comes through here so that the sources dropped due to NaN values
+    #  also have the values dropped in these variables
+    elif len(point_names) != len(x_values):
+        ValueError("The 'point_names' argument is a different length ({p}) to the input data "
+                   "({d}).".format(p=len(point_names), d=len(x_values)))
+    elif len(third_dim) != len(x_values):
+        ValueError("The 'third_dim' argument is a different length ({p}) to the input data "
+                   "({d}).".format(p=len(third_dim), d=len(x_values)))
     elif y_errs.unit != y_values.unit:
         raise UnitConversionError("Uncertainty quantities must have the same units as value quantities.")
     elif x_errs is not None and x_errs.unit != x_values.unit:
@@ -128,23 +137,19 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
             x_fit_err = Quantity(np.zeros(len(x_values)), x_values.unit)
 
     # Make sure point_names actually is an array (if supplied) and remove the NaN entry equivalents
-    if point_names is not None and len(point_names) == len(all_not_nans):
+    if point_names is not None:
         if isinstance(point_names, list):
             point_names = np.array(point_names)
         point_names = point_names[all_not_nans]
-    elif point_names is not None and len(point_names) != len(all_not_nans):
-        raise ValueError("The 'point_names' argument is a different length to the input data.")
     elif point_names is None:
         point_names = None
 
     # Same deal with the third dimension data that can optionally be supplied to the scaling relations (though
     #  isn't used in the fit process, it's just for colouring data points in a view method).
-    if third_dim is not None and len(third_dim) == len(all_not_nans):
+    if third_dim is not None:
         if isinstance(third_dim, list):
             third_dim = Quantity(third_dim)
         third_dim = third_dim[all_not_nans]
-    elif third_dim is not None and len(third_dim) != len(all_not_nans):
-        raise ValueError("The 'third_dim' argument is a different length to the input data.")
     elif third_dim is None:
         third_dim = None
 
