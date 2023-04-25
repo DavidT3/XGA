@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 15:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 15:26. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -231,6 +231,8 @@ class ScalingRelation:
             raise ValueError("You have passed a 'third_dim_info' argument that has a different number of "
                              "entries ({dn}) than the data given to this scaling relation "
                              "({d}).".format(dn=len(third_dim_info), d=len(x_data)))
+        elif third_dim_info is not None and third_dim_info.ndim != 1:
+            raise ValueError("Only single-dimension Quantities are accepted by 'third_dim_info'.")
         elif third_dim_info is not None and third_dim_name is None:
             raise ValueError("If 'third_dim_info' is set, then the 'third_dim_name' argument must be as well.")
         elif third_dim_info is None and third_dim_name is not None:
@@ -996,7 +998,10 @@ class ScalingRelation:
         # If we did colour the data by a third dimension then we should add a colour-bar to the relation
         if show_third_dim:
             cbar = plt.colorbar(cmap_mapper)
-            cbar_lab = self.third_dimension_name + ' ' + self.third_dimension_data.unit.to_string('latex')
+            if self.third_dimension_data.unit.is_equivalent(''):
+                cbar_lab = self.third_dimension_name
+            else:
+                cbar_lab = self.third_dimension_name + ' [' + self.third_dimension_data.unit.to_string('latex') + ']'
             cbar.ax.set_ylabel(cbar_lab, fontsize=fontsize)
 
         plt.legend(loc="best", fontsize=legend_fontsize)
