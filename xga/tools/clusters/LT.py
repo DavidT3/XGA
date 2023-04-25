@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 14:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 10:33. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -196,8 +196,19 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         except SASGenerationError as err:
             # Otherwise if something went wrong we can parse the error messages and extract the names of the sources
             #  for which the error occurred
-            bad_gen = list(set([me.message.split(' is the associated source')[0].split('- ')[-1]
-                                for i_err in err.message for me in i_err]))
+            poss_bad_gen = list(set([me.message.split(' is the associated source')[0].split('- ')[-1]
+                                     for i_err in err.message for me in i_err]))
+            # Do also need to check that the entries in poss_bad_gen are actually source names - as XGA is raising
+            #  the errors we're parsing, we SHOULD be able to rely on them being a certain format, but we had better
+            #  be safe
+            bad_gen = [en for en in poss_bad_gen if en in samp.names]
+            if len(bad_gen) != len(poss_bad_gen):
+                # If there are entries in poss_bad_gen that ARE NOT names in the sample, then something has gone wrong
+                #  with the error parsing and we need to warn the user.
+                problem = [en for en in poss_bad_gen if en not in samp.names]
+                warn("SASGenerationError parsing has recovered a string that is not a source name, a "
+                     "problem source may not have been removed from the sample (contact the development team). The "
+                     "offending strings are, {}".format(', '.join(problem)), stacklevel=2)
 
             # Just to be safe I'm adding a check to make sure bad_gen has entries
             if len(bad_gen) == 0:
@@ -211,7 +222,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             # Then we can cycle through those names and delete the sources from the sample (throwing a hopefully
             #  useful warning as well).
             for bad_name in bad_gen:
-                del samp[bad_name]
+                if bad_name in samp.names:
+                    del samp[bad_name]
             warn("Some sources ({}) have been removed because of spectrum generation "
                  "failures.".format(', '.join(bad_gen)), stacklevel=2)
 
