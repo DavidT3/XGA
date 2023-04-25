@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 15:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 15:39. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -570,7 +570,7 @@ class ScalingRelation:
             default is None.
         :rtype: Quantity/None
         """
-        if isinstance(self._point_names, (list, np.ndarray)):
+        if isinstance(self._third_dim_info, (list, np.ndarray)):
             return Quantity(self._third_dim_info)
         else:
             return self._third_dim_info
