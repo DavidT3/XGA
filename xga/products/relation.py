@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:36. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -78,8 +78,10 @@ class ScalingRelation:
         to be set for every view method, and it will be remembered when multiple relations are viewed together.
     :param np.ndarray/list point_names: The source names associated with the data points passed in to this scaling
         relation, can be used for diagnostic purposes (i.e. identifying which source an outlier belongs to).
-    :param np.ndarray/Quantity third_dim_info:
-    :param str third_dim_name:
+    :param np.ndarray/Quantity third_dim_info: A set of data points which represent a faux third dimension. They should
+        not have been involved in the fitting process, and the relation should not be in three dimensions, but these
+        can be used to colour the data points in a view method.
+    :param str third_dim_name: The name of the third dimension data.
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, dim_hubb_ind=None, fit_method: str = 'unknown', x_data: Quantity = None,

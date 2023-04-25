@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:36. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -155,7 +155,9 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
                                x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
                                x_lims: Quantity = None, start_pars: list = None, y_name: str = 'Y',
                                x_name: str = 'X', dim_hubb_ind: Union[float, int] = None,
-                               point_names: Union[np.ndarray, list] = None) -> ScalingRelation:
+                               point_names: Union[np.ndarray, list] = None,
+                               third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None) \
+        -> ScalingRelation:
     """
     A function to fit a scaling relation with the scipy non-linear least squares implementation (curve fit), generate
     an XGA ScalingRelation product, and return it.
@@ -185,12 +187,17 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
         predictions. The default is None.
     :param np.ndarray/list point_names: The source names associated with the data points passed in to this scaling
         relation, can be used for diagnostic purposes (i.e. identifying which source an outlier belongs to).
+    :param np.ndarray/Quantity third_dim_info: A set of data points which represent a faux third dimension. They should
+        not have been involved in the fitting process, and the relation should not be in three dimensions, but these
+        can be used to colour the data points in a view method.
+    :param str third_dim_name: The name of the third dimension data.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
     """
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, \
-        point_names = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, point_names, \
+        third_dim_info = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names,
+                                         third_dim=third_dim_info)
 
     fit_par, fit_cov = curve_fit(model_func, x_fit_data.value, y_fit_data.value, sigma=y_fit_errs.value,
                                  absolute_sigma=True, p0=start_pars)
@@ -198,7 +205,8 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
 
     sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, fit_method='Curve Fit',
                          x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
-                         y_err=y_fit_errs * y_norm, x_lims=x_lims, dim_hubb_ind=dim_hubb_ind, point_names=point_names)
+                         y_err=y_fit_errs * y_norm, x_lims=x_lims, dim_hubb_ind=dim_hubb_ind, point_names=point_names,
+                         third_dim_info=third_dim_info, third_dim_name=third_dim_name)
 
     return sr
 
@@ -207,7 +215,9 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
                          x_errs: Quantity = None, y_norm: Quantity = None, x_norm: Quantity = None,
                          x_lims: Quantity = None, start_pars: list = None, y_name: str = 'Y',
                          x_name: str = 'X', dim_hubb_ind: Union[float, int] = None,
-                         point_names: Union[np.ndarray, list] = None) -> ScalingRelation:
+                         point_names: Union[np.ndarray, list] = None,
+                         third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None) \
+        -> ScalingRelation:
     """
     A function to fit a scaling relation with the scipy orthogonal distance regression implementation, generate
     an XGA ScalingRelation product, and return it.
@@ -239,6 +249,10 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
         predictions. The default is None.
     :param np.ndarray/list point_names: The source names associated with the data points passed in to this scaling
         relation, can be used for diagnostic purposes (i.e. identifying which source an outlier belongs to).
+    :param np.ndarray/Quantity third_dim_info: A set of data points which represent a faux third dimension. They should
+        not have been involved in the fitting process, and the relation should not be in three dimensions, but these
+        can be used to colour the data points in a view method.
+    :param str third_dim_name: The name of the third dimension data.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
@@ -249,8 +263,9 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
         start_pars = np.ones(num_par)
 
     # Standard data preparation
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, \
-        point_names = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, point_names, \
+        third_dim_info = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, point_names=point_names,
+                                         third_dim=third_dim_info)
 
     # Immediately faced with a problem, because scipy's ODR is naff and wants functions defined like
     #  blah(par_vector, x_values), which is completely different to my standard definition of models in this module.
@@ -285,7 +300,7 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
     sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, fit_method='ODR',
                          x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
                          y_err=y_fit_errs * y_norm, x_lims=x_lims, odr_output=fit_results, dim_hubb_ind=dim_hubb_ind,
-                         point_names=point_names)
+                         point_names=point_names, third_dim_info=third_dim_info, third_dim_name=third_dim_name)
 
     return sr
 
@@ -293,7 +308,8 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
 def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
                           y_norm: Quantity = None, x_norm: Quantity = None, x_lims: Quantity = None, y_name: str = 'Y',
                           x_name: str = 'X', num_steps: int = 100000, num_chains: int = 4, num_burn_in: int = 10000,
-                          dim_hubb_ind: Union[float, int] = None, point_names: Union[np.ndarray, list] = None) \
+                          dim_hubb_ind: Union[float, int] = None, point_names: Union[np.ndarray, list] = None,
+                          third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None) \
         -> ScalingRelation:
     """
     A function to fit a power law scaling relation with the excellent R fitting package LIRA
@@ -324,6 +340,10 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
         predictions. The default is None.
     :param np.ndarray/list point_names: The source names associated with the data points passed in to this scaling
         relation, can be used for diagnostic purposes (i.e. identifying which source an outlier belongs to).
+    :param np.ndarray/Quantity third_dim_info: A set of data points which represent a faux third dimension. They should
+        not have been involved in the fitting process, and the relation should not be in three dimensions, but these
+        can be used to colour the data points in a view method.
+    :param str third_dim_name: The name of the third dimension data.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
@@ -351,8 +371,9 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
                                          'the LIRA fitting package to your R environment')
 
     # Slightly different data preparation to the other fitting methods, this one returns logged data and errors
-    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, \
-        point_names = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, True, point_names)
+    x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, point_names, \
+        third_dim_info = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm, True, point_names,
+                                         third_dim_info)
 
     # And now we have to make some R objects so that we can pass it through our R interface to the LIRA package
     x_fit_data = robjects.FloatVector(x_fit_data.value)
@@ -387,7 +408,7 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
     # This call to the fit initialisation function DOESN'T produce logged data, do this so the plot works
     #  properly - it expects non logged data
     x_fit_data, x_fit_errs, y_fit_data, y_fit_errs, x_norm, y_norm, \
-        throw_away = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm)
+        throw_away, sec_throw_away = _fit_initialise(y_values, y_errs, x_values, x_errs, y_norm, x_norm)
 
     # I'm re-formatting the chains into a shape that the ScalingRelation class will understand.
     xga_chains = np.concatenate([beta_par_chain.reshape(len(beta_par_chain), 1),
@@ -397,7 +418,8 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
                          x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
                          y_err=y_fit_errs * y_norm, x_lims=x_lims, chains=xga_chains,
                          scatter_par=np.array([sigma_par_val, sigma_par_err]), scatter_chain=sigma_par_chain,
-                         dim_hubb_ind=dim_hubb_ind, point_names=point_names)
+                         dim_hubb_ind=dim_hubb_ind, point_names=point_names, third_dim_info=third_dim_info,
+                         third_dim_name=third_dim_name)
 
     return sr
 
