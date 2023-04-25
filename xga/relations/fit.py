@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 16:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:28. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -21,8 +21,8 @@ ALLOWED_FIT_METHODS = ["curve_fit", "odr", "lira", "emcee"]
 
 def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_errs: Quantity = None,
                     y_norm: Quantity = None, x_norm: Quantity = None, log_data: bool = False,
-                    point_names: Union[np.ndarray, list] = None) \
-        -> Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray]:
+                    point_names: Union[np.ndarray, list] = None, third_dim: Union[np.ndarray, Quantity, list] = None) \
+        -> Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray, Quantity]:
     """
     A handy little function that prepares the data for fitting with the chosen method.
 
@@ -36,8 +36,10 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     :param Quantity x_norm: Quantity to normalise the x data by.
     :param bool log_data: This parameter controls whether the data is logged before being returned. The
         default is False as it isn't likely to be used often - its included because LIRA wants logged data.
+    :param np.ndarray/list point_names: A possible set of source names associated with all the data points
+    :param np.ndarray/Quantity/list third_dim: A possible set of extra data used to colour data points.
     :return: The x data, x errors, y data, and y errors. Also the x_norm, y_norm, and the names of non-NaN points.
-    :rtype: Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray]
+    :rtype: Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray, Quantity]
     """
     # Check the lengths of the value and uncertainty quantities
     if len(x_values) != len(y_values):
@@ -126,14 +128,27 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
             x_fit_err = Quantity(np.zeros(len(x_values)), x_values.unit)
 
     # Make sure point_names actually is an array (if supplied) and remove the NaN entry equivalents
-    if point_names is not None:
+    if point_names is not None and len(point_names) == len(all_not_nans):
         if isinstance(point_names, list):
             point_names = np.array(point_names)
         point_names = point_names[all_not_nans]
+    elif point_names is not None and len(point_names) != len(all_not_nans):
+        raise ValueError("The 'point_names' argument is a different length to the input data.")
     elif point_names is None:
         point_names = None
 
-    return x_fit_data, x_fit_err, y_fit_data, y_fit_err, x_norm, y_norm, point_names
+    # Same deal with the third dimension data that can optionally be supplied to the scaling relations (though
+    #  isn't used in the fit process, it's just for colouring data points in a view method).
+    if third_dim is not None and len(third_dim) == len(all_not_nans):
+        if isinstance(third_dim, list):
+            third_dim = Quantity(third_dim)
+        third_dim = third_dim[all_not_nans]
+    elif third_dim is not None and len(third_dim) != len(all_not_nans):
+        raise ValueError("The 'third_dim' argument is a different length to the input data.")
+    elif third_dim is None:
+        third_dim = None
+
+    return x_fit_data, x_fit_err, y_fit_data, y_fit_err, x_norm, y_norm, point_names, third_dim
 
 
 def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_errs: Quantity, x_values: Quantity,
