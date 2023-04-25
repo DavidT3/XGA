@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 15:11. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -8,14 +8,15 @@ from datetime import date
 from typing import List, Union
 from warnings import warn
 
-import matplotlib.colors as mcolors
 import numpy as np
 import scipy.odr as odr
 from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 from cycler import cycler
 from getdist import plots, MCSamples
+from matplotlib import cm
 from matplotlib import pyplot as plt
+from matplotlib.colors import TABLEAU_COLORS, BASE_COLORS, Colormap, CSS4_COLORS, Normalize
 from matplotlib.ticker import FuncFormatter
 
 from ..models import MODEL_PUBLICATION_NAMES
@@ -534,7 +535,7 @@ class ScalingRelation:
 
         :param str new_colour: The new matplotlib colour.
         """
-        all_col = list(mcolors.TABLEAU_COLORS.keys())+list(mcolors.CSS4_COLORS.keys())+list(mcolors.BASE_COLORS.keys())
+        all_col = list(TABLEAU_COLORS.keys()) + list(CSS4_COLORS.keys()) + list(BASE_COLORS.keys())
         if new_colour not in all_col:
             all_names = ', '.join(all_col)
             raise ValueError("{c} is not a named matplotlib colour, please use one of the "
@@ -730,7 +731,8 @@ class ScalingRelation:
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
              save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
-             point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01)):
+             point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = True,
+             third_dim_cmap: Union[str, Colormap] = 'plasma'):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -766,6 +768,12 @@ class ScalingRelation:
             property to retrieve the source name for a point. Default is False.
         :param str point_label_colour: The colour of the label text.
         :param int point_label_size: The fontsize of the label text.
+        :param bool show_third_dim: Colour the data points by the third dimension data passed in on creation of this
+            scaling relation, with a colour bar to communicate values. Only possible if data were passed to
+            'third_dim_info' on initialization. Default is False.
+        :param str/Colormap third_dim_cmap: The colour map which should be used for the third dimension data points.
+            A matplotlib colour map name or a colour map object may be passed. Default is 'plasma'. This essentially
+            overwrites the 'data_colour' argument if show_third_dim is True.
         :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
             data point coordinates to determine the location a label should be added. You can use this to fine-tune
             the label positions relative to their data point.
@@ -810,10 +818,36 @@ class ScalingRelation:
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
+        # We check to see a) whether the user wants a third dimension of data communicated via the colour of the
+        #  data, and b) if they actually passed the data necessary to make that happen. If there is no data but they
+        #  have set show_third_dim=True, we set it back to False and give a warning
+        if show_third_dim and self.third_dimension_data is None:
+            warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on the creation "
+                 "of this scaling relation. Setting 'show_third_im' to False.")
+            show_third_dim = False
+
         # Plot the data with uncertainties, if any data is present in this scaling relation.
-        if len(self.x_data) != 0:
+        if len(self.x_data) != 0 and not show_third_dim:
             ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
                         fmt="x", color=data_colour, capsize=2)
+        elif len(self.x_data) != 0 and show_third_dim:
+            # The user can either set the cmap with a string name, or actually pass a colormap object
+            if isinstance(third_dim_cmap, str):
+                cmap = cm.get_cmap(third_dim_cmap)
+            else:
+                cmap = third_dim_cmap
+            # We want to normalise this colourmap to our specific data range
+            norm = Normalize(vmin=self.third_dimension_data.value.min(), vmax=self.third_dimension_data.value.max())
+            # Now this mapper can be constructed so that we can take that information about the cmap and normalisation
+            #  and use it with our data to calculate colours
+            cmap_mapper = cm.ScalarMappable(norm=norm, cmap=cmap)
+            # This calculates the colours
+            colours = cmap_mapper.to_rgba(self.third_dimension_data.value)
+            # I didn't really want to do this but errorbar calls plot (rather than scatter) so it will only do one
+            #  colour at a time.
+            for c_ind, col in enumerate(colours):
+                ax.errorbar(self._x_data[c_ind].value, self._y_data[c_ind].value, xerr=self._x_err[c_ind].value,
+                            yerr=self._y_err[c_ind].value, fmt="x", c=colours[c_ind, :], capsize=2)
 
         # This will check a) if the scaling relation knows the source names associated with the points, and b) if the
         #  user wants us to label them
@@ -958,6 +992,12 @@ class ScalingRelation:
         if y_minor_ticks is not None:
             ax.set_xticks(y_minor_ticks, minor=True)
             ax.set_xticklabels(y_minor_ticks, minor=True)
+
+        # If we did colour the data by a third dimension then we should add a colour-bar to the relation
+        if show_third_dim:
+            cbar = plt.colorbar(cmap_mapper)
+            cbar_lab = self.third_dimension_name + ' ' + self.third_dimension_data.unit.to_string('latex')
+            cbar.ax.set_ylabel(cbar_lab, fontsize=fontsize)
 
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
