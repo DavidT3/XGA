@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 11:52. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -51,10 +51,10 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
         raise ValueError("Uncertainty quantities must have the same number of entries as the value quantities.")
     # Not involved in the fitting process, but comes through here so that the sources dropped due to NaN values
     #  also have the values dropped in these variables
-    elif len(point_names) != len(x_values):
+    elif point_names is not None and len(point_names) != len(x_values):
         ValueError("The 'point_names' argument is a different length ({p}) to the input data "
                    "({d}).".format(p=len(point_names), d=len(x_values)))
-    elif len(third_dim) != len(x_values):
+    elif point_names is not None and len(third_dim) != len(x_values):
         ValueError("The 'third_dim' argument is a different length ({p}) to the input data "
                    "({d}).".format(p=len(third_dim), d=len(x_values)))
     elif y_errs.unit != y_values.unit:
