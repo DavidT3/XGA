@@ -17,6 +17,9 @@ source {xsp}
 #################################################
 # Setting up XSPEC
 #################################################
+# Turning off caching in the home directory .xspec folder
+autosave off
+
 # Set the statistic type to Cash
 statistic cstat
 
