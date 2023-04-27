@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 01:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 11:02. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -126,7 +126,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
                         linking: str, freezing: str, par_fit_stat: float, lum_low_lims: str, lum_upp_lims: str,
                         lum_conf: float, redshift: float, pre_check: bool, check_par_names: str, check_par_lo_lims: str,
                         check_par_hi_lims: str, check_par_err_lims: str, norm_scale: bool,
-                        which_mod_nh: str = 'None') -> Tuple[str, str]:
+                        which_par_nh: str = 'None') -> Tuple[str, str]:
     """
     This writes out a configured XSPEC script, and is common to all fit functions.
 
@@ -160,9 +160,8 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         uncertainties.
     :param bool norm_scale: Is there an extra constant designed to account for the differences in normalisation
         you can get from different observations of a cluster.
-    :param str which_mod_nh: The name of an absorptive model which has an nH component that should be zeroed for
-        the measurement of unabsorbed luminosities. If no model contains a zero-able nH value, this should be set to
-        'None' (the default).
+    :param str which_par_nh: The parameter IDs of the nH parameters values which should be zeroed for the calculation
+        of unabsorbed luminosities.
     :return: The paths to the output file and the script file.
     :rtype: Tuple[str, str]
     """
@@ -187,7 +186,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
                            lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
                            of=out_file, redshift=redshift, lel=lum_conf, check=pre_check, cps=check_par_names,
                            cpsl=check_par_lo_lims, cpsh=check_par_hi_lims, cpse=check_par_err_lims, ns=norm_scale,
-                           nhmtz=which_mod_nh)
+                           nhmtz=which_par_nh)
 
     # Write out the filled-in template to its destination
     with open(script_file, 'w') as xcm:
