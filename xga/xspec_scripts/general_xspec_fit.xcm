@@ -93,6 +93,11 @@ set luminosity_confidence {lel}
 # This is where the lower and upper energy limits for the luminosity calculations go, xga_extract needs them
 set lum_low_lims {lll}
 set lum_upp_lims {lul}
+
+# This allows us to specify which model's nH parameter should be set to zero for the calculation of unabsorbed
+#  luminosity in the xga_extract.tcl file. The issue is that some emission models (e.g. mekal) have an intrinsic
+#  nH parameter, and they were being zeroed along with the wabs/tbabs/etc. nH parameter
+set nh_mod_to_zero {nhmtz}
 #################################################
 
 
@@ -458,6 +463,6 @@ for {{set i 0}} {{$i < [llength $lum_low_lims]}} {{incr i}} {{
     }}
 
 # And finally we run the custom XGA script that extracts all the information we want
-xga_extract $out_file $lum_lim_pairs $input_redshift $luminosity_confidence $model_name
+xga_extract $out_file $lum_lim_pairs $input_redshift $luminosity_confidence $model_name $nh_mod_to_zero
 #################################################
 exit
