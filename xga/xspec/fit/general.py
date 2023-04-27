@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 10:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 11:11. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -150,11 +150,17 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             check_hi_lims = "{}"
             check_err_lims = "{}"
 
+        # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
+        #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
+        #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
+        #  them all.
+        nh_to_zero = "{2}"
+
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
                                                     spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True, 'tbabs')
+                                                    check_err_lims, True, nh_to_zero)
 
         # If the fit has already been performed we do not wish to perform it again
         try:
@@ -284,8 +290,6 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
         #  linked
         linking = "{F T T T T T T T T T}"
 
-        # par_names = "{factor nH Tmax beta inv_slope nH abundanc Redshift switch norm}"
-
         # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
         #  limits. The check limits here are somewhat of a guesstimate based on my understanding of the model
         #  rather than on practical experience with it
@@ -300,13 +304,19 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
             check_hi_lims = "{}"
             check_err_lims = "{}"
 
+        # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
+        #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
+        #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
+        #  them all.
+        nh_to_zero = "{2}"
+
         # This internal function writes out the XSPEC script with all the information we've assembled in this
         #  function - filling out the XSPEC template and writing to disk
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
                                                     spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True, 'tbabs')
+                                                    check_err_lims, True, nh_to_zero)
 
         # If the fit has already been performed we do not wish to perform it again
         try:
@@ -441,10 +451,16 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
                           " will be invalid, as redshift has been set to one.".format(s=source.name))
 
+        # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
+        #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
+        #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
+        #  them all.
+        nh_to_zero = "{2}"
+
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
-                                                    "{}", "{}", "{}", True, 'tbabs')
+                                                    "{}", "{}", "{}", True, nh_to_zero)
 
         # If the fit has already been performed we do not wish to perform it again
         try:
@@ -583,10 +599,15 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
                           " will be invalid, as redshift has been set to one.".format(s=source.name))
 
+        # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
+        #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
+        #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
+        #  them all.
+        nh_to_zero = "{2}"
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
-                                                    "{}", "{}", "{}", True, 'tbabs')
+                                                    "{}", "{}", "{}", True, nh_to_zero)
 
         # If the fit has already been performed we do not wish to perform it again
         try:
