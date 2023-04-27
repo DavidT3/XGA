@@ -92,24 +92,25 @@ proc xga_extract { args } {
     #  luminosity calculations
     set nh_pars {}
     set count 0
-    for {set ipar 1} {$ipar <= [array size spardel]} {incr ipar} {
-	    set punit " "
-	    scan [tcloutr pinfo $nh_mod_name:$ipar] "%s %s" pname punit
-	    if {$pname == "nH"} {
-	        lappend nh_pars $ipar
-	        }
-	    lappend idents $ipar
-        if { $spardel($ipar) > 0 } {
+    if {$nh_mod_name != 'None'} {
+        for {set ipar 1} {$ipar <= [array size spardel]} {incr ipar} {
+            set punit " "
+            scan [tcloutr pinfo $nh_mod_name:$ipar] "%s %s" pname punit
+            if {$pname == "nH"} {
+                lappend nh_pars $ipar
+                }
+            lappend idents $ipar
+            if { $spardel($ipar) > 0 } {
 
-    # Each parameter gets three columns; the value, the -error, and the +error
-            set divid "|"
-            append col_list "," $pname$divid$ipar
-            append col_list "," $pname$divid$ipar-
-            append col_list "," $pname$divid$ipar+
-            incr count
-	    }
+        # Each parameter gets three columns; the value, the -error, and the +error
+                set divid "|"
+                append col_list "," $pname$divid$ipar
+                append col_list "," $pname$divid$ipar-
+                append col_list "," $pname$divid$ipar+
+                incr count
+            }
+        }
     }
-
     #################################################
     # Writes global values to files
     #################################################
