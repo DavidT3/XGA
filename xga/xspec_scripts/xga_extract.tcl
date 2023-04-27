@@ -30,6 +30,8 @@ proc xga_extract { args } {
     set redshift [lindex $args 2]
     set conf [lindex $args 3]
     set mod_name [lindex $args 4]
+    # This tells us which model contains the nH that should be zeroed for unabsorbed luminosity calculations
+    set nh_mod_name [lindex $args 5]
 
     #################################################
     # Fetching exp times and rates
@@ -92,7 +94,7 @@ proc xga_extract { args } {
     set count 0
     for {set ipar 1} {$ipar <= [array size spardel]} {incr ipar} {
 	    set punit " "
-	    scan [tcloutr pinfo $ipar] "%s %s" pname punit
+	    scan [tcloutr pinfo $nh_mod_name:$ipar] "%s %s" pname punit
 	    if {$pname == "nH"} {
 	        lappend nh_pars $ipar
 	        }
