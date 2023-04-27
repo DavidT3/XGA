@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 00:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 10:08. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -171,17 +171,23 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
 @xspec_call
 def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                    start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3, start_t_rat: float = 0.1,
-                    start_inv_em_slope: float = 0.25,
-                    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                    freeze_nh: bool = True, freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
-                    hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                    abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
-                    min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                    num_cores: int = NUM_CORES, spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr')):
+                        inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                        start_max_temp: Quantity = Quantity(5.0, "keV"), start_met: float = 0.3,
+                        start_t_rat: float = 0.1, start_inv_em_slope: float = 0.25,
+                        lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+                        freeze_nh: bool = True, freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
+                        hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
+                        abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
+                        min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+                        num_cores: int = NUM_CORES, spectrum_checking: bool = True,
+                        timeout: Quantity = Quantity(1, 'hr')):
     """
+    This is a convenience function for fitting an absorbed multi temperature apec model (constant*tbabs*wdem) to
+    spectra generated for XGA sources. The wdem model uses a power law distribution of the differential emission
+    measure distribution. It may be a good empirical approximation for the spectra in cooling cores of
+    clusters of galaxies. This implementation sets the 'switch' to 2, which means that the APEC model is used.
 
+    If there are no existing spectra with the passed settings, then they will be generated automatically.
 
     :param List[BaseSource] sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
@@ -193,8 +199,10 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
         desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
         or Quantity(1000, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum. If
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
-    :param Quantity start_temp: The initial temperature for the fit.
-    :param start_met: The initial metallicity for the fit (in ZSun).
+    :param Quantity start_max_temp: The initial maximum temperature for the fit.
+    :param float start_met: The initial metallicity for the fit (in ZSun).
+    :param float start_t_rat: The initial minimum to maximum temperature ratio (beta) for the fit.
+    :param float start_inv_em_slope: The initial inverse slope value of the emission measure for the fit.
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
     :param bool freeze_met: Whether the metallicity parameter in the fit should be frozen.
@@ -223,10 +231,6 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
     """
-
-    # TODO sort this one way or another
-    spectrum_checking = False
-
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
@@ -265,9 +269,10 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
             raise ValueError("You cannot supply a source without a redshift to this model.")
 
         # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
+        t = start_max_temp.to("keV", equivalencies=u.temperature_energy()).value
         # Another TCL list, this time of the parameter start values for this model.
-        par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}}}".format(1., source.nH.to("10^22 cm^-2").value, t, start_t_rat, start_inv_em_slope,
+        par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
+                                                                          start_t_rat, start_inv_em_slope,
                                                                           1, start_met, source.redshift, 2, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependant on user input
@@ -279,20 +284,24 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
         #  linked
         linking = "{F T T T T T T T T T}"
 
-        # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
-        #  limits. For this function they will be hardcoded, for simplicities sake, and we're only going to
-        #  check the temperature, as its the main thing we're fitting for with constant*tbabs*apec
-        # if spectrum_checking:
-        #     check_list = "{kT}"
-        #     check_lo_lims = "{0.01}"
-        #     check_hi_lims = "{20}"
-        #     check_err_lims = "{15}"
-        # else:
-        check_list = "{}"
-        check_lo_lims = "{}"
-        check_hi_lims = "{}"
-        check_err_lims = "{}"
+        # par_names = "{factor nH Tmax beta inv_slope nH abundanc Redshift switch norm}"
 
+        # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
+        #  limits. The check limits here are somewhat of a guesstimate based on my understanding of the model
+        #  rather than on practical experience with it
+        if spectrum_checking:
+            check_list = "{Tmax beta inv_slope}"
+            check_lo_lims = "{0.01 0.01 0.1}"
+            check_hi_lims = "{20 1 20}"
+            check_err_lims = "{15 5 5}"
+        else:
+            check_list = "{}"
+            check_lo_lims = "{}"
+            check_hi_lims = "{}"
+            check_err_lims = "{}"
+
+        # This internal function writes out the XSPEC script with all the information we've assembled in this
+        #  function - filling out the XSPEC template and writing to disk
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
