@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 00:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 00:29. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -154,7 +154,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
                                                     spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True)
+                                                    check_err_lims, True, 'tbabs')
 
         # If the fit has already been performed we do not wish to perform it again
         try:
@@ -297,7 +297,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
                                                     spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True)
+                                                    check_err_lims, True, 'tbabs')
 
         # If the fit has already been performed we do not wish to perform it again
         try:
@@ -435,7 +435,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
-                                                    "{}", "{}", "{}", True)
+                                                    "{}", "{}", "{}", True, 'tbabs')
 
         # If the fit has already been performed we do not wish to perform it again
         try:
@@ -577,7 +577,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
                                                     specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                     par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
-                                                    "{}", "{}", "{}", True)
+                                                    "{}", "{}", "{}", True, 'tbabs')
 
         # If the fit has already been performed we do not wish to perform it again
         try:
