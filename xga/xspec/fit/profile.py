@@ -1,12 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 00:23. Copyright (c) The Contributors
 
 from typing import List, Union
 
 import astropy.units as u
 from astropy.units import Quantity
 
-from .common import _write_xspec_script, _check_inputs
+from ._common import _write_xspec_script, _check_inputs
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError
