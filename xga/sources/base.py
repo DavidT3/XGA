@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/05/2023, 15:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/05/2023, 17:05. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -939,8 +939,6 @@ class BaseSource:
         # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
         #  those objects and add them to the storage structure
         if len(ann_spec_constituents) != 0:
-            print(ann_spec_usable)
-            print(ann_spec_constituents, '\n\n\n')
             for set_id in ann_spec_constituents:
                 if ann_spec_usable[set_id]:
                     ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
