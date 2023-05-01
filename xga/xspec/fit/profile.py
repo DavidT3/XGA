@@ -1,12 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 12:06. Copyright (c) The Contributors
 
 from typing import List, Union
 
 import astropy.units as u
 from astropy.units import Quantity
 
-from .common import _write_xspec_script, _check_inputs
+from ._common import _write_xspec_script, _check_inputs
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError
@@ -152,13 +152,19 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                 check_hi_lims = "{}"
                 check_err_lims = "{}"
 
+            # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed
+            #  luminosities. I am only specifying parameter 2 here (though there will likely be multiple models
+            #  because there are likely multiple spectra) because I know that nH of tbabs is linked in this
+            #  setup, so zeroing one will zero them all.
+            nh_to_zero = "{2}"
+
             file_prefix = spec_objs[0].storage_key + "_ident{}_".format(spec_objs[0].set_ident) \
                           + str(spec_objs[0].annulus_ident)
             out_file, script_file = _write_xspec_script(source, file_prefix, model, abund_table, fit_method,
                                                         specs, lo_en, hi_en, par_names, par_values, linking, freezing,
                                                         par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf,
                                                         source.redshift, spectrum_checking, check_list, check_lo_lims,
-                                                        check_hi_lims, check_err_lims, True)
+                                                        check_hi_lims, check_err_lims, True, nh_to_zero)
 
             try:
                 res = ann_spec.get_results(0, model, 'kT')
