@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/04/2023, 16:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/04/2023, 10:26. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -165,7 +165,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  adds overhead, and I think that this way should work fine).
     samp = ClusterSample(sample_data['ra'].values, sample_data['dec'].values, sample_data['redshift'].values,
                          sample_data['name'].values, use_peak=use_peak, peak_find_method=peak_find_method,
-                         clean_obs_threshold=0.7, load_fits=True, cosmology=cosmo, **o_dens_arg)
+                         clean_obs_threshold=0.7, clean_obs_reg=o_dens, load_fits=True, cosmology=cosmo, **o_dens_arg)
 
     # As it is possible some clusters in the sample_data dataframe don't actually have X-ray data, we copy
     #  the sample_data and cut it down, so it only contains entries for clusters that were loaded in the sample at the

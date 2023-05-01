@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/04/2023, 10:18. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -235,9 +235,9 @@ class GalaxyCluster(ExtendedSource):
 
         # The 0.66 and 2.25 factors are intended to shift the r200 and r2500 values to approximately r500, and were
         #  decided on by dividing the Arnaud et al. 2005 R-T relations by one another and finding the mean factor
-        if self._radii['r500'] is not None:
+        if 'r500' in self._radii:
             check_rad = self.convert_radius(self._radii['r500'] * 0.15, 'deg')
-        elif self._radii['r200'] is not None:
+        elif 'r200' in self._radii:
             check_rad = self.convert_radius(self._radii['r200'] * 0.66 * 0.15, 'deg')
         else:
             check_rad = self.convert_radius(self._radii['r2500'] * 2.25 * 0.15, 'deg')
