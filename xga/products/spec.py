@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/05/2023, 15:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/05/2023, 15:08. Copyright (c) The Contributors
 
 
 import os
@@ -1187,6 +1187,7 @@ class AnnularSpectra(BaseAggregateProduct):
         :return: A list of every single spectrum associated with this object.
         :rtype: List[Spectrum]
         """
+        print(self._component_products)
         all_spec = []
         for ann_i in range(self._num_ann):
             # If there is only one spectrum per annulus then get_spectra will just return an object
