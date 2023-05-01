@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/03/2023, 11:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/05/2023, 15:01. Copyright (c) The Contributors
 
 
 import os
@@ -892,6 +892,7 @@ class AnnularSpectra(BaseAggregateProduct):
         The init method for the AnnularSpectrum class, performs checks and organises the spectra which
         have been passed in, for easy retrieval.
         """
+        print(spectra)
         super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined")
 
         # There shouldn't be any way this can happen, but it doesn't hurt to check that all of the spectra
@@ -1192,7 +1193,7 @@ class AnnularSpectra(BaseAggregateProduct):
             ann_spec = self.get_spectra(ann_i)
             if isinstance(ann_spec, Spectrum):
                 ann_spec = [ann_spec]
-
+            print(ann_spec)
             all_spec += ann_spec
 
         return all_spec
