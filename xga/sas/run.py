@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 10:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 11:04. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -170,6 +170,7 @@ def sas_call(sas_func):
                     nonlocal raised_errors
                     nonlocal gen
 
+                    print(err)
                     if err is not None:
                         # Rather than throwing an error straight away I append them all to a list for later.
                         raised_errors.append(err)
