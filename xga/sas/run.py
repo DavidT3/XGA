@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 11:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 11:17. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -170,7 +170,6 @@ def sas_call(sas_func):
                     nonlocal raised_errors
                     nonlocal gen
 
-                    print(err)
                     if err is not None:
                         # Rather than throwing an error straight away I append them all to a list for later.
                         raised_errors.append(err)
@@ -227,6 +226,8 @@ def sas_call(sas_func):
                     # Really we're just re-creating the results dictionary here, but I want these products
                     #  to go through the error checking stuff like everything else does
                     ann_spec_comps[entry].append(product)
+                elif prod_type_str == "annular spectrum set components":
+                    print(product, 'OH NO')
 
             if len(to_raise) != 0:
                 all_to_raise.append(to_raise)
