@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 12:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 16:40. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -280,7 +280,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Got to check if this spectrum already exists
             exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name)
-            print(exists)
             if len(exists) == 1 and exists[0].usable and not force_gen:
                 continue
 
@@ -812,10 +811,6 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
         all_paths.append(src_paths)
         all_out_types.append(src_out_types)
         all_extras.append(src_extras)
-
-    for pth in all_paths:
-        print(pth)
-    print('')
 
     # This gets passed back to the sas call function and is used to run the commands
     return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
