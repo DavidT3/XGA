@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/03/2023, 11:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 16:40. Copyright (c) The Contributors
 
 
 import os
@@ -905,7 +905,14 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
-        self._num_ann = len(set([s.annulus_ident for s in spectra]))
+        uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
+        if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
+            raise ValueError("Some expected annulus IDs are missing from the spectra passed to this AnnularSpectra. "
+                             "Spectra with IDs {p} have been "
+                             "passed.".format(p=', '.join([str(i) for i in uniq_ann_ids])))
+        # Now we've made certain that the input annuli IDs are making sense, we can just use the length of the
+        #  list of unique IDs to set the number of annuli
+        self._num_ann = len(uniq_ann_ids)
 
         # While the official ObsID and Instrument of this product are 'combined', I do still
         #  want to know which ObsIDs and instruments the spectra belong to
@@ -1192,7 +1199,6 @@ class AnnularSpectra(BaseAggregateProduct):
             ann_spec = self.get_spectra(ann_i)
             if isinstance(ann_spec, Spectrum):
                 ann_spec = [ann_spec]
-
             all_spec += ann_spec
 
         return all_spec
