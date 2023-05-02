@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 09:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 10:19. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -722,7 +722,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
             for r_ind in range(len(radii[s_ind])-1):
                 # Generate the SAS commands for the current annulus of the current source, for all observations
                 spec_cmd_out = _spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
-                                          min_sn, over_sample, one_rmf, num_cores, disable_progress, force_regen)
+                                          min_sn, over_sample, one_rmf, num_cores, disable_progress, True)
 
                 # Read out some of the output into variables to be modified
                 interim_paths = spec_cmd_out[5][0]
