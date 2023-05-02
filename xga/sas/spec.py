@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 10:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 10:43. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -812,6 +812,8 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
         all_paths.append(src_paths)
         all_out_types.append(src_out_types)
         all_extras.append(src_extras)
+
+    print(all_extras)
 
     # This gets passed back to the sas call function and is used to run the commands
     return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
