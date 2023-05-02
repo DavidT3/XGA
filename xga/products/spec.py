@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 10:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 10:57. Copyright (c) The Contributors
 
 
 import os
@@ -892,6 +892,8 @@ class AnnularSpectra(BaseAggregateProduct):
         The init method for the AnnularSpectrum class, performs checks and organises the spectra which
         have been passed in, for easy retrieval.
         """
+        print(spectra)
+
         super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined")
 
         # There shouldn't be any way this can happen, but it doesn't hurt to check that all of the spectra
@@ -906,7 +908,6 @@ class AnnularSpectra(BaseAggregateProduct):
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
         uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
-        print(uniq_ann_ids)
         if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
             raise ValueError("Some expected annulus IDs are missing from the spectra passed to this AnnularSpectra. "
                              "Spectra with IDs {p} have been "

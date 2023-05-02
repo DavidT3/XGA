@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/04/2023, 22:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 10:57. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -231,6 +231,8 @@ def sas_call(sas_func):
                 all_to_raise.append(to_raise)
 
         if prod_type_str == "annular spectrum set components":
+            print(ann_spec_comps)
+            print('')
             for entry in ann_spec_comps:
                 # So now we pass the list of spectra to a AnnularSpectra definition - and it will sort them out
                 #  itself so the order doesn't matter
