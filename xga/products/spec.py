@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 17:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 18:05. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1377,7 +1377,7 @@ class Spectrum(BaseProduct):
             # If the 'group' is actually just made up of one channel then we just put that current channel
             #  in the quantity, with a width of 0
             if cur_chan == next_chan:
-                chans[grp_start_ind] = Quantity([cur_chan, 0])
+                chans[grp_start_ind] = Quantity([cur_chan, 0.5])
             # Otherwise we calculate the midpoint of the group, and the width
             else:
                 mid = (cur_chan + next_chan) / 2
@@ -1559,7 +1559,9 @@ class Spectrum(BaseProduct):
 
     def new_view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
                  hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
-                 grouped: bool = True, xscale: str = "log", yscale: str = "linear", save_path: str = None):
+                 src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
+                 yscale: str = "linear", fontsize: Union[int, float] = 14,
+                 save_path: str = None):
         """
         A method for viewing the data associated with this Spectrum instance.
 
@@ -1573,10 +1575,14 @@ class Spectrum(BaseProduct):
         :param bool back_sub: Whether the plotted data should have their background subtracted, default is True.
         :param bool energy: Controls whether the x-axis is in units of energy, default is True. If False then
             channels are plotted instead.
+        :param str src_colour: The colour in which to plot the source spectrum. Default is 'black'.
+        :param str bck_colour: The colour in which to plot the background spectrum. Default is 'firebrick' red.
         :param bool grouped: Whether the grouped spectrum should be plotted, default is True. If the spectrum has not
             been grouped then this be automatically set to False.
         :param str xscale: The scaling to be applied to the x-axis, default is 'log'.
         :param str yscale: The scaling to be applied to the y-axis, default is 'linear'.
+        :param int/float fontsize: The fontsize for axis labels. The legend fontsize will be fontsize - 1. The title
+            fontsize will be fontsize + 1. Default is 14.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
         """
@@ -1624,18 +1630,35 @@ class Spectrum(BaseProduct):
             sct = self.count_rates.copy()
             bct = self.back_count_rates.copy()
             if energy:
-                x_dat = self.conv_channel_energy(self.channels).value
+                x_dat = self.conv_channel_energy(self.channels.copy()).value
+                x_wid = (self.rmf_channels_hi_en - self.rmf_channels_lo_en).value
             else:
-                x_dat = self.channels
+                x_dat = self.channels.copy()
+                x_wid = 1
         else:
             grp_info = self.get_grouped_data()
             sct = grp_info[0]
             bct = grp_info[1]
-            # TODO make width error bars work
             if energy:
+                # This entry is the middle energy of each bin
                 x_dat = grp_info[-1][:, 0].value
+                # This entry is the 'error' (but really just half the width) of each energy bin
+                x_wid = grp_info[-1][:, 1].value
             else:
+                # This entry is the middle channel of each bin
                 x_dat = grp_info[4][:, 0].value
+                # This entry is the 'error' (but really just half the width) of each channel bin
+                x_wid = grp_info[4][:, 1].value
+
+        # We pre-select the data based on the passed lower and upper limits - first making a selection mask array
+        sel_x = (x_dat <= hi_lim) & (x_dat >= lo_lim)
+        # Then selecting the relevant source count, background count, and x-data (energy or channel) entries
+        sct = sct[sel_x]
+        bct = bct[sel_x]
+        x_dat = x_dat[sel_x]
+        x_wid = x_wid[sel_x]
+        # This is what the y-data are divided by to make it per keV or per channel, the width of the bin essentially
+        per_x = x_wid * 2
 
         # This uses the AREASCAL keyword (the product of EXPOSURE times AREASCAL is the exposure duration for any
         #  fully exposed pixels in each channel - my experience is that this is normally 1 for XMM products) to
@@ -1644,8 +1667,7 @@ class Spectrum(BaseProduct):
 
         # This scales the background count rates by the AREASCAL (as above), but also by the ratio of BACKSCAL
         #  values, which scales the background flux to the same area as the source
-        bck_rate = (self.header['BACKSCAL']/self.back_header['BACKSCAL']) \
-                   * (bct / self.back_header['AREASCAL'])
+        bck_rate = (self.header['BACKSCAL']/self.back_header['BACKSCAL']) * (bct / self.back_header['AREASCAL'])
 
         # And finally subtracting one from the other
         src_sub_bck_rate = src_rate - bck_rate
@@ -1662,46 +1684,40 @@ class Spectrum(BaseProduct):
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
         # Set the title with all relevant information about the spectrum object in it
-        plt.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()))
+        plt.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()),
+                  fontsize=fontsize+1)
 
-        # TODO Some of this is extraneous now I think
         # Plotting the data, accounting for the different combinations of x-axis and y-axis
-        if back_sub and energy:
-            plt.errorbar(x_dat, src_sub_bck_rate.value, xerr=0, yerr=0,
-                         fmt="k+", label="background subtracted data", zorder=1)
-            # plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
-            plt.ylabel("Counts s$^{-1}$")
-            plt.xlabel("Energy [keV]")
-        elif back_sub and not energy:
-            plt.errorbar(x_dat, src_sub_bck_rate.value, xerr=0, yerr=0, fmt="k+",
+        if back_sub:
+            # If we're going for background subtracted data, then that is all we plot
+            plt.errorbar(x_dat, src_sub_bck_rate.value / per_x, xerr=0, yerr=0, fmt="+", colour=src_colour,
                          label="background subtracted data", zorder=1)
-            # plt.ylabel("Normalised Counts s$^{-1}$ Channel$^{-1}$")
-            plt.ylabel("Counts s$^{-1}$")
-            plt.xlabel("Channel")
-        elif not back_sub and energy:
-            plt.errorbar(x_dat, src_rate.value, xerr=0, yerr=0, fmt="k+",
-                         label="source", zorder=1)
-            plt.errorbar(x_dat, bck_rate.value, xerr=0, yerr=0, fmt="cx",
-                         label="background", zorder=1)
-            # plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
-            plt.ylabel("Counts s$^{-1}$")
-            plt.xlabel("Energy [keV]")
-        elif not back_sub and not energy:
-            plt.errorbar(x_dat, src_rate.value, xerr=0, yerr=0, fmt="k+", label="source", zorder=1)
-            plt.errorbar(x_dat, bck_rate.value, xerr=0, yerr=0, fmt="cx", label="background", zorder=1)
-            # plt.ylabel("Normalised Counts s$^{-1}$ Channel$^{-1}$")
-            plt.ylabel("Counts s$^{-1}$")
-            plt.xlabel("Channel")
+        else:
+            # But if we're not wanting background subtracted, we need to plot the source and background spectra
+            plt.errorbar(x_dat, src_rate.value / per_x, xerr=0, yerr=0, fmt="+", color=src_colour, label="source data",
+                         zorder=1)
+            plt.errorbar(x_dat, bck_rate.value / per_x, xerr=0, yerr=0, fmt="x", color=bck_colour,
+                         label="background data", zorder=1)
+
+        # Energy vs channel has already been encoded in the x data, but we still need to plot different axis labels
+        if energy:
+            plt.ylabel("Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
+            plt.xlabel("Energy [keV]", fontsize=fontsize)
+        else:
+            plt.ylabel("Counts s$^{-1}$ Channel$^{-1}$", fontsize=fontsize)
+            plt.xlabel("Channel", fontsize=fontsize)
 
         # Generate the legend for the data and model(s)
-        plt.legend(loc="best")
+        plt.legend(loc="best", fontsize=fontsize-1)
 
+        # Setting up the scaling aspects of the plot
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
         ax.xaxis.set_major_formatter(ScalarFormatter())
         ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
         ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
+        # Removing extraneous whitespace around the plot
         plt.tight_layout()
 
         # If the user passed a save_path value, then we assume they want to save the figure
