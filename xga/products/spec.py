@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 18:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 18:54. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -425,7 +425,8 @@ class Spectrum(BaseProduct):
     @property
     def counts(self) -> Quantity:
         """
-        The array of counts associated with each channel of the spectrum.
+        The array of counts associated with each channel of the spectrum, with a second column containing the
+        Poisson error.
 
         :rtype: Quantity
         :return: The counts quantity in units of 'ct'.
@@ -435,7 +436,7 @@ class Spectrum(BaseProduct):
         if self._spec_counts is None:
             self._read_on_demand(True)
 
-        return Quantity(self._spec_counts, 'ct')
+        return Quantity([self._spec_counts, np.sqrt(self._spec_counts)], 'ct').T
 
     @property
     def exposure(self) -> Quantity:
@@ -454,7 +455,8 @@ class Spectrum(BaseProduct):
     def count_rates(self) -> Quantity:
         """
         The array of counts/second associated with each channel of the spectrum. This takes the counts property
-        and divides it by the EXPOSURE entry in the spectrum header.
+        and divides it by the EXPOSURE entry in the spectrum header. A second column containing uncertainty is
+        included.
 
         :rtype: Quantity
         :return: The counts/second quantity in units of 'ct/s'.
@@ -553,7 +555,8 @@ class Spectrum(BaseProduct):
     @property
     def back_counts(self) -> Quantity:
         """
-        The array of counts associated with each channel of the background spectrum.
+        The array of counts associated with each channel of the background spectrum, with a second column containing
+        the Poisson error.
 
         :rtype: Quantity
         :return: The counts quantity in units of 'ct'.
@@ -564,7 +567,7 @@ class Spectrum(BaseProduct):
             # Passing false means it won't read the source spectrum, but instead the background spectrum
             self._read_on_demand(False)
 
-        return Quantity(self._back_counts, 'ct')
+        return Quantity([self._back_counts, np.sqrt(self._back_counts)], 'ct').T
 
     @property
     def back_exposure(self) -> Quantity:
@@ -583,7 +586,8 @@ class Spectrum(BaseProduct):
     def back_count_rates(self) -> Quantity:
         """
         The array of counts/second associated with each channel of the background spectrum. This takes the
-        back_counts property and divides it by the EXPOSURE entry in the background spectrum header.
+        back_counts property and divides it by the EXPOSURE entry in the background spectrum header. A second column
+        containing uncertainty is included.
 
         :rtype: Quantity
         :return: The counts/second quantity in units of 'ct/s'.
@@ -1304,7 +1308,7 @@ class Spectrum(BaseProduct):
     def get_grouped_data(self, count_rate: bool = True) -> Tuple[Quantity]:
         """
         In many cases a spectrum is 'grouped' after generation, which involves combining sequential channels to
-        increase the signal to noise. This method reads any grouping information in the spectrum associated with
+        increase the signal-to-noise. This method reads any grouping information in the spectrum associated with
         this object and returns the grouped data, along with everything necessary to use it. The properties that
         return counts, energy bins etc all give the raw data, unlike this method.
 
@@ -1314,9 +1318,10 @@ class Spectrum(BaseProduct):
         :param bool count_rate: Should the grouped spectrum data be returned as a count-rate, default is True. If
             set to False then grouped data will be returned as counts.
         :rtype: Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity]
-        :return: The source count-rates (or counts), the background count-rates (or counts), the lower energy bounds
-            of the groups, the upper energy bounds of the groups, the channel midpoints of the groups (with width
-            in a second column), the energy midpoints of the groups (with width in a second column).
+        :return: The source count-rates (or counts) with uncertainties, the background count-rates (or counts) with
+            uncertainties, the lower energy bounds of the groups, the upper energy bounds of the groups, the channel
+            midpoints of the groups (with width in a second column), the energy midpoints of the groups (with width
+            in a second column).
         """
         # Check whether this spectrum was actually grouped on generation
         if not self.grouped:
