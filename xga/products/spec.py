@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 18:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 18:46. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1390,6 +1390,9 @@ class Spectrum(BaseProduct):
             en_width = (bins_hi_en[grp_start_ind] - bins_lo_en[grp_start_ind])/2
             en_cens[grp_start_ind] = Quantity([en_mid, en_width])
 
+        src_grpd_cnts = Quantity([src_grpd_cnts, Quantity(np.sqrt(src_grpd_cnts.value), 'ct')]).T
+        bck_grpd_cnts = Quantity([bck_grpd_cnts, Quantity(np.sqrt(bck_grpd_cnts.value), 'ct')]).T
+
         # Simple enough, if the user wants a count rate then divide by exposure, if just counts then don't
         if count_rate:
             src_grpd = src_grpd_cnts / self.exposure
@@ -1669,8 +1672,11 @@ class Spectrum(BaseProduct):
         #  values, which scales the background flux to the same area as the source
         bck_rate = (self.header['BACKSCAL']/self.back_header['BACKSCAL']) * (bct / self.back_header['AREASCAL'])
 
-        # And finally subtracting one from the other
+        # And finally subtracting one from the other - they both have error columns which are also subtracted
+        #  here (which is completely meaningless of course), but don't worry we'll fix that on the next line!
         src_sub_bck_rate = src_rate - bck_rate
+        # Simple error propagation to replace the nonsense uncertainty column in src_sub_bck_rate
+        src_sub_bck_rate[:, 1] = np.sqrt(src_rate[:, 1]**2 + bck_rate[:, 1]**2)
 
         # Create figure object
         plt.figure(figsize=figsize)
@@ -1690,14 +1696,15 @@ class Spectrum(BaseProduct):
         # Plotting the data, accounting for the different combinations of x-axis and y-axis
         if back_sub:
             # If we're going for background subtracted data, then that is all we plot
-            plt.errorbar(x_dat, src_sub_bck_rate.value / per_x, xerr=0, yerr=0, fmt="+", colour=src_colour,
-                         label="background subtracted data", zorder=1)
+            plt.errorbar(x_dat, src_sub_bck_rate.value[:, 0] / per_x, xerr=x_wid,
+                         yerr=src_sub_bck_rate.value[:, 1] / per_x, fmt="+", color=src_colour,
+                         label="Background subtracted source data", zorder=1)
         else:
             # But if we're not wanting background subtracted, we need to plot the source and background spectra
-            plt.errorbar(x_dat, src_rate.value / per_x, xerr=0, yerr=0, fmt="+", color=src_colour, label="source data",
-                         zorder=1)
-            plt.errorbar(x_dat, bck_rate.value / per_x, xerr=0, yerr=0, fmt="x", color=bck_colour,
-                         label="background data", zorder=1)
+            plt.errorbar(x_dat, src_rate.value[:, 0] / per_x, xerr=x_wid, yerr=src_rate.value[:, 1] / per_x, fmt="+",
+                         color=src_colour, label="Source data", zorder=1)
+            plt.errorbar(x_dat, bck_rate.value[:, 0] / per_x, xerr=x_wid, yerr=bck_rate.value[:, 1] / per_x, fmt="x",
+                         color=bck_colour, label="Background data", zorder=1)
 
         # Energy vs channel has already been encoded in the x data, but we still need to plot different axis labels
         if energy:
