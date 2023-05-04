@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 10:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 12:20. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -476,6 +476,17 @@ class Spectrum(BaseProduct):
             self._read_on_demand(True)
 
         return Quantity(self._spec_channels)
+
+    @property
+    def energies(self) -> Quantity:
+        """
+        The array of instrument channels, converted to energy using information from the RMF.
+
+        :rtype: Quantity
+        :return: An array of channel energy midpoints, in keV.
+        """
+
+        return self.conv_channel_energy(self.channels)
 
     @property
     def grouping(self) -> np.ndarray:
