@@ -1,9 +1,10 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#   Last modified by David J Turner (david.turner@sussex.ac.uk) 11/01/2022, 12:30. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 10:07. Copyright (c) The Contributors
 
 import os
 import warnings
 from typing import Tuple, Union, List, Dict
+from warnings import warn
 
 import numpy as np
 from astropy.io import fits
@@ -1380,22 +1381,47 @@ class Spectrum(BaseProduct):
         # Return all the useful information that we have calculated.
         return src_grpd, bck_grpd, bins_lo_en, bins_hi_en, chans, en_cens
 
-    def view_arf(self, figsize: Tuple = (8, 6), xscale: str = 'linear', yscale: str = 'linear',
-                 lo_en: Quantity = Quantity(0.0, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
+    def view_arf(self, figsize: Tuple = (8, 6), xscale: str = 'log', yscale: str = 'linear',
+                 lo_en: Quantity = Quantity(0.01, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
         """
         Plots the response curve for this spectrum.
 
         :param tuple figsize: The desired size of the output figure.
         :param str xscale: The xscale to use for the plot.
         :param str yscale: The yscale to use for the plot.
-        :param Quantity lo_en: The lower energy limit for the x-axis.
-        :param Quantity hi_en: The upper energy limit for the y-axis.
+        :param Quantity lo_en: The lower energy limit for the x-axis. The default is 0.01 keV. This will be altered
+            to reflect the minimum value of the energy scale for this curve if lo_en is smaller than the lowest
+            energy bin.
+        :param Quantity hi_en: The upper energy limit for the x-axis. The default is 16.0 keV. This will be altered
+            to reflect the maximum value of the energy scale for this curve if hi_en is greater than the highest
+            energy bin.
         """
-        if lo_en > hi_en:
-            raise ValueError("hi_en cannot be greater than lo_en")
+        # Calculate the energy values by finding the midpoints of the bins - this is done up here so that the minimum
+        #  and maximum values of energy (lo_en and hi_en) passed by the user can be set to minimum and maximum
+        #  values available if they are higher or lower
+        ens = (self.eff_area_hi_en+self.eff_area_lo_en)/2
+
+        # Have to check the input energy bounds to make sure that they are sensible
+        if lo_en >= hi_en:
+            raise ValueError("The 'hi_en' argument cannot be greater than or equal to the 'lo_en' argument.")
         else:
             lo_en = lo_en.to("keV").value
             hi_en = hi_en.to("keV").value
+
+        # We dynamically alter the upper and lower energy bounds passed by the user to reflect the actual maxima and
+        #  minima of the energy scale, so there isn't a ton of blank space in on either side if they made a bad
+        #  choice, or my default value choices were bad
+        if lo_en < ens.value.min():
+            lo_en = ens.value.min()
+        if hi_en > ens.value.max():
+            hi_en = ens.value.max()
+
+        # As we know, log scales don't like zero values, so I make a change if the user has set the minimum
+        #  energy to be zero and set an x-axis log scale
+        if xscale == 'log' and lo_en == 0:
+            warn("The x-axis scale has been set to log, and 'lo_en' cannot be zero - it has been set to 0.01 "
+                 "keV.", stacklevel=2)
+            lo_en = 0.01
 
         plt.figure(figsize=figsize)
         # Set the plot up to look nice and professional.
@@ -1403,12 +1429,14 @@ class Spectrum(BaseProduct):
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
-        # Get the data and plot it
-        ens = (self.eff_area_hi_en+self.eff_area_lo_en)/2
-        plt.plot(ens, self.eff_area, color='black')
+        # Get the data and plot it - we select the data to plot first because then matplotlib selects a nice upper
+        #  y-axis limit for us
+        sel_ens = (ens.value >= lo_en) & (ens.value <= hi_en)
+        plt.plot(ens[sel_ens], self.eff_area[sel_ens], color='black')
 
-        # Set the lower y-lim to be zero, and then the user supplied x-lims
-        plt.ylim(0)
+        # Set the lower y-lim to be 1, and then the user supplied x-lims (supplementing the fact that we've already
+        #  used those limits to select the data to plot
+        plt.ylim(1)
         plt.xlim(lo_en, hi_en)
 
         # Set the user defined x and y scales
@@ -1419,6 +1447,11 @@ class Spectrum(BaseProduct):
         plt.ylabel("Effective Area [cm$^{2}$]", fontsize=12)
         plt.xlabel("Energy [keV]", fontsize=12)
         plt.title("{o}-{i} Sensitivity Curve".format(o=self.obs_id, i=self.instrument.upper()), fontsize=14)
+
+        # This makes sure that the tick labels are formatted as 0.1, 1, 10, etc. keV on the x-axis (if logged) and
+        #  10, 100, 100, 1000, etc. cm^2 on the y-axis if logged
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         # Aaaand finally actually plot it
         plt.tight_layout()
