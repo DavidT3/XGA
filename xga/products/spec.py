@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 12:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 17:04. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1306,7 +1306,10 @@ class Spectrum(BaseProduct):
         In many cases a spectrum is 'grouped' after generation, which involves combining sequential channels to
         increase the signal to noise. This method reads any grouping information in the spectrum associated with
         this object and returns the grouped data, along with everything necessary to use it. The properties that
-        returns counts, energy bins etc all give the raw data, unlike this method.
+        return counts, energy bins etc all give the raw data, unlike this method.
+
+        The spectrum quality information is used to filter the spectrum before grouping is applied, only channels with
+        a quality flag of 0 are accepted.
 
         :param bool count_rate: Should the grouped spectrum data be returned as a count-rate, default is True. If
             set to False then grouped data will be returned as counts.
@@ -1320,66 +1323,72 @@ class Spectrum(BaseProduct):
             raise ValueError("This spectrum was generated without grouping, and so you cannot "
                              "retrieve grouped data.")
 
+        # This is the mask which accepts only those channels with a quality flag of zero.
+        notice = self.quality == 0
+        # This copies the raw counts, and then masks them to take only those with an acceptable quality
+        start_cnt = self.counts.copy()[notice]
+        # Then the same process is followed for background counts, grouping information, channels, and energies
+        start_bck_cnt = self.back_counts.copy()[notice]
+        grouping = self.grouping.copy()[notice]
+        start_chans = self.channels.copy()[notice]
+        lo_energies = self.rmf_channels_lo_en.copy()[notice]
+        hi_energies = self.rmf_channels_hi_en.copy()[notice]
+
         # As the beginning of a group is indicated by a 1, we assemble a list of indexes where the grouping
-        #  value is 1. After that -1 values indicate that the channel belongs to a group, but we now we know where
-        #  each sequential group starts, we can figure out what belongs to them
-        grp_start_inds = np.squeeze(np.argwhere(self.grouping == 1))
+        #  value is 1. After that -1 values indicate that the channel belongs to a group, but we won't actually need
+        #  to use them
+        grp_bnds = np.where(grouping == 1)[0]
+        # As I am setting these up as boundaries, I append the length of the group start indices as a final boundary
+        grp_bnds = np.append(grp_bnds, len(grp_bnds))
 
         # Setting up empty quantities to store the grouped counts in later, both source and background
-        src_grpd_cnts = Quantity(np.zeros(grp_start_inds.shape), 'ct')
-        bck_grpd_cnts = Quantity(np.zeros(grp_start_inds.shape), 'ct')
+        src_grpd_cnts = Quantity(np.zeros(len(grp_bnds) - 1), 'ct')
+        bck_grpd_cnts = Quantity(np.zeros(len(grp_bnds) - 1), 'ct')
 
         # Setting up empty quantities to store the lower and upper energy bounds for the groups
-        bins_lo_en = Quantity(np.zeros(grp_start_inds.shape), 'keV')
-        bins_hi_en = Quantity(np.zeros(grp_start_inds.shape), 'keV')
+        bins_lo_en = Quantity(np.zeros((len(grp_bnds) - 1)), 'keV')
+        bins_hi_en = Quantity(np.zeros((len(grp_bnds) - 1)), 'keV')
         # Empty quantities (with two columns now) to store central energy and channel values, along with
         #  an 'uncertainty' column that gives the width of the group
-        en_cens = Quantity(np.zeros((len(grp_start_inds), 2)), 'keV')
-        chans = Quantity(np.zeros((len(grp_start_inds), 2)))
+        en_cens = Quantity(np.zeros((len(grp_bnds) - 1, 2)), 'keV')
+        chans = Quantity(np.zeros((len(grp_bnds) - 1, 2)))
 
-        # I really did try to figure out a more efficent way to do this, but this is what I'm resorting to for now
-        for grped_ind, grp_ind in enumerate(grp_start_inds):
-            # grped_ind = the position in the grp_start_inds array (so goes continuously from 0 to len(grp_start_inds)
-            # grp_ind = the actual channel index where a group starts, so it isn't continuous (apart from when
-            #  no bins have been created).
+        # I really did try to figure out a more efficient way to do this, but this is what I'm resorting to for now
+        for grp_start_ind, grp_start in enumerate(grp_bnds[:-1]):
+            # We have the index of the start of the current group in the grp_start variable, but we also need to be
+            #  able to define the end of the group. As we are going to be slicing arrays in this loop (for which the
+            #  second index is non-inclusive), I just define the start of the next group to use as the end of this one
+            next_grp_start = grp_bnds[grp_start_ind + 1]
 
-            # In this instance, the last group (i.e. highest energy group) is actually just a single channel
-            #  That means we don't need to check whether this group has more than 1 channel, because it can't
-            if grped_ind == (len(grp_start_inds)-1):
-                src_grpd_cnts[grped_ind] = self.counts[-1]
-                bck_grpd_cnts[grped_ind] = self.back_counts[-1]
-                bins_lo_en[grped_ind] = self.rmf_channels_lo_en[-1]
-                bins_hi_en[grped_ind] = self.rmf_channels_hi_en[-1]
-                cur_chan = self.rmf_channels[-1]
-                next_chan = self.rmf_channels[-1]
-            else:
-                # Adding the entries in the group together and putting them in the pre-declared quantity
-                src_grpd_cnts[grped_ind] = self.counts[grp_ind:grp_start_inds[grped_ind+1]].sum()
-                bck_grpd_cnts[grped_ind] = self.back_counts[grp_ind:grp_start_inds[grped_ind+1]].sum()
+            # Simply grab the channels which are a part of the current group (both for the source and background
+            #  spectra), and then add the raw counts together to retrieve the start and background counts for
+            #  this group
+            src_grpd_cnts[grp_start_ind] = start_cnt[grp_start: next_grp_start].sum()
+            bck_grpd_cnts[grp_start_ind] = start_bck_cnt[grp_start: next_grp_start].sum()
 
-                # Finding the lower and upper energy bounds of the group
-                bins_lo_en[grped_ind] = self.rmf_channels_lo_en[grp_ind]
-                bins_hi_en[grped_ind] = self.rmf_channels_hi_en[grp_start_inds[grped_ind+1]-1]
+            # Finding the lower and upper energy bounds of the group
+            bins_lo_en[grp_start_ind] = lo_energies[grp_start]
+            bins_hi_en[grp_start_ind] = hi_energies[next_grp_start - 1]
 
-                # Finding the start and end channel values in the group
-                cur_chan = self.rmf_channels[grp_ind]
-                next_chan = self.rmf_channels[grp_start_inds[grped_ind+1]-1]
+            # Finding the start and end channel values in the group
+            cur_chan = start_chans[grp_start]
+            next_chan = start_chans[next_grp_start - 1]
 
             # If the 'group' is actually just made up of one channel then we just put that current channel
             #  in the quantity, with a width of 0
             if cur_chan == next_chan:
-                chans[grped_ind] = Quantity([cur_chan, 0])
+                chans[grp_start_ind] = Quantity([cur_chan, 0])
             # Otherwise we calculate the midpoint of the group, and the width
             else:
                 mid = (cur_chan + next_chan) / 2
                 width = (next_chan - cur_chan) / 2
-                chans[grped_ind, :] = Quantity([mid, width])
+                chans[grp_start_ind, :] = Quantity([mid, width])
 
             # Always calculate the energy midpoint and width of a group, even if there is only one entry, because
             #  we know the upper and lower energy bounds of every channel from the RMF
-            en_mid = (bins_lo_en[grped_ind]+ bins_hi_en[grped_ind])/2
-            en_width = (bins_hi_en[grped_ind] - bins_lo_en[grped_ind])/2
-            en_cens[grped_ind] = Quantity([en_mid, en_width])
+            en_mid = (bins_lo_en[grp_start_ind] + bins_hi_en[grp_start_ind])/2
+            en_width = (bins_hi_en[grp_start_ind] - bins_lo_en[grp_start_ind])/2
+            en_cens[grp_start_ind] = Quantity([en_mid, en_width])
 
         # Simple enough, if the user wants a count rate then divide by exposure, if just counts then don't
         if count_rate:
