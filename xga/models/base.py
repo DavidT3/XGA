@@ -35,7 +35,7 @@ class BaseModel1D(metaclass=ABCMeta):
         representation or an astropy unit object.
     :param List[Quantity] start_pars: The start values of the model parameters for any fitting function that
         used start values.
-    :param List[Dict[str, Union[Quantity, str]]] par_priors: The priors on the model parameters, for any
+    :param List[Dict[str, Quantity/str]] par_priors: The priors on the model parameters, for any
         fitting function that uses them.
     :param str model_name: The simple name of the particular model, e.g. 'beta'.
     :param str model_pub_name: A smart name for the model that might be used in a publication
