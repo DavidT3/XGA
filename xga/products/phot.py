@@ -2647,7 +2647,7 @@ class RateMap(Image):
         """
         pix_coord = self.coord_conv(at_coord, pix).value
         rate = self.data[pix_coord[1], pix_coord[0]]
-        return Quantity(rate, "ct/s^-1")
+        return Quantity(rate, "ct/s")
 
     def get_count(self, at_coord: Quantity) -> float:
         """
