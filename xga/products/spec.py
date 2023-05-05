@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/05/2023, 11:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/05/2023, 15:48. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1925,6 +1925,17 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self._num_ann
 
+    @property
+    def annulus_ids(self) -> np.ndarray:
+        """
+        The set of annulus IDs for this AnnularSpectra; i.e. for an AnnularSpectra with 4 annuli, this will return
+        an array of 0, 1, 2, and 3.
+
+        :return: The array of annulus IDs.
+        :rtype: np.ndarray
+        """
+        return np.array(range(0, self.num_annuli))
+
     def background(self, obs_id: str, inst: str) -> str:
         """
         This method returns the path to the background spectrum for a particular ObsID and
@@ -2494,7 +2505,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
     def view_annulus(self, ann_ident: int, model: str, figsize: Tuple = (12, 8)):
         """
-        An equivelant to the Spectrum view method, but allows all spectra from the same annulus to be
+        An equivalent to the Spectrum view method, but allows all spectra from the same annulus to be
         displayed on the same axis.
 
         :param int ann_ident: The integer identifier of the annulus you wish to see spectra for.
