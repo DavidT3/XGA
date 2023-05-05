@@ -241,6 +241,18 @@ class Spectrum(BaseProduct):
         if which_spec == "main" and self.usable:
             # Currently having to use astropy's fits interface, I don't really want to because of risk of segfaults
             with fits.open(self._path, mode='update') as spec_fits:
+                # I delete the headers first, as I've found issues with XSPEC not being able to read the
+                #  path if the SAS version I'm using adds entries for the headers before I do. See issue #745
+                # Do have to check that the offending headers are actually present, as they won't be introduced by
+                #  all versions of SAS
+                if "RESPFILE" in spec_fits["SPECTRUM"].header:
+                    del spec_fits["SPECTRUM"].header["RESPFILE"]
+                if "ANCRFILE" in spec_fits["SPECTRUM"].header:
+                    del spec_fits["SPECTRUM"].header["ANCRFILE"]
+                if "BACKFILE" in spec_fits["SPECTRUM"].header:
+                    del spec_fits["SPECTRUM"].header["BACKFILE"]
+
+                # This writes the new response file paths to the headers.
                 spec_fits["SPECTRUM"].header["RESPFILE"] = self._rmf
                 spec_fits["SPECTRUM"].header["ANCRFILE"] = self._arf
                 spec_fits["SPECTRUM"].header["BACKFILE"] = self._back_spec
@@ -248,8 +260,12 @@ class Spectrum(BaseProduct):
         elif which_spec == "back" and self.usable:
             with fits.open(self._back_spec, mode='update') as spec_fits:
                 if self._back_rmf is not None:
+                    if 'RESPFILE' in spec_fits["SPECTRUM"].header:
+                        del spec_fits["SPECTRUM"].header["RESPFILE"]
                     spec_fits["SPECTRUM"].header["RESPFILE"] = self._back_rmf
                 if self._back_arf is not None:
+                    if 'ANCRFILE' in spec_fits["SPECTRUM"].header:
+                        del spec_fits["SPECTRUM"].header["ANCRFILE"]
                     spec_fits["SPECTRUM"].header["ANCRFILE"] = self._back_arf
 
     def _read_on_demand(self, src_spec: bool = True):
@@ -1825,7 +1841,14 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
-        self._num_ann = len(set([s.annulus_ident for s in spectra]))
+        uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
+        if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
+            raise ValueError("Some expected annulus IDs are missing from the spectra passed to this AnnularSpectra. "
+                             "Spectra with IDs {p} have been "
+                             "passed.".format(p=', '.join([str(i) for i in uniq_ann_ids])))
+        # Now we've made certain that the input annuli IDs are making sense, we can just use the length of the
+        #  list of unique IDs to set the number of annuli
+        self._num_ann = len(uniq_ann_ids)
 
         # While the official ObsID and Instrument of this product are 'combined', I do still
         #  want to know which ObsIDs and instruments the spectra belong to
@@ -2112,7 +2135,6 @@ class AnnularSpectra(BaseAggregateProduct):
             ann_spec = self.get_spectra(ann_i)
             if isinstance(ann_spec, Spectrum):
                 ann_spec = [ann_spec]
-
             all_spec += ann_spec
 
         return all_spec

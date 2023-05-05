@@ -1,5 +1,5 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:36. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 16:40. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -469,14 +469,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 #                      gr=group_spec, ex=extra_file_name)
 
             final_rmf_path = OUTPUT + obs_id + '/' + rmf
-            if one_rmf and not os.path.exists(final_rmf_path):
+            if one_rmf and (not os.path.exists(final_rmf_path) or force_gen):
                 cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
                                     rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map, dt=dt),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map, dt=dt),
                                     sb_cmd_str, bscal_cmd.format(s=spec, e=evt_list.path),
                                     bscal_cmd.format(s=b_spec, e=evt_list.path)])
                 #arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
-            elif not one_rmf and not os.path.exists(final_rmf_path):
+            elif not one_rmf and (not os.path.exists(final_rmf_path) or force_gen):
                 cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
                                     rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map, dt=dt),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src,
@@ -721,7 +721,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
             for r_ind in range(len(radii[s_ind])-1):
                 # Generate the SAS commands for the current annulus of the current source, for all observations
                 spec_cmd_out = _spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
-                                          min_sn, over_sample, one_rmf, num_cores, disable_progress, force_regen)
+                                          min_sn, over_sample, one_rmf, num_cores, disable_progress, True)
 
                 # Read out some of the output into variables to be modified
                 interim_paths = spec_cmd_out[5][0]

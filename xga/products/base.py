@@ -1,5 +1,5 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/08/2021, 09:32. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -15,6 +15,8 @@ import numpy as np
 from astropy.units import Quantity, UnitConversionError, Unit, deg
 from getdist import plots, MCSamples
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
 from tabulate import tabulate
@@ -705,6 +707,22 @@ class BaseProfile1D:
 
         self._save_path = None
 
+    def _model_allegiance(self, model: BaseModel1D):
+        """
+        This internal method with a silly name just checks whether a model instance has already been associated
+        with a profile other than this one, or if it has any association with a profile. If there is an association
+        with another profile then it throws an error, as that that can cause serious problems that have caught me
+        out before (see issue #742). If there is no association it sets the models profile attribute.
+
+        :param BaseModel1D model: An instance of a BaseModel1D class (or subclass) to check.
+        """
+        if model.profile is not None and model.profile != self:
+            raise ModelNotAssociatedError("The passed model instance is already associated with another profile, and"
+                                          " as such cannot be fit to this one. Ensure that individual model instances"
+                                          " are declared for each profile you are fitting.")
+        elif model.profile is None:
+            model.profile = self
+
     def emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
                   num_samples: int) -> Tuple[BaseModel1D, bool]:
         """
@@ -714,7 +732,7 @@ class BaseProfile1D:
         likelihood estimate is run, and if that fails the method will revert to using the start parameters
         set in the model instance.
 
-        :param BaseModel1D model: The model to be fit to the data.
+        :param BaseModel1D model: The model to be fit to the data, you cannot pass a model name for this argument.
         :param int num_steps: The number of steps each chain should take.
         :param int num_walkers: The number of walkers to be run for the ensemble sampler.
         :param bool progress_bar: Whether a progress bar should be displayed.
@@ -744,6 +762,17 @@ class BaseProfile1D:
 
             return to_replace_arr
 
+        # The very first thing I do is to check whether the passed model is ACTUALLY a model or a model name - I
+        #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
+        #  allows either an instance or a model name.
+        if not isinstance(model, BaseModel1D):
+            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
+                            "rather than a model name.")
+        # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
+        #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
+        else:
+            self._model_allegiance(model)
+
         # I'm just defining these here so that the lines don't get too long for PEP standards
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
@@ -761,7 +790,11 @@ class BaseProfile1D:
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
         #  we try maximum likelihood, and if that fails then we fall back on the default start parameters in the
         #  model.
-        curve_fit_model, success = self.nlls_fit(deepcopy(model), 10, show_warn=False)
+        # Making a copy of the model, and setting the profile to None otherwise the allegiance check gets very upset
+        curve_fit_model = deepcopy(model)
+        curve_fit_model.profile = None
+
+        curve_fit_model, success = self.nlls_fit(curve_fit_model, 10, show_warn=False)
         if success or curve_fit_model.fit_warning == "Very large parameter uncertainties":
             base_start_pars = np.array([p.value for p in curve_fit_model.model_pars])
         else:
@@ -911,6 +944,9 @@ class BaseProfile1D:
         # And finally storing the fit method used in the model itself
         model.fit_method = "mcmc"
 
+        # Explicitly deleting the curve fit model, just to be safe
+        del curve_fit_model
+
         return model, success
 
     def nlls_fit(self, model: BaseModel1D, num_samples: int, show_warn: bool) -> Tuple[BaseModel1D, bool]:
@@ -927,6 +963,17 @@ class BaseProfile1D:
             fit was successful or not.
         :rtype: Tuple[BaseModel1D, bool]
         """
+        # The very first thing I do is to check whether the passed model is ACTUALLY a model or a model name - I
+        #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
+        #  allows either an instance or a model name.
+        if not isinstance(model, BaseModel1D):
+            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
+                            "rather than a model name.")
+        # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
+        #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
+        else:
+            self._model_allegiance(model)
+
         y_data = (self.values.copy() - self._background).value
         y_errs = self.values_err.copy().value
         rads = self.fit_radii.copy().value
@@ -1010,6 +1057,17 @@ class BaseProfile1D:
         # TODO REMEMBER TO USE THE FIT RADII PROPERTY
         # Tell the model whether we think the fit was successful or not
         # model.success = success
+
+        # The very first thing I do is to check whether the passed model is ACTUALLY a model or a model name - I
+        #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
+        #  allows either an instance or a model name.
+        if not isinstance(model, BaseModel1D):
+            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
+                            "rather than a model name.")
+        # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
+        #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
+        else:
+            self._model_allegiance(model)
 
         # And finally storing the fit method used in the model itself
         model.fit_method = "odr"
@@ -1380,16 +1438,18 @@ class BaseProfile1D:
 
         return realisations
 
-    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
-             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
-             x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-             y_label: str = None, save_path: str = None):
+    def get_view(self, fig: Figure, main_ax: Axes, xscale="log", yscale="log", xlim=None, ylim=None, models=True,
+                 back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
+                 x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
+                 y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
+                 show_legend: bool = True, show_residual_ax: bool = True):
         """
-        A method that allows us to view the current profile, as well as any models that have been fitted to it,
-        and their residuals. The models are plotted by generating random model realisations from the parameter
-        distributions, then plotting the median values, with 1sigma confidence limits.
+        A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
+        is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
+        the profile plot in concert with other views.
 
-        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param Figure fig: The figure which has been set up for this profile plot.
+        :param Axes main_ax: The matplotlib axes on which to show the image.
         :param str xscale: The scaling to be applied to the x axis, default is log.
         :param str yscale: The scaling to be applied to the y axis, default is log.
         :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
@@ -1413,9 +1473,13 @@ class BaseProfile1D:
             will attempt to normalise using that.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
-        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
-            which case the figure will not be saved.
+        :param str data_colour: Used to set the colour of the data points.
+        :param str model_colour: Used to set the colour of a model fit.
+        :param bool show_legend: Whether the legend should be displayed or not. Default is True.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
         """
+
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
         if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
@@ -1449,12 +1513,8 @@ class BaseProfile1D:
         elif isinstance(y_norm, bool) and not y_norm:
             y_norm = Quantity(1, '')
 
-        # Setting up figure for the plot
-        fig = plt.figure(figsize=figsize)
-        # Grabbing the axis object and making sure the ticks are set up how we want
-        main_ax = plt.gca()
         main_ax.minorticks_on()
-        if models:
+        if models and show_residual_ax:
             # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
             res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
             res_ax.minorticks_on()
@@ -1482,18 +1542,18 @@ class BaseProfile1D:
         if self.radii_err is not None and self.values_err is None:
             x_errs = (self.radii_err.copy() / x_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
-                                    label=leg_label)
+                                    label=leg_label, color=data_colour)
         elif self.radii_err is None and self.values_err is not None:
             y_errs = (self.values_err.copy() / y_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
-                                    label=leg_label)
+                                    label=leg_label, color=data_colour)
         elif self.radii_err is not None and self.values_err is not None:
             x_errs = (self.radii_err.copy() / x_norm).value
             y_errs = (self.values_err.copy() / y_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
-                                    label=leg_label)
+                                    label=leg_label, color=data_colour)
         else:
-            line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
+            line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label, color=data_colour)
 
         if just_models and models:
             line[0].set_visible(False)
@@ -1521,22 +1581,26 @@ class BaseProfile1D:
                     lower_model = np.percentile(mod_reals, 15.9, axis=1)
 
                     mod_lab = model_obj.publication_name + " - {}".format(self._nice_fit_methods[method])
-                    mod_line = main_ax.plot(mod_rads.value/x_norm.value, median_model.value/y_norm,
-                                            label=mod_lab)
-                    model_colour = mod_line[0].get_color()
+                    main_ax.plot(mod_rads.value / x_norm.value, median_model.value / y_norm, label=mod_lab,
+                                 color=model_colour)
 
-                    main_ax.fill_between(mod_rads.value/x_norm.value, lower_model.value/y_norm.value,
-                                         upper_model.value/y_norm.value, alpha=0.7, interpolate=True,
+                    main_ax.fill_between(mod_rads.value / x_norm.value, lower_model.value / y_norm.value,
+                                         upper_model.value / y_norm.value, alpha=0.7, interpolate=True,
                                          where=upper_model.value >= lower_model.value, facecolor=model_colour)
-                    main_ax.plot(mod_rads.value/x_norm.value, lower_model.value/y_norm.value, color=model_colour,
+                    main_ax.plot(mod_rads.value / x_norm.value, lower_model.value / y_norm.value, color=model_colour,
                                  linestyle="dashed")
-                    main_ax.plot(mod_rads.value/x_norm.value, upper_model.value/y_norm.value, color=model_colour,
+                    main_ax.plot(mod_rads.value / x_norm.value, upper_model.value / y_norm.value, color=model_colour,
                                  linestyle="dashed")
 
-                    # This calculates and plots the residuals between the model and the data on the extra
-                    #  axis we added near the beginning of this method
-                    res = np.percentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) - (plot_y_vals*y_norm)
-                    res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
+                    # I only want this to trigger if the user has decided they want a residual axis. I expect most
+                    #  of the time that they will, but for things like the Hydrostatic mass diagnostic plots I want
+                    #  to be able to turn the residual axis off.
+                    if show_residual_ax:
+                        # This calculates and plots the residuals between the model and the data on the extra
+                        #  axis we added near the beginning of this method
+                        res = np.percentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) \
+                              - (plot_y_vals * y_norm)
+                        res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
         x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
@@ -1562,10 +1626,12 @@ class BaseProfile1D:
         elif y_label is not None:
             main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
 
-        main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
-        # This makes sure legend keys are shown, even if the data is hidden
-        for leg_key in main_leg.legendHandles:
-            leg_key.set_visible(True)
+        # If the user wants a legend to be shown, then we create one
+        if show_legend:
+            main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+            # This makes sure legend keys are shown, even if the data is hidden
+            for leg_key in main_leg.legendHandles:
+                leg_key.set_visible(True)
 
         # If the user has manually set limits then we can use them, only on the main axis because
         #  we grab those limits from the axes object for the residual axis later
@@ -1577,7 +1643,7 @@ class BaseProfile1D:
         # Setup the scale that the user wants to see, again on the main axis
         main_ax.set_xscale(xscale)
         main_ax.set_yscale(yscale)
-        if models:
+        if models and show_residual_ax:
             # We want the residual x axis limits to be identical to the main axis, as the
             # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
@@ -1622,7 +1688,7 @@ class BaseProfile1D:
         if max(x_axis_lims) < 100 and not models and min(x_axis_lims) > 0.1:
             main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
             main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        elif max(x_axis_lims) < 100 and models:
+        elif max(x_axis_lims) < 100 and models and show_residual_ax:
             res_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
             res_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
@@ -1632,12 +1698,125 @@ class BaseProfile1D:
         elif max(y_axis_lims) < 100 and min(y_axis_lims) <= 0.1:
             main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
-        # If the user passed a save_path value, then we assume they want to save the figure
-        if save_path is not None:
-            plt.savefig(save_path)
+        if models and show_residual_ax:
+            return main_ax, res_ax
+        else:
+            return main_ax, None
 
-        # And of course actually showing it
+    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
+             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
+             x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
+             y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen', show_legend: bool = True,
+             show_residual_ax: bool = True):
+        """
+        A method that allows us to view the current profile, as well as any models that have been fitted to it,
+        and their residuals. The models are plotted by generating random model realisations from the parameter
+        distributions, then plotting the median values, with 1sigma confidence limits.
+
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param str models: Should the fitted models to this profile be plotted, default is True
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool just_models: Should ONLY the fitted models be plotted? Default is False
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+            the dictionary key they are stored under is what they will be labelled.
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}
+        :param bool x_norm: Controls whether the x-axis of the profile is normalised by another value, the default is
+            False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
+            internal normalisation value (which can be set with the x_norm property), and if a quantity is passed it
+            will attempt to normalise using that.
+        :param bool y_norm: Controls whether the y-axis of the profile is normalised by another value, the default is
+            False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
+            internal normalisation value (which can be set with the y_norm property), and if a quantity is passed it
+            will attempt to normalise using that.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param str data_colour: Used to set the colour of the data points.
+        :param str model_colour: Used to set the colour of a model fit.
+        :param bool show_legend: Whether the legend should be displayed or not. Default is True.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
+        """
+        # Setting up figure for the plot
+        fig = plt.figure(figsize=figsize)
+        # Grabbing the axis object and making sure the ticks are set up how we want
+        main_ax = plt.gca()
+
+        main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
+                                        custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
+                                        model_colour, show_legend, show_residual_ax)
+
+        # plt.tight_layout()
         plt.show()
+
+        # Wipe the figure
+        plt.close("all")
+
+    def save_view(self, save_path: str, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
+                  back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
+                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
+                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
+                  show_legend: bool = True, show_residual_ax: bool = True):
+        """
+        A method that allows us to save a view of the current profile, as well as any models that have been
+        fitted to it, and their residuals. The models are plotted by generating random model realisations from
+        the parameter distributions, then plotting the median values, with 1sigma confidence limits.
+
+        This method will not display a figure, just save it at the supplied save_path.
+
+        :param str save_path: The path (including file name) where you wish to save the profile view.
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param str models: Should the fitted models to this profile be plotted, default is True
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool just_models: Should ONLY the fitted models be plotted? Default is False
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+            the dictionary key they are stored under is what they will be labelled.
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}
+        :param bool x_norm: Controls whether the x-axis of the profile is normalised by another value, the default is
+            False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
+            internal normalisation value (which can be set with the x_norm property), and if a quantity is passed it
+            will attempt to normalise using that.
+        :param bool y_norm: Controls whether the y-axis of the profile is normalised by another value, the default is
+            False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
+            internal normalisation value (which can be set with the y_norm property), and if a quantity is passed it
+            will attempt to normalise using that.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param str data_colour: Used to set the colour of the data points.
+        :param str model_colour: Used to set the colour of a model fit.
+        :param bool show_legend: Whether the legend should be displayed or not. Default is True.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
+        """
+        # Setting up figure for the plot
+        fig = plt.figure(figsize=figsize)
+        # Grabbing the axis object and making sure the ticks are set up how we want
+        main_ax = plt.gca()
+
+        main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
+                                        custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
+                                        model_colour, show_legend, show_residual_ax)
+
+        plt.savefig(save_path)
+
+        # plt.tight_layout()
+        plt.show()
+
+        # Wipe the figure
+        plt.close("all")
 
     def save(self, save_path: str = None):
         """

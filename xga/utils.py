@@ -1,5 +1,5 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 15/06/2021, 14:04. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 15:12. Copyright (c) The Contributors
 
 import json
 import os
@@ -12,6 +12,7 @@ from warnings import warn
 import pandas as pd
 import pkg_resources
 from astropy.constants import m_p, m_e
+from astropy.cosmology import LambdaCDM
 from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import read_header
@@ -57,6 +58,8 @@ COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
                     ] + ENERGY_BOUND_PRODUCTS + PROFILE_PRODUCTS + COMBINED_PROFILE_PRODUCTS
 XMM_INST = ["pn", "mos1", "mos2"]
+# This list contains banned filter types - these occur in observations that I don't want XGA to try and use
+BANNED_FILTS = ['CalClosed', 'Closed']
 
 # Here we read in files that list the errors and warnings in SAS
 errors = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_errors.csv"), header="infer")
@@ -90,6 +93,9 @@ MEAN_MOL_WEIGHT = 0.61
 
 # A centralised constant to define what radius labels are allowed
 RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
+
+# Adding a default concordance cosmology set up here - this replaces the original default choice of Planck15
+DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
 
 
 def xmm_obs_id_test(test_string: str) -> bool:
@@ -137,8 +143,17 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
     # Creates black list file if one doesn't exist, then reads it in
     if not os.path.exists(BLACKLIST_FILE):
         with open(BLACKLIST_FILE, 'w') as bl:
-            bl.write("ObsID")
+            bl.write("ObsID,EXCLUDE_PN,EXCLUDE_MOS1,EXCLUDE_MOS2")
     blacklist = pd.read_csv(BLACKLIST_FILE, header="infer", dtype=str)
+
+    # This part here is to support blacklists used by older versions of XGA, where only a full ObsID was excluded.
+    #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected
+    if len(blacklist.columns) == 1:
+        # Adds the three new columns, all with a default value of True. So any ObsID already in the blacklist
+        #  will have the same behaviour as before, all instruments for the ObsID are excluded
+        blacklist[["EXCLUDE_PN", "EXCLUDE_MOS1", "EXCLUDE_MOS2"]] = 'T'
+        # If we have even gotten to this stage then the actual blacklist file needs re-writing, so I do
+        blacklist.to_csv(BLACKLIST_FILE, index=False)
 
     # Need to find out which observations are available, crude way of making sure they are ObsID directories
     # This also checks that I haven't run them before
@@ -153,7 +168,7 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
                     if os.path.exists(evt_path):
                         evts_header = read_header(evt_path)
                         try:
-                            # Reads out the filter header, if it is CalClosed then we can't use it
+                            # Reads out the filter header, if it is CalClosed/Closed then we can't use it
                             filt = evts_header["FILTER"]
                             submode = evts_header["SUBMODE"]
                             info['ra'] = evts_header["RA_PNT"]
@@ -164,7 +179,7 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
                             filt = "CalClosed"
 
                         # TODO Decide if I want to disallow small window mode observations
-                        if filt != "CalClosed":
+                        if filt not in BANNED_FILTS:
                             info["the_rest"].append("T")
                         else:
                             info["the_rest"].append("F")
@@ -424,6 +439,16 @@ else:
         except:
             XSPEC_VERSION = None
 
-
+    # This defines the meaning of different colours of region - this will eventually be user configurable in the
+    #  configuration file, but putting it here means that the user can still change the definitions programmatically
+    # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
+    #  University of Edinburgh - 2005.
+    # Red - Point source
+    # Green - Extended source
+    # Magenta - PSF-sized extended source
+    # Blue - Extended source with significant point source contribution
+    # Cyan - Extended source with significant Run1 contribution
+    # Yellow - Extended source with less than 10 counts
+    SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan", "yellow"]}
 
 

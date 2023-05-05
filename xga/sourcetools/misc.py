@@ -1,15 +1,16 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 08/10/2021, 18:23. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 09:06. Copyright (c) The Contributors
 import warnings
 from copy import deepcopy
 from subprocess import Popen, PIPE
 from typing import Union, List
 
 from astropy.coordinates import SkyCoord
-from astropy.cosmology import Planck15
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity
 from numpy import array, ndarray, pi
 
+from .. import DEFAULT_COSMO
 from ..exceptions import HeasoftError
 from ..models import BaseModel1D
 
@@ -66,12 +67,12 @@ def nh_lookup(coord_pair: Quantity) -> ndarray:
     return nh_vals
 
 
-def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
+def rad_to_ang(rad: Quantity, z: float, cosmo: Cosmology = DEFAULT_COSMO) -> Quantity:
     """
     Converts radius in length units to radius on sky in degrees.
 
     :param Quantity rad: Radius for conversion.
-    :param Cosmology cosmo: An instance of an astropy cosmology, the default is Planck15.
+    :param Cosmology cosmo: An instance of an astropy cosmology, the default is a flat LambdaCDM concordance model.
     :param float z: The _redshift of the source.
     :return: The radius in degrees.
     :rtype: Quantity
@@ -81,12 +82,12 @@ def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
     return Quantity(ang_rad, 'deg')
 
 
-def ang_to_rad(ang: Quantity, z: float, cosmo=Planck15) -> Quantity:
+def ang_to_rad(ang: Quantity, z: float, cosmo: Cosmology = DEFAULT_COSMO) -> Quantity:
     """
     The counterpart to rad_to_ang, this converts from an angle to a radius in kpc.
 
     :param Quantity ang: Angle to be converted to radius.
-    :param Cosmology cosmo: An instance of an astropy cosmology, the default is Planck15.
+    :param Cosmology cosmo: An instance of an astropy cosmology, the default is a flat LambdaCDM concordance model.
     :param float z: The _redshift of the source.
     :return: The radius in kpc.
     :rtype: Quantity
@@ -151,8 +152,8 @@ def coord_to_name(coord_pair: Quantity, survey: str = None) -> str:
     return name
 
 
-def model_check(sources,
-                model: Union[str, List[str], BaseModel1D, List[BaseModel1D]]) -> Union[List[BaseModel1D], List[str]]:
+def model_check(sources, model: Union[str, List[str], BaseModel1D, List[BaseModel1D]]) \
+        -> Union[List[BaseModel1D], List[str]]:
     """
     Very simple function that checks if a passed set of models is appropriately structured for the number of sources
     that have been passed. I can't imagine why a user would need this directly, its only here as these checks
@@ -163,12 +164,22 @@ def model_check(sources,
     :return: A list of model instances, or names of models.
     :rtype: Union[List[BaseModel1D], List[str]]
     """
+
+    # This is when there is a single model instance or model name given for a single source. Obviously this is
+    #  fine, but we need to put it in a list because the functions that use this want everything to be iterable
     if isinstance(model, (str, BaseModel1D)) and len(sources) == 1:
         model = [model]
+    # Here we deal with a single model name for a SET of sources - as the fit method will use strings to declare
+    #  model instances we just make a list of the same length as the sample we're analysing (full of the same string)
     elif isinstance(model, str) and len(sources) != 1:
         model = [model]*len(sources)
+    # Here we deal with a single model INSTANCE for a SET of sources - this is slightly more complex, as we don't want
+    #  to just fill a list full of a bunch of pointers to the same memory address (instance). As such we store copies
+    #  of the model in the list, one for each source
     elif isinstance(model, BaseModel1D) and len(sources) != 1:
         model = [deepcopy(model) for s_ind in range(len(sources))]
+    # These next conditionals just catch when the user has done something silly - you can figure it out from the
+    #  error messages
     elif isinstance(model, list) and len(model) != len(sources):
         raise ValueError("If you pass a list of model names (or model instances), then that list must be the same"
                          " length as the number of sources passed for analysis.")

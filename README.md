@@ -5,7 +5,7 @@
 [![Documentation Status](https://readthedocs.org/projects/xga/badge/?version=latest)](https://xga.readthedocs.io/en/latest/?badge=latest)
 [![Coverage Percentage](https://raw.githubusercontent.com/DavidT3/XGA/master/tests/coverage_badge.svg)](https://raw.githubusercontent.com/DavidT3/XGA/master/tests/coverage_badge.svg)
 
-# What is XMM: Generate and Analyse (XGA)?
+# What is X-ray: Generate and Analyse (XGA)?
 
 XGA is a Python module designed to make it easy to analyse X-ray sources that have been observed by the XMM-Newton Space telescope. It is based around declaring different types of source and sample objects which correspond to real X-ray sources, finding all available data, and then insulating the user from the tedious generation and basic analysis of X-ray data products.
 
@@ -16,6 +16,16 @@ This module also supports more complex analyses for specific object types; the e
 # Installing XGA
 This is a slightly more complex installation than many Python modules, but shouldn't be too difficult. If you're
 having issues feel free to contact me.
+
+## Data Required to use XGA
+### Cleaned Event Lists
+**This is very important** - Currently, to make use of this module, you **must** have access to cleaned XMM-Newton
+event lists, as XGA is not yet capable of producing them itself.
+
+### Region Files
+It will be beneficial if you have region files available, as it will allow XGA to remove interloper sources. If you
+wish to use existing region files, then they must be in a DS9 compatible format, **point sources** must be **red** and
+**extended sources** must be **green**.
 
 ## The Module
 XGA has been uploaded to PyPi, so you can simply run:
@@ -34,8 +44,7 @@ python setup.py install
 XGA depends on two non-Python pieces of software:
 * XMM's Science Analysis System (SAS) - Version 17.0.0, but other versions should be largely compatible with the
     software. SAS version 14.0.0 however, does not support features that PSF correction of images depends on.
-* HEASoft's XSPEC - Version 12.10.1, **I can't guarantee later versions will work.**
-* HEASoft's XSPEC - Version 12.10.1, **I can't guarantee later versions will work.**
+* HEASoft's XSPEC - Version 12.10.1, but other versions should be largely compatible even if I have not tested them.
 
 All required Python modules can be found in requirements.txt, and should be added to your system during the 
 installation of XGA.
@@ -106,7 +115,7 @@ If you encounter a bug, or would like to make a feature request, please use the 
 [issues](https://github.com/DavidT3/XGA/issues) page, it really helps to keep track of everything.
 
 However, if you have further questions, or just want to make doubly sure I notice the issue, feel free to send
-me an email at david.turner@sussex.ac.uk
+me an email at turne540@msu.edu
 
 
 

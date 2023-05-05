@@ -17,6 +17,14 @@ sourcetools.temperature module
    :undoc-members:
    :show-inheritance:
 
+sourcetools.entropy module
+--------------------------
+
+.. automodule:: xga.sourcetools.entropy
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 sourcetools.mass module
 --------------------------
 

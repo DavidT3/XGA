@@ -1,5 +1,5 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/05/2021, 20:46. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:34. Copyright (c) The Contributors
 
 
 class HeasoftError(Exception):
@@ -592,4 +592,24 @@ class InvalidProductError(Exception):
             return '{}'.format(self.message)
         else:
             return 'InvalidProductError has been raised'
+
+
+class NotSampleMemberError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when a feature reserved for sources that belong to samples is used, and the source is independent
+        of a sample.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'NotSampleMemberError has been raised'
 

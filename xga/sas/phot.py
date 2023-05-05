@@ -1,5 +1,5 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 09/06/2021, 10:36. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 15:27. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -36,8 +36,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
     :param Quantity lo_en: The lower energy limit for the image, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the image, in astropy energy units.
     :param str add_expr: A string to be added to the SAS expression keyword
-    :param int num_cores: The number of cores to use (if running locally), default is set to
-        90% of available.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
@@ -146,7 +145,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
 
     # These are crucial, to generate an exposure map one must have a ccf.cif calibration file, and a reference
     # image. If they do not already exist, these commands should generate them.
-    cifbuild(sources, disable_progress=disable_progress)
+    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
     sources = evselect_image(sources, lo_en, hi_en)
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
@@ -254,10 +253,10 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
 
     # To make a mosaic we need to have the individual products in the first place
     if to_mosaic == "image":
-        sources = evselect_image(sources, lo_en, hi_en, disable_progress=disable_progress)
+        sources = evselect_image(sources, lo_en, hi_en, disable_progress=disable_progress, num_cores=num_cores)
         for_name = "img"
     elif to_mosaic == "expmap":
-        sources = eexpmap(sources, lo_en, hi_en, disable_progress=disable_progress)
+        sources = eexpmap(sources, lo_en, hi_en, disable_progress=disable_progress, num_cores=num_cores)
         for_name = "expmap"
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
@@ -373,7 +372,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                          " probably take too long...".format(bins))
 
     # Need a valid CIF for this task, so run cifbuild first
-    cifbuild(sources, disable_progress=disable_progress)
+    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.

@@ -1,14 +1,15 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 28/04/2021, 11:54. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:33. Copyright (c) The Contributors
 
 
 from typing import Tuple
 
 import numpy as np
-from astropy.cosmology import Planck15
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitBase, pix, deg, arcsec, UnitConversionError
 
 from .misc import pix_deg_scale, pix_rad_to_physical, physical_rad_to_pix, rad_to_ang
+from .. import DEFAULT_COSMO
 from ..products import Image, RateMap
 from ..products.profile import SurfaceBrightness1D
 
@@ -109,7 +110,7 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
 
 
 def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, pix_step: int = 1,
-              rad_units: UnitBase = arcsec, cosmo=Planck15, min_central_pix_rad: int = 3,
+              rad_units: UnitBase = arcsec, cosmo: Cosmology = DEFAULT_COSMO, min_central_pix_rad: int = 3,
               start_pix_rad: int = 0) -> Tuple[np.ndarray, np.ndarray, Quantity]:
     """
     Will probably only ever be called by an internal brightness calculation, but two different methods
@@ -123,7 +124,7 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
     :param UnitBase rad_units: The output units for the centres of the annulli returned by
         this function. The inner and outer radii will always be in pixels.
-    :param cosmo: An instance of an astropy cosmology, the default is Planck15.
+    :param Cosmology cosmo: An instance of an astropy cosmology, the default is a concordance flat LambdaCDM model.
     :param int start_pix_rad: The pixel radius at which the innermost annulus starts, default is zero.
     :param int min_central_pix_rad: The minimum radius of the innermost circular annulus (will only
         be used if start_pix_rad is 0, otherwise the innermost annulus is not a circle), default is three.
@@ -173,7 +174,7 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
 def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_inn_rad_factor: float = 1.05,
                       back_out_rad_factor: float = 1.5, interloper_mask: np.ndarray = None,
                       z: float = None, pix_step: int = 1, rad_units: UnitBase = arcsec,
-                      cosmo=Planck15, min_snr: float = 0.0, min_central_pix_rad: int = 3,
+                      cosmo: Cosmology = DEFAULT_COSMO, min_snr: float = 0.0, min_central_pix_rad: int = 3,
                       start_pix_rad: int = 0) -> Tuple[SurfaceBrightness1D, bool]:
     """
     A simple method to calculate the average brightness in circular annuli upto the radius of
@@ -191,7 +192,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     :param float z: The redshift of the source of interest.
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
     :param BaseUnit rad_units: The desired output units for the central radii of the annuli.
-    :param cosmo: An astropy cosmology object for source coordinate conversions.
+    :param Cosmology cosmo: An astropy cosmology object for source coordinate conversions.
     :param float min_snr: The minimum signal to noise allowed for each bin in the profile. If any point is
         below this threshold the profile will be rebinned. Default is 0.0
     :param int start_pix_rad: The pixel radius at which the innermost annulus starts, default is zero.
@@ -379,7 +380,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
 def pizza_brightness(im_prod: Image, src_mask: np.ndarray, back_mask: np.ndarray,
                      centre: Quantity, rad: Quantity, num_slices: int = 4,
                      z: float = None, pix_step: int = 1, cen_rad_units: UnitBase = arcsec,
-                     cosmo=Planck15) -> Tuple[np.ndarray, Quantity, Quantity, np.float64, np.ndarray, np.ndarray]:
+                     cosmo=DEFAULT_COSMO) -> Tuple[np.ndarray, Quantity, Quantity, np.float64, np.ndarray, np.ndarray]:
 
     raise NotImplementedError("The supporting infrastructure to allow pizza profile product objects hasn't been"
                               " written yet sorry!")

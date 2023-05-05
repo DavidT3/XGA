@@ -1,5 +1,5 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 11/06/2021, 14:29. Copyright (c) David J Turner
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -155,6 +155,12 @@ class BaseModel1D(metaclass=ABCMeta):
         # I'm going to store any volume integral results within the model itself
         self._vol_ints = {'pars': {}, 'par_dists': {}}
 
+        # This attribute stores a reference to a profile that a model instance has been used to fit. If the model
+        #  exists in isolation and hasn't been fit through a profile fit() method then it will remain None, but
+        #  otherwise I'm storing the profile to avoid one model being fit to two different profiles accidentally.
+        #  The BaseProfile1D internal method _model_allegiance sets this
+        self._profile = None
+
     def __call__(self, x: Quantity, use_par_dist: bool = False) -> Quantity:
         """
         This method gets run when an instance of a particular model class gets called (i.e. an x-value is
@@ -173,7 +179,7 @@ class BaseModel1D(metaclass=ABCMeta):
             raise UnitConversionError("You have passed an x value in units of {p}, but this model expects units of "
                                       "{e}".format(p=x.unit.to_string(), e=self._x_unit.to_string()))
         else:
-            # Just to be sure its in exactly the right units
+            # Just to be sure it's in exactly the right units
             x = x.to(self._x_unit)
 
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
@@ -309,7 +315,7 @@ class BaseModel1D(metaclass=ABCMeta):
             method = 'direct'
             force_change = True
         else:
-            dr = (x[1]-x[0]).value
+            dr = (x[1] - x[0]).value
 
         # If the user just wants to use the current values of the model parameters then this is what happens
         if not use_par_dist:
@@ -356,27 +362,37 @@ class BaseModel1D(metaclass=ABCMeta):
                 else:
                     raise ValueError("{} is not a recognised inverse abel transform type".format(method))
 
-        transform_res = Quantity(transform_res, self._y_unit/self._x_unit)
+        transform_res = Quantity(transform_res, self._y_unit / self._x_unit)
 
         return transform_res
 
-    def volume_integral(self, outer_radius: Quantity, use_par_dist: bool = False) -> Quantity:
+    def volume_integral(self, outer_radius: Quantity, inner_radius: Quantity = None,
+                        use_par_dist: bool = False) -> Quantity:
         """
         Calculates a numerical value for the volume integral of the function over a sphere of
         radius outer_radius. The scipy quad function is used. This method can either return a single value
         calculated using the current model parameters, or a distribution of values using the parameter
         distributions (assuming that this model has had a fit run on it).
 
-        This method will be overridden if there is an analytical solution to a particular model's volume
+        This method may be overridden if there is an analytical solution to a particular model's volume
         integration over a sphere.
 
-        :param Quantity outer_radius: The radius to integrate out to.
+        The results of calculations with single values of outer and inner radius are stored in the model object
+        to reduce processing time if they are needed again, but if a distribution of radii are passed then
+        the results will not be stored and will be re-calculated each time.
+
+        :param Quantity outer_radius: The radius to integrate out to. Either a single value or, if you want to
+            marginalise over a radius distribution when 'use_par_dist=True', a non-scalar quantity of the same
+            length as the number of samples in the parameter posteriors.
+        :param Quantity inner_radius: The inner bound of the radius integration. Default is None, which results
+            in an inner radius of 0 in the units of outer_radius being used.
         :param bool use_par_dist: Should the parameter distributions be used to calculate a volume
             integral distribution; this can only be used if a fit has been performed using the model instance.
             Default is False, in which case the current parameters will be used to calculate a single value
         :return: The result of the integration, either a single value or a distribution.
         :rtype: Quantity
         """
+
         def integrand(x: float, pars: List[float]):
             """
             Internal function to wrap the model function.
@@ -387,47 +403,120 @@ class BaseModel1D(metaclass=ABCMeta):
             :rtype: float
             """
 
-            return x**2 * self.model(x, *pars)
+            return x ** 2 * self.model(x, *pars)
 
-        # Perform checks on the input radius units
+        # This variable just tells the rest of the function whether either the inner or outer radii are actually
+        #  a distribution rather than a single value.
+        if not inner_radius.isscalar or not outer_radius.isscalar:
+            rad_dist = True
+        else:
+            rad_dist = False
+
+        # This checks to see if inner radius is None (probably how it will be used most of the time), and if
+        #  it is then creates a Quantity with the same units as outer_radius
+        if inner_radius is None:
+            inner_radius = Quantity(0, outer_radius.unit)
+        elif inner_radius is not None and not inner_radius.unit.is_equivalent(outer_radius.unit):
+            raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
+                                      " as the outer_radius Quantity.")
+
+        if (not outer_radius.isscalar or not inner_radius.isscalar) and not use_par_dist:
+            raise ValueError("Radius distributions can only be used with use_par_dist set to True.")
+        elif not outer_radius.isscalar and len(outer_radius) != len(self.par_dists[0]):
+            raise ValueError("The outer_radius distribution must have the same number of entries (currently {rd}) "
+                             "as the model posterior distributions ({md}).".format(rd=len(outer_radius),
+                                                                                   md=len(self.par_dists[0])))
+        elif not inner_radius.isscalar and len(inner_radius) != len(self.par_dists[0]):
+            raise ValueError("The inner_radius distribution must have the same number of entries (currently {rd}) "
+                             "as the model posterior distributions ({md}).".format(rd=len(inner_radius),
+                                                                                   md=len(self.par_dists[0])))
+
+        # Do a basic sanity checks on the radii, they can't be below zero because that doesn't make any sense
+        #  physically. Also make sure that outer_radius isn't less than inner_radius
+        if (inner_radius.value < 0).any() or (not rad_dist and outer_radius < inner_radius):
+            raise ValueError("Both inner_radius and outer_radius must be greater than zero (though inner_radius "
+                             "may be None, which is equivalent to zero). Also, outer_radius must be greater than "
+                             "inner_radius.")
+
+        # Perform checks on the input outer radius units - don't need to explicitly check the inner radius units
+        #  because I've already ensured that they're the same as outer_radius
         if not outer_radius.unit.is_equivalent(self._x_unit):
             raise UnitConversionError("Outer radius cannot be converted to units of "
                                       "{}".format(self._x_unit.to_string()))
         else:
             outer_radius = outer_radius.to(self._x_unit)
+            # We already know that this conversion is possible, because I checked that inner_radius units are
+            #  equivalent to outer_radius
+            inner_radius = inner_radius.to(self._x_unit)
 
-        if use_par_dist and outer_radius in self._vol_ints['pars']:
+        # Here I just check to see whether this particular integral has been performed already, no sense repeating a
+        #  costly-ish calculation if it has. Where the results are stored depends on whether the integral was performed
+        #  using the median parameter values or the distributions
+        if not use_par_dist and (outer_radius in self._vol_ints['pars'] and
+                                 inner_radius in self._vol_ints['pars'][outer_radius]):
+            # This makes sure the rest of the code in this function knows that this calculation has already been run
             already_run = True
-            integral_res = self._vol_ints['pars'][outer_radius]
-        elif not use_par_dist and outer_radius in self._vol_ints['par_dists']:
+            integral_res = self._vol_ints['pars'][outer_radius][inner_radius]
+
+        # Equivalent to the above clause but for par distribution results rather than the median single values used
+        #  to concisely represent the models
+        elif use_par_dist and not rad_dist and (outer_radius in self._vol_ints['par_dists'] and
+                                                inner_radius in self._vol_ints['par_dists'][outer_radius]):
             already_run = True
-            integral_res = self._vol_ints['par_dists'][outer_radius]
+            integral_res = self._vol_ints['par_dists'][outer_radius][inner_radius]
+
+        # Otherwise, this particular integral just hasn't been run
+        elif not rad_dist:
+            already_run = False
+            # In this case I pre-emptively add the outer radius to the dictionary keys, for use later to store
+            #  the result. I don't add the inner radius because it will be automatically added
+            if use_par_dist:
+                self._vol_ints['par_dists'][outer_radius] = {}
+            else:
+                self._vol_ints['pars'][outer_radius] = {}
         else:
+            # In the case where we are using a radius distribution, we still need to set this parameter so
+            #  that the calculation is actually run
             already_run = False
 
         # The user can either request a single value using the current model parameters, or a distribution
         #  using the current parameter distributions (if set)
         if not use_par_dist and not already_run:
-            integral_res = 4 * np.pi * quad(integrand, 0, outer_radius.value, args=[p.value for p
-                                                                                    in self._model_pars])[0]
+            # Runs the volume integral for a sphere for the representative parameter values of this model
+            integral_res = 4 * np.pi * quad(integrand, inner_radius.value, outer_radius.value,
+                                            args=[p.value for p in self._model_pars])[0]
         elif use_par_dist and len(self._par_dists[0]) != 0 and not already_run:
+            # Runs the volume integral for the parameter distributions (assuming there are any) of this model
             unitless_dists = [par_d.value for par_d in self.par_dists]
             integral_res = np.zeros(len(unitless_dists[0]))
+            # An unfortunately unsophisticated way of doing this, but stepping through the parameter distributions
+            #  one by one.
             for par_ind in range(len(unitless_dists[0])):
-                integral_res[par_ind] = 4 * np.pi * quad(integrand, 0, outer_radius.value,
+                if not outer_radius.isscalar:
+                    out_rad = outer_radius[par_ind].value
+                else:
+                    out_rad = outer_radius.value
+
+                if not inner_radius.isscalar:
+                    inn_rad = inner_radius[par_ind].value
+                else:
+                    inn_rad = inner_radius.value
+                integral_res[par_ind] = 4 * np.pi * quad(integrand, inn_rad, out_rad,
                                                          args=[par_d[par_ind] for par_d in unitless_dists])[0]
         elif use_par_dist and len(self._par_dists[0]) == 0 and not already_run:
             raise XGAFitError("No fit has been performed with this model, so there are no parameter distributions"
                               " available.")
 
+        # If there wasn't already a result stored, the integration result is saved in a dictionary
         if not already_run:
-            integral_res = Quantity(integral_res, self.y_unit * self.x_unit**3)
-            if use_par_dist:
-                self._vol_ints['par_dists'][outer_radius] = integral_res
-            else:
-                self._vol_ints['pars'][outer_radius] = integral_res
+            integral_res = Quantity(integral_res, self.y_unit * self.x_unit ** 3)
 
-        return integral_res
+            if not rad_dist and use_par_dist:
+                self._vol_ints['par_dists'][outer_radius][inner_radius] = integral_res
+            elif not rad_dist:
+                self._vol_ints['pars'][outer_radius][inner_radius] = integral_res
+
+        return integral_res.copy()
 
     def allowed_prior_types(self, table_format: str = 'fancy_grid'):
         """
@@ -558,7 +647,7 @@ class BaseModel1D(metaclass=ABCMeta):
         # Check if there are parameter distributions associated with this model
         if len(self._par_dists[0] != 0):
             # Set up the figure
-            figsize = (6, 5*self.num_pars)
+            figsize = (6, 5 * self.num_pars)
             fig, ax_arr = plt.subplots(ncols=1, nrows=self.num_pars, figsize=figsize)
 
             # Iterate through the axes and plot the histograms
@@ -571,8 +660,8 @@ class BaseModel1D(metaclass=ABCMeta):
                 err = self.model_par_errs[ax_ind]
                 # Depending how many entries there are per parameter in the error quantity depends how we plot them
                 if err.isscalar:
-                    ax.axvline(self.model_pars[ax_ind].value-err.value, color='red', linestyle='dashed')
-                    ax.axvline(self.model_pars[ax_ind].value+err.value, color='red', linestyle='dashed')
+                    ax.axvline(self.model_pars[ax_ind].value - err.value, color='red', linestyle='dashed')
+                    ax.axvline(self.model_pars[ax_ind].value + err.value, color='red', linestyle='dashed')
                 elif not err.isscalar and len(err) == 2:
                     ax.axvline(self.model_pars[ax_ind].value - err[0].value, color='red', linestyle='dashed')
                     ax.axvline(self.model_pars[ax_ind].value + err[1].value, color='red', linestyle='dashed')
@@ -1047,12 +1136,28 @@ class BaseModel1D(metaclass=ABCMeta):
         """
         self._success = new_val
 
+    @property
+    def profile(self):
+        """
+        The profile that this model has been fit to.
 
+        :return: The profile object that this has been fit to, if no fit has been performed then this property
+            will return None.
+        :rtype: BaseProfile1D
+        """
+        return self._profile
 
+    @profile.setter
+    def profile(self, new_val):
+        """
+        The property setter for the profile that this model has been fit to.
 
+        :param BaseProfile1D new_val: A profile object that this model has been fit to.
+        """
+        # Have to do this here to avoid circular import errors
+        from ..products import BaseProfile1D
 
-
-
-
-
-
+        if new_val is not None and not isinstance(new_val, BaseProfile1D):
+            raise TypeError("You may only set the profile property with an XGA profile object, or None.")
+        else:
+            self._profile = new_val

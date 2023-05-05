@@ -1,16 +1,15 @@
-#  This code is a part of XMM: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 12/10/2021, 09:51. Copyright (c) David J Turner
-import numpy as np
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:33. Copyright (c) The Contributors
 import pytest
 from astropy.cosmology import Planck15
 from astropy.units import Quantity
 from numpy import zeros
 from numpy.testing import assert_array_equal
 
-from xga.products.phot import Image
 from xga.imagetools.misc import pix_deg_scale, sky_deg_scale, pix_rad_to_physical, physical_rad_to_pix, \
     data_limits, edge_finder
-from .. import A907_LOC, A907_IM_PN_INFO, A907_EX_PN_INFO
+from xga.products.phot import Image
+from .. import A907_LOC, A907_IM_PN_INFO
 
 OFF_PIX = Quantity([20, 20], 'pix')
 
