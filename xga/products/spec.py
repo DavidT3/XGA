@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/05/2023, 18:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/05/2023, 10:07. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1568,10 +1568,15 @@ class Spectrum(BaseProduct):
     def new_view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
                  hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
                  src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
-                 yscale: str = "linear", fontsize: Union[int, float] = 14,
+                 yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
                  save_path: str = None):
         """
         A method for viewing the data associated with this Spectrum instance.
+
+        A spectrum can be viewed prior to fitting, and this method will produce plots that should be the same as the
+        XSPEC count/s/keV (or channel) spectrum views. If a model has been fit, and the user wishes to display it, then
+        the 'normalised count/s/keV' that are plotted are extracted from the XSPEC data, rather than assembled in this
+        method.
 
         :param tuple figsize: The desired size of the output figure, default is (10, 7).
         :param Quantity lo_lim: The lower limit applied to the plot, either a unitless Quantity (representing
@@ -1591,6 +1596,8 @@ class Spectrum(BaseProduct):
         :param str yscale: The scaling to be applied to the y-axis, default is 'linear'.
         :param int/float fontsize: The fontsize for axis labels. The legend fontsize will be fontsize - 1. The title
             fontsize will be fontsize + 1. Default is 14.
+        :param bool show_model_fits: Whether any models fit to the spectrum by XSPEC should be shown. Default is
+            True, but will be set to False if no fits have been performed.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
         """
@@ -1632,6 +1639,15 @@ class Spectrum(BaseProduct):
             lo_lim = lo_lim.value
             hi_lim = hi_lim.value
 
+        # If the call to this method requested that models be plotted, we need to just make sure that there are models
+        #  available, because the default is True, but we can look at spectra prior to fitting now
+        if show_model_fits and len(self._plot_data) == 0:
+            # If there are no model data to plot, we set this to False
+            show_model_fits = False
+        elif show_model_fits and not energy:
+            raise ValueError("As fitted spectra are extracted from XSPEC, and only spectra with energy x-axes are "
+                             "extracted, plotting against channel is not supported.")
+
         # Here we grab the count-rates of the channels in this spectrum - either straight from the property
         #  or the get_grouped_data() method
         if not grouped:
@@ -1657,6 +1673,13 @@ class Spectrum(BaseProduct):
                 x_dat = grp_info[4][:, 0].value
                 # This entry is the 'error' (but really just half the width) of each channel bin
                 x_wid = grp_info[4][:, 1].value
+
+        # We check that the x limits are actually sensible values, if they are higher (for the top limit) or lower (
+        #  (for the lower limit) than the data that are actually available then we nudge them to those values
+        if lo_lim < x_dat.min():
+            lo_lim = x_dat.min()
+        if hi_lim > x_dat.max():
+            hi_lim = x_dat.max()
 
         # We pre-select the data based on the passed lower and upper limits - first making a selection mask array
         sel_x = (x_dat <= hi_lim) & (x_dat >= lo_lim)
@@ -1698,26 +1721,61 @@ class Spectrum(BaseProduct):
         plt.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()),
                   fontsize=fontsize+1)
 
-        # Plotting the data, accounting for the different combinations of x-axis and y-axis
-        if back_sub:
-            # If we're going for background subtracted data, then that is all we plot
-            plt.errorbar(x_dat, src_sub_bck_rate.value[:, 0] / per_x, xerr=x_wid,
-                         yerr=src_sub_bck_rate.value[:, 1] / per_x, fmt="+", color=src_colour,
-                         label="Background subtracted source data", zorder=1)
-        else:
-            # But if we're not wanting background subtracted, we need to plot the source and background spectra
-            plt.errorbar(x_dat, src_rate.value[:, 0] / per_x, xerr=x_wid, yerr=src_rate.value[:, 1] / per_x, fmt="+",
-                         color=src_colour, label="Source data", zorder=1)
-            plt.errorbar(x_dat, bck_rate.value[:, 0] / per_x, xerr=x_wid, yerr=bck_rate.value[:, 1] / per_x, fmt="x",
-                         color=bck_colour, label="Background data", zorder=1)
+        # This is an ugly way of doing this, but I hope that in the future I'll be able to implement this 'properly'
+        #  and just undo this
+        if not show_model_fits:
+            # Plotting the data, accounting for the different combinations of x-axis and y-axis
+            if back_sub:
+                # If we're going for background subtracted data, then that is all we plot
+                plt.errorbar(x_dat, src_sub_bck_rate.value[:, 0] / per_x, xerr=x_wid,
+                             yerr=src_sub_bck_rate.value[:, 1] / per_x, fmt="+", color=src_colour,
+                             label="Background subtracted source data", zorder=1)
+            else:
+                # But if we're not wanting background subtracted, we need to plot the source and background spectra
+                plt.errorbar(x_dat, src_rate.value[:, 0] / per_x, xerr=x_wid, yerr=src_rate.value[:, 1] / per_x, fmt="+",
+                             color=src_colour, label="Source data", zorder=1)
+                plt.errorbar(x_dat, bck_rate.value[:, 0] / per_x, xerr=x_wid, yerr=bck_rate.value[:, 1] / per_x, fmt="x",
+                             color=bck_colour, label="Background data", zorder=1)
 
-        # Energy vs channel has already been encoded in the x data, but we still need to plot different axis labels
-        if energy:
-            plt.ylabel("Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
-            plt.xlabel("Energy [keV]", fontsize=fontsize)
+            # Energy vs channel has already been encoded in the x data, but we still need to plot different axis labels
+            if energy:
+                plt.ylabel("Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
+                plt.xlabel("Energy [keV]", fontsize=fontsize)
+            else:
+                plt.ylabel("Counts s$^{-1}$ Channel$^{-1}$", fontsize=fontsize)
+                plt.xlabel("Channel", fontsize=fontsize)
+
+        # In this case the user wants the fitted spectra, and there ARE fits to plot, so rather than plot our own
+        #  calculated values we plot the normalised counts/s/keV (or channel) that were extracted from XSPEC
         else:
-            plt.ylabel("Counts s$^{-1}$ Channel$^{-1}$", fontsize=fontsize)
-            plt.xlabel("Channel", fontsize=fontsize)
+            # Set the axis labels
+            plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
+            plt.xlabel("Energy [keV]", fontsize=fontsize)
+
+            for mod_ind, mod in enumerate(self._plot_data):
+                # Extract the x values which we gathered from XSPEC (they will be in keV)
+                x = self._plot_data[mod]["x"]
+                # Cut the x dataset to just the energy range we want
+                sel_x = (x > lo_lim) & (x < hi_lim)
+                plot_x = x[sel_x]
+
+                if mod_ind == 0:
+                    # Read out the data just for line length reasons
+                    # Make the cuts based on energy values supplied to the view method
+                    plot_y = self._plot_data[mod]["y"][sel_x]
+                    plot_xerr = self._plot_data[mod]["x_err"][sel_x]
+                    plot_yerr = self._plot_data[mod]["y_err"][sel_x]
+                    plot_mod = self._plot_data[mod]["model"][sel_x]
+
+                    plt.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
+                                 label="Background subtracted source data", zorder=1)
+                else:
+                    # Don't want to re-plot data points as they should be identical, so if there is another model
+                    #  only it will be plotted
+                    plot_mod = self._plot_data[mod]["model"][sel_x]
+
+                # The model line is put on
+                plt.plot(plot_x, plot_mod, label=mod, linewidth=1.5)
 
         # Generate the legend for the data and model(s)
         plt.legend(loc="best", fontsize=fontsize-1)
