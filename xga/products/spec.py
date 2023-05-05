@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/05/2023, 10:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/05/2023, 11:30. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1501,87 +1501,7 @@ class Spectrum(BaseProduct):
         plt.tight_layout()
         plt.show()
 
-    def view(self, lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-             figsize: Tuple = (8, 6)):
-        """
-        Very simple method to plot the data/models associated with this Spectrum object,
-        between certain energy limits.
-
-        :param Quantity lo_en: The lower energy limit from which to plot the spectrum.
-        :param Quantity hi_en: The upper energy limit to plot the spectrum to.
-        :param Tuple figsize: The desired size of the output figure.
-        """
-        if lo_en > hi_en:
-            raise ValueError("hi_en cannot be greater than lo_en")
-        else:
-            lo_en = lo_en.to("keV").value
-            hi_en = hi_en.to("keV").value
-
-        if len(self._plot_data.keys()) != 0:
-            # Create figure object
-            plt.figure(figsize=figsize)
-
-            # Set the plot up to look nice and professional.
-            ax = plt.gca()
-            ax.minorticks_on()
-            ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
-
-            # Set the title with all relevant information about the spectrum object in it
-            plt.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()))
-            for mod_ind, mod in enumerate(self._plot_data):
-                x = self._plot_data[mod]["x"]
-                # If the defaults are left, just update them to the min and max of the dataset
-                #  to avoid unsightly gaps at the sides of the plot
-                if lo_en == 0.:
-                    lo_en = x.min()
-                if hi_en == 30.0:
-                    hi_en = x.max()
-
-                # Cut the x dataset to just the energy range we want
-                plot_x = x[(x > lo_en) & (x < hi_en)]
-
-                if mod_ind == 0:
-                    # Read out the data just for line length reasons
-                    # Make the cuts based on energy values supplied to the view method
-                    plot_y = self._plot_data[mod]["y"][(x > lo_en) & (x < hi_en)]
-                    plot_xerr = self._plot_data[mod]["x_err"][(x > lo_en) & (x < hi_en)]
-                    plot_yerr = self._plot_data[mod]["y_err"][(x > lo_en) & (x < hi_en)]
-                    plot_mod = self._plot_data[mod]["model"][(x > lo_en) & (x < hi_en)]
-
-                    plt.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+", label="data", zorder=1)
-                else:
-                    # Don't want to re-plot data points as they should be identical, so if there is another model
-                    #  only it will be plotted
-                    plot_mod = self._plot_data[mod]["model"][(x > lo_en) & (x < hi_en)]
-
-                # The model line is put on
-                plt.plot(plot_x, plot_mod, label=mod, linewidth=1.5)
-
-            # Generate the legend for the data and model(s)
-            plt.legend(loc="best")
-
-            # Ensure axis is limited to the chosen energy range
-            plt.xlim(lo_en, hi_en)
-
-            plt.xlabel("Energy [keV]")
-            plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
-
-            ax.set_xscale("log")
-            ax.xaxis.set_major_formatter(ScalarFormatter())
-            ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-            ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-
-            plt.tight_layout()
-            # Display the spectrum
-            plt.show()
-
-            # Wipe the figure
-            plt.close("all")
-
-        else:
-            warnings.warn("There are no XSPEC fits associated with this Spectrum, you can't view it.")
-
-    def new_view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
+    def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
                  hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
                  src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
                  yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
@@ -1617,10 +1537,6 @@ class Spectrum(BaseProduct):
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
         """
-        warnings.warn("This method is being developed as a replacement for the clumsy approach taken in view(), but "
-                      "is not yet complete. Ideally the plots produced by this method will be equivelant to those"
-                      "produced by XSPEC, but that is not yet the case."
-                      "When finished, it will be renamed as view() and the old method will be removed")
 
         # This just checks whether the grouped argument to this method is compatible with whether the spectrum
         #  associated with this Spectrum instance has actually been grouped - if not then we automatically
