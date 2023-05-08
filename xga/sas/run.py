@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 16:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/05/2023, 10:24. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -65,6 +65,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                        extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
                        extra_info["instrument"], out, err, cmd)
+    elif p_type == "cross arfs":
+        print(err, '\n')
     elif "NullSource" in src:
         prod = None
     else:
