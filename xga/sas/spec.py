@@ -1,9 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 16:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/05/2023, 10:15. Copyright (c) The Contributors
 
 import os
 import warnings
 from copy import copy
+from itertools import permutations
 from random import randint
 from typing import Union, Tuple, List
 
@@ -12,7 +13,7 @@ from astropy.units import Quantity
 
 from .misc import cifbuild
 from .. import OUTPUT, NUM_CORES
-from ..exceptions import SASInputInvalid, NotAssociatedError
+from ..exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError
 from ..samples.base import BaseSample
 from ..sas.run import sas_call
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -607,7 +608,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
         if your call to this function was interrupted and an incomplete AnnularSpectrum is being read in.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
-    # If its a single source I put it into an iterable object (i.e. a list), just for convenience
+    # If it's a single source I put it into an iterable object (i.e. a list), just for convenience
     if isinstance(sources, BaseSource):
         sources = [sources]
     elif isinstance(sources, list) and not all([isinstance(s, BaseSource) for s in sources]):
@@ -816,4 +817,81 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
     return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
 
 
+@sas_call
+def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
+              group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+              set_id: str = None, num_cores: int = NUM_CORES, disable_progress: bool = False):
+
+    # If it's a single source I put it into an iterable object (i.e. a list), just for convenience
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+    elif isinstance(sources, list) and not all([isinstance(s, BaseSource) for s in sources]):
+        raise TypeError("If a list is passed, each element must be a source.")
+    # And the only other option is a BaseSample instance, so if it isn't that then we get angry
+    elif not isinstance(sources, (BaseSample, list)):
+        raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
+
+    arfgen_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; arfgen spectrumset={s} arfset={a} withrmfset=yes " \
+                 "rmfset={r} badpixlocation={e} extendedsource=yes detmaptype=dataset detmaparray={ds} " \
+                 "setbackscale=no badpixmaptype=dataset crossregionarf=yes crossreg_spectrumset={crs}"
+
+    # These store the final output information needed to run the commands
+    all_cmds = []
+    all_paths = []
+    all_out_types = []
+    all_extras = []
+    for src in sources:
+
+        # This is where the commands/extra information get concatenated from the different annuli
+        src_cmds = np.array([])
+        src_paths = np.array([])
+        src_out_types = []
+        src_extras = np.array([])
+
+        try:
+            ann_spec = src.get_annular_spectra(radii, group_spec, min_counts, min_sn, over_sample, set_id)
+        except NoProductAvailableError:
+            continue
+
+        oi_combos = [(o_id, inst) for o_id, insts in ann_spec.instruments.items() for inst in insts]
+        for oi in oi_combos:
+            rel_sp_comp = [ann_spec.get_spectra(ann_id, oi[0], oi[1]) for ann_id in ann_spec.annulus_ids]
+
+            for sp_comb in permutations(rel_sp_comp, 2):
+                obs_id = sp_comb[0].obs_id
+                inst = sp_comb[0].instrument
+                evt_list = src.get_products('events', obs_id, inst)[0]
+
+                dest_dir = OUTPUT + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=src.name, r=randint(0, 1e+8))
+
+                ccf = dest_dir + "ccf.cif"
+                det_map = OUTPUT + "{o}/{o}_{i}_detmap.fits".format(o=obs_id, i=inst)
+
+                # ra149.59254581874075_dec-11.063968180370173_grpTrue_mincnt5
+                c_arf_name = ann_spec.storage_key.split('_ar')[0] + '_grp' + \
+                             ann_spec.storage_key.split('ar')[-1].split('_grp')[1] + \
+                             "_ident" + str(ann_spec.set_ident) + \
+                             '_cross_{inn}_{out}.arf'.format(inn=sp_comb[0].annulus_ident,
+                                                             out=sp_comb[1].annulus_ident)
+                c_arf_path = dest_dir + c_arf_name
+
+                cmd = arfgen_cmd.format(d=dest_dir, ccf=ccf, s=sp_comb[0].path, a=c_arf_path, r=sp_comb[0].rmf,
+                                        e=evt_list.path, crs=sp_comb[1].path, ds=det_map)
+
+                extra_info = {}
+
+                src_paths = np.concatenate([src_paths, [c_arf_path]])
+                # Go through and concatenate things to the source lists defined above
+                src_cmds = np.concatenate([src_cmds, [cmd]])
+                src_out_types += ['cross arfs'] * len(src_cmds)
+                src_extras = np.concatenate([src_extras, [extra_info]])
+
+        # This adds the current sources final commands to the 'all sources' lists
+        all_cmds.append(src_cmds)
+        all_paths.append(src_paths)
+        all_out_types.append(src_out_types)
+        all_extras.append(src_extras)
+
+    # This gets passed back to the sas call function and is used to run the commands
+    return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
 
