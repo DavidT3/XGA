@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 16:56. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -39,10 +39,26 @@ class BaseProduct:
     :param str stdout_str: The stdout from calling the terminal command.
     :param str stderr_str: The stderr from calling the terminal command.
     :param str gen_cmd: The command used to generate the product.
+    :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
+        object for later use by another processing step. It isn't intended for use by a user and will only be
+        accessible when defining a BaseProduct.
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 extra_info: dict = None):
         """
-        The initialisation method for the BaseProduct class.
+        The initialisation method for the BaseProduct class, the super class for all SAS generated products in XGA.
+        Stores relevant file path information, parses the std_err output of the generation process, and stores the
+        instrument and ObsID that the product was generated for.
+
+        :param str path: The path to where the product file SHOULD be located.
+        :param str obs_id: The ObsID related to the product being declared.
+        :param str instrument: The instrument related to the product being declared.
+        :param str stdout_str: The stdout from calling the terminal command.
+        :param str stderr_str: The stderr from calling the terminal command.
+        :param str gen_cmd: The command used to generate the product.
+        :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
+            object for later use by another processing step. It isn't intended for use by a user and will only be
+            accessible when defining a BaseProduct.
         """
         # This attribute stores strings that indicate why a product object has been deemed as unusable
         self._why_unusable = []
@@ -65,6 +81,12 @@ class BaseProduct:
         self._energy_bounds = (None, None)
         self._prod_type = None
         self._src_name = None
+
+        # Any extra information which a processing step might want to store in this base product - generally only
+        #  used when a product has been generated that doesn't need its only product class, but is being put in
+        #  a product class to be returned from 'execute_cmd'. I'm not even going to give it a property to hopefully
+        #  highlight to the user that it shouldn't be accessed by them.
+        self._extra_info = extra_info
 
     # Users are not allowed to change this, so just a getter.
     @property
