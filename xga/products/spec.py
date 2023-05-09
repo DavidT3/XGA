@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/05/2023, 15:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 16:45. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1879,6 +1879,12 @@ class AnnularSpectra(BaseAggregateProduct):
         #  it is not linked across multiple spectra during fitting, what order the fit results are in.
         self._obs_order = {ai: {} for ai in range(self._num_ann)}
 
+        # This dictionary will store the cross-arfs that might be generated for this annular spectrum. That is why
+        #  there are two layers of annulus identifiers - each annulus gets one arf per every OTHER annulus (not itself)
+        self._cross_arfs = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
+                                    for ai in range(self._num_ann)}
+                                for i in self._instruments[o]} for o in self.obs_ids}
+
     # The src_name setter and getter have been overridden because there is an easier way of setting
     #  the source name for all spectra
     @property
@@ -2212,6 +2218,116 @@ class AnnularSpectra(BaseAggregateProduct):
         :rtype: float
         """
         return self._over_sample
+
+    def add_cross_arf(self, arf: Union[BaseProduct, str], obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int,
+                      set_ident: int):
+        """
+        This method allows you to add cross-arfs generated for this annular spectrum to a storage structure in
+        the object. That means that other processes that make use of them, such as spectral fitting, will be able
+        to retrieve them from this object easily.
+
+        :param BaseProduct/str arf: Either an XGA BaseProduct instance (which is what is produced by the generation
+            process) or a string path to the cross-arf file. This should represent the 'cross_ann_id' contribution
+            to the 'src_ann_id' spectrum.
+        :param str obs_id: The ObsID of the cross-arf - if 'arf' is a BaseProduct instance this argument will be
+            compared the ObsID of the 'arf' object. It will also be checked to ensure that it is associated with
+            this object.
+        :param str inst: The instrument of the cross-arf - if 'arf' is a BaseProduct instance this argument will be
+            compared the instrument of the 'arf' object. It will also be checked to ensure that it is associated with
+            the ObsID in this object.
+        :param int src_ann_id: The identifying number of the source annulus for this cross-arf.
+        :param int cross_ann_id: The identifying number of the 'cross' annulus for this cross-arf.
+        :param int set_ident: The set_ident that the cross-arf was generated for, it is checked against the
+            set identifier of this object.
+        """
+
+        # Hopefully this is never triggered, and obviously you could just grab the set_ident from the object you're
+        #  adding too if you want to get past this, but I mean this more as a check for the development of the
+        #  cross_arfs function to ensure I'm adding the right cross-arfs to the right annular spectra.
+        if set_ident != self.set_ident:
+            raise ValueError("The passed 'set_ident' ({s}) does not match the identifier of this object "
+                             "({ri}).".format(s=set_ident, ri=self.set_ident))
+
+        # I check whether the specified ObsID is actually a part of this AnnularSpectra, and raise a hopefully
+        #  informative error if it is not.
+        if obs_id not in self.obs_ids:
+            raise NotAssociatedError("The passed 'obs_id' ({o}) is not associated with this annular spectrum "
+                                     "({ol})".format(o=obs_id, ol=', '.join(self.obs_ids)))
+        # If we've passed the first check, and the passed arf is an XGA product instance, we perform a sanity check
+        #  to ensure that the ObsID passed by the user matches the one in the product
+        elif isinstance(arf, BaseProduct) and obs_id != arf.obs_id:
+            raise ValueError("The 'obs_id' ({o}) argument does not match the ObsID set for the XGA product containing "
+                             "the cross-arf ({po}).".format(o=obs_id, po=arf.obs_id))
+
+        # We then repeat the exact same checks as above, but with the instrument
+        if inst not in self.instruments[obs_id]:
+            raise NotAssociatedError("The passed 'inst' ({i}) is not associated with the ObsID in this annular "
+                                     "spectrum ({il}).".format(i=inst, il=', '.join(self.instruments[obs_id])))
+        elif isinstance(arf, BaseProduct) and inst != arf.instrument:
+            raise ValueError("The 'inst' ({i}) argument does not match the instrument set for the XGA product "
+                             "containing the cross-arf ({pi}).".format(i=inst, pi=arf.inst))
+
+        # I think I will allow either a string path, or a product (as I am declaring these arfs in BaseProducts in
+        #  the execute_cmd function) - as such I need to account for both. In this case we know that everything is fine
+        #  because the product has told us that it is usable
+        if isinstance(arf, BaseProduct) and arf.usable:
+            arf = arf.path
+        # In this case though something has obviously gone wrong, so we'll tell the user about it
+        elif isinstance(arf, BaseProduct) and not arf.usable:
+            raise FailedProductError("The specified cross-arf is not usable for the following reasons; "
+                                     "{}".format(', '.join(arf.not_usable_reasons)))
+        # In this case we assume that the string was the path, and if it doesn't exist we say so.
+        elif isinstance(arf, str) and not os.path.exists(arf):
+            raise FileNotFoundError("The specified cross-arf file ({}) cannot be found.".format(arf))
+
+        # If we've got here we know that the 'arf' argument was alright, but now we have to try to check the
+        #  validity of the src_ann_id and cross_ann_id values. Firstly they have to actually be identifying annuli
+        #  present in this object
+        if src_ann_id not in self.annulus_ids or cross_ann_id not in self.annulus_ids:
+            raise NotAssociatedError("The 'src_ann_id' and 'cross_ann_id' arguments must be annulus identifiers "
+                                     "associated with this AnnularSpectra, allowed values "
+                                     "are; {}".format(', '.join([str(i) for i in self.annulus_ids])))
+        # Having the same value for both isn't allowed, because that doesn't make sense. Cross arfs represent the
+        #  contribution of one annulus to another, so what use would an arf be that represents the contribution of one
+        #  annulus to itself?
+        elif src_ann_id == cross_ann_id:
+            raise ValueError("The 'src_ann_id' and 'cross_ann_id' arguments have the same value ({}). They must be "
+                             "different as cross-arfs represent the contribution of one annulus to "
+                             "another.".format(str(src_ann_id)))
+
+        # Now we actually store the PATH to the file in the attribute that was set up in the init of this
+        #  class - This one is four layers deep, as every source annulus will have a cross arf for every
+        #  other annulus
+        self._cross_arfs[obs_id][inst][src_ann_id][cross_ann_id] = arf
+
+    def get_cross_arfs(self, obs_id: str, inst: str, src_ann_id: int) -> dict:
+        """
+
+
+        :param str obs_id:
+        :param str inst:
+        :param int src_ann_id:
+        :return:
+        :rtype:
+        """
+        if obs_id not in self.obs_ids:
+            raise NotAssociatedError("The passed 'obs_id' ({o}) is not associated with this annular spectrum "
+                                     "({ol})".format(o=obs_id, ol=', '.join(self.obs_ids)))
+        elif inst not in self.instruments[obs_id]:
+            raise NotAssociatedError("The passed 'inst' ({i}) is not associated with the ObsID in this annular "
+                                     "spectrum ({il}).".format(i=inst, il=', '.join(self.instruments[obs_id])))
+        elif src_ann_id not in self.annulus_ids:
+            raise NotAssociatedError("The passed 'src_ann_id' ({si}) is not an annulus ID associated with this annular"
+                                     " spectrum ({ls}).".format(si=src_ann_id,
+                                                                ls=', '.join([str(i) for i in self.annulus_ids])))
+
+        # If we pass those checks we can grab the requested cross-ARFs.
+        rel_arfs = self._cross_arfs[obs_id][inst][src_ann_id]
+        # We do a final check to make sure that no None values sneak through
+        if None in rel_arfs.values():
+            raise ValueError("One or more cross-arfs for your selection have not been assigned to this annular "
+                             "spectrum.")
+        return rel_arfs
 
     def add_fit_data(self, model: str, tab_line: dict, lums: dict, obs_order: dict):
         """
