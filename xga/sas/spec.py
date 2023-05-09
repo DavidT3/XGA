@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 12:14. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -713,7 +713,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
     return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
 
 
-# @sas_call
+@sas_call
 def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
               group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
               set_id: str = None, detmap_bin: int = 200, num_cores: int = NUM_CORES, disable_progress: bool = False):
@@ -784,7 +784,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
 
                 extra_info = {}
 
-                src_paths = np.concatenate([src_paths, [OUTPUT +"{o}/".format(o=obs_id) + c_arf_name]])
+                src_paths = np.concatenate([src_paths, [OUTPUT + "{o}/".format(o=obs_id) + c_arf_name]])
                 # Go through and concatenate things to the source lists defined above
                 src_cmds = np.concatenate([src_cmds, [cmd]])
                 src_out_types += ['cross arfs'] * len(src_cmds)
