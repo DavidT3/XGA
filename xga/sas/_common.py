@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 17:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 17:11. Copyright (c) The Contributors
 import os.path
 import warnings
 from typing import Union, Tuple, List
@@ -114,8 +114,24 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
     return sources, final_inner, final_outer
 
 
-def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 200):
+def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 200) -> Tuple[str, str, str]:
+    """
 
+    :param BaseSource source: The source for which the parent method is generating ARFs for, and that needs
+        a detector map.
+    :param str obs_id: The ObsID of the data we are generating ARFs for.
+    :param str inst: The instrument of the data we are generating ARFs for. NOTE - ideally this instrument WILL NOT
+        be used for the detector map, as it is beneficial to source a detector map from a different instrument to
+        the one you are generating ARFs for.
+    :param int bin_size: The x and y binning that should be applied to the image. Larger numbers will cause ARF
+        generation to be faster, but arguably the results will be less accurate.
+    :return: The command to generate the requested detector map (will be blank if the detector map already
+        exists), the path where the detmap will be after the command is run (i.e. the ObsID directory if it was
+        already generated, or the temporary directory if it has just been generated), and the final output path
+        of the detector.
+    :rtype: Tuple[str, str, str]
+    """
+    # This is the command that will be filled out to generate the detmap of our dreams!
     detmap_cmd = "evselect table={e} imageset={d} xcolumn=DETX ycolumn=DETY imagebinning=binSize ximagebinsize={bs} " \
                  "yimagebinsize={bs} {ex}"
 
