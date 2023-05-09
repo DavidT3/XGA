@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/05/2023, 10:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 09:48. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -833,7 +833,8 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
 
     arfgen_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; arfgen spectrumset={s} arfset={a} withrmfset=yes " \
                  "rmfset={r} badpixlocation={e} extendedsource=yes detmaptype=dataset detmaparray={ds} " \
-                 "setbackscale=no badpixmaptype=dataset crossregionarf=yes crossreg_spectrumset={crs}"
+                 "setbackscale=no badpixmaptype=dataset crossregionarf=yes crossreg_spectrumset={crs}; mv * ../; " \
+                 "cd ..; rm -r {d}"
 
     # These store the final output information needed to run the commands
     all_cmds = []
@@ -870,7 +871,6 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                 ccf = dest_dir + "ccf.cif"
                 det_map = OUTPUT + "{o}/{o}_{i}_detmap.fits".format(o=obs_id, i=inst)
 
-                # ra149.59254581874075_dec-11.063968180370173_grpTrue_mincnt5
                 c_arf_name = ann_spec.storage_key.split('_ar')[0] + '_grp' + \
                              ann_spec.storage_key.split('ar')[-1].split('_grp')[1] + \
                              "_ident" + str(ann_spec.set_ident) + \
@@ -883,7 +883,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
 
                 extra_info = {}
 
-                src_paths = np.concatenate([src_paths, [c_arf_path]])
+                src_paths = np.concatenate([src_paths, [OUTPUT + c_arf_name]])
                 # Go through and concatenate things to the source lists defined above
                 src_cmds = np.concatenate([src_cmds, [cmd]])
                 src_out_types += ['cross arfs'] * len(src_cmds)
