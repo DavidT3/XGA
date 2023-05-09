@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 17:05. Copyright (c) The Contributors
 import os.path
 import warnings
 from typing import Union, Tuple, List
@@ -178,7 +178,7 @@ def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 
         det_map_cmd_path = det_map_path
     else:
         # Does the same thing for the evselect command to make the detmap
-        d_cmd_str = detmap_cmd.format(e=detmap_evts.path, d=det_map, ex=d_expr, bs=bin_size)
+        d_cmd_str = detmap_cmd.format(e=detmap_evts.path, d=det_map, ex=d_expr, bs=bin_size) + "; "
         det_map_cmd_path = det_map
 
     return d_cmd_str, det_map_cmd_path, det_map_path

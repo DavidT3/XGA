@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 17:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 17:05. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -780,8 +780,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                 c_arf_path = dest_dir + c_arf_name
 
                 cmd = arfgen_cmd.format(d=dest_dir, ccf=ccf, s=sp_comb[0].path, a=c_arf_path, r=sp_comb[0].rmf,
-                                        e=evt_list.path, crs=sp_comb[1].path, ds=det_map_cmd_path,
-                                        dmc=det_map_cmd + '; ')
+                                        e=evt_list.path, crs=sp_comb[1].path, ds=det_map_cmd_path, dmc=det_map_cmd)
 
                 extra_info = {'detmap_bin': detmap_bin,
                               'ann_spec_id': ann_spec.set_ident,
