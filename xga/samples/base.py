@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -284,7 +284,7 @@ class BaseSample:
         :rtype: Quantity
         """
         # Has to be here to prevent circular import unfortunately
-        from ..sas.spec import region_setup
+        from ..sas._common import region_setup
 
         if outer_radius != 'region':
             # This just parses the input inner and outer radii into something predictable
