@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:48. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -10,7 +10,7 @@ from typing import Union, List
 import numpy as np
 from astropy.units import Quantity
 
-from ._common import region_setup
+from ._common import region_setup, _gen_detmap_cmd
 from .misc import cifbuild
 from .. import OUTPUT, NUM_CORES
 from ..exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError
@@ -88,6 +88,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         extra_name = "_minsn{}".format(min_sn)
     else:
         extra_name = ''
+
+    # Have to make sure that all observations have an up to date cif file.
+    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
 
     # And if it was oversampled during generation then we need to include that as well
     if over_sample is not None:
@@ -710,10 +713,10 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
     return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
 
 
-@sas_call
+# @sas_call
 def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
               group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-              set_id: str = None, num_cores: int = NUM_CORES, disable_progress: bool = False):
+              set_id: str = None, detmap_bin: int = 200, num_cores: int = NUM_CORES, disable_progress: bool = False):
 
     # If it's a single source I put it into an iterable object (i.e. a list), just for convenience
     if isinstance(sources, BaseSource):
@@ -724,10 +727,10 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
     elif not isinstance(sources, (BaseSample, list)):
         raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
 
-    arfgen_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; arfgen spectrumset={s} arfset={a} withrmfset=yes " \
-                 "rmfset={r} badpixlocation={e} extendedsource=yes detmaptype=dataset detmaparray={ds} " \
-                 "setbackscale=no badpixmaptype=dataset crossregionarf=yes crossreg_spectrumset={crs}; mv * ../; " \
-                 "cd ..; rm -r {d}"
+    arfgen_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; {dmc}; arfgen spectrumset={s} arfset={a} " \
+                 "withrmfset=yes rmfset={r} badpixlocation={e} extendedsource=yes detmaptype=dataset " \
+                 "detmaparray={ds} setbackscale=no badpixmaptype=dataset crossregionarf=yes " \
+                 "crossreg_spectrumset={crs}; mv * ../; cd ..; rm -r {d}"
 
     # These store the final output information needed to run the commands
     all_cmds = []
@@ -762,9 +765,11 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                     os.makedirs(dest_dir)
 
                 ccf = dest_dir + "ccf.cif"
-                det_map = OUTPUT + "{o}/{o}_{i}_detmap.fits".format(o=obs_id, i=inst)
-                print(det_map)
-                print(os.path.exists(det_map))
+
+                det_map_cmd, det_map_cmd_path, det_map_path = _gen_detmap_cmd(src, obs_id, inst, detmap_bin)
+                # det_map = OUTPUT + "{o}/{o}_{i}_detmap.fits".format(o=obs_id, i=inst)
+                # print(det_map)
+                # print(os.path.exists(det_map))
 
                 c_arf_name = "{o}_{i}_{n}_".format(o=obs_id, i=inst, n=src.name) + \
                              ann_spec.storage_key.split('_ar')[0] + '_grp' + \
@@ -775,7 +780,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                 c_arf_path = dest_dir + c_arf_name
 
                 cmd = arfgen_cmd.format(d=dest_dir, ccf=ccf, s=sp_comb[0].path, a=c_arf_path, r=sp_comb[0].rmf,
-                                        e=evt_list.path, crs=sp_comb[1].path, ds=det_map)
+                                        e=evt_list.path, crs=sp_comb[1].path, ds=det_map_cmd_path, dmc=det_map_cmd)
 
                 extra_info = {}
 

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:48. Copyright (c) The Contributors
 import os.path
 import warnings
 from typing import Union, Tuple, List
@@ -8,7 +8,6 @@ from astropy.units import Quantity
 
 from xga.exceptions import NotAssociatedError
 from xga.samples import BaseSample
-from xga.sas import cifbuild
 from xga.sources import BaseSource, NullSource, GalaxyCluster
 from xga.utils import RAD_LABELS, OUTPUT
 
@@ -112,9 +111,6 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
             final_inner.append(cur_inn_rad)
             final_outer.append(cur_out_rad)
 
-    # Have to make sure that all observations have an up to date cif file.
-    cifbuild(sources, disable_progress=disable_progress)
-
     return sources, final_inner, final_outer
 
 
@@ -179,8 +175,10 @@ def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 
     # If the detmap that we've decided we need already exists, then we don't need to generate it again
     if os.path.exists(det_map_path):
         d_cmd_str = ""
+        det_map_cmd_path = det_map_path
     else:
         # Does the same thing for the evselect command to make the detmap
         d_cmd_str = detmap_cmd.format(e=detmap_evts.path, d=det_map, ex=d_expr, bs=bin_size)
+        det_map_cmd_path = det_map
 
-    return d_cmd_str, det_map_path
+    return d_cmd_str, det_map_cmd_path, det_map_path
