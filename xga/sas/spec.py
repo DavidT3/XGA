@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 14:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 17:02. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -727,7 +727,10 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
     elif not isinstance(sources, (BaseSample, list)):
         raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
 
-    arfgen_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; {dmc}; arfgen spectrumset={s} arfset={a} " \
+    # NOTE - There is no ';' after {dmc} because it will be included in the dmc command, or not. This is because if the
+    #  requested detmap already exists then the command will just be "", and that will make bash upset if there is
+    #  a ";" after it.
+    arfgen_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; {dmc} arfgen spectrumset={s} arfset={a} " \
                  "withrmfset=yes rmfset={r} badpixlocation={e} extendedsource=yes detmaptype=dataset " \
                  "detmaparray={ds} setbackscale=no badpixmaptype=dataset crossregionarf=yes " \
                  "crossreg_spectrumset={crs}; mv * ../; cd ..; rm -r {d}"
@@ -767,9 +770,6 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                 ccf = dest_dir + "ccf.cif"
 
                 det_map_cmd, det_map_cmd_path, det_map_path = _gen_detmap_cmd(src, obs_id, inst, detmap_bin)
-                # det_map = OUTPUT + "{o}/{o}_{i}_detmap.fits".format(o=obs_id, i=inst)
-                # print(det_map)
-                # print(os.path.exists(det_map))
 
                 c_arf_name = "{o}_{i}_{n}_".format(o=obs_id, i=inst, n=src.name) + \
                              ann_spec.storage_key.split('_ar')[0] + '_grp' + \
@@ -780,7 +780,8 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                 c_arf_path = dest_dir + c_arf_name
 
                 cmd = arfgen_cmd.format(d=dest_dir, ccf=ccf, s=sp_comb[0].path, a=c_arf_path, r=sp_comb[0].rmf,
-                                        e=evt_list.path, crs=sp_comb[1].path, ds=det_map_cmd_path, dmc=det_map_cmd)
+                                        e=evt_list.path, crs=sp_comb[1].path, ds=det_map_cmd_path,
+                                        dmc=det_map_cmd + '; ')
 
                 extra_info = {'detmap_bin': detmap_bin,
                               'ann_spec_id': ann_spec.set_ident,
