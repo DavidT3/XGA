@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 11:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 11:29. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2331,9 +2331,9 @@ class AnnularSpectra(BaseAggregateProduct):
 
         :param str obs_id: The ObsID of the spectrum for which you wish to retrieve cross-arf paths.
         :param str inst: The instrument of the spectrum for which you wish to retrieve cross-arf paths.
-        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum you to retrieve cross-arfs for.
+        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum you wish to retrieve cross-arf paths for.
         :param int cross_ann_id: Optionally you can specify the cross-arf annulus ID. The default is None, in which
-            case all cross-arf paths for a given source annulus will be returned.
+            case all cross-arf paths for the given source annulus will be returned.
         :return: A dictionary with annulus IDs as keys, and cross-arf paths as values.
         :rtype: dict
         """
@@ -2347,6 +2347,11 @@ class AnnularSpectra(BaseAggregateProduct):
             raise NotAssociatedError("The passed 'src_ann_id' ({si}) is not an annulus ID associated with this annular"
                                      " spectrum ({ls}).".format(si=src_ann_id,
                                                                 ls=', '.join([str(i) for i in self.annulus_ids])))
+        elif cross_ann_id is not None and cross_ann_id not in self.annulus_ids:
+            raise NotAssociatedError("The passed 'cross_ann_id' ({si}) is not an annulus ID associated with this "
+                                     "annular spectrum "
+                                     "({ls}).".format(si=cross_ann_id,
+                                                      ls=', '.join([str(i) for i in self.annulus_ids])))
 
         if cross_ann_id is None:
             # If we pass those checks we can grab the requested cross-ARFs.
@@ -2361,6 +2366,45 @@ class AnnularSpectra(BaseAggregateProduct):
             raise ValueError("One or more cross-arfs for your selection have not been assigned to this annular "
                              "spectrum.")
         return rel_arfs
+
+    def get_cross_arf_lo_ens(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+        """
+        A method that will retrieve the lower energy bound data from cross-arfs associated with this annular
+        spectrum. A set of cross-arf lower energy bounds can be retrieved for a particular source annulus, or
+        an individual cross-arf for a particular source annulus, depending on user input. It is extremely likely
+        that all lower energy bounds will be the same for a given instrument, but this is not assumed.
+
+        :param str obs_id: The ObsID of the spectrum for which you wish to retrieve cross-arf lower energy bounds.
+        :param str inst: The instrument of the spectrum for which you wish to retrieve cross-arf lower energy bounds.
+        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum you wish to retrieve cross-arf lower energy
+            bounds for.
+        :param int cross_ann_id: Optionally you can specify the cross-arf annulus ID. The default is None, in which
+            case all lower energy bounds of cross-arfs for the given source annulus will be returned.
+        :return: A dictionary with annulus IDs as keys, and astropy array quantities of lower energy bounds as values.
+        :rtype: dict
+        """
+        # This is a bit cheesy, but by calling this get method for cross arf paths I can know that the correct
+        #  checks are being made on the ObsID, instrument, src ann id, and cross ann id. The only other thing this
+        #  method does is a dictionary call, which isn't going to be a huge burden
+        self.get_cross_arf_paths(obs_id, inst, src_ann_id, cross_ann_id)
+
+        # Now that we know that the input values are all valid, we first deal with the case where a set of cross-arf
+        #  data are being retrieved. We check to see whether 'None' is in lo_ens attribute's values, and if it
+        #  is then we decide that the data haven't been loaded in and we trigger the read on demand method
+        if cross_ann_id is None and None in self._cross_arf_lo_ens[obs_id][inst][src_ann_id].values():
+            self._read_cross_arf_on_demand(obs_id, inst, src_ann_id)
+        # In this case a specific cross-arf's data are being requested, so we check that particular cross ann ID
+        #  to see whether the entry in the attribute is currently None. If it is we trigger the read method
+        elif cross_ann_id is not None and self._cross_arf_lo_ens[obs_id][inst][src_ann_id][cross_ann_id] is None:
+            self._read_cross_arf_on_demand(obs_id, inst, src_ann_id, cross_ann_id)
+
+        if cross_ann_id is None:
+            rel_lo_ens = self._cross_arf_lo_ens[obs_id][inst][src_ann_id]
+        else:
+            # I want the return to be a dictionary regardless of whether the input was specific to one cross-arf or not
+            rel_lo_ens = {cross_ann_id: self._cross_arf_lo_ens[obs_id][inst][src_ann_id][cross_ann_id]}
+
+        return rel_lo_ens
 
     def _read_cross_arf_on_demand(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None):
         """
