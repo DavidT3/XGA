@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 12:01. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2802,6 +2802,111 @@ class AnnularSpectra(BaseAggregateProduct):
             profs = profs[0]
 
         return profs
+
+    def view_cross_arfs(self, src_ann_id: int, obs_id: str, inst: str, src_arf_norm: bool = False,
+                        figsize: tuple = (8, 6), xscale: str = 'log', yscale: str = 'linear',
+                        lo_en: Quantity = Quantity(0.01, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
+
+        plt.figure(figsize=figsize)
+        # Set the plot up to look nice and professional.
+        ax = plt.gca()
+        ax.minorticks_on()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        # I retrieve the energies and effective areas for the source arf from the source spectrum specified by the
+        #  user input of src_ann_id, ObsID, and instrument. This will be used to provide context to the cross-arf
+        #  plots (or to normalize them if src_arf_norm is set to True.
+        src_spec = self.get_spectra(src_ann_id, obs_id, inst)
+        # Just take the midpoint of the energy bins
+        src_ens = (src_spec.eff_area_hi_en + src_spec.eff_area_lo_en) / 2
+        src_eff_areas = src_spec.eff_area
+
+        # Have to check the input energy bounds to make sure that they are sensible
+        if lo_en >= hi_en:
+            raise ValueError("The 'hi_en' argument cannot be greater than or equal to the 'lo_en' argument.")
+        else:
+            lo_en = lo_en.to("keV").value
+            hi_en = hi_en.to("keV").value
+
+        # We dynamically alter the upper and lower energy bounds passed by the user to reflect the actual maxima and
+        #  minima of the energy scale, so there isn't a ton of blank space in on either side if they made a bad
+        #  choice, or my default value choices were bad. We'll be plotting a bunch of arfs here, but I use the
+        #  original source arf as the comparison (though the energies should be identical for a given instrument).
+        if lo_en < src_ens.value.min():
+            lo_en = src_ens.value.min()
+        if hi_en > src_ens.value.max():
+            hi_en = src_ens.value.max()
+
+        # As we know, log scales don't like zero values, so I make a change if the user has set the minimum
+        #  energy to be zero and set an x-axis log scale
+        if xscale == 'log' and lo_en == 0:
+            warn("The x-axis scale has been set to log, and 'lo_en' cannot be zero - it has been set to 0.01 "
+                 "keV.", stacklevel=2)
+            lo_en = 0.01
+
+        # Now I grab the dictionaries of lower/upper energy bounds, and effective areas, for the cross-arfs that we
+        #  wish to plot in this method
+        all_lo_ens = self.get_cross_arf_lo_ens(obs_id, inst, src_ann_id)
+        all_hi_ens = self.get_cross_arf_hi_ens(obs_id, inst, src_ann_id)
+        all_eff_areas = self.get_cross_arf_eff_areas(obs_id, inst, src_ann_id)
+
+        if not src_arf_norm:
+            # Before I get to plotting the cross-arf curves, I plot the original source arf as a dashed black line
+            plt.plot(src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
+                     src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
+                     color='black', linestyle='dashed', label='Source annulus response')
+        # In this case though we are going to normalize the cross-arfs by the source arf, so actually we just
+        #  want to plot a straight line with 1 on the y-axis
+        else:
+            # Cheesy way to get the right span of the 1 value, I divide the y values by themselves
+            plt.plot(src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
+                     src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)] /
+                     src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
+                     color='black', linestyle='dashed', label='Source annulus reference')
+
+        for cross_ann_id, eff_area in all_eff_areas.items():
+            ens = (all_hi_ens[cross_ann_id] + all_lo_ens[cross_ann_id]) / 2
+
+            # Get the data and plot it
+            sel_ens = (ens.value >= lo_en) & (ens.value <= hi_en)
+            if not src_arf_norm:
+                plt.plot(ens[sel_ens], eff_area[sel_ens], label='Annulus {} contribution '
+                                                                'response'.format(cross_ann_id))
+            else:
+                norm_area = eff_area / src_eff_areas
+                plt.plot(ens[sel_ens], norm_area[sel_ens], label='Annulus {} normalised '
+                                                                 'response'.format(cross_ann_id))
+
+        # Set the lower y-lim to be 1, and then the user supplied x-lims (supplementing the fact that we've already
+        #  used those limits to select the data to plot
+        plt.ylim(1)
+        plt.xlim(lo_en, hi_en)
+
+        # Set the user defined x and y scales
+        plt.xscale(xscale)
+        plt.yscale(yscale)
+
+        # Title and axis labels
+        if not src_arf_norm:
+            plt.ylabel("Effective Area [cm$^{2}$]", fontsize=12)
+        else:
+            plt.ylabel("Normalised Effective Area", fontsize=12)
+
+        plt.xlabel("Energy [keV]", fontsize=12)
+        plt.title("Annulus {ai} {o}-{i} Cross-ARFs".format(o=self.obs_id, i=self.instrument.upper(), ai=src_ann_id),
+                  fontsize=14)
+
+        # This makes sure that the tick labels are formatted as 0.1, 1, 10, etc. keV on the x-axis (if logged) and
+        #  10, 100, 100, 1000, etc. cm^2 on the y-axis if logged
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+        # Make sure we add the legend in, it has a lot of context regarding which curve is for which cross-annulus
+        plt.legend(loc='best', fontsize=12)
+
+        # Aaaand finally actually plot it
+        plt.tight_layout()
+        plt.show()
 
     def view_annulus(self, ann_ident: int, model: str, figsize: Tuple = (12, 8)):
         """
