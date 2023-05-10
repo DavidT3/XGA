@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 10:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 11:03. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2321,16 +2321,19 @@ class AnnularSpectra(BaseAggregateProduct):
         #  other annulus
         self._cross_arfs[obs_id][inst][src_ann_id][cross_ann_id] = arf
 
-    def get_cross_arfs(self, obs_id: str, inst: str, src_ann_id: int) -> dict:
+    def get_cross_arfs(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
         """
         This method allows the user to retrieve cross-arf paths for a specific ObsID-instrument spectrum of an
         annulus. For instance, passing an ObsID and Instrument, along with a src_ann_id of 1, to an annular spectrum
         with four annuli, will return the paths to cross-arfs between annulus 1 and 0, annulus 1 and 2, and
-        annulus 1 and 3 (labelling starts at zero).
+        annulus 1 and 3 (labelling starts at zero). If a cross_ann_id is passed in addition to a src_ann_id, then
+        that specific path will be retrieved (but still returned in a dictionary).
 
         :param str obs_id: The ObsID of the spectrum for which you wish to retrieve cross-arf paths.
         :param str inst: The instrument of the spectrum for which you wish to retrieve cross-arf paths.
         :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum you to retrieve cross-arfs for.
+        :param int cross_ann_id: Optionally you can specify the cross-arf annulus ID. The default is None, in which
+            case all cross-arf paths for a given source annulus will be returned.
         :return: A dictionary with annulus IDs as keys, and cross-arf paths as values.
         :rtype: dict
         """
@@ -2345,8 +2348,14 @@ class AnnularSpectra(BaseAggregateProduct):
                                      " spectrum ({ls}).".format(si=src_ann_id,
                                                                 ls=', '.join([str(i) for i in self.annulus_ids])))
 
-        # If we pass those checks we can grab the requested cross-ARFs.
-        rel_arfs = self._cross_arfs[obs_id][inst][src_ann_id]
+        if cross_ann_id is None:
+            # If we pass those checks we can grab the requested cross-ARFs.
+            rel_arfs = self._cross_arfs[obs_id][inst][src_ann_id]
+        else:
+            # In this case we just want to return a single, specific, path - we will still return it in the same
+            #  form though - in a dictionary with the key being the cross-arf ann id
+            rel_arfs = {cross_ann_id: self._cross_arfs[obs_id][inst][src_ann_id][cross_ann_id]}
+
         # We do a final check to make sure that no None values sneak through
         if None in rel_arfs.values():
             raise ValueError("One or more cross-arfs for your selection have not been assigned to this annular "
@@ -2357,14 +2366,17 @@ class AnnularSpectra(BaseAggregateProduct):
         """
 
         """
-        raise NotImplementedError('This should never be seen by anyone but I have not finished yet')
+        raise NotImplementedError("Not done yet")
         cross_paths = self.get_cross_arfs(obs_id, inst, src_ann_id)
 
         for cross_ann_id, rel_path in cross_paths.items():
             arf_read = FITS(rel_path)
-            self._arf_lo_en = Quantity(arf_read[1]['ENERG_LO'].read(), 'keV')
-            self._arf_hi_en = Quantity(arf_read[1]['ENERG_HI'].read(), 'keV')
-            self._arf_eff_area = Quantity(arf_read[1]['SPECRESP'].read(), 'cm^2')
+            self._cross_arf_lo_ens[obs_id][inst][src_ann_id][cross_ann_id] = \
+                Quantity(arf_read[1]['ENERG_LO'].read(), 'keV')
+            self._cross_arf_hi_ens[obs_id][inst][src_ann_id][cross_ann_id] = \
+                Quantity(arf_read[1]['ENERG_HI'].read(), 'keV')
+            self._cross_arf_eff_areas[obs_id][inst][src_ann_id][cross_ann_id] = \
+                Quantity(arf_read[1]['SPECRESP'].read(), 'cm^2')
 
             # And make sure to close the arf file after reading
             arf_read.close()
