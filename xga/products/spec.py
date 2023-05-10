@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 10:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 10:43. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -424,7 +424,7 @@ class Spectrum(BaseProduct):
         if self._spec_spec_header is None:
             self._read_header_on_demand(src_spec=True, primary_header=False)
         return self._spec_spec_header
-    
+
     @property
     def primary_header(self) -> FITSHDR:
         """
@@ -437,7 +437,7 @@ class Spectrum(BaseProduct):
         if self._prim_spec_header is None:
             self._read_header_on_demand(src_spec=True, primary_header=True)
         return self._prim_spec_header
-    
+
     @property
     def counts(self) -> Quantity:
         """
@@ -744,7 +744,7 @@ class Spectrum(BaseProduct):
             self._read_response_on_demand(rmf=True)
 
         return self._rmf_channels_hi_en
-    
+
     @property
     def rmf_redist_matrix(self) -> np.ndarray:
         """
@@ -1283,7 +1283,7 @@ class Spectrum(BaseProduct):
                                           "and {u}".format(l=self.rmf_channels_lo_en.min(),
                                                            u=self.rmf_channels_hi_en.max()))
             # Finding the index of the energy bin that brackets the input energy value(s)
-            rel_inds = np.array([np.where((e > self.rmf_channels_lo_en) & (e <= self.rmf_channels_hi_en))[0][0] 
+            rel_inds = np.array([np.where((e > self.rmf_channels_lo_en) & (e <= self.rmf_channels_hi_en))[0][0]
                                  for e in ens])
             # Getting the equivelant channel
             converted_vals = Quantity(self.rmf_channels[rel_inds])
@@ -1879,11 +1879,32 @@ class AnnularSpectra(BaseAggregateProduct):
         #  it is not linked across multiple spectra during fitting, what order the fit results are in.
         self._obs_order = {ai: {} for ai in range(self._num_ann)}
 
-        # This dictionary will store the cross-arfs that might be generated for this annular spectrum. That is why
-        #  there are two layers of annulus identifiers - each annulus gets one arf per every OTHER annulus (not itself)
+        # This dictionary will store the paths to cross-arfs that might be generated for this annular spectrum. That
+        #  is why there are two layers of annulus identifiers - each annulus gets one arf per every OTHER annulus
+        #  (not itself)
         self._cross_arfs = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
                                     for ai in range(self._num_ann)}
                                 for i in self._instruments[o]} for o in self.obs_ids}
+        # If at any point the user decides that they want to actually access the data in the cross-arfs, which they
+        #  might do to plot the response curves for instance, then the 'read on demand' method for the cross-arfs will
+        #  store them in these attributes - the key structure is the same as the above _cross_arfs attribute that
+        #  stores the paths to the files
+        self._cross_arf_lo_ens = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
+                                          for ai in range(self._num_ann)} for i in self._instruments[o]}
+                                  for o in self.obs_ids}
+        self._cross_arf_hi_ens = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
+                                          for ai in range(self._num_ann)}
+                                  for i in self._instruments[o]} for o in self.obs_ids}
+        self._cross_arf_eff_areas = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
+                                              for ai in range(self._num_ann)}
+                                     for i in self._instruments[o]} for o in self.obs_ids}
+
+        # Attributes to store ARF information
+        # The actual effective area information will live in this attribute
+        self._arf_eff_area = None
+        # The corresponding energy bounds will be stored in these attributes
+        self._arf_lo_en = None
+        self._arf_hi_en = None
 
     # The src_name setter and getter have been overridden because there is an easier way of setting
     #  the source name for all spectra
@@ -2331,6 +2352,33 @@ class AnnularSpectra(BaseAggregateProduct):
             raise ValueError("One or more cross-arfs for your selection have not been assigned to this annular "
                              "spectrum.")
         return rel_arfs
+
+    def _read_cross_arf_on_demand(self, obs_id: str, inst: str, src_ann_id: int):
+        """
+
+        """
+        raise NotImplementedError('This should never be seen by anyone but I have not finished yet')
+        cross_paths = self.get_cross_arfs(obs_id, inst, src_ann_id)
+
+        for cross_ann_id, rel_path in cross_paths.items():
+            arf_read = FITS(rel_path)
+            self._arf_lo_en = Quantity(arf_read[1]['ENERG_LO'].read(), 'keV')
+            self._arf_hi_en = Quantity(arf_read[1]['ENERG_HI'].read(), 'keV')
+            self._arf_eff_area = Quantity(arf_read[1]['SPECRESP'].read(), 'cm^2')
+
+            # And make sure to close the arf file after reading
+            arf_read.close()
+
+        #     except OSError:
+        #         raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
+        #                                 "the file, it doesn't exist, or maybe an SFTP problem? This product is "
+        #                                 "associated with {s}.".format(f=rel_path, s=self.src_name))
+        #
+        # else:
+        #     reasons = ", ".join(self.not_usable_reasons)
+        #     raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
+        #                              "data from it; reason give is {}. Check the usable attribute next "
+        #                              "time".format(reasons))
 
     def add_fit_data(self, model: str, tab_line: dict, lums: dict, obs_order: dict):
         """
