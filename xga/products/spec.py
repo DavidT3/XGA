@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 16:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 10:08. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2302,13 +2302,16 @@ class AnnularSpectra(BaseAggregateProduct):
 
     def get_cross_arfs(self, obs_id: str, inst: str, src_ann_id: int) -> dict:
         """
+        This method allows the user to retrieve cross-arf paths for a specific ObsID-instrument spectrum of an
+        annulus. For instance, passing an ObsID and Instrument, along with a src_ann_id of 1, to an annular spectrum
+        with four annuli, will return the paths to cross-arfs between annulus 1 and 0, annulus 1 and 2, and
+        annulus 1 and 3 (labelling starts at zero).
 
-
-        :param str obs_id:
-        :param str inst:
-        :param int src_ann_id:
-        :return:
-        :rtype:
+        :param str obs_id: The ObsID of the spectrum for which you wish to retrieve cross-arf paths.
+        :param str inst: The instrument of the spectrum for which you wish to retrieve cross-arf paths.
+        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum you to retrieve cross-arfs for.
+        :return: A dictionary with annulus IDs as keys, and cross-arf paths as values.
+        :rtype: dict
         """
         if obs_id not in self.obs_ids:
             raise NotAssociatedError("The passed 'obs_id' ({o}) is not associated with this annular spectrum "
@@ -2331,7 +2334,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
     def add_fit_data(self, model: str, tab_line: dict, lums: dict, obs_order: dict):
         """
-        An equivelant to the add_fit_data method built into all source objects. The final fit results
+        An equivalent to the add_fit_data method built into all source objects. The final fit results
         and luminosities are housed in a storage structure within the AnnularSpectra, which makes sense
         because this is an aggregate product of all the relevant spectra, storing them just as source objects
         store spectra that don't exist in a spectrum set.
