@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 12:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 13:13. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2809,7 +2809,7 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         A method that produces a plot of the cross-arf curves for a specified source annulus spectrum, for a specified
         ObsID and instrument. The original source spectrum will also be plotted as a reference. This method can also
-        be used to create 'normalised' curves were the cross-arf effective area values are divided by the source
+        be used to create 'normalized' curves were the cross-arf effective area values are divided by the source
         arf effective areas.
 
         :param int src_ann_id: The annulus ID of the source annulus for which you wish to plot cross-arf curves.
@@ -2873,7 +2873,7 @@ class AnnularSpectra(BaseAggregateProduct):
             # Before I get to plotting the cross-arf curves, I plot the original source arf as a dashed black line
             plt.plot(src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
                      src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
-                     color='black', linestyle='dashed', label='Source annulus response')
+                     color='black', linestyle='dashed', label='Source annulus')
         # In this case though we are going to normalize the cross-arfs by the source arf, so actually we just
         #  want to plot a straight line with 1 on the y-axis
         else:
@@ -2881,24 +2881,30 @@ class AnnularSpectra(BaseAggregateProduct):
             plt.plot(src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
                      src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)] /
                      src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
-                     color='black', linestyle='dashed', label='Source annulus reference')
+                     color='black', linestyle='dashed', label='Source reference')
 
+        min_norm = 1
         for cross_ann_id, eff_area in all_eff_areas.items():
             ens = (all_hi_ens[cross_ann_id] + all_lo_ens[cross_ann_id]) / 2
 
             # Get the data and plot it
             sel_ens = (ens.value >= lo_en) & (ens.value <= hi_en)
             if not src_arf_norm:
-                plt.plot(ens[sel_ens], eff_area[sel_ens], label='Annulus {} contribution '
-                                                                'response'.format(cross_ann_id))
+                plt.plot(ens[sel_ens], eff_area[sel_ens], label='Annulus {} contribution'.format(cross_ann_id))
             else:
                 norm_area = eff_area / src_eff_areas
-                plt.plot(ens[sel_ens], norm_area[sel_ens], label='Annulus {} normalised '
-                                                                 'response'.format(cross_ann_id))
+                plt.plot(ens[sel_ens], norm_area[sel_ens], label='Annulus {} normalised'.format(cross_ann_id))
+                # We compare to the global min norm area to see whether we have a smaller value here or not - this
+                #  will be used to set the minimum y value
+                min_norm = min(min(norm_area), min_norm)
 
-        # Set the lower y-lim to be 1, and then the user supplied x-lims (supplementing the fact that we've already
-        #  used those limits to select the data to plot
-        plt.ylim(1)
+        if not src_arf_norm:
+            # Set the lower y-lim to be 1, and then the user supplied x-lims (supplementing the fact that we've already
+            #  used those limits to select the data to plot
+            plt.ylim(1)
+        else:
+            # In the case where we're normalizing, setting the lower y limit to 1 doesn't make sense.
+            plt.ylim(min_norm)
         plt.xlim(lo_en, hi_en)
 
         # Set the user defined x and y scales
@@ -2912,8 +2918,7 @@ class AnnularSpectra(BaseAggregateProduct):
             plt.ylabel("Normalised Effective Area", fontsize=12)
 
         plt.xlabel("Energy [keV]", fontsize=12)
-        plt.title("Annulus {ai} {o}-{i} Cross-ARFs".format(o=self.obs_id, i=self.instrument.upper(), ai=src_ann_id),
-                  fontsize=14)
+        plt.title("Annulus {ai} {o}-{i} Cross-ARFs".format(o=obs_id, i=inst.upper(), ai=src_ann_id), fontsize=14)
 
         # This makes sure that the tick labels are formatted as 0.1, 1, 10, etc. keV on the x-axis (if logged) and
         #  10, 100, 100, 1000, etc. cm^2 on the y-axis if logged
