@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 11:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 11:09. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2321,7 +2321,7 @@ class AnnularSpectra(BaseAggregateProduct):
         #  other annulus
         self._cross_arfs[obs_id][inst][src_ann_id][cross_ann_id] = arf
 
-    def get_cross_arfs(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+    def get_cross_arf_paths(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
         """
         This method allows the user to retrieve cross-arf paths for a specific ObsID-instrument spectrum of an
         annulus. For instance, passing an ObsID and Instrument, along with a src_ann_id of 1, to an annular spectrum
@@ -2362,35 +2362,27 @@ class AnnularSpectra(BaseAggregateProduct):
                              "spectrum.")
         return rel_arfs
 
-    def _read_cross_arf_on_demand(self, obs_id: str, inst: str, src_ann_id: int):
+    def _read_cross_arf_on_demand(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None):
         """
 
         """
-        raise NotImplementedError("Not done yet")
-        cross_paths = self.get_cross_arfs(obs_id, inst, src_ann_id)
+        # Retrieves the paths to the cross-arfs specified by the input to this method
+        cross_paths = self.get_cross_arf_paths(obs_id, inst, src_ann_id, cross_ann_id)
 
-        for cross_ann_id, rel_path in cross_paths.items():
+        # We cycle through the cross-arfs. Even if a cross_ann_id was specified (i.e. we've only retrieved a path for
+        #  a single cross-arf), it will still be returned in a dictionary so this will work fun
+        for c_a_id, rel_path in cross_paths.items():
+            # Do the actual reading of the current cross-arf file
             arf_read = FITS(rel_path)
-            self._cross_arf_lo_ens[obs_id][inst][src_ann_id][cross_ann_id] = \
-                Quantity(arf_read[1]['ENERG_LO'].read(), 'keV')
-            self._cross_arf_hi_ens[obs_id][inst][src_ann_id][cross_ann_id] = \
-                Quantity(arf_read[1]['ENERG_HI'].read(), 'keV')
-            self._cross_arf_eff_areas[obs_id][inst][src_ann_id][cross_ann_id] = \
+            # Now store the array of lower energy limits, upper energy limits, and effective areas in the attributes
+            #  that were set up with an ObsID-Instrument-src_ann_id-cross_ann_id structure in the init of this class
+            self._cross_arf_lo_ens[obs_id][inst][src_ann_id][c_a_id] = Quantity(arf_read[1]['ENERG_LO'].read(), 'keV')
+            self._cross_arf_hi_ens[obs_id][inst][src_ann_id][c_a_id] = Quantity(arf_read[1]['ENERG_HI'].read(), 'keV')
+            self._cross_arf_eff_areas[obs_id][inst][src_ann_id][c_a_id] = \
                 Quantity(arf_read[1]['SPECRESP'].read(), 'cm^2')
 
             # And make sure to close the arf file after reading
             arf_read.close()
-
-        #     except OSError:
-        #         raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
-        #                                 "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-        #                                 "associated with {s}.".format(f=rel_path, s=self.src_name))
-        #
-        # else:
-        #     reasons = ", ".join(self.not_usable_reasons)
-        #     raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-        #                              "data from it; reason give is {}. Check the usable attribute next "
-        #                              "time".format(reasons))
 
     def add_fit_data(self, model: str, tab_line: dict, lums: dict, obs_order: dict):
         """
