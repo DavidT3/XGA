@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 11:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 11:12. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2364,7 +2364,15 @@ class AnnularSpectra(BaseAggregateProduct):
 
     def _read_cross_arf_on_demand(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None):
         """
+        An internal method to read cross-arf data into memory only when required by some other method or property
+        of this function - that way we don't unnecessarily take up memory.
 
+        :param str obs_id: The ObsID of the spectrum for which cross-arf data should be read into memory.
+        :param str inst: The instrument of the spectrum for which cross-arf data should be read into memory.
+        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum for which cross-arf data should be
+            read into memory.
+        :param int cross_ann_id: Optionally you can specify the cross-arf annulus ID. The default is None, in which
+            case all cross-arf data for the given source annulus will be read into memory.
         """
         # Retrieves the paths to the cross-arfs specified by the input to this method
         cross_paths = self.get_cross_arf_paths(obs_id, inst, src_ann_id, cross_ann_id)
