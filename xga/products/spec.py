@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 11:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 11:33. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2444,6 +2444,44 @@ class AnnularSpectra(BaseAggregateProduct):
             rel_hi_ens = {cross_ann_id: self._cross_arf_hi_ens[obs_id][inst][src_ann_id][cross_ann_id]}
 
         return rel_hi_ens
+
+    def get_cross_arf_eff_areas(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+        """
+        A method that will retrieve the effective area data from cross-arfs associated with this annular
+        spectrum. A set of cross-arf effective areas can be retrieved for a particular source annulus, or
+        an individual cross-arf for a particular source annulus, depending on user input.
+
+        :param str obs_id: The ObsID of the spectrum for which you wish to retrieve cross-arf effective areas.
+        :param str inst: The instrument of the spectrum for which you wish to retrieve cross-arf effective areas.
+        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum you wish to retrieve cross-arf effective
+            areas for.
+        :param int cross_ann_id: Optionally you can specify the cross-arf annulus ID. The default is None, in which
+            case all effective areas of cross-arfs for the given source annulus will be returned.
+        :return: A dictionary with annulus IDs as keys, and astropy array quantities of effective areas as values.
+        :rtype: dict
+        """
+        # This is a bit cheesy, but by calling this get method for cross arf paths I can know that the correct
+        #  checks are being made on the ObsID, instrument, src ann id, and cross ann id. The only other thing this
+        #  method does is a dictionary call, which isn't going to be a huge burden
+        self.get_cross_arf_paths(obs_id, inst, src_ann_id, cross_ann_id)
+
+        # Now that we know that the input values are all valid, we first deal with the case where a set of cross-arf
+        #  data are being retrieved. We check to see whether 'None' is in the eff_area attribute's values, and if it
+        #  is then we decide that the data haven't been loaded in, and we trigger the read on demand method
+        if cross_ann_id is None and None in self._cross_arf_eff_areas[obs_id][inst][src_ann_id].values():
+            self._read_cross_arf_on_demand(obs_id, inst, src_ann_id)
+        # In this case a specific cross-arf's data are being requested, so we check that particular cross ann ID
+        #  to see whether the entry in the attribute is currently None. If it is we trigger the read method
+        elif cross_ann_id is not None and self._cross_arf_eff_areas[obs_id][inst][src_ann_id][cross_ann_id] is None:
+            self._read_cross_arf_on_demand(obs_id, inst, src_ann_id, cross_ann_id)
+
+        if cross_ann_id is None:
+            rel_eff_areas = self._cross_arf_eff_areas[obs_id][inst][src_ann_id]
+        else:
+            # I want the return to be a dictionary regardless of whether the input was specific to one cross-arf or not
+            rel_eff_areas = {cross_ann_id: self._cross_arf_eff_areas[obs_id][inst][src_ann_id][cross_ann_id]}
+
+        return rel_eff_areas
 
     def _read_cross_arf_on_demand(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None):
         """
