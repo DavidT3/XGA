@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 12:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 12:11. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2806,7 +2806,26 @@ class AnnularSpectra(BaseAggregateProduct):
     def view_cross_arfs(self, src_ann_id: int, obs_id: str, inst: str, src_arf_norm: bool = False,
                         figsize: tuple = (8, 6), xscale: str = 'log', yscale: str = 'linear',
                         lo_en: Quantity = Quantity(0.01, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
+        """
+        A method that produces a plot of the cross-arf curves for a specified source annulus spectrum, for a specified
+        ObsID and instrument. The original source spectrum will also be plotted as a reference. This method can also
+        be used to create 'normalised' curves were the cross-arf effective area values are divided by the source
+        arf effective areas.
 
+        :param int src_ann_id: The annulus ID of the source annulus for which you wish to plot cross-arf curves.
+        :param str obs_id: The ObsID of the spectrum for which you wish to plot cross-arf curves.
+        :param str inst: The instrument of the spectrum for which you wish to plot cross-arf curves.
+        :param bool src_arf_norm:
+        :param tuple figsize: The size of the figure, the default is (8, 6).
+        :param str xscale: The xscale to use for the plot.
+        :param str yscale: The yscale to use for the plot.
+        :param Quantity lo_en: The lower energy limit for the x-axis. The default is 0.01 keV. This will be altered
+            to reflect the minimum value of the energy scale for this curve if lo_en is smaller than the lowest
+            energy bin.
+        :param Quantity hi_en: The upper energy limit for the x-axis. The default is 16.0 keV. This will be altered
+            to reflect the maximum value of the energy scale for this curve if hi_en is greater than the highest
+            energy bin.
+        """
         plt.figure(figsize=figsize)
         # Set the plot up to look nice and professional.
         ax = plt.gca()
