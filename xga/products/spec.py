@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 13:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 15:49. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2877,10 +2877,9 @@ class AnnularSpectra(BaseAggregateProduct):
         # In this case though we are going to normalize the cross-arfs by the source arf, so actually we just
         #  want to plot a straight line with 1 on the y-axis
         else:
-            # Cheesy way to get the right span of the 1 value, I divide the y values by themselves
-            plt.plot(src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
-                     src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)] /
-                     src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
+            # As I'm normalising by the source ARF here, I just plot a line at 1
+            plt.plot(src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)].value,
+                     [1]*len(src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)]),
                      color='black', linestyle='dashed', label='Source reference')
 
         min_norm = 1
@@ -2892,11 +2891,12 @@ class AnnularSpectra(BaseAggregateProduct):
             if not src_arf_norm:
                 plt.plot(ens[sel_ens], eff_area[sel_ens], label='Annulus {} contribution'.format(cross_ann_id))
             else:
-                norm_area = eff_area / src_eff_areas
+                norm_area = Quantity(np.zeros(len(eff_area)))
+                np.divide(eff_area, src_eff_areas, out=norm_area, where=src_eff_areas != 0)
                 plt.plot(ens[sel_ens], norm_area[sel_ens], label='Annulus {} normalised'.format(cross_ann_id))
                 # We compare to the global min norm area to see whether we have a smaller value here or not - this
                 #  will be used to set the minimum y value
-                min_norm = min(min(norm_area), min_norm)
+                min_norm = min(min(norm_area[norm_area > 0]), min_norm)
 
         if not src_arf_norm:
             # Set the lower y-lim to be 1, and then the user supplied x-lims (supplementing the fact that we've already
