@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 12:48. Copyright (c) The Contributors
 
 import json
 import os
@@ -17,7 +17,7 @@ from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import read_header
 from fitsio.header import FITSHDR
-from numpy import floor
+from numpy import nan, floor
 from tqdm import tqdm
 
 from .exceptions import XGAConfigError
@@ -71,6 +71,7 @@ SASWARNING_LIST = warnings["WarnName"].values
 # XSPEC file extraction (and base fit) scripts
 XGA_EXTRACT = pkg_resources.resource_filename(__name__, "xspec_scripts/xga_extract.tcl")
 BASE_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/general_xspec_fit.xcm")
+CROSS_ARF_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/crossarf_xspec_fit.xcm")
 COUNTRATE_CONV_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/cr_conv_calc.xcm")
 # Useful jsons of all XSPEC models, their required parameters, and those parameter's units
 with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json5"), 'r') as filey:
