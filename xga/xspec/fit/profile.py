@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 12:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 16:05. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -176,6 +176,21 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     run_type = "fit"
     return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout
 
+
+def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, List[Quantity]],
+                                      start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
+                                      lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+                                      freeze_nh: bool = True, freeze_met: bool = True,
+                                      lo_en: Quantity = Quantity(0.3, "keV"),  hi_en: Quantity = Quantity(7.9, "keV"),
+                                      par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
+                                      fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
+                                      min_sn: float = None, over_sample: float = None, one_rmf: bool = False,
+                                      num_cores: int = NUM_CORES, spectrum_checking: bool = True,
+                                      timeout: Quantity = Quantity(1, 'hr')):
+
+    single_temp_apec_profile(sources, radii, start_temp, start_met, lum_en, freeze_nh, freeze_met, lo_en, hi_en,
+                             par_fit_stat, lum_conf, abund_table, fit_method, group_spec, min_counts, min_sn,
+                             over_sample, one_rmf, num_cores, spectrum_checking, timeout)
 
 
 
