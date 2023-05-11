@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 17:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 15:46. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -46,8 +46,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
-    :param int num_cores: The number of cores to use (if running locally), default is set to
-        90% of available.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
@@ -463,8 +462,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
-    :param int num_cores: The number of cores to use (if running locally), default is set to
-        90% of available.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
@@ -498,8 +496,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
-    :param int num_cores: The number of cores to use (if running locally), default is set to
-        90% of available.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool force_regen: This will force all the constituent spectra of the set to be regenerated, use this
         if your call to this function was interrupted and an incomplete AnnularSpectrum is being read in.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
@@ -717,7 +714,38 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
 def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
               group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
               set_id: str = None, detmap_bin: int = 200, num_cores: int = NUM_CORES, disable_progress: bool = False):
+    """
+    This function will generate cross-arfs for annular spectra, which describe the contribution of each annulus
+    to each other annulus due to XMM's relatively sizeable PSF. The cross-arfs are generated for each instrument
+    of each observation, and automatically stored in their parent AnnularSpectra instance, both for retrieval by
+    fitting processes and so that the user can examine them with a plotting method and by retrieving effective
+    area values from them.
 
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
+    :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the
+        annuli for the sources. A single quantity containing at least three radii may be passed if one source
+        is being analysed, but for multiple sources there should be a quantity (with at least three radii), PER
+        source. This is used to help retrieve the correct annular spectrum.
+    :param bool group_spec: A boolean flag that sets whether the spectra are grouped or not. This is used to help
+        retrieve the correct annular spectrum.
+    :param float min_counts: If retrieving a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None. This is used to help retrieve the correct
+        annular spectrum.
+    :param float min_sn: If retrieving a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None. This is used to help retrieve the correct
+        annular spectrum.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.  This is
+        used to help retrieve the correct annular spectrum.
+    :param str/List[str] set_id: The unique annular spectrum identifier (or a list of them if analysing multiple
+        sources) that specifies which annular spectrum to use.
+    :param int detmap_bin: The spatial binning applied to event lists to create the detector maps used in the
+        calculations of effective areas. The default is 200, smaller values will increase the resolution but will
+        cause dramatically slower calculations.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
+    :return:
+    """
     # If it's a single source I put it into an iterable object (i.e. a list), just for convenience
     if isinstance(sources, BaseSource):
         sources = [sources]
@@ -726,6 +754,19 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
     # And the only other option is a BaseSample instance, so if it isn't that then we get angry
     elif not isinstance(sources, (BaseSample, list)):
         raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
+
+    # We want set_id to be iterable as well, so we wrap it in a list if it wasn't already a list or array
+    if set_id is not None and isinstance(set_id, (list, np.ndarray)):
+        set_id = [set_id]
+    # We still want it to be iterable even if the user never specified it, so we make a list of Nones the same
+    #  length as the sources variable
+    elif set_id is None:
+        set_id = [None]*len(sources)
+
+    # This will trigger if the user passed too few or too many set ids for the number of sources there are
+    if len(set_id) != len(sources):
+        raise ValueError("If an XGA sample has been passed, and AnnularSpectra are being specified with the 'set_id' "
+                         "argument, then a list of set_ids with the same number of entries must be passed.")
 
     # NOTE - There is no ';' after {dmc} because it will be included in the dmc command, or not. This is because if the
     #  requested detmap already exists then the command will just be "", and that will make bash upset if there is
@@ -740,7 +781,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
     all_paths = []
     all_out_types = []
     all_extras = []
-    for src in sources:
+    for src_ind, src in enumerate(sources):
 
         # This is where the commands/extra information get concatenated from the different annuli
         src_cmds = np.array([])
@@ -749,9 +790,11 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
         src_extras = np.array([])
 
         try:
-            ann_spec = src.get_annular_spectra(radii, group_spec, min_counts, min_sn, over_sample, set_id)
+            ann_spec = src.get_annular_spectra(radii, group_spec, min_counts, min_sn, over_sample, set_id[src_ind])
         except NoProductAvailableError:
-            continue
+            # We make our own version of this error
+            raise NoProductAvailableError("The requested AnnularSpectra cannot be located for {sn}, and this function "
+                                          "will not automatically generate annular spectra.".format(sn=src.name))
 
         oi_combos = [(o_id, inst) for o_id, insts in ann_spec.instruments.items() for inst in insts]
         for oi in oi_combos:
