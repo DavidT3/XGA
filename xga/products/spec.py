@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/05/2023, 11:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 15:49. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -424,7 +424,7 @@ class Spectrum(BaseProduct):
         if self._spec_spec_header is None:
             self._read_header_on_demand(src_spec=True, primary_header=False)
         return self._spec_spec_header
-    
+
     @property
     def primary_header(self) -> FITSHDR:
         """
@@ -437,7 +437,7 @@ class Spectrum(BaseProduct):
         if self._prim_spec_header is None:
             self._read_header_on_demand(src_spec=True, primary_header=True)
         return self._prim_spec_header
-    
+
     @property
     def counts(self) -> Quantity:
         """
@@ -744,7 +744,7 @@ class Spectrum(BaseProduct):
             self._read_response_on_demand(rmf=True)
 
         return self._rmf_channels_hi_en
-    
+
     @property
     def rmf_redist_matrix(self) -> np.ndarray:
         """
@@ -1283,7 +1283,7 @@ class Spectrum(BaseProduct):
                                           "and {u}".format(l=self.rmf_channels_lo_en.min(),
                                                            u=self.rmf_channels_hi_en.max()))
             # Finding the index of the energy bin that brackets the input energy value(s)
-            rel_inds = np.array([np.where((e > self.rmf_channels_lo_en) & (e <= self.rmf_channels_hi_en))[0][0] 
+            rel_inds = np.array([np.where((e > self.rmf_channels_lo_en) & (e <= self.rmf_channels_hi_en))[0][0]
                                  for e in ens])
             # Getting the equivelant channel
             converted_vals = Quantity(self.rmf_channels[rel_inds])
@@ -1879,6 +1879,33 @@ class AnnularSpectra(BaseAggregateProduct):
         #  it is not linked across multiple spectra during fitting, what order the fit results are in.
         self._obs_order = {ai: {} for ai in range(self._num_ann)}
 
+        # This dictionary will store the paths to cross-arfs that might be generated for this annular spectrum. That
+        #  is why there are two layers of annulus identifiers - each annulus gets one arf per every OTHER annulus
+        #  (not itself)
+        self._cross_arfs = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
+                                    for ai in range(self._num_ann)}
+                                for i in self._instruments[o]} for o in self.obs_ids}
+        # If at any point the user decides that they want to actually access the data in the cross-arfs, which they
+        #  might do to plot the response curves for instance, then the 'read on demand' method for the cross-arfs will
+        #  store them in these attributes - the key structure is the same as the above _cross_arfs attribute that
+        #  stores the paths to the files
+        self._cross_arf_lo_ens = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
+                                          for ai in range(self._num_ann)} for i in self._instruments[o]}
+                                  for o in self.obs_ids}
+        self._cross_arf_hi_ens = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
+                                          for ai in range(self._num_ann)}
+                                  for i in self._instruments[o]} for o in self.obs_ids}
+        self._cross_arf_eff_areas = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
+                                              for ai in range(self._num_ann)}
+                                     for i in self._instruments[o]} for o in self.obs_ids}
+
+        # Attributes to store ARF information
+        # The actual effective area information will live in this attribute
+        self._arf_eff_area = None
+        # The corresponding energy bounds will be stored in these attributes
+        self._arf_lo_en = None
+        self._arf_hi_en = None
+
     # The src_name setter and getter have been overridden because there is an easier way of setting
     #  the source name for all spectra
     @property
@@ -1924,6 +1951,17 @@ class AnnularSpectra(BaseAggregateProduct):
         :rtype: int
         """
         return self._num_ann
+
+    @property
+    def annulus_ids(self) -> np.ndarray:
+        """
+        The set of annulus IDs for this AnnularSpectra; i.e. for an AnnularSpectra with 4 annuli, this will return
+        an array of 0, 1, 2, and 3.
+
+        :return: The array of annulus IDs.
+        :rtype: np.ndarray
+        """
+        return np.array(range(0, self.num_annuli))
 
     def background(self, obs_id: str, inst: str) -> str:
         """
@@ -2202,9 +2240,282 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self._over_sample
 
+    def add_cross_arf(self, arf: Union[BaseProduct, str], obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int,
+                      set_ident: int):
+        """
+        This method allows you to add cross-arfs generated for this annular spectrum to a storage structure in
+        the object. That means that other processes that make use of them, such as spectral fitting, will be able
+        to retrieve them from this object easily.
+
+        :param BaseProduct/str arf: Either an XGA BaseProduct instance (which is what is produced by the generation
+            process) or a string path to the cross-arf file. This should represent the 'cross_ann_id' contribution
+            to the 'src_ann_id' spectrum.
+        :param str obs_id: The ObsID of the cross-arf - if 'arf' is a BaseProduct instance this argument will be
+            compared the ObsID of the 'arf' object. It will also be checked to ensure that it is associated with
+            this object.
+        :param str inst: The instrument of the cross-arf - if 'arf' is a BaseProduct instance this argument will be
+            compared the instrument of the 'arf' object. It will also be checked to ensure that it is associated with
+            the ObsID in this object.
+        :param int src_ann_id: The identifying number of the source annulus for this cross-arf.
+        :param int cross_ann_id: The identifying number of the 'cross' annulus for this cross-arf.
+        :param int set_ident: The set_ident that the cross-arf was generated for, it is checked against the
+            set identifier of this object.
+        """
+
+        # Hopefully this is never triggered, and obviously you could just grab the set_ident from the object you're
+        #  adding too if you want to get past this, but I mean this more as a check for the development of the
+        #  cross_arfs function to ensure I'm adding the right cross-arfs to the right annular spectra.
+        if set_ident != self.set_ident:
+            raise ValueError("The passed 'set_ident' ({s}) does not match the identifier of this object "
+                             "({ri}).".format(s=set_ident, ri=self.set_ident))
+
+        # I check whether the specified ObsID is actually a part of this AnnularSpectra, and raise a hopefully
+        #  informative error if it is not.
+        if obs_id not in self.obs_ids:
+            raise NotAssociatedError("The passed 'obs_id' ({o}) is not associated with this annular spectrum "
+                                     "({ol})".format(o=obs_id, ol=', '.join(self.obs_ids)))
+        # If we've passed the first check, and the passed arf is an XGA product instance, we perform a sanity check
+        #  to ensure that the ObsID passed by the user matches the one in the product
+        elif isinstance(arf, BaseProduct) and obs_id != arf.obs_id:
+            raise ValueError("The 'obs_id' ({o}) argument does not match the ObsID set for the XGA product containing "
+                             "the cross-arf ({po}).".format(o=obs_id, po=arf.obs_id))
+
+        # We then repeat the exact same checks as above, but with the instrument
+        if inst not in self.instruments[obs_id]:
+            raise NotAssociatedError("The passed 'inst' ({i}) is not associated with the ObsID in this annular "
+                                     "spectrum ({il}).".format(i=inst, il=', '.join(self.instruments[obs_id])))
+        elif isinstance(arf, BaseProduct) and inst != arf.instrument:
+            raise ValueError("The 'inst' ({i}) argument does not match the instrument set for the XGA product "
+                             "containing the cross-arf ({pi}).".format(i=inst, pi=arf.inst))
+
+        # I think I will allow either a string path, or a product (as I am declaring these arfs in BaseProducts in
+        #  the execute_cmd function) - as such I need to account for both. In this case we know that everything is fine
+        #  because the product has told us that it is usable
+        if isinstance(arf, BaseProduct) and arf.usable:
+            arf = arf.path
+        # In this case though something has obviously gone wrong, so we'll tell the user about it
+        elif isinstance(arf, BaseProduct) and not arf.usable:
+            raise FailedProductError("The specified cross-arf is not usable for the following reasons; "
+                                     "{}".format(', '.join(arf.not_usable_reasons)))
+        # In this case we assume that the string was the path, and if it doesn't exist we say so.
+        elif isinstance(arf, str) and not os.path.exists(arf):
+            raise FileNotFoundError("The specified cross-arf file ({}) cannot be found.".format(arf))
+
+        # If we've got here we know that the 'arf' argument was alright, but now we have to try to check the
+        #  validity of the src_ann_id and cross_ann_id values. Firstly they have to actually be identifying annuli
+        #  present in this object
+        if src_ann_id not in self.annulus_ids or cross_ann_id not in self.annulus_ids:
+            raise NotAssociatedError("The 'src_ann_id' and 'cross_ann_id' arguments must be annulus identifiers "
+                                     "associated with this AnnularSpectra, allowed values "
+                                     "are; {}".format(', '.join([str(i) for i in self.annulus_ids])))
+        # Having the same value for both isn't allowed, because that doesn't make sense. Cross arfs represent the
+        #  contribution of one annulus to another, so what use would an arf be that represents the contribution of one
+        #  annulus to itself?
+        elif src_ann_id == cross_ann_id:
+            raise ValueError("The 'src_ann_id' and 'cross_ann_id' arguments have the same value ({}). They must be "
+                             "different as cross-arfs represent the contribution of one annulus to "
+                             "another.".format(str(src_ann_id)))
+
+        # Now we actually store the PATH to the file in the attribute that was set up in the init of this
+        #  class - This one is four layers deep, as every source annulus will have a cross arf for every
+        #  other annulus
+        self._cross_arfs[obs_id][inst][src_ann_id][cross_ann_id] = arf
+
+    def get_cross_arf_paths(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+        """
+        This method allows the user to retrieve cross-arf paths for a specific ObsID-instrument spectrum of an
+        annulus. For instance, passing an ObsID and Instrument, along with a src_ann_id of 1, to an annular spectrum
+        with four annuli, will return the paths to cross-arfs between annulus 1 and 0, annulus 1 and 2, and
+        annulus 1 and 3 (labelling starts at zero). If a cross_ann_id is passed in addition to a src_ann_id, then
+        that specific path will be retrieved (but still returned in a dictionary).
+
+        :param str obs_id: The ObsID of the spectrum for which you wish to retrieve cross-arf paths.
+        :param str inst: The instrument of the spectrum for which you wish to retrieve cross-arf paths.
+        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum you wish to retrieve cross-arf paths for.
+        :param int cross_ann_id: Optionally you can specify the cross-arf annulus ID. The default is None, in which
+            case all cross-arf paths for the given source annulus will be returned.
+        :return: A dictionary with annulus IDs as keys, and cross-arf paths as values.
+        :rtype: dict
+        """
+        if obs_id not in self.obs_ids:
+            raise NotAssociatedError("The passed 'obs_id' ({o}) is not associated with this annular spectrum "
+                                     "({ol})".format(o=obs_id, ol=', '.join(self.obs_ids)))
+        elif inst not in self.instruments[obs_id]:
+            raise NotAssociatedError("The passed 'inst' ({i}) is not associated with the ObsID in this annular "
+                                     "spectrum ({il}).".format(i=inst, il=', '.join(self.instruments[obs_id])))
+        elif src_ann_id not in self.annulus_ids:
+            raise NotAssociatedError("The passed 'src_ann_id' ({si}) is not an annulus ID associated with this annular"
+                                     " spectrum ({ls}).".format(si=src_ann_id,
+                                                                ls=', '.join([str(i) for i in self.annulus_ids])))
+        elif cross_ann_id is not None and cross_ann_id not in self.annulus_ids:
+            raise NotAssociatedError("The passed 'cross_ann_id' ({si}) is not an annulus ID associated with this "
+                                     "annular spectrum "
+                                     "({ls}).".format(si=cross_ann_id,
+                                                      ls=', '.join([str(i) for i in self.annulus_ids])))
+
+        if cross_ann_id is None:
+            # If we pass those checks we can grab the requested cross-ARFs.
+            rel_arfs = self._cross_arfs[obs_id][inst][src_ann_id]
+        else:
+            # In this case we just want to return a single, specific, path - we will still return it in the same
+            #  form though - in a dictionary with the key being the cross-arf ann id
+            rel_arfs = {cross_ann_id: self._cross_arfs[obs_id][inst][src_ann_id][cross_ann_id]}
+
+        # We do a final check to make sure that no None values sneak through
+        if None in rel_arfs.values():
+            raise ValueError("One or more cross-arfs for your selection have not been assigned to this annular "
+                             "spectrum.")
+        return rel_arfs
+
+    def get_cross_arf_lo_ens(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+        """
+        A method that will retrieve the lower energy bound data from cross-arfs associated with this annular
+        spectrum. A set of cross-arf lower energy bounds can be retrieved for a particular source annulus, or
+        an individual cross-arf for a particular source annulus, depending on user input. It is extremely likely
+        that all lower energy bounds will be the same for a given instrument, but this is not assumed.
+
+        :param str obs_id: The ObsID of the spectrum for which you wish to retrieve cross-arf lower energy bounds.
+        :param str inst: The instrument of the spectrum for which you wish to retrieve cross-arf lower energy bounds.
+        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum you wish to retrieve cross-arf lower energy
+            bounds for.
+        :param int cross_ann_id: Optionally you can specify the cross-arf annulus ID. The default is None, in which
+            case all lower energy bounds of cross-arfs for the given source annulus will be returned.
+        :return: A dictionary with annulus IDs as keys, and astropy array quantities of lower energy bounds as values.
+        :rtype: dict
+        """
+        # This is a bit cheesy, but by calling this get method for cross arf paths I can know that the correct
+        #  checks are being made on the ObsID, instrument, src ann id, and cross ann id. The only other thing this
+        #  method does is a dictionary call, which isn't going to be a huge burden
+        self.get_cross_arf_paths(obs_id, inst, src_ann_id, cross_ann_id)
+
+        # Now that we know that the input values are all valid, we first deal with the case where a set of cross-arf
+        #  data are being retrieved. We check to see whether 'None' is in lo_ens attribute's values, and if it
+        #  is then we decide that the data haven't been loaded in and we trigger the read on demand method
+        if cross_ann_id is None and None in self._cross_arf_lo_ens[obs_id][inst][src_ann_id].values():
+            self._read_cross_arf_on_demand(obs_id, inst, src_ann_id)
+        # In this case a specific cross-arf's data are being requested, so we check that particular cross ann ID
+        #  to see whether the entry in the attribute is currently None. If it is we trigger the read method
+        elif cross_ann_id is not None and self._cross_arf_lo_ens[obs_id][inst][src_ann_id][cross_ann_id] is None:
+            self._read_cross_arf_on_demand(obs_id, inst, src_ann_id, cross_ann_id)
+
+        if cross_ann_id is None:
+            rel_lo_ens = self._cross_arf_lo_ens[obs_id][inst][src_ann_id]
+        else:
+            # I want the return to be a dictionary regardless of whether the input was specific to one cross-arf or not
+            rel_lo_ens = {cross_ann_id: self._cross_arf_lo_ens[obs_id][inst][src_ann_id][cross_ann_id]}
+
+        return rel_lo_ens
+
+    def get_cross_arf_hi_ens(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+        """
+        A method that will retrieve the upper energy bound data from cross-arfs associated with this annular
+        spectrum. A set of cross-arf upper energy bounds can be retrieved for a particular source annulus, or
+        an individual cross-arf for a particular source annulus, depending on user input. It is extremely likely
+        that all upper energy bounds will be the same for a given instrument, but this is not assumed.
+
+        :param str obs_id: The ObsID of the spectrum for which you wish to retrieve cross-arf upper energy bounds.
+        :param str inst: The instrument of the spectrum for which you wish to retrieve cross-arf upper energy bounds.
+        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum you wish to retrieve cross-arf upper energy
+            bounds for.
+        :param int cross_ann_id: Optionally you can specify the cross-arf annulus ID. The default is None, in which
+            case all upper energy bounds of cross-arfs for the given source annulus will be returned.
+        :return: A dictionary with annulus IDs as keys, and astropy array quantities of upper energy bounds as values.
+        :rtype: dict
+        """
+        # This is a bit cheesy, but by calling this get method for cross arf paths I can know that the correct
+        #  checks are being made on the ObsID, instrument, src ann id, and cross ann id. The only other thing this
+        #  method does is a dictionary call, which isn't going to be a huge burden
+        self.get_cross_arf_paths(obs_id, inst, src_ann_id, cross_ann_id)
+
+        # Now that we know that the input values are all valid, we first deal with the case where a set of cross-arf
+        #  data are being retrieved. We check to see whether 'None' is in hi_ens attribute's values, and if it
+        #  is then we decide that the data haven't been loaded in, and we trigger the read on demand method
+        if cross_ann_id is None and None in self._cross_arf_hi_ens[obs_id][inst][src_ann_id].values():
+            self._read_cross_arf_on_demand(obs_id, inst, src_ann_id)
+        # In this case a specific cross-arf's data are being requested, so we check that particular cross ann ID
+        #  to see whether the entry in the attribute is currently None. If it is we trigger the read method
+        elif cross_ann_id is not None and self._cross_arf_hi_ens[obs_id][inst][src_ann_id][cross_ann_id] is None:
+            self._read_cross_arf_on_demand(obs_id, inst, src_ann_id, cross_ann_id)
+
+        if cross_ann_id is None:
+            rel_hi_ens = self._cross_arf_hi_ens[obs_id][inst][src_ann_id]
+        else:
+            # I want the return to be a dictionary regardless of whether the input was specific to one cross-arf or not
+            rel_hi_ens = {cross_ann_id: self._cross_arf_hi_ens[obs_id][inst][src_ann_id][cross_ann_id]}
+
+        return rel_hi_ens
+
+    def get_cross_arf_eff_areas(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
+        """
+        A method that will retrieve the effective area data from cross-arfs associated with this annular
+        spectrum. A set of cross-arf effective areas can be retrieved for a particular source annulus, or
+        an individual cross-arf for a particular source annulus, depending on user input.
+
+        :param str obs_id: The ObsID of the spectrum for which you wish to retrieve cross-arf effective areas.
+        :param str inst: The instrument of the spectrum for which you wish to retrieve cross-arf effective areas.
+        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum you wish to retrieve cross-arf effective
+            areas for.
+        :param int cross_ann_id: Optionally you can specify the cross-arf annulus ID. The default is None, in which
+            case all effective areas of cross-arfs for the given source annulus will be returned.
+        :return: A dictionary with annulus IDs as keys, and astropy array quantities of effective areas as values.
+        :rtype: dict
+        """
+        # This is a bit cheesy, but by calling this get method for cross arf paths I can know that the correct
+        #  checks are being made on the ObsID, instrument, src ann id, and cross ann id. The only other thing this
+        #  method does is a dictionary call, which isn't going to be a huge burden
+        self.get_cross_arf_paths(obs_id, inst, src_ann_id, cross_ann_id)
+
+        # Now that we know that the input values are all valid, we first deal with the case where a set of cross-arf
+        #  data are being retrieved. We check to see whether 'None' is in the eff_area attribute's values, and if it
+        #  is then we decide that the data haven't been loaded in, and we trigger the read on demand method
+        if cross_ann_id is None and None in self._cross_arf_eff_areas[obs_id][inst][src_ann_id].values():
+            self._read_cross_arf_on_demand(obs_id, inst, src_ann_id)
+        # In this case a specific cross-arf's data are being requested, so we check that particular cross ann ID
+        #  to see whether the entry in the attribute is currently None. If it is we trigger the read method
+        elif cross_ann_id is not None and self._cross_arf_eff_areas[obs_id][inst][src_ann_id][cross_ann_id] is None:
+            self._read_cross_arf_on_demand(obs_id, inst, src_ann_id, cross_ann_id)
+
+        if cross_ann_id is None:
+            rel_eff_areas = self._cross_arf_eff_areas[obs_id][inst][src_ann_id]
+        else:
+            # I want the return to be a dictionary regardless of whether the input was specific to one cross-arf or not
+            rel_eff_areas = {cross_ann_id: self._cross_arf_eff_areas[obs_id][inst][src_ann_id][cross_ann_id]}
+
+        return rel_eff_areas
+
+    def _read_cross_arf_on_demand(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None):
+        """
+        An internal method to read cross-arf data into memory only when required by some other method or property
+        of this function - that way we don't unnecessarily take up memory.
+
+        :param str obs_id: The ObsID of the spectrum for which cross-arf data should be read into memory.
+        :param str inst: The instrument of the spectrum for which cross-arf data should be read into memory.
+        :param int src_ann_id: The annulus ID (e.g. 1) of the spectrum for which cross-arf data should be
+            read into memory.
+        :param int cross_ann_id: Optionally you can specify the cross-arf annulus ID. The default is None, in which
+            case all cross-arf data for the given source annulus will be read into memory.
+        """
+        # Retrieves the paths to the cross-arfs specified by the input to this method
+        cross_paths = self.get_cross_arf_paths(obs_id, inst, src_ann_id, cross_ann_id)
+
+        # We cycle through the cross-arfs. Even if a cross_ann_id was specified (i.e. we've only retrieved a path for
+        #  a single cross-arf), it will still be returned in a dictionary so this will work fun
+        for c_a_id, rel_path in cross_paths.items():
+            # Do the actual reading of the current cross-arf file
+            arf_read = FITS(rel_path)
+            # Now store the array of lower energy limits, upper energy limits, and effective areas in the attributes
+            #  that were set up with an ObsID-Instrument-src_ann_id-cross_ann_id structure in the init of this class
+            self._cross_arf_lo_ens[obs_id][inst][src_ann_id][c_a_id] = Quantity(arf_read[1]['ENERG_LO'].read(), 'keV')
+            self._cross_arf_hi_ens[obs_id][inst][src_ann_id][c_a_id] = Quantity(arf_read[1]['ENERG_HI'].read(), 'keV')
+            self._cross_arf_eff_areas[obs_id][inst][src_ann_id][c_a_id] = \
+                Quantity(arf_read[1]['SPECRESP'].read(), 'cm^2')
+
+            # And make sure to close the arf file after reading
+            arf_read.close()
+
     def add_fit_data(self, model: str, tab_line: dict, lums: dict, obs_order: dict):
         """
-        An equivelant to the add_fit_data method built into all source objects. The final fit results
+        An equivalent to the add_fit_data method built into all source objects. The final fit results
         and luminosities are housed in a storage structure within the AnnularSpectra, which makes sense
         because this is an aggregate product of all the relevant spectra, storing them just as source objects
         store spectra that don't exist in a spectrum set.
@@ -2492,9 +2803,138 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return profs
 
+    def view_cross_arfs(self, src_ann_id: int, obs_id: str, inst: str, src_arf_norm: bool = False,
+                        figsize: tuple = (8, 6), xscale: str = 'log', yscale: str = 'linear',
+                        lo_en: Quantity = Quantity(0.01, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
+        """
+        A method that produces a plot of the cross-arf curves for a specified source annulus spectrum, for a specified
+        ObsID and instrument. The original source spectrum will also be plotted as a reference. This method can also
+        be used to create 'normalized' curves were the cross-arf effective area values are divided by the source
+        arf effective areas.
+
+        :param int src_ann_id: The annulus ID of the source annulus for which you wish to plot cross-arf curves.
+        :param str obs_id: The ObsID of the spectrum for which you wish to plot cross-arf curves.
+        :param str inst: The instrument of the spectrum for which you wish to plot cross-arf curves.
+        :param bool src_arf_norm:
+        :param tuple figsize: The size of the figure, the default is (8, 6).
+        :param str xscale: The xscale to use for the plot.
+        :param str yscale: The yscale to use for the plot.
+        :param Quantity lo_en: The lower energy limit for the x-axis. The default is 0.01 keV. This will be altered
+            to reflect the minimum value of the energy scale for this curve if lo_en is smaller than the lowest
+            energy bin.
+        :param Quantity hi_en: The upper energy limit for the x-axis. The default is 16.0 keV. This will be altered
+            to reflect the maximum value of the energy scale for this curve if hi_en is greater than the highest
+            energy bin.
+        """
+        plt.figure(figsize=figsize)
+        # Set the plot up to look nice and professional.
+        ax = plt.gca()
+        ax.minorticks_on()
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+
+        # I retrieve the energies and effective areas for the source arf from the source spectrum specified by the
+        #  user input of src_ann_id, ObsID, and instrument. This will be used to provide context to the cross-arf
+        #  plots (or to normalize them if src_arf_norm is set to True.
+        src_spec = self.get_spectra(src_ann_id, obs_id, inst)
+        # Just take the midpoint of the energy bins
+        src_ens = (src_spec.eff_area_hi_en + src_spec.eff_area_lo_en) / 2
+        src_eff_areas = src_spec.eff_area
+
+        # Have to check the input energy bounds to make sure that they are sensible
+        if lo_en >= hi_en:
+            raise ValueError("The 'hi_en' argument cannot be greater than or equal to the 'lo_en' argument.")
+        else:
+            lo_en = lo_en.to("keV").value
+            hi_en = hi_en.to("keV").value
+
+        # We dynamically alter the upper and lower energy bounds passed by the user to reflect the actual maxima and
+        #  minima of the energy scale, so there isn't a ton of blank space in on either side if they made a bad
+        #  choice, or my default value choices were bad. We'll be plotting a bunch of arfs here, but I use the
+        #  original source arf as the comparison (though the energies should be identical for a given instrument).
+        if lo_en < src_ens.value.min():
+            lo_en = src_ens.value.min()
+        if hi_en > src_ens.value.max():
+            hi_en = src_ens.value.max()
+
+        # As we know, log scales don't like zero values, so I make a change if the user has set the minimum
+        #  energy to be zero and set an x-axis log scale
+        if xscale == 'log' and lo_en == 0:
+            warn("The x-axis scale has been set to log, and 'lo_en' cannot be zero - it has been set to 0.01 "
+                 "keV.", stacklevel=2)
+            lo_en = 0.01
+
+        # Now I grab the dictionaries of lower/upper energy bounds, and effective areas, for the cross-arfs that we
+        #  wish to plot in this method
+        all_lo_ens = self.get_cross_arf_lo_ens(obs_id, inst, src_ann_id)
+        all_hi_ens = self.get_cross_arf_hi_ens(obs_id, inst, src_ann_id)
+        all_eff_areas = self.get_cross_arf_eff_areas(obs_id, inst, src_ann_id)
+
+        if not src_arf_norm:
+            # Before I get to plotting the cross-arf curves, I plot the original source arf as a dashed black line
+            plt.plot(src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
+                     src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
+                     color='black', linestyle='dashed', label='Source annulus')
+        # In this case though we are going to normalize the cross-arfs by the source arf, so actually we just
+        #  want to plot a straight line with 1 on the y-axis
+        else:
+            # As I'm normalising by the source ARF here, I just plot a line at 1
+            plt.plot(src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)].value,
+                     [1]*len(src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)]),
+                     color='black', linestyle='dashed', label='Source reference')
+
+        min_norm = 1
+        for cross_ann_id, eff_area in all_eff_areas.items():
+            ens = (all_hi_ens[cross_ann_id] + all_lo_ens[cross_ann_id]) / 2
+
+            # Get the data and plot it
+            sel_ens = (ens.value >= lo_en) & (ens.value <= hi_en)
+            if not src_arf_norm:
+                plt.plot(ens[sel_ens], eff_area[sel_ens], label='Annulus {} contribution'.format(cross_ann_id))
+            else:
+                norm_area = Quantity(np.zeros(len(eff_area)))
+                np.divide(eff_area, src_eff_areas, out=norm_area, where=src_eff_areas != 0)
+                plt.plot(ens[sel_ens], norm_area[sel_ens], label='Annulus {} normalised'.format(cross_ann_id))
+                # We compare to the global min norm area to see whether we have a smaller value here or not - this
+                #  will be used to set the minimum y value
+                min_norm = min(min(norm_area[norm_area > 0]), min_norm)
+
+        if not src_arf_norm:
+            # Set the lower y-lim to be 1, and then the user supplied x-lims (supplementing the fact that we've already
+            #  used those limits to select the data to plot
+            plt.ylim(1)
+        else:
+            # In the case where we're normalizing, setting the lower y limit to 1 doesn't make sense.
+            plt.ylim(min_norm)
+        plt.xlim(lo_en, hi_en)
+
+        # Set the user defined x and y scales
+        plt.xscale(xscale)
+        plt.yscale(yscale)
+
+        # Title and axis labels
+        if not src_arf_norm:
+            plt.ylabel("Effective Area [cm$^{2}$]", fontsize=12)
+        else:
+            plt.ylabel("Normalised Effective Area", fontsize=12)
+
+        plt.xlabel("Energy [keV]", fontsize=12)
+        plt.title("Annulus {ai} {o}-{i} Cross-ARFs".format(o=obs_id, i=inst.upper(), ai=src_ann_id), fontsize=14)
+
+        # This makes sure that the tick labels are formatted as 0.1, 1, 10, etc. keV on the x-axis (if logged) and
+        #  10, 100, 100, 1000, etc. cm^2 on the y-axis if logged
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+        # Make sure we add the legend in, it has a lot of context regarding which curve is for which cross-annulus
+        plt.legend(loc='best', fontsize=12)
+
+        # Aaaand finally actually plot it
+        plt.tight_layout()
+        plt.show()
+
     def view_annulus(self, ann_ident: int, model: str, figsize: Tuple = (12, 8)):
         """
-        An equivelant to the Spectrum view method, but allows all spectra from the same annulus to be
+        An equivalent to the Spectrum view method, but allows all spectra from the same annulus to be
         displayed on the same axis.
 
         :param int ann_ident: The integer identifier of the annulus you wish to see spectra for.

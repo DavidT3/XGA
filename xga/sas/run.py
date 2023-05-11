@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 16:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 17:22. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -65,6 +65,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                        extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
                        extra_info["instrument"], out, err, cmd)
+    elif p_type == "cross arfs":
+        prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info)
     elif "NullSource" in src:
         prod = None
     else:
@@ -227,10 +229,20 @@ def sas_call(sas_func):
                     # Really we're just re-creating the results dictionary here, but I want these products
                     #  to go through the error checking stuff like everything else does
                     ann_spec_comps[entry].append(product)
+                # In case they are components of an annular spectrum but they are either none or not usable
                 elif prod_type_str == "annular spectrum set components":
                     raise warn("An annular spectrum component ({a}) for {n} has not been generated properly, contact "
                                "the development team if a SAS error is not "
                                "shown.".format(a=product.storage_key, n=product.src_name), stacklevel=2)
+                # Here the generated product was a cross-arf, and needs to be added to the right annular spectrum
+                #  object that already exists in our source
+                elif prod_type_str == "cross arfs":
+                    # OH NO WE'RE USING A PROTECTED ATTRIBUTE - but don't worry, I didn't give this a property
+                    #  deliberately to hopefully discourage any user from doing anything with it
+                    ei = product._extra_info
+                    ann_spec = sources[ind].get_annular_spectra(set_id=ei['ann_spec_set_id'])
+                    ann_spec.add_cross_arf(product, ei['obs_id'], ei['inst'], ei['src_ann_id'], ei['cross_ann_id'],
+                                           ei['ann_spec_set_id'])
 
             if len(to_raise) != 0:
                 all_to_raise.append(to_raise)

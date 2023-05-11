@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -17,7 +17,7 @@ from ..imagetools.profile import radial_brightness
 from ..models import BaseModel1D
 from ..products.profile import SurfaceBrightness1D, GasDensity3D
 from ..samples.extended import ClusterSample
-from ..sas.spec import region_setup
+from ..sas._common import region_setup
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
 from ..sourcetools.deproj import shell_ann_vol_intersect

@@ -1,128 +1,22 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2023, 16:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 15:46. Copyright (c) The Contributors
 
 import os
-import warnings
 from copy import copy
+from itertools import permutations
 from random import randint
-from typing import Union, Tuple, List
+from typing import Union, List
 
 import numpy as np
 from astropy.units import Quantity
 
+from ._common import region_setup, _gen_detmap_cmd
 from .misc import cifbuild
 from .. import OUTPUT, NUM_CORES
-from ..exceptions import SASInputInvalid, NotAssociatedError
+from ..exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError
 from ..samples.base import BaseSample
 from ..sas.run import sas_call
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
-from ..sources.base import NullSource
-from ..utils import RAD_LABELS
-
-
-def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                 inner_radius: Union[str, Quantity], disable_progress: bool, obs_id: str) \
-        -> Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]:
-    """
-    The preparation and value checking stage for SAS spectrum generation.
-
-    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
-    :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
-        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')).
-    :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
-        the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
-        default this is zero arcseconds, resulting in a circular spectrum.
-    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
-    :param str obs_id: Only used if the 'region' radius name is passed, the ObsID to retrieve the region for.
-    :return: The source objects, a list of inner radius quantities, and a list of outer radius quantities.
-    :rtype: Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]
-    """
-    # NullSources are not allowed to have spectra, as they can have any observations associated and thus won't
-    #  necessarily overlap
-    if isinstance(sources, NullSource):
-        raise TypeError("You cannot create spectra of a NullSource")
-
-    if isinstance(sources, BaseSource):
-        sources = [sources]
-
-    # Checking that the user hasn't passed BaseSources
-    if not all([type(src) != BaseSource for src in sources]):
-        raise TypeError("You cannot generate spectra from a BaseSource object, really you shouldn't be using "
-                        "them at all, they are mostly useful as a superclass.")
-
-    # Issuing a warning to the user that one or one sources have not been detected
-    if not all([src.detected for src in sources]):
-        warnings.warn("Not all of these sources have been detected, the spectra generated may not be helpful.")
-
-    # Checking that inner radii that have been passed into the spectrum generation aren't nonsense
-    if isinstance(inner_radius, str) and inner_radius not in RAD_LABELS:
-        raise ValueError("You have passed a radius name rather than a value for 'inner_radius', but it is "
-                         "not a valid name, please use one of the following:\n {}".format(", ".join(RAD_LABELS)))
-
-    elif isinstance(inner_radius, str) and inner_radius in ["r2500", "r500", "r200"] and \
-            not all([type(src) == GalaxyCluster for src in sources]):
-        raise TypeError("The {} radius is only valid for GalaxyCluster objects".format(inner_radius))
-
-    # One radius can be passed for a whole sample, but this checks to make sure that if there are multiple sources,
-    #  and multiple radii have been passed, there are the same number of sources and radii
-    elif isinstance(inner_radius, Quantity) and len(sources) != 1 and not inner_radius.isscalar \
-            and len(sources) != len(inner_radius):
-        raise ValueError("Your sample has {s} sources, but your inner_radius variable only has {i} entries. Please "
-                         "pass only one inner_radius or the same number as there are "
-                         "sources".format(s=len(sources), i=len(inner_radius)))
-
-    # Checking that outer_radius radii that have been passed into the spectrum generation aren't nonsense
-    if isinstance(outer_radius, str) and outer_radius not in RAD_LABELS:
-        raise ValueError("You have passed a radius name rather than a value for 'outer_radius', but it is "
-                         "not a valid name, please use one of the following:\n {}".format(", ".join(RAD_LABELS)))
-    elif isinstance(outer_radius, str) and outer_radius in ["r2500", "r500", "r200"] and \
-            not all([type(src) == GalaxyCluster for src in sources]):
-        raise TypeError("The {} radius is only valid for GalaxyCluster objects".format(outer_radius))
-    elif isinstance(outer_radius, Quantity) and len(sources) != 1 and not outer_radius.isscalar \
-            and len(sources) != len(outer_radius):
-        raise ValueError("Your sample has {s} sources, but your outer_radius variable only has {o} entries. Please "
-                         "pass only one outer_radius or the same number as there are "
-                         "sources".format(s=len(sources), o=len(outer_radius)))
-
-    # A crude way to store the radii but I'm tired and this will work fine
-    final_inner = []
-    final_outer = []
-    # I need to convert the radii to the same units and compare them, and to make sure they
-    #  are actually in distance units. The distance unit checking is done by convert_radius
-    for s_ind, src in enumerate(sources):
-        # Converts the inner and outer radius for this source into the same unit
-        if isinstance(outer_radius, str) and outer_radius != 'region':
-            cur_out_rad = src.get_radius(outer_radius, 'deg')
-        elif isinstance(outer_radius, str) and outer_radius == 'region':
-            reg = src.source_back_regions('region', obs_id)[0]
-            cur_out_rad = Quantity([reg.width.to('deg').value/2, reg.height.to('deg').value/2], 'deg')
-        elif outer_radius.isscalar:
-            cur_out_rad = src.convert_radius(outer_radius, 'deg')
-        else:
-            cur_out_rad = src.convert_radius(outer_radius[s_ind], 'deg')
-
-        # We need to check that the outer radius isn't region, because for region objects we ignore whatever
-        #  inner radius has been passed and just set it 0
-        if outer_radius == 'region':
-            cur_inn_rad = Quantity([0, 0], 'deg')
-        elif isinstance(inner_radius, str):
-            cur_inn_rad = src.get_radius(inner_radius, 'deg')
-        elif inner_radius.isscalar:
-            cur_inn_rad = src.convert_radius(inner_radius, 'deg')
-        else:
-            cur_inn_rad = src.convert_radius(inner_radius[s_ind], 'deg')
-
-        # Then we can check to make sure that the outer radius is larger than the inner radius
-        if outer_radius != 'region' and cur_inn_rad >= cur_out_rad:
-            raise ValueError("The inner_radius of {s} is greater than or equal to the outer_radius".format(s=src.name))
-        else:
-            final_inner.append(cur_inn_rad)
-            final_outer.append(cur_out_rad)
-
-    # Have to make sure that all observations have an up to date cif file.
-    cifbuild(sources, disable_progress=disable_progress)
-
-    return sources, final_inner, final_outer
 
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
@@ -152,8 +46,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
-    :param int num_cores: The number of cores to use (if running locally), default is set to
-        90% of available.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
@@ -194,6 +87,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         extra_name = "_minsn{}".format(min_sn)
     else:
         extra_name = ''
+
+    # Have to make sure that all observations have an up to date cif file.
+    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
 
     # And if it was oversampled during generation then we need to include that as well
     if over_sample is not None:
@@ -566,8 +462,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
-    :param int num_cores: The number of cores to use (if running locally), default is set to
-        90% of available.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
@@ -601,13 +496,12 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
-    :param int num_cores: The number of cores to use (if running locally), default is set to
-        90% of available.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool force_regen: This will force all the constituent spectra of the set to be regenerated, use this
         if your call to this function was interrupted and an incomplete AnnularSpectrum is being read in.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
-    # If its a single source I put it into an iterable object (i.e. a list), just for convenience
+    # If it's a single source I put it into an iterable object (i.e. a list), just for convenience
     if isinstance(sources, BaseSource):
         sources = [sources]
     elif isinstance(sources, list) and not all([isinstance(s, BaseSource) for s in sources]):
@@ -816,4 +710,140 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
     return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
 
 
+@sas_call
+def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
+              group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+              set_id: str = None, detmap_bin: int = 200, num_cores: int = NUM_CORES, disable_progress: bool = False):
+    """
+    This function will generate cross-arfs for annular spectra, which describe the contribution of each annulus
+    to each other annulus due to XMM's relatively sizeable PSF. The cross-arfs are generated for each instrument
+    of each observation, and automatically stored in their parent AnnularSpectra instance, both for retrieval by
+    fitting processes and so that the user can examine them with a plotting method and by retrieving effective
+    area values from them.
+
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
+    :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the
+        annuli for the sources. A single quantity containing at least three radii may be passed if one source
+        is being analysed, but for multiple sources there should be a quantity (with at least three radii), PER
+        source. This is used to help retrieve the correct annular spectrum.
+    :param bool group_spec: A boolean flag that sets whether the spectra are grouped or not. This is used to help
+        retrieve the correct annular spectrum.
+    :param float min_counts: If retrieving a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None. This is used to help retrieve the correct
+        annular spectrum.
+    :param float min_sn: If retrieving a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None. This is used to help retrieve the correct
+        annular spectrum.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.  This is
+        used to help retrieve the correct annular spectrum.
+    :param str/List[str] set_id: The unique annular spectrum identifier (or a list of them if analysing multiple
+        sources) that specifies which annular spectrum to use.
+    :param int detmap_bin: The spatial binning applied to event lists to create the detector maps used in the
+        calculations of effective areas. The default is 200, smaller values will increase the resolution but will
+        cause dramatically slower calculations.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
+    :return:
+    """
+    # If it's a single source I put it into an iterable object (i.e. a list), just for convenience
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+    elif isinstance(sources, list) and not all([isinstance(s, BaseSource) for s in sources]):
+        raise TypeError("If a list is passed, each element must be a source.")
+    # And the only other option is a BaseSample instance, so if it isn't that then we get angry
+    elif not isinstance(sources, (BaseSample, list)):
+        raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
+
+    # We want set_id to be iterable as well, so we wrap it in a list if it wasn't already a list or array
+    if set_id is not None and isinstance(set_id, (list, np.ndarray)):
+        set_id = [set_id]
+    # We still want it to be iterable even if the user never specified it, so we make a list of Nones the same
+    #  length as the sources variable
+    elif set_id is None:
+        set_id = [None]*len(sources)
+
+    # This will trigger if the user passed too few or too many set ids for the number of sources there are
+    if len(set_id) != len(sources):
+        raise ValueError("If an XGA sample has been passed, and AnnularSpectra are being specified with the 'set_id' "
+                         "argument, then a list of set_ids with the same number of entries must be passed.")
+
+    # NOTE - There is no ';' after {dmc} because it will be included in the dmc command, or not. This is because if the
+    #  requested detmap already exists then the command will just be "", and that will make bash upset if there is
+    #  a ";" after it.
+    arfgen_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; {dmc} arfgen spectrumset={s} arfset={a} " \
+                 "withrmfset=yes rmfset={r} badpixlocation={e} extendedsource=yes detmaptype=dataset " \
+                 "detmaparray={ds} setbackscale=no badpixmaptype=dataset crossregionarf=yes " \
+                 "crossreg_spectrumset={crs}; mv * ../; cd ..; rm -r {d}"
+
+    # These store the final output information needed to run the commands
+    all_cmds = []
+    all_paths = []
+    all_out_types = []
+    all_extras = []
+    for src_ind, src in enumerate(sources):
+
+        # This is where the commands/extra information get concatenated from the different annuli
+        src_cmds = np.array([])
+        src_paths = np.array([])
+        src_out_types = []
+        src_extras = np.array([])
+
+        try:
+            ann_spec = src.get_annular_spectra(radii, group_spec, min_counts, min_sn, over_sample, set_id[src_ind])
+        except NoProductAvailableError:
+            # We make our own version of this error
+            raise NoProductAvailableError("The requested AnnularSpectra cannot be located for {sn}, and this function "
+                                          "will not automatically generate annular spectra.".format(sn=src.name))
+
+        oi_combos = [(o_id, inst) for o_id, insts in ann_spec.instruments.items() for inst in insts]
+        for oi in oi_combos:
+            rel_sp_comp = [ann_spec.get_spectra(ann_id, oi[0], oi[1]) for ann_id in ann_spec.annulus_ids]
+
+            for sp_comb in permutations(rel_sp_comp, 2):
+                obs_id = sp_comb[0].obs_id
+                inst = sp_comb[0].instrument
+                evt_list = src.get_products('events', obs_id, inst)[0]
+
+                dest_dir = OUTPUT + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=src.name, r=randint(0, 1e+8))
+
+                if not os.path.exists(dest_dir):
+                    os.makedirs(dest_dir)
+
+                ccf = dest_dir + "ccf.cif"
+
+                det_map_cmd, det_map_cmd_path, det_map_path = _gen_detmap_cmd(src, obs_id, inst, detmap_bin)
+
+                c_arf_name = "{o}_{i}_{n}_".format(o=obs_id, i=inst, n=src.name) + \
+                             ann_spec.storage_key.split('_ar')[0] + '_grp' + \
+                             ann_spec.storage_key.split('ar')[-1].split('_grp')[1] + \
+                             "_ident" + str(ann_spec.set_ident) + \
+                             '_cross_{inn}_{out}.arf'.format(inn=sp_comb[0].annulus_ident,
+                                                             out=sp_comb[1].annulus_ident)
+                c_arf_path = dest_dir + c_arf_name
+
+                cmd = arfgen_cmd.format(d=dest_dir, ccf=ccf, s=sp_comb[0].path, a=c_arf_path, r=sp_comb[0].rmf,
+                                        e=evt_list.path, crs=sp_comb[1].path, ds=det_map_cmd_path, dmc=det_map_cmd)
+
+                extra_info = {'detmap_bin': detmap_bin,
+                              'ann_spec_set_id': ann_spec.set_ident,
+                              'obs_id': obs_id,
+                              'inst': inst,
+                              'src_ann_id': sp_comb[0].annulus_ident,
+                              'cross_ann_id': sp_comb[1].annulus_ident}
+
+                src_paths = np.concatenate([src_paths, [OUTPUT + "{o}/".format(o=obs_id) + c_arf_name]])
+                # Go through and concatenate things to the source lists defined above
+                src_cmds = np.concatenate([src_cmds, [cmd]])
+                src_out_types += ['cross arfs'] * len(src_cmds)
+                src_extras = np.concatenate([src_extras, [extra_info]])
+
+        # This adds the current sources final commands to the 'all sources' lists
+        all_cmds.append(src_cmds)
+        all_paths.append(src_paths)
+        all_out_types.append(src_out_types)
+        all_extras.append(src_extras)
+
+    # This gets passed back to the sas call function and is used to run the commands
+    return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
 
