@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 16:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 17:02. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -9,10 +9,10 @@ from astropy.units import Quantity
 from ._common import _write_xspec_script, _check_inputs
 from ..run import xspec_call
 from ... import NUM_CORES
-from ...exceptions import ModelNotAssociatedError
+from ...exceptions import ModelNotAssociatedError, NoProductAvailableError
 from ...products import Spectrum
 from ...samples.base import BaseSample
-from ...sas import spectrum_set
+from ...sas import spectrum_set, cross_arf
 from ...sources import BaseSource
 
 
@@ -186,11 +186,101 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
                                       fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
                                       min_sn: float = None, over_sample: float = None, one_rmf: bool = False,
                                       num_cores: int = NUM_CORES, spectrum_checking: bool = True,
-                                      timeout: Quantity = Quantity(1, 'hr')):
+                                      detmap_bin: int = 200, timeout: Quantity = Quantity(1, 'hr')):
 
     single_temp_apec_profile(sources, radii, start_temp, start_met, lum_en, freeze_nh, freeze_met, lo_en, hi_en,
                              par_fit_stat, lum_conf, abund_table, fit_method, group_spec, min_counts, min_sn,
                              over_sample, one_rmf, num_cores, spectrum_checking, timeout)
+
+    cross_arf(sources, radii, group_spec, min_counts, min_sn, over_sample, detmap_bin=detmap_bin, num_cores=num_cores)
+
+    sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
+
+    model = "constant*tbabs*apec"
+    par_names = "{factor nH kT Abundanc Redshift norm}"
+    lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
+    lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
+
+    script_paths = []
+    outfile_paths = []
+    src_inds = []
+
+    deg_rad = []
+    for src_ind, src in enumerate(sources):
+
+        try:
+            ann_spec = src.get_annular_spectra(radii, group_spec, min_counts, min_sn, over_sample)
+        except NoProductAvailableError:
+            # We make our own version of this error
+            raise NoProductAvailableError("The requested AnnularSpectra cannot be located for {sn}, and this function "
+                                          "will not automatically generate annular spectra.".format(sn=src.name))
+
+        oi_combos = [(o_id, inst) for o_id, insts in ann_spec.instruments.items() for inst in insts]
+
+        ann_spec_paths = []
+        # Assembling spectrum list strings for the annuli
+        for ann_id in ann_spec.annulus_ids:
+            ann_spec_paths.append("{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).path
+                                                  for oi in oi_combos]) + "}")
+
+        ann_spec_paths = "{" + " ".join(ann_spec_paths) + "}"
+
+
+        # TODO - SUPER PRELIMINARY. START VALUES WILL ACTUALLY BE TAKEN FROM THE FIRST PASS ANNULAR SPECTRA FIT BY
+        #  DEFAULT, THOUGH THE USER WILL STILL BE ALLOWED TO SPECIFY THEM
+        # Whatever start temperature is passed gets converted to keV, this will be put in the template
+        t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
+        # Another TCL list, this time of the parameter start values for this model.
+        par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., src.nH.to("10^22 cm^-2").value, t, start_met,
+                                                          src.redshift, 1.)
+
+        # Set up the TCL list that defines which parameters are frozen, dependant on user input
+        if freeze_nh and freeze_met:
+            freezing = "{F T F T T F}"
+        elif not freeze_nh and freeze_met:
+            freezing = "{F F F T T F}"
+        elif freeze_nh and not freeze_met:
+            freezing = "{F T F F T F}"
+        elif not freeze_nh and not freeze_met:
+            freezing = "{F F F F T F}"
+
+        # Set up the TCL list that defines which parameters are linked across different spectra
+        linking = "{F T T T T T}"
+
+        # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
+        #  limits. For this function they will be hardcoded, for simplicities sake, and we're only going to
+        #  check the temperature, as its the main thing we're fitting for with constant*tbabs*apec
+        if spectrum_checking:
+            check_list = "{kT}"
+            check_lo_lims = "{0.01}"
+            check_hi_lims = "{20}"
+            check_err_lims = "{15}"
+        else:
+            check_list = "{}"
+            check_lo_lims = "{}"
+            check_hi_lims = "{}"
+            check_err_lims = "{}"
+
+        # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed
+        #  luminosities. I am only specifying parameter 2 here (though there will likely be multiple models
+        #  because there are likely multiple spectra) because I know that nH of tbabs is linked in this
+        #  setup, so zeroing one will zero them all.
+        nh_to_zero = "{2}"
+
+        # TODO Make this a permanent solution - might be I can still use the original _write_xspec_script function
+        from ... import CROSS_ARF_XSPEC_SCRIPT, XGA_EXTRACT
+        # Read in the template file for the XSPEC script.
+        with open(CROSS_ARF_XSPEC_SCRIPT, 'r') as x_script:
+            script = x_script.read()
+
+        script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=src.cosmo.H0.value,
+                           q0=0., lamb0=src.cosmo.Ode0, sp=ann_spec_paths, lo_cut=lo_en.to("keV").value,
+                           hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
+                           lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
+                           of='', redshift=src.redshift, lel=lum_conf, check=spectrum_checking, cps=check_list,
+                           cpsl=check_lo_lims, cpsh=check_hi_lims, cpse=check_err_lims, ns=True,
+                           nhmtz=nh_to_zero)
+        return script
 
 
 
