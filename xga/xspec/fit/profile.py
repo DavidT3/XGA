@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 17:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 17:37. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -76,6 +76,17 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     # We make sure the requested sets of annular spectra have actually been generated
     spectrum_set(sources, radii, group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
+
+    # This should deal with instances where a single source has been passed, along with a single set of
+    #  annular radii
+    if isinstance(radii, Quantity):
+        radii = [radii]
+
+    # Got to try and make sure the user is passing things properly.
+    if len(radii) != len(sources):
+        raise ValueError("If analysing multiple sources, the radii argument must be a list containing Quantities of "
+                         "annular radii. The number of annular radii sets ({ar}) does not match the number of "
+                         "sources ({ns}).".format(ar=len(radii), ns=len(sources)))
 
     # Unfortunately, a very great deal of this function is going to be copied from the original single_temp_apec
     model = "constant*tbabs*apec"
@@ -196,6 +207,17 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
+    # This should deal with instances where a single source has been passed, along with a single set of
+    #  annular radii
+    if isinstance(radii, Quantity):
+        radii = [radii]
+
+    # Got to try and make sure the user is passing things properly.
+    if len(radii) != len(sources):
+        raise ValueError("If analysing multiple sources, the radii argument must be a list containing Quantities of "
+                         "annular radii. The number of annular radii sets ({ar}) does not match the number of "
+                         "sources ({ns}).".format(ar=len(radii), ns=len(sources)))
+
     model = "constant*tbabs*apec"
     par_names = "{factor nH kT Abundanc Redshift norm}"
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
@@ -209,7 +231,7 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
     for src_ind, src in enumerate(sources):
 
         try:
-            ann_spec = src.get_annular_spectra(radii, group_spec, min_counts, min_sn, over_sample)
+            ann_spec = src.get_annular_spectra(radii[src_ind], group_spec, min_counts, min_sn, over_sample)
         except NoProductAvailableError:
             # We make our own version of this error
             raise NoProductAvailableError("The requested AnnularSpectra cannot be located for {sn}, and this function "
@@ -273,12 +295,14 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
         with open(CROSS_ARF_XSPEC_SCRIPT, 'r') as x_script:
             script = x_script.read()
 
+        nuclear_option = True
+
         script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=src.cosmo.H0.value,
                            q0=0., lamb0=src.cosmo.Ode0, sp=ann_spec_paths, lo_cut=lo_en.to("keV").value,
                            hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
                            lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
                            of='', redshift=src.redshift, lel=lum_conf, check=spectrum_checking, cps=check_list,
-                           cpsl=check_lo_lims, cpsh=check_hi_lims, cpse=check_err_lims, ns=True,
+                           cpsl=check_lo_lims, cpsh=check_hi_lims, cpse=check_err_lims, cpea=nuclear_option, ns=True,
                            nhmtz=nh_to_zero)
         return script
 
