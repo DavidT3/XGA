@@ -367,18 +367,37 @@ if {{$run_pre_check == True}} {{
 
     }}
 
-#    set acc_ind {{}}
-#    if {{$check_pars_exclude_all == True}} {{
-#        for {{set sp_i 0}} {{$sp_i < num_spec}} {{incr sp_i}} {{
-#
-#        }}
-#    }}
+    if {{$check_pars_exclude_all == True}} {{
+        set acc_ind {{}}
+
+        for {{set sp_i 0}} {{$sp_i < $num_spec}} {{incr sp_i}} {{
+            set ind_good True
+            for {{set sp_a 0}} {{$sp_a < $num_ann}} {{incr sp_a}} {{
+                if {{[llength [lsearch -all [lindex $final_ann_spec_indexes $sp_a] $sp_i]] == 0}} {{
+                    set ind_good False
+                    break
+                }}
+            }}
+
+            if {{$ind_good == True}} {{
+                lappend acc_ind $sp_i
+            }}
+        }}
+
+        set final_ann_spec_paths {{}}
+        for {{set sp_a 0}} {{$sp_a < $num_ann}} {{incr sp_a}} {{
+            set final_sel_spec_paths {{}}
+            foreach acc_i $acc_ind {{
+                lappend final_sel_spec_paths [lindex [lindex $ann_spec_paths $sp_a] $acc_i]
+            }}
+            lappend final_ann_spec_paths $final_sel_spec_paths
+        }}
+
+        puts $final_ann_spec_paths
+
+    }}
 
 }}
 
-puts $final_ann_spec_paths
-puts $final_ann_spec_indexes
-puts [llength [lindex $final_ann_spec_paths 0]]
-puts [llength [lindex $final_ann_spec_paths 1]]
-puts [llength [lindex $final_ann_spec_paths 2]]
+
 exit
