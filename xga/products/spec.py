@@ -2298,6 +2298,13 @@ class AnnularSpectra(BaseAggregateProduct):
         elif isinstance(arf, str) and not os.path.exists(arf):
             raise FileNotFoundError("The specified cross-arf file ({}) cannot be found.".format(arf))
 
+        # We make absolutely sure that the input annulus identifiers are integer representations, not strings, just
+        #  to be safe as it could screw things up downstream from here
+        if isinstance(src_ann_id, str):
+            src_ann_id = int(src_ann_id)
+        if isinstance(cross_ann_id, str):
+            cross_ann_id = int(cross_ann_id)
+
         # If we've got here we know that the 'arf' argument was alright, but now we have to try to check the
         #  validity of the src_ann_id and cross_ann_id values. Firstly they have to actually be identifying annuli
         #  present in this object
