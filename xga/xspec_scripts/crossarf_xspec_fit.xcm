@@ -65,11 +65,11 @@ for {{set i 1}} {{$i < $num_ann}} {{incr i}} {{
 # The special sauce of this particular fitting script is the cross-arf capability, so I suppose I should probably
 #  store the paths somewhere! This variable is going to be a three-layer deep list I think. Top level will be lists
 #  for each annulus, then the next level down will be lists of cross-arf paths for each annular spectrum
-set cross_arf_paths {cap}
+set ann_cross_arf_paths {cap}
 # For simplicity I will also add a list of RMF paths for each of the annular spectra (this will be of the same
 #  structure as ann_spec_paths), so that I have easy access to the matching response for each cross-arf. Each cross-arf
 #  is loaded in with the response of the 'source' annulus
-set cross_arf_matching_rmf_paths {carp}
+set ann_cross_arf_matching_rmf_paths {carp}
 
 # The energy limits applied to the spectra before fitting
 set ignore_lo_en {lo_cut}
@@ -165,6 +165,8 @@ if {{$run_pre_check == True}} {{
 
     set final_ann_spec_paths {{}}
     set final_ann_spec_indexes {{}}
+    set final_ann_spec_indexes {{}}
+    set final_ann_spec_indexes {{}}
     #############################################
     # Iterating through the annuli
     #############################################
@@ -175,6 +177,8 @@ if {{$run_pre_check == True}} {{
     for {{set ai 0}} {{$ai < $num_ann}} {{incr ai}} {{
 
         set spec_paths [lindex $ann_spec_paths $ai]
+        set cross_arf_paths [lindex $ann_cross_arf_paths $ai]
+        set cross_arf_rmf_paths [lindex $ann_cross_arf_matching_rmf_paths $ai]
 
         #############################################
         # Setting up spectra for individual fits
@@ -329,6 +333,10 @@ if {{$run_pre_check == True}} {{
         # This list is for the final cleaned spectrum paths, after this final check
         set final_spec_paths {{}}
         set final_spec_indexes {{}}
+        # Also need to select the cross-arfs and their matching rmfs to go with - this could be overwritten if the
+        #  user has selected the more stringent checking step, but we have to do it here as well in case they haven't
+        set final_spec_cross_arf_paths {{}}
+        set final_spec_cross_arf_rmf_paths {{}}
 
         # Each spectrum path must appear num_par_test times in good_spec_paths to make the final cut, otherwise
         #  we know that it didn't pass quality checks for all the parameters we were assessing - we also keep track
@@ -342,6 +350,8 @@ if {{$run_pre_check == True}} {{
             if {{[llength [lsearch -all $good_spec_paths $sp]] == $num_par_test}} {{
                 lappend final_spec_paths $sp
                 lappend final_spec_indexes $sp_i
+                lappend final_spec_cross_arf_paths [lindex $cross_arf_paths $sp_i]
+                lappend final_spec_cross_arf_rmf_paths [lindex $cross_arf_rmf_paths $sp_i]
             }}
         }}
 
@@ -371,6 +381,8 @@ if {{$run_pre_check == True}} {{
         #  spectrum paths and indices to the overall lists we created for them
         lappend final_ann_spec_paths $final_spec_paths
         lappend final_ann_spec_indexes $final_spec_indexes
+        lappend final_ann_spec_cross_arf_paths $final_spec_cross_arf_paths
+        lappend final_ann_spec_cross_arf_rmf_paths $final_spec_cross_arf_rmf_paths
         #############################################
 
     }}
@@ -418,21 +430,33 @@ if {{$run_pre_check == True}} {{
         # Now we cycle through our universally accepted indices, and re-create the final_ann_spec_paths list with
         #  our more stringent checking requirements
         set final_ann_spec_paths {{}}
+        # We also need to select the relevant cross-arf and rmf paths
+        set final_ann_spec_cross_arf_paths {{}}
+        set final_ann_spec_cross_arf_rmf_paths {{}}
         # The outer for loop is through the annuli (remember that our original variable of spectrum paths is a list
         #  of lists, one list per annulus).
         for {{set sp_a 0}} {{$sp_a < $num_ann}} {{incr sp_a}} {{
             set final_sel_spec_paths {{}}
+            set final_sel_c_arf_paths {{}}
+            set final_sel_c_arf_rmf_paths {{}}
             foreach acc_i $acc_ind {{
                 lappend final_sel_spec_paths [lindex [lindex $ann_spec_paths $sp_a] $acc_i]
+                lappend final_sel_c_arf_paths [lindex [lindex $cross_arf_paths $sp_a] $acc_i]
+                lappend final_sel_c_arf_rmf_paths [lindex [lindex $cross_arf_rmf_paths $sp_a] $acc_i]
             }}
             lappend final_ann_spec_paths $final_sel_spec_paths
+            lappend final_ann_spec_cross_arf_paths $final_sel_c_arf_paths
+            lappend final_ann_spec_cross_arf_rmf_paths $final_sel_c_arf_rmf_paths
         }}
     }}
     #############################################
 
     # Making sure we alter the original list of annular spectra paths to reflect the checks we've done
     set ann_spec_paths $final_ann_spec_paths
+    set ann_cross_arf_paths $final_ann_spec_cross_arf_paths
+    set ann_cross_arf_matching_rmf_paths $final_ann_spec_cross_arf_rmf_paths
 }}
+
 
 #################################################
 # Setting up spectra for the final fit
@@ -452,8 +476,12 @@ foreach cur_ann_paths $ann_spec_paths {{
     }}
 }}
 
+puts $ann_spec_paths
+puts $ann_cross_arf_paths
+puts $ann_cross_arf_matching_rmf_paths
+
 #show
-#exit
+exit
 
 ## Now we ignore the energy range that we don't want to use, for all loaded spectra
 #ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
