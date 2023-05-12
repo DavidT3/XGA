@@ -52,6 +52,15 @@ query yes
 set ann_spec_paths {sp}
 # We use the defined list of lists to quickly infer how many annuli we're dealing with here
 set num_ann [llength $ann_spec_paths]
+# For my own sanity I am just going to make absolutely sure that each annulus has the same number of spectra - which
+#  I am taking as a check that every annulus has entries from the same ObsIDs and Instruments
+set comp_spec_len [llength [lindex $ann_spec_paths 0]]
+for {{set i 1}} {{$i < $num_ann}} {{incr i}} {{
+    if {{[llength [lindex $ann_spec_paths $i]] != $comp_spec_len}} {{
+        puts "ERROR: Not all annuli have the same number of spectra"
+        exit
+    }}
+}}
 
 # The energy limits applied to the spectra before fitting
 set ignore_lo_en {lo_cut}
@@ -357,6 +366,14 @@ if {{$run_pre_check == True}} {{
         lappend final_ann_spec_indexes $final_spec_indexes
 
     }}
+
+#    set acc_ind {{}}
+#    if {{$check_pars_exclude_all == True}} {{
+#        for {{set sp_i 0}} {{$sp_i < num_spec}} {{incr sp_i}} {{
+#
+#        }}
+#    }}
+
 }}
 
 puts $final_ann_spec_paths
