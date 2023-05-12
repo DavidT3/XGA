@@ -48,6 +48,8 @@ query yes
 #  particular fitting script template will fit all annuli in one swoop. The lists are in order, so entry 0 is for
 #  annulus 0, entry 1 is for annulus 1 etc.
 set ann_spec_paths {sp}
+# We use the defined list of lists to quickly infer how many annuli we're dealing with here
+set num_ann [llength $ann_spec_paths]
 
 # The energy limits applied to the spectra before fitting
 set ignore_lo_en {lo_cut}
@@ -59,6 +61,9 @@ set check_pars {cps}
 set check_pars_lo_lim {cpsl}
 set check_pars_hi_lim {cpsh}
 set check_pars_err_lim {cpse}
+# This differs from the XGA general XSPEC fit - if True then all spectra from an ObsID-Instrument combo will be
+#  excluded if ANY annulus spectrum for that ObsID-Instrument fails to pass the checks
+set check_pars_exclude_all {cpea}
 
 # The name of the model
 set model_name {m}
@@ -105,4 +110,245 @@ set lum_upp_lims {lul}
 set nh_par_to_zero {nhmtz}
 #################################################
 
+
+# Here we run a pre-check to see which of the spectra are good enough to actually contribute anything to the fit
+# NOTE - THIS DIFFERS FROM THE IMPLEMENTATION IN THE GENERAL FIT METHOD IN ONE KEY WAY. If any annulus spectrum fails
+#  the checks, this can (if set by the XGA function filling in this template) exclude ALL annular spectra that
+#  originate from the same ObsID-Instrument combo. This would be to avoid biasing some annuli wrt others as different
+#  instrument combinations can end up changing the measured temperature.
+#################################################
+# Running the spectral gauntlet
+#################################################
+if {{$run_pre_check == True}} {{
+
+    # Here we set up a copy of the freezing list
+    set check_freezing $freezing
+    # If we have a constant out the front that is designed to help scale the normalisation when doing
+    #  simultaneous fits then it has to be frozen for this process - as we're fitting one spectrum at a time
+    #  for the checks
+    if {{$norm_scale == True}} {{
+        lset check_freezing 0 T
+    }}
+
+    # Setting up arrays to store the limits in, that way future code can just pass a parameter name and
+    #  get the required limit back
+    array set check_lo_lim {{}}
+    array set check_hi_lim {{}}
+    array set check_err_lim {{}}
+    for {{set i 0}} {{$i < [llength $check_pars]}} {{incr i}} {{
+        set temp_key [lindex $check_pars $i]
+        set check_lo_lim($temp_key) [lindex $check_pars_lo_lim $i]
+        set check_hi_lim($temp_key) [lindex $check_pars_hi_lim $i]
+        set check_err_lim($temp_key) [lindex $check_pars_err_lim $i]
+    }}
+
+
+    set final_ann_spec_paths {{}}
+    #############################################
+    # Iterating through the annuli
+    #############################################
+    # This is very similar to the implementation in general_xspec_fit.xcm, but here we are using a for loop to
+    #  iterate through the lists containing spectral paths. This is because ann_spec_paths is a list of lists, with
+    #  each individual list being for an annulus, and thus equivalent to the 'spec_paths' variable in the general
+    #  XGA XSPEC template
+    for {{set ai 0}} {{$ai < $num_ann}} {{incr ai}} {{
+
+        set spec_paths [lindex $ann_spec_paths $ai]
+
+        #############################################
+        # Setting up spectra for individual fits
+        #############################################
+
+        # Put the number of spectra in a variable
+        set num_spec [llength $spec_paths]
+
+        # For loop here to load in all the spectra, iterating over path list
+        set counter 1
+        foreach pa $spec_paths {{
+            # Loads each spectrum into its own data and plot group
+            data $counter:$counter $pa
+            incr counter
+            }}
+
+        # Now we ignore the energy range that we don't want to use, for all loaded spectra
+        ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
+
+        # If any channels have been labelled bad, this will discount them from analysis
+        ignore bad
+        #############################################
+        # Setting up model for individual fits
+        #############################################
+        # Model is defined with default parameters, these will be modified later
+        model $model_name
+        /*
+
+        # Get the number of parameters in a variable, for iterating through later. To be clear this is the TOTAL
+        #  number of parameters across all spectra, so a tbabs*apec for 7 spectra would have 35 parameters
+        set num_pars [tcloutr modpar]
+        # This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
+        set num_uniq_par [expr {{$num_pars / $num_spec}}]
+
+        # Just combines them into an array, so we can pass a parameter name and get a value and freeze bool. All
+        #  link bools will be false because these models are being fit independently of each other. This is probably
+        #  more complex than it needs to be but it allowed me to just copy some code I'd already written
+        array set par_arr {{}}
+        array set link_arr {{}}
+        array set freeze_arr {{}}
+        for {{set i 0}} {{$i < [llength $par_names]}} {{incr i}} {{
+            set temp_key [lindex $par_names $i]
+            set temp_contents [array get par_arr]
+
+            # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+            set key_count 1
+            while {{$temp_key in $temp_contents}} {{
+                set temp_key [concat [lindex $par_names $i]_$key_count]
+                incr key_count
+                }}
+
+            set par_arr($temp_key) [lindex $par_values $i]
+            # All link parameters are set to False, as these spectra all need to have models fit separately for
+            #  the cleaning step
+            set link_arr($temp_key) F
+            set freeze_arr($temp_key) [lindex $check_freezing $i]
+            }}
+
+        # Here we iterate through the parameters and set them up in the XSPEC model
+        set sep_cnt 1
+        set sep_par_lst {{}}
+        for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
+            set cur_par [lindex [tcloutr pinfo $i] 0]
+            if {{$sep_cnt <= $num_uniq_par}} {{
+                # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+                set key_count 1
+                while {{$cur_par in $sep_par_lst}} {{
+                    set cur_par [concat [lindex [tcloutr pinfo $i] 0]_$key_count]
+                    incr key_count
+                    }}
+                lappend sep_par_lst $cur_par
+            }} else {{
+                set sep_cnt 1
+                set sep_par_lst {{$cur_par}}
+            }}
+
+            if {{$i <= $num_uniq_par}} {{
+                newpar $i $par_arr($cur_par)
+            }} elseif {{$i > $num_uniq_par && $link_arr($cur_par) == "F"}} {{
+                newpar $i $par_arr($cur_par)
+                }}
+
+            if {{$freeze_arr($cur_par) == "T"}} {{
+                freeze $i
+            }} else {{
+                thaw $i
+                }}
+            incr sep_cnt
+            }}
+        #############################################
+        # Running fit/errors and checking results
+        #############################################
+
+        # This assembles a list of spec paths where each spec name is repeated N times (where N is the number of
+        #  parameters in a model - tbabs*apec has 5 for instance), then we move onto the next spec_path
+        set par_spec {{}}
+        set par_spec_chan {{}}
+
+        set sp_id 1
+        foreach sp $spec_paths {{
+            set range [split [tcloutr noticed $sp_id] -]
+            set num_chan [expr [lindex $range 1] - [lindex $range 0]]
+            for {{set i 1}} {{$i <= $num_uniq_par}} {{incr i 1}} {{
+                lappend par_spec $sp
+                lappend par_spec_chan $num_chan
+            }}
+            incr sp_id
+        }}
+
+        # Run the fits for all models
+        fit 100
+
+        # Setting up this path to store spectra which have met one of our criteria, a further checking step is
+        #  required after this because if we are checking 2 parameters (kT and norm for instance), then a spectrum
+        #  path needs to appear in this list twice so that we know it met the quality check for both parameters
+        set good_spec_paths {{}}
+
+        # We iterate through all the parameters, and find which ones we are checking so we can calculate errors for them
+        for {{set ipar 1}} {{$ipar <= $num_pars}} {{incr ipar}} {{
+            # Find the equivelant parameter name for the current ipar
+            scan [tcloutr pinfo $ipar] "%s %s" pname punit
+
+            # Check if that parameter name appears in the list of parameters we're meant to be quality checking
+            if {{[lsearch -exact $check_pars $pname] >= 0}} {{
+                # We calculate the errors on the individual fits, though only if its a parameter we're checking
+                error $delta_fit_stat, $ipar
+
+                # Grab the parameter value, and the lower and upper confidence limits
+                scan [tcloutr param $ipar] "%f %f" par_val delta
+                scan [tcloutr error $ipar] "%f %f" lo_conf_lim hi_conf_lim
+
+                # Calculate an upper and lower uncertainty from the confidence limits
+                set lo_err [expr $par_val-$lo_conf_lim]
+                set hi_err [expr $hi_conf_lim-$par_val]
+
+                # Read out the equivelant spectrum path for this particular parameter
+                set cur_sp [lindex $par_spec [expr $ipar-1]]
+                # And the number of noticed channels for this spectrum
+                set cur_chan [lindex $par_spec_chan [expr $ipar-1]]
+
+                # If the parameter meets our quality cuts then the spectrum is added to the good_spec_paths list
+                if {{$par_val > $check_lo_lim($pname) && $par_val < $check_hi_lim($pname) && $lo_err < $check_err_lim($pname) && $hi_err < $check_err_lim($pname) && $cur_chan > 10}} {{
+                    lappend good_spec_paths $cur_sp
+                }}
+            }}
+        }}
+        #############################################
+        # Final decision on spectra
+        #############################################
+        # Just read the number of parameters we're assessing into its own variable
+        set num_par_test [llength $check_pars]
+        # This list is for the final cleaned spectrum paths, after this final check
+        set final_spec_paths {{}}
+        # Each spectrum path must appear num_par_test times in good_spec_paths to make the final cut, otherwise
+        #  we know that it didn't pass quality checks for all the parameters we were assessing
+        foreach sp $spec_paths {{
+            # Just finds the number of instances of the path in the good_spec_path list
+            if {{[llength [lsearch -all $good_spec_paths $sp]] == $num_par_test}} {{
+                lappend final_spec_paths $sp
+            }}
+        }}
+
+        # The fit script has to exit here if no spectra made it past our cleaning
+        if {{[llength $final_spec_paths] == 0}} {{
+            puts "No acceptable spectra are left after the cleaning step"
+            exit
+        }}
+        #############################################
+        # Cleanup step
+        #############################################
+        # This wipes all existing models, we need to do this before we define the model for the final fit
+        model clear
+        # spec_paths has to be set to the cleaned spec path values, as the rest of the code uses spec_paths to
+        #  load in the data
+        set spec_paths $final_spec_paths
+        # And we remove all the spectra that we already have loaded
+        data none
+
+        # I delete a bunch of variables that are re-used in the code later, I was having some problems with parameter
+        #  linking before I did this, though I'm showing my TCL ignorance a bit as I'm not quite sure why this fixed it
+        unset par_arr
+        unset link_arr
+        unset freeze_arr
+        unset sep_par_lst
+        unset num_pars
+        unset num_uniq_par
+        #############################################
+
+        lappend final_ann_spec_paths $final_spec_paths
+
+    }}
+}}
+
+puts $final_ann_spec_paths
+puts [llength [lindex $final_ann_spec_paths 0]]
+puts [llength [lindex $final_ann_spec_paths 1]]
+puts [llength [lindex $final_ann_spec_paths 2]]
 exit
