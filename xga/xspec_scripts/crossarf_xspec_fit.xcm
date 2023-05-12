@@ -346,9 +346,6 @@ if {{$run_pre_check == True}} {{
         #############################################
         # This wipes all existing models, we need to do this before we define the model for the final fit
         model clear
-        # spec_paths has to be set to the cleaned spec path values, as the rest of the code uses spec_paths to
-        #  load in the data
-        set spec_paths $final_spec_paths
         # And we remove all the spectra that we already have loaded
         data none
 
@@ -360,13 +357,18 @@ if {{$run_pre_check == True}} {{
         unset sep_par_lst
         unset num_pars
         unset num_uniq_par
-        #############################################
 
+        # As we're dealing with these spectra on an annulus-by-annulus basis, we need to append the lists of
+        #  spectrum paths and indices to the overall lists we created for them
         lappend final_ann_spec_paths $final_spec_paths
         lappend final_ann_spec_indexes $final_spec_indexes
+        #############################################
+
     }}
 
-
+    #############################################
+    # Stringent checking step
+    #############################################
     # In this case the user has decided that they want the extreme cleaning option - where an ObsID-Instrument
     #  combination (say 0201903501-PN for instance) is only used in the overall fits if it passed the checks
     #  in ALL annuli.
@@ -417,8 +419,140 @@ if {{$run_pre_check == True}} {{
             lappend final_ann_spec_paths $final_sel_spec_paths
         }}
     }}
+    #############################################
+
+    # Making sure we alter the original list of annular spectra paths to reflect the checks we've done
+    set ann_spec_paths $final_ann_spec_paths
 }}
 
+#################################################
+# Setting up spectra for the final fit
+#################################################
 
+# Now put the number of spectra in a variable
+set num_spec [llength $spec_paths]
 
-exit
+# For loop here to load in all the spectra, iterating over path list
+set counter 1
+foreach cur_ann_paths $ann_spec_paths {{
+    puts $cur_ann_paths
+    foreach p $cur_ann_paths {{
+        # Loads each spectrum into its own data and plot group
+        data $counter:$counter $p
+        incr counter
+    }}
+}}
+
+#show
+#exit
+
+## Now we ignore the energy range that we don't want to use, for all loaded spectra
+#ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
+#
+## If any channels have been labelled bad, this will discount them from analysis
+#ignore bad
+##################################################
+## Setting up the final model and links
+##################################################
+## Now we must define the model, but without setting any parameters (thats what /* does)
+#model $model_name
+#/*
+#
+## Get the number of parameters in a variable, for iterating through later
+#set num_pars [tcloutr modpar]
+## This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
+#set num_uniq_par [expr {{$num_pars / $num_spec}}]
+#
+## Probably isn't necessary as the inputs should be governed by XGA, but doing some checks
+#if {{[llength $par_names] != $num_uniq_par}} {{
+#    puts "par_names list is not the length expected by the defined model"
+#    exit
+#}} elseif {{[llength $par_values] != $num_uniq_par}} {{
+#    puts "par_values list is not the length expected by the defined model"
+#    exit
+#}} elseif {{[llength $linking] != $num_uniq_par}} {{
+#    puts "linking list is not the length expected by the defined model"
+#    exit
+#}} elseif {{[llength $freezing] != $num_uniq_par}} {{
+#    puts "freezing list is not the length expected by the defined model"
+#    exit
+#}}
+#
+## Just combines them into an array, so we can pass a parameter name and get a value, link bool, and freeze bool
+#array set par_arr {{}}
+#array set link_arr {{}}
+#array set freeze_arr {{}}
+#for {{set i 0}} {{$i < [llength $par_names]}} {{incr i}} {{
+#    # Gets the name of the parameter we're currently dealing with
+#    set temp_key [lindex $par_names $i]
+#    # Get the current keys of the par_arr
+#    set temp_contents [array get par_arr]
+#
+#    # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+#    set key_count 1
+#    while {{$temp_key in $temp_contents}} {{
+#        # Adds a number to the end of the parameter we're currently dealing with
+#        set temp_key [concat [lindex $par_names $i]_$key_count]
+#        incr key_count
+#        }}
+#    # Stores the start value, linking, and freezing information under the parameter names in the arrays
+#    #  we defined earlier
+#    set par_arr($temp_key) [lindex $par_values $i]
+#    set link_arr($temp_key) [lindex $linking $i]
+#    set freeze_arr($temp_key) [lindex $freezing $i]
+#    }}
+#
+## Here we iterate through the parameters and set them up in XSPEC, including user choices on linking and freezing
+#set sep_cnt 1
+## sep_cnt keeps track of the current parameter of a given spectrum
+#set sep_par_lst {{}}
+#for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
+#    # Grabs the current parameter name, we'll use it to look up start values etc.
+#    set cur_par [lindex [tcloutr pinfo $i] 0]
+#
+#    # As sep_cnt keeps track of the current position within a specific spectrum's model, it cannot be greater than
+#    #  the number of parameters per spectrum model (5 for tbabs*apec for instance), so it must be reset to 1
+#    #  once it is larger than that number, and we know we've moved onto another spectrum
+#    if {{$sep_cnt <= $num_uniq_par}} {{
+#        # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+#        set key_count 1
+#        while {{$cur_par in $sep_par_lst}} {{
+#            set cur_par [concat [lindex [tcloutr pinfo $i] 0]_$key_count]
+#            incr key_count
+#            }}
+#        lappend sep_par_lst $cur_par
+#    }} else {{
+#        set sep_cnt 1
+#        set sep_par_lst {{$cur_par}}
+#    }}
+#
+#    # If we're still in the first spectrum then the start values MUST be set. Remember that i goes up to the full
+#    #  num_pars value (so for tbabs*apec for 7 spectra that number would be 35), but we know that if i is less than
+#    #  the number of parameters per spectrum model then we're still on the first spectrum
+#    if {{$i <= $num_uniq_par}} {{
+#        # Set the start value of the parameter using the handy array we constructed earlier
+#        newpar $i $par_arr($cur_par)
+#    # If we're past the first spectrum but the current parameter isn't meant to be linked across spectra then we
+#    #  must set its starting value. We don't need to do anything if the parameter IS meant to be linked, as that
+#    #  will happen automatically
+#    }} elseif {{$i > $num_uniq_par && $link_arr($cur_par) == "F"}} {{
+#        newpar $i $par_arr($cur_par)
+#        }}
+#
+#    # And finally if the current parameter isn't meant to be able to vary then we must freeze it, or thaw it
+#    #  if it should be allowed to vary. If we know that we have a constant at the front to deal with different
+#    #  norms for different observations, and that the current parameter is the first model's factor, then we freeze it
+#    #  at one, whereas all the rest are allowed to vary
+#    if {{($freeze_arr($cur_par) == "T") || (($norm_scale == True) && ($i == 1))}} {{
+#        freeze $i
+#    }} else {{
+#        thaw $i
+#        }}
+#
+#    incr sep_cnt
+#    }}
+#
+#
+#
+#
+#exit
