@@ -364,27 +364,51 @@ if {{$run_pre_check == True}} {{
 
         lappend final_ann_spec_paths $final_spec_paths
         lappend final_ann_spec_indexes $final_spec_indexes
-
     }}
 
+
+    # In this case the user has decided that they want the extreme cleaning option - where an ObsID-Instrument
+    #  combination (say 0201903501-PN for instance) is only used in the overall fits if it passed the checks
+    #  in ALL annuli.
     if {{$check_pars_exclude_all == True}} {{
+        # As part of the checks above, we produced a list of lists of the 'final' spectrum paths for each
+        #  annuli (final_ann_spec_paths), though actually we're going to overwrite that. We also produced a list
+        #  of lists of the indexes of the spectrum paths in final_ann_spec_paths.
+        # The information about the accepted indices now needs to be pruned, so we select only those indices which
+        #  are accepted for every annulus - this does implicitly assume that the spectrum paths are in the same
+        #  order for each annulus, which will be the case for XGA populated scripts. The indices that are accepted
+        #  for every annulus will be stored in this acc_ind variable
         set acc_ind {{}}
 
+        # This will be a nested for loop, with the top level looping through the indices of the spectra in
+        #  each in annulus
         for {{set sp_i 0}} {{$sp_i < $num_spec}} {{incr sp_i}} {{
+            # This variable states whether the current index has been accepted for every annulus, we start by assuming
+            #  that it has
             set ind_good True
+            # Now we cycle through all the annuli
             for {{set sp_a 0}} {{$sp_a < $num_ann}} {{incr sp_a}} {{
+                # If the current index DOES NOT appear in the list of accepted indices for the current annulus, then
+                #  we have to set the variable that defines whether the current index has been universally accepted to
+                #  False - we also break out of the inner loop because there is no need to continue
                 if {{[llength [lsearch -all [lindex $final_ann_spec_indexes $sp_a] $sp_i]] == 0}} {{
                     set ind_good False
                     break
                 }}
             }}
 
+            # If we made it through the inner loop and ind_good is still True, then we add the current index to the
+            #  list of universally accepted indices
             if {{$ind_good == True}} {{
                 lappend acc_ind $sp_i
             }}
         }}
 
+        # Now we cycle through our universally accepted indices, and re-create the final_ann_spec_paths list with
+        #  our more stringent checking requirements
         set final_ann_spec_paths {{}}
+        # The outer for loop is through the annuli (remember that our original variable of spectrum paths is a list
+        #  of lists, one list per annulus).
         for {{set sp_a 0}} {{$sp_a < $num_ann}} {{incr sp_a}} {{
             set final_sel_spec_paths {{}}
             foreach acc_i $acc_ind {{
@@ -392,12 +416,9 @@ if {{$run_pre_check == True}} {{
             }}
             lappend final_ann_spec_paths $final_sel_spec_paths
         }}
-
-        puts $final_ann_spec_paths
-
     }}
-
 }}
+
 
 
 exit
