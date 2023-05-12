@@ -441,8 +441,8 @@ if {{$run_pre_check == True}} {{
             set final_sel_c_arf_rmf_paths {{}}
             foreach acc_i $acc_ind {{
                 lappend final_sel_spec_paths [lindex [lindex $ann_spec_paths $sp_a] $acc_i]
-                lappend final_sel_c_arf_paths [lindex [lindex $cross_arf_paths $sp_a] $acc_i]
-                lappend final_sel_c_arf_rmf_paths [lindex [lindex $cross_arf_rmf_paths $sp_a] $acc_i]
+                lappend final_sel_c_arf_paths [lindex [lindex $ann_cross_arf_paths $sp_a] $acc_i]
+                lappend final_sel_c_arf_rmf_paths [lindex [lindex $ann_cross_arf_matching_rmf_paths $sp_a] $acc_i]
             }}
             lappend final_ann_spec_paths $final_sel_spec_paths
             lappend final_ann_spec_cross_arf_paths $final_sel_c_arf_paths
@@ -462,26 +462,45 @@ if {{$run_pre_check == True}} {{
 # Setting up spectra for the final fit
 #################################################
 
-# Now put the number of spectra in a variable
-set num_spec [llength $spec_paths]
-
 # For loop here to load in all the spectra, iterating over path list
-set counter 1
-foreach cur_ann_paths $ann_spec_paths {{
-    puts $cur_ann_paths
-    foreach p $cur_ann_paths {{
+set data_counter 1
+# We start the source counter at 2 as the default source for XSPEC spectra is 1. The counter is
+set source_counter 2
+
+# This top level iterates through annuli
+for {{set ai 0}} {{$ai < $num_ann}} {{incr ai}} {{
+    set cur_ann_paths [lindex $ann_spec_paths $ai]
+    set cur_ann_crossarf_set [lindex $ann_cross_arf_paths $ai]
+    set cur_ann_crossarf_rmf_paths [lindex $ann_cross_arf_matching_rmf_paths $ai]
+
+    # Now put the number of spectra in a variable
+    set num_spec [llength $cur_ann_paths]
+
+    # This iterates through spectrum entries for each annulus
+    for {{set pi 0}} {{$pi < $num_spec}} {{incr pi}} {{
+        set sp [lindex $cur_ann_paths $pi]
         # Loads each spectrum into its own data and plot group
-        data $counter:$counter $p
-        incr counter
+        data $data_counter:$data_counter $sp
+
+        set ca [lindex $cur_ann_crossarf_set $pi]
+        puts $ca
+        set ca_rmf [lindex $cur_ann_crossarf_rmf_paths $pi]
+
+        for {{set cai 0}} {{$cai < [expr $num_ann-1]}} {{incr cai}} {{
+            set rel_ca [lindex $ca $cai]
+
+            resp $source_counter:$data_counter $ca_rmf
+            arf $source_counter:$data_counter $rel_ca
+            incr source_counter
+        }}
+        incr data_counter
+
     }}
 }}
 
-puts $ann_spec_paths
-puts $ann_cross_arf_paths
-puts $ann_cross_arf_matching_rmf_paths
 
 #show
-exit
+#exit
 
 ## Now we ignore the energy range that we don't want to use, for all loaded spectra
 #ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
