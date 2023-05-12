@@ -47,6 +47,8 @@ query yes
 # This creates a list of lists of spectral file paths. Each list within the outer list represents an annulus, as this
 #  particular fitting script template will fit all annuli in one swoop. The lists are in order, so entry 0 is for
 #  annulus 0, entry 1 is for annulus 1 etc.
+# The inner lists are expected to be in the same ObsID-Instrument order, but as I can't see anyone using this outside
+#  of XGA hopefully that will never bite them in the ass
 set ann_spec_paths {sp}
 # We use the defined list of lists to quickly infer how many annuli we're dealing with here
 set num_ann [llength $ann_spec_paths]
@@ -144,6 +146,7 @@ if {{$run_pre_check == True}} {{
 
 
     set final_ann_spec_paths {{}}
+    set final_ann_spec_indexes {{}}
     #############################################
     # Iterating through the annuli
     #############################################
@@ -273,7 +276,7 @@ if {{$run_pre_check == True}} {{
 
         # We iterate through all the parameters, and find which ones we are checking so we can calculate errors for them
         for {{set ipar 1}} {{$ipar <= $num_pars}} {{incr ipar}} {{
-            # Find the equivelant parameter name for the current ipar
+            # Find the equivalent parameter name for the current ipar
             scan [tcloutr pinfo $ipar] "%s %s" pname punit
 
             # Check if that parameter name appears in the list of parameters we're meant to be quality checking
@@ -289,7 +292,7 @@ if {{$run_pre_check == True}} {{
                 set lo_err [expr $par_val-$lo_conf_lim]
                 set hi_err [expr $hi_conf_lim-$par_val]
 
-                # Read out the equivelant spectrum path for this particular parameter
+                # Read out the equivalent spectrum path for this particular parameter
                 set cur_sp [lindex $par_spec [expr $ipar-1]]
                 # And the number of noticed channels for this spectrum
                 set cur_chan [lindex $par_spec_chan [expr $ipar-1]]
@@ -307,12 +310,20 @@ if {{$run_pre_check == True}} {{
         set num_par_test [llength $check_pars]
         # This list is for the final cleaned spectrum paths, after this final check
         set final_spec_paths {{}}
+        set final_spec_indexes {{}}
+
         # Each spectrum path must appear num_par_test times in good_spec_paths to make the final cut, otherwise
-        #  we know that it didn't pass quality checks for all the parameters we were assessing
-        foreach sp $spec_paths {{
+        #  we know that it didn't pass quality checks for all the parameters we were assessing - we also keep track
+        #  of the storage indexes that were accepted, in case the user wants to restrict the list further so if one
+        #  ObsID-Instrument combo spectrum is excluded, they all are
+        for {{set sp_i 0}} {{$sp_i < $num_spec}} {{incr sp_i}} {{
+            # Need to set 'sp' the path of the current spectrum we're considering
+            set sp [lindex $spec_paths $sp_i]
+
             # Just finds the number of instances of the path in the good_spec_path list
             if {{[llength [lsearch -all $good_spec_paths $sp]] == $num_par_test}} {{
                 lappend final_spec_paths $sp
+                lappend final_spec_indexes $sp_i
             }}
         }}
 
@@ -343,11 +354,13 @@ if {{$run_pre_check == True}} {{
         #############################################
 
         lappend final_ann_spec_paths $final_spec_paths
+        lappend final_ann_spec_indexes $final_spec_indexes
 
     }}
 }}
 
 puts $final_ann_spec_paths
+puts $final_ann_spec_indexes
 puts [llength [lindex $final_ann_spec_paths 0]]
 puts [llength [lindex $final_ann_spec_paths 1]]
 puts [llength [lindex $final_ann_spec_paths 2]]
