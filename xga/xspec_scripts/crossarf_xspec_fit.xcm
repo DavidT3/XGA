@@ -62,6 +62,15 @@ for {{set i 1}} {{$i < $num_ann}} {{incr i}} {{
     }}
 }}
 
+# The special sauce of this particular fitting script is the cross-arf capability, so I suppose I should probably
+#  store the paths somewhere! This variable is going to be a three-layer deep list I think. Top level will be lists
+#  for each annulus, then the next level down will be lists of cross-arf paths for each annular spectrum
+set cross_arf_paths {cap}
+# For simplicity I will also add a list of RMF paths for each of the annular spectra (this will be of the same
+#  structure as ann_spec_paths), so that I have easy access to the matching response for each cross-arf. Each cross-arf
+#  is loaded in with the response of the 'source' annulus
+set cross_arf_matching_rmf_paths {carp}
+
 # The energy limits applied to the spectra before fitting
 set ignore_lo_en {lo_cut}
 set ignore_hi_en {hi_cut}
