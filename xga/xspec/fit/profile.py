@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/05/2023, 11:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/05/2023, 11:49. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -189,7 +189,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
 
 def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, List[Quantity]],
-                                      start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
+                                      start_temp: Quantity = Quantity(3.0, "keV"), start_met: Quantity = 0.3,
                                       lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
                                       freeze_nh: bool = True, freeze_met: bool = True,
                                       lo_en: Quantity = Quantity(0.3, "keV"),  hi_en: Quantity = Quantity(7.9, "keV"),
@@ -203,6 +203,7 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
                              par_fit_stat, lum_conf, abund_table, fit_method, group_spec, min_counts, min_sn,
                              over_sample, one_rmf, num_cores, spectrum_checking, timeout)
 
+    # We make sure to run the XGA function that uses SAS to generate the cross-arfs necessary for
     # cross_arf(sources, radii, group_spec, min_counts, min_sn, over_sample, detmap_bin=detmap_bin, num_cores=num_cores)
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
@@ -237,17 +238,30 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
             raise NoProductAvailableError("The requested AnnularSpectra cannot be located for {sn}, and this function "
                                           "will not automatically generate annular spectra.".format(sn=src.name))
 
+        # TODO CHANGE THE FUNCTION SIGNATURE SO THAT NONE IS THE DEFAULT, I.E. WE'RE USING MEASURED START VALUES FROM
+        #  THE INITIAL RUN OF single_temp_apec_profile - also actually add in the feature that pulls start pars from
+        #  a previous fit - make sure to grab norm start vals as well
+        start_temp = [start_temp]*len(radii[src_ind])
+        # t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
+        start_met = [start_met]*len(radii[src_ind])
+
         oi_combos = [(o_id, inst) for o_id, insts in ann_spec.instruments.items() for inst in insts]
 
         ann_spec_paths = []
         cross_arf_paths = []
         cross_arf_rmf_paths = []
-        # Assembling spectrum list strings for the annuli
+        ann_model_start_vals = []
+        # Assembling spectrum list strings for the annuli, as well as cross-arf paths, and parameter start value lists
+        #  for the final fits
         for ann_id in ann_spec.annulus_ids:
             ann_spec_paths.append("{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).path
                                                   for oi in oi_combos]) + "}")
             cross_arf_rmf_paths.append("{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).rmf
                                                        for oi in oi_combos]) + "}")
+            ann_model_start_vals.append("{{{0} {1} {2} {3} {4} {5}}}".format(1., src.nH.to("10^22 cm^-2").value,
+                                                                             start_temp[ann_id].value,
+                                                                             start_met[ann_id],
+                                                                             src.redshift, 1.))
             cur_ann_cross_arfs = []
             for oi in oi_combos:
                 rel_c_arfs = ann_spec.get_cross_arf_paths(oi[0], oi[1], ann_id)
@@ -262,14 +276,7 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
         ann_spec_paths = "{" + " ".join(ann_spec_paths) + "}"
         cross_arf_rmf_paths = "{" + " ".join(cross_arf_rmf_paths) + "}"
         cross_arf_paths = "{" + " ".join(cross_arf_paths) + "}"
-
-        # TODO - SUPER PRELIMINARY. START VALUES WILL ACTUALLY BE TAKEN FROM THE FIRST PASS ANNULAR SPECTRA FIT BY
-        #  DEFAULT, THOUGH THE USER WILL STILL BE ALLOWED TO SPECIFY THEM
-        # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
-        # Another TCL list, this time of the parameter start values for this model.
-        par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., src.nH.to("10^22 cm^-2").value, t, start_met,
-                                                          src.redshift, 1.)
+        par_values = "{" + " ".join(ann_model_start_vals) + "}"
 
         # Set up the TCL list that defines which parameters are frozen, dependant on user input
         if freeze_nh and freeze_met:
