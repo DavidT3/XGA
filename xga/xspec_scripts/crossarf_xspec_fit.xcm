@@ -467,17 +467,17 @@ set data_counter 1
 # We start the source counter at 2 as the default source for XSPEC spectra is 1. The counter is
 set source_counter 2
 
+# Now put the number of spectra FOR EACH ANNULUS (NOTE THIS SHOULD BE THE SAME NUMBER FOR ALL ANNULI) in a variable
+set num_spec_per_ann [llength [lindex $ann_spec_paths 0]]
+
 # This top level iterates through annuli
 for {{set ai 0}} {{$ai < $num_ann}} {{incr ai}} {{
     set cur_ann_paths [lindex $ann_spec_paths $ai]
     set cur_ann_crossarf_set [lindex $ann_cross_arf_paths $ai]
     set cur_ann_crossarf_rmf_paths [lindex $ann_cross_arf_matching_rmf_paths $ai]
 
-    # Now put the number of spectra in a variable
-    set num_spec [llength $cur_ann_paths]
-
     # This iterates through spectrum entries for each annulus
-    for {{set pi 0}} {{$pi < $num_spec}} {{incr pi}} {{
+    for {{set pi 0}} {{$pi < $num_spec_per_ann}} {{incr pi}} {{
         set sp [lindex $cur_ann_paths $pi]
         # Loads each spectrum into its own data and plot group
         data $data_counter:$data_counter $sp
@@ -498,23 +498,20 @@ for {{set ai 0}} {{$ai < $num_ann}} {{incr ai}} {{
     }}
 }}
 
+# Now we ignore the energy range that we don't want to use, for all loaded spectra
+ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
 
-#show
-#exit
+# If any channels have been labelled bad, this will discount them from analysis
+ignore bad
 
-## Now we ignore the energy range that we don't want to use, for all loaded spectra
-#ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
-#
-## If any channels have been labelled bad, this will discount them from analysis
-#ignore bad
 ##################################################
 ## Setting up the final model and links
 ##################################################
-## Now we must define the model, but without setting any parameters (thats what /* does)
-#model $model_name
-#/*
-#
-## Get the number of parameters in a variable, for iterating through later
+# Now we must define the model, but without setting any parameters (thats what /* does)
+model $model_name
+/*
+
+# Get the number of parameters in a variable, for iterating through later
 #set num_pars [tcloutr modpar]
 ## This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
 #set num_uniq_par [expr {{$num_pars / $num_spec}}]
@@ -533,7 +530,9 @@ for {{set ai 0}} {{$ai < $num_ann}} {{incr ai}} {{
 #    puts "freezing list is not the length expected by the defined model"
 #    exit
 #}}
-#
+
+show
+
 ## Just combines them into an array, so we can pass a parameter name and get a value, link bool, and freeze bool
 #array set par_arr {{}}
 #array set link_arr {{}}
