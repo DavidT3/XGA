@@ -545,9 +545,12 @@ model $model_name
 /*
 
 # Get the number of parameters in a variable, for iterating through later
-#set num_pars [tcloutr modpar]
-## This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
-#set num_uniq_par [expr {{$num_pars / $num_spec}}]
+set num_pars [tcloutr modpar]
+# This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
+set num_uniq_par [expr {{$num_pars / ($num_spec*$num_ann)}}]
+
+set ann_par_incr [expr {{$num_pars / $num_ann}}]
+
 #
 ## Probably isn't necessary as the inputs should be governed by XGA, but doing some checks
 #if {{[llength $par_names] != $num_uniq_par}} {{
@@ -564,59 +567,62 @@ model $model_name
 #    exit
 #}}
 
-show
-puts "yeeeeeaha"
-puts $pspsps
+set ann_par_start 0
+for {{set ai 0}} {{$ai < $num_ann}} {{incr ai}} {{
+    # Here we iterate through the parameters and set them up in XSPEC, including user choices on linking and freezing
+    set sep_cnt 1
+    # sep_cnt keeps track of the current parameter of a given spectrum
+    set sep_par_lst {{}}
+    for {{set i 1}} {{$i <= $ann_par_incr}} {{incr i}} {{
+        # Grabs the current parameter name, we'll use it to look up start values etc.
+        set cur_par [lindex [tcloutr pinfo $i] 0]
 
+        # As sep_cnt keeps track of the current position within a specific spectrum's model, it cannot be greater than
+        #  the number of parameters per spectrum model (5 for tbabs*apec for instance), so it must be reset to 1
+        #  once it is larger than that number, and we know we've moved onto another spectrum
 
+#         && ($ann_par_start == 0)
+        if {{($sep_cnt <= $num_uniq_par)}} {{
+            # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+            set key_count 1
+            while {{$cur_par in $sep_par_lst}} {{
+                set cur_par [concat [lindex [tcloutr pinfo $i] 0]_$key_count]
+                incr key_count
+                }}
+            lappend sep_par_lst $cur_par
+        }} else {{
+            set sep_cnt 1
+            set sep_par_lst {{$cur_par}}
+        }}
 
-## Here we iterate through the parameters and set them up in XSPEC, including user choices on linking and freezing
-set sep_cnt 1
-# sep_cnt keeps track of the current parameter of a given spectrum
-set sep_par_lst {{}}
-for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
-    # Grabs the current parameter name, we'll use it to look up start values etc.
-    set cur_par [lindex [tcloutr pinfo $i] 0]
+        # If we're still in the first spectrum then the start values MUST be set. Remember that i goes up to the full
+        #  num_pars value (so for tbabs*apec for 7 spectra that number would be 35), but we know that if i is less than
+        #  the number of parameters per spectrum model then we're still on the first spectrum
+        if {{$i <= $num_uniq_par}} {{
+            # Set the start value of the parameter using the handy array we constructed earlier
+            newpar [expr $i + $ann_par_start] [lindex $par_arr($cur_par) $ai]
+        # If we're past the first spectrum but the current parameter isn't meant to be linked across spectra then we
+        #  must set its starting value. We don't need to do anything if the parameter IS meant to be linked, as that
+        #  will happen automatically
+        }} elseif {{$i > $num_uniq_par && $link_arr($cur_par) == "F"}} {{
+            newpar [expr $i + $ann_par_start] [lindex $par_arr($cur_par) $ai]
+        }} elseif {{[expr $i%$num_uniq_par] != 0}} {{
+            newpar [expr $i + $ann_par_start]=p[expr $i%$num_uniq_par + $ann_par_start]
+        }} else {{
+            newpar [expr $i + $ann_par_start]=p[expr $i%$num_uniq_par + $num_uniq_par + $ann_par_start]
+        }}
 
-    # As sep_cnt keeps track of the current position within a specific spectrum's model, it cannot be greater than
-    #  the number of parameters per spectrum model (5 for tbabs*apec for instance), so it must be reset to 1
-    #  once it is larger than that number, and we know we've moved onto another spectrum
-    if {{$sep_cnt <= $num_uniq_par}} {{
-        # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
-        set key_count 1
-        while {{$cur_par in $sep_par_lst}} {{
-            set cur_par [concat [lindex [tcloutr pinfo $i] 0]_$key_count]
-            incr key_count
+        # And finally if the current parameter isn't meant to be able to vary then we must freeze it, or thaw it
+        #  if it should be allowed to vary. If we know that we have a constant at the front to deal with different
+        #  norms for different observations, and that the current parameter is the first model's factor, then we freeze it
+        #  at one, whereas all the rest are allowed to vary
+        if {{($freeze_arr($cur_par) == "T") || (($norm_scale == True) && ($i == 1))}} {{
+            freeze [expr $i + $ann_par_start]
+        }} else {{
+            thaw [expr $i + $ann_par_start]
             }}
-        lappend sep_par_lst $cur_par
-    }} else {{
-        set sep_cnt 1
-        set sep_par_lst {{$cur_par}}
-    }}
-
-    # If we're still in the first spectrum then the start values MUST be set. Remember that i goes up to the full
-    #  num_pars value (so for tbabs*apec for 7 spectra that number would be 35), but we know that if i is less than
-    #  the number of parameters per spectrum model then we're still on the first spectrum
-    if {{$i <= $num_uniq_par}} {{
-        # Set the start value of the parameter using the handy array we constructed earlier
-        newpar $i $par_arr($cur_par)
-    # If we're past the first spectrum but the current parameter isn't meant to be linked across spectra then we
-    #  must set its starting value. We don't need to do anything if the parameter IS meant to be linked, as that
-    #  will happen automatically
-    }} elseif {{$i > $num_uniq_par && $link_arr($cur_par) == "F"}} {{
-        newpar $i $par_arr($cur_par)
+        incr sep_cnt
         }}
-
-    # And finally if the current parameter isn't meant to be able to vary then we must freeze it, or thaw it
-    #  if it should be allowed to vary. If we know that we have a constant at the front to deal with different
-    #  norms for different observations, and that the current parameter is the first model's factor, then we freeze it
-    #  at one, whereas all the rest are allowed to vary
-    if {{($freeze_arr($cur_par) == "T") || (($norm_scale == True) && ($i == 1))}} {{
-        freeze $i
-    }} else {{
-        thaw $i
-        }}
-
-    incr sep_cnt
+    incr ann_par_start $ann_par_incr
     }}
 
