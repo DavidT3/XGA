@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 17:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/05/2023, 11:06. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -12,7 +12,7 @@ from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError, NoProductAvailableError
 from ...products import Spectrum
 from ...samples.base import BaseSample
-from ...sas import spectrum_set, cross_arf
+from ...sas import spectrum_set
 from ...sources import BaseSource
 
 
@@ -203,7 +203,7 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
                              par_fit_stat, lum_conf, abund_table, fit_method, group_spec, min_counts, min_sn,
                              over_sample, one_rmf, num_cores, spectrum_checking, timeout)
 
-    cross_arf(sources, radii, group_spec, min_counts, min_sn, over_sample, detmap_bin=detmap_bin, num_cores=num_cores)
+    # cross_arf(sources, radii, group_spec, min_counts, min_sn, over_sample, detmap_bin=detmap_bin, num_cores=num_cores)
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
@@ -240,13 +240,28 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
         oi_combos = [(o_id, inst) for o_id, insts in ann_spec.instruments.items() for inst in insts]
 
         ann_spec_paths = []
+        cross_arf_paths = []
+        cross_arf_rmf_paths = []
         # Assembling spectrum list strings for the annuli
         for ann_id in ann_spec.annulus_ids:
             ann_spec_paths.append("{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).path
                                                   for oi in oi_combos]) + "}")
+            cross_arf_rmf_paths.append("{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).rmf
+                                                       for oi in oi_combos]) + "}")
+            cur_ann_cross_arfs = []
+            for oi in oi_combos:
+                rel_c_arfs = ann_spec.get_cross_arf_paths(oi[0], oi[1], ann_id)
+                # This is massive overkill, as this will be setup by XGA I can almost guarantee that the keys will be
+                #  integer cross-annulus identifiers, and they will be in the right order.
+                cross_ids = [en for en in list(rel_c_arfs.keys())]
+                cross_ids.sort()
+                cur_ann_cross_arfs.append("{" + " ".join([rel_c_arfs[c_id] for c_id in cross_ids]) + "}")
+
+            cross_arf_paths.append("{" + " ".join(cur_ann_cross_arfs) + "}")
 
         ann_spec_paths = "{" + " ".join(ann_spec_paths) + "}"
-
+        cross_arf_rmf_paths = "{" + " ".join(cross_arf_rmf_paths) + "}"
+        cross_arf_paths = "{" + " ".join(cross_arf_paths) + "}"
 
         # TODO - SUPER PRELIMINARY. START VALUES WILL ACTUALLY BE TAKEN FROM THE FIRST PASS ANNULAR SPECTRA FIT BY
         #  DEFAULT, THOUGH THE USER WILL STILL BE ALLOWED TO SPECIFY THEM
@@ -295,16 +310,19 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
         with open(CROSS_ARF_XSPEC_SCRIPT, 'r') as x_script:
             script = x_script.read()
 
+        # TODO REMOVE THE MACHINERY THAT GIVES A CHOICE HERE - IT HAS TO BE THIS WAY FOR CROSS ARF TO WORK
         nuclear_option = True
 
-        script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=src.cosmo.H0.value,
+        pop = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=src.cosmo.H0.value,
                            q0=0., lamb0=src.cosmo.Ode0, sp=ann_spec_paths, lo_cut=lo_en.to("keV").value,
                            hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
                            lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
-                           of='', redshift=src.redshift, lel=lum_conf, check=spectrum_checking, cps=check_list,
+                           of='thingy', redshift=src.redshift, lel=lum_conf, check=spectrum_checking, cps=check_list,
                            cpsl=check_lo_lims, cpsh=check_hi_lims, cpse=check_err_lims, cpea=nuclear_option, ns=True,
-                           nhmtz=nh_to_zero)
-        return script
+                           nhmtz=nh_to_zero, cap=cross_arf_paths, carp=cross_arf_rmf_paths)
+        with open('/Users/dt237/Desktop/testo.xcm', 'w') as writo:
+            writo.writelines(pop)
+        return pop
 
 
 
