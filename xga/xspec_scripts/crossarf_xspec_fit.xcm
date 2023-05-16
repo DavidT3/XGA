@@ -637,7 +637,7 @@ for {{set ai_src 0}} {{$ai_src < $num_ann}} {{incr ai_src}} {{
                 model $src_id:$cur_cross_mod_name $model_name
                 /*
                 for {{set pi 1}} {{$pi <= $num_uniq_par}} {{incr pi}} {{
-                    newpar $cur_cross_mod_name:$pi = p[expr ($ai_crs*$ann_par_incr)+$pi]
+                    newpar $cur_cross_mod_name:$pi = p[expr ($ai_crs*$ann_par_incr)+$pi+($num_uniq_par*$si)]
                 }}
                 incr src_id
             }}
