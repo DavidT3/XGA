@@ -645,4 +645,30 @@ for {{set ai_src 0}} {{$ai_src < $num_ann}} {{incr ai_src}} {{
     }}
 }}
 
-puts "SOME MEASURE OF VICTORY"
+#################################################
+# Run fit and calculate final uncertainties
+#################################################
+# Now of course we run the model fit
+fit 100
+
+# Calculate errors on the fit parameters; error just ignores those parameters that are frozen
+error $delta_fit_stat,1-$num_pars
+#################################################
+
+#################################################
+# Run the extract script to write results
+#################################################
+# List to store luminosity energy limit pairs in the format required by xga_extract
+set lum_lim_pairs {{}}
+
+# Iterate through the number of luminosity bands supplied
+for {{set i 0}} {{$i < [llength $lum_low_lims]}} {{incr i}} {{
+    set interim {{}}
+    lappend interim [lindex $lum_low_lims $i]
+    lappend interim [lindex $lum_upp_lims $i]
+    lappend lum_lim_pairs $interim
+    }}
+
+xga_extract $out_file $lum_lim_pairs $input_redshift $luminosity_confidence $model_name $nh_par_to_zero
+
+exit

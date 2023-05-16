@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 15:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/05/2023, 17:08. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -113,7 +113,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype={dt} detmaparray={ds} extendedsource={es}"
 
-    # Don't need to run backscale separately, as this arfgen call will do it automatically
+    # Don't make use of the setbackscale functionality of arg
     arf_cmd = "arfgen spectrumset={s} arfset={a} withrmfset=yes rmfset={r} badpixlocation={e} " \
               "extendedsource={es} detmaptype={dt} detmaparray={ds} setbackscale=no badpixmaptype={dt}"
 
