@@ -626,3 +626,23 @@ for {{set ai 0}} {{$ai < $num_ann}} {{incr ai}} {{
     incr ann_par_start $ann_par_incr
     }}
 
+set src_id 2
+for {{set ai_src 0}} {{$ai_src < $num_ann}} {{incr ai_src}} {{
+
+    # Contributions of other annuli to annulus $ai_src
+    for {{set si 0}} {{$si < $num_spec_per_ann}} {{incr si}} {{
+        for {{set ai_crs 0}} {{$ai_crs < $num_ann}} {{incr ai_crs}} {{
+            if {{$ai_crs != $ai_src}} {{
+                set cur_cross_mod_name crs_ann${{ai_crs}}_to_ann${{ai_src}}_src${{src_id}}
+                model $src_id:$cur_cross_mod_name $model_name
+                /*
+                for {{set pi 1}} {{$pi <= $num_uniq_par}} {{incr pi}} {{
+                    newpar $cur_cross_mod_name:$pi = p[expr ($ai_crs*$ann_par_incr)+$pi]
+                }}
+                incr src_id
+            }}
+        }}
+    }}
+}}
+
+puts "SOME MEASURE OF VICTORY"
