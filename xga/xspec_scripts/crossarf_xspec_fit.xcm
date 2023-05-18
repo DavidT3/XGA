@@ -81,9 +81,6 @@ set check_pars {cps}
 set check_pars_lo_lim {cpsl}
 set check_pars_hi_lim {cpsh}
 set check_pars_err_lim {cpse}
-# This differs from the XGA general XSPEC fit - if True then all spectra from an ObsID-Instrument combo will be
-#  excluded if ANY annulus spectrum for that ObsID-Instrument fails to pass the checks
-set check_pars_exclude_all {cpea}
 
 # The name of the model
 set model_name {m}
@@ -423,64 +420,62 @@ if {{$run_pre_check == True}} {{
     #############################################
     # Stringent checking step
     #############################################
-    # In this case the user has decided that they want the extreme cleaning option - where an ObsID-Instrument
-    #  combination (say 0201903501-PN for instance) is only used in the overall fits if it passed the checks
-    #  in ALL annuli.
-    if {{$check_pars_exclude_all == True}} {{
-        # As part of the checks above, we produced a list of lists of the 'final' spectrum paths for each
-        #  annuli (final_ann_spec_paths), though actually we're going to overwrite that. We also produced a list
-        #  of lists of the indexes of the spectrum paths in final_ann_spec_paths.
-        # The information about the accepted indices now needs to be pruned, so we select only those indices which
-        #  are accepted for every annulus - this does implicitly assume that the spectrum paths are in the same
-        #  order for each annulus, which will be the case for XGA populated scripts. The indices that are accepted
-        #  for every annulus will be stored in this acc_ind variable
-        set acc_ind {{}}
+    # Here we enforce that an ObsID-Instrument combination (say 0201903501-PN for instance) is only used in the
+    #  overall fits if it passed the checks in ALL annuli. This is required to make proper use of cross-arfs
 
-        # This will be a nested for loop, with the top level looping through the indices of the spectra in
-        #  each in annulus
-        for {{set sp_i 0}} {{$sp_i < $num_spec}} {{incr sp_i}} {{
-            # This variable states whether the current index has been accepted for every annulus, we start by assuming
-            #  that it has
-            set ind_good True
-            # Now we cycle through all the annuli
-            for {{set sp_a 0}} {{$sp_a < $num_ann}} {{incr sp_a}} {{
-                # If the current index DOES NOT appear in the list of accepted indices for the current annulus, then
-                #  we have to set the variable that defines whether the current index has been universally accepted to
-                #  False - we also break out of the inner loop because there is no need to continue
-                if {{[llength [lsearch -all [lindex $final_ann_spec_indexes $sp_a] $sp_i]] == 0}} {{
-                    set ind_good False
-                    break
-                }}
-            }}
+    # As part of the checks above, we produced a list of lists of the 'final' spectrum paths for each
+    #  annuli (final_ann_spec_paths), though actually we're going to overwrite that. We also produced a list
+    #  of lists of the indexes of the spectrum paths in final_ann_spec_paths.
+    # The information about the accepted indices now needs to be pruned, so we select only those indices which
+    #  are accepted for every annulus - this does implicitly assume that the spectrum paths are in the same
+    #  order for each annulus, which will be the case for XGA populated scripts. The indices that are accepted
+    #  for every annulus will be stored in this acc_ind variable
+    set acc_ind {{}}
 
-            # If we made it through the inner loop and ind_good is still True, then we add the current index to the
-            #  list of universally accepted indices
-            if {{$ind_good == True}} {{
-                lappend acc_ind $sp_i
-            }}
-        }}
-
-        # Now we cycle through our universally accepted indices, and re-create the final_ann_spec_paths list with
-        #  our more stringent checking requirements
-        set final_ann_spec_paths {{}}
-        # We also need to select the relevant cross-arf and rmf paths
-        set final_ann_spec_cross_arf_paths {{}}
-        set final_ann_spec_cross_arf_rmf_paths {{}}
-        # The outer for loop is through the annuli (remember that our original variable of spectrum paths is a list
-        #  of lists, one list per annulus).
+    # This will be a nested for loop, with the top level looping through the indices of the spectra in
+    #  each in annulus
+    for {{set sp_i 0}} {{$sp_i < $num_spec}} {{incr sp_i}} {{
+        # This variable states whether the current index has been accepted for every annulus, we start by assuming
+        #  that it has
+        set ind_good True
+        # Now we cycle through all the annuli
         for {{set sp_a 0}} {{$sp_a < $num_ann}} {{incr sp_a}} {{
-            set final_sel_spec_paths {{}}
-            set final_sel_c_arf_paths {{}}
-            set final_sel_c_arf_rmf_paths {{}}
-            foreach acc_i $acc_ind {{
-                lappend final_sel_spec_paths [lindex [lindex $ann_spec_paths $sp_a] $acc_i]
-                lappend final_sel_c_arf_paths [lindex [lindex $ann_cross_arf_paths $sp_a] $acc_i]
-                lappend final_sel_c_arf_rmf_paths [lindex [lindex $ann_cross_arf_matching_rmf_paths $sp_a] $acc_i]
+            # If the current index DOES NOT appear in the list of accepted indices for the current annulus, then
+            #  we have to set the variable that defines whether the current index has been universally accepted to
+            #  False - we also break out of the inner loop because there is no need to continue
+            if {{[llength [lsearch -all [lindex $final_ann_spec_indexes $sp_a] $sp_i]] == 0}} {{
+                set ind_good False
+                break
             }}
-            lappend final_ann_spec_paths $final_sel_spec_paths
-            lappend final_ann_spec_cross_arf_paths $final_sel_c_arf_paths
-            lappend final_ann_spec_cross_arf_rmf_paths $final_sel_c_arf_rmf_paths
         }}
+
+        # If we made it through the inner loop and ind_good is still True, then we add the current index to the
+        #  list of universally accepted indices
+        if {{$ind_good == True}} {{
+            lappend acc_ind $sp_i
+        }}
+    }}
+
+    # Now we cycle through our universally accepted indices, and re-create the final_ann_spec_paths list with
+    #  our more stringent checking requirements
+    set final_ann_spec_paths {{}}
+    # We also need to select the relevant cross-arf and rmf paths
+    set final_ann_spec_cross_arf_paths {{}}
+    set final_ann_spec_cross_arf_rmf_paths {{}}
+    # The outer for loop is through the annuli (remember that our original variable of spectrum paths is a list
+    #  of lists, one list per annulus).
+    for {{set sp_a 0}} {{$sp_a < $num_ann}} {{incr sp_a}} {{
+        set final_sel_spec_paths {{}}
+        set final_sel_c_arf_paths {{}}
+        set final_sel_c_arf_rmf_paths {{}}
+        foreach acc_i $acc_ind {{
+            lappend final_sel_spec_paths [lindex [lindex $ann_spec_paths $sp_a] $acc_i]
+            lappend final_sel_c_arf_paths [lindex [lindex $ann_cross_arf_paths $sp_a] $acc_i]
+            lappend final_sel_c_arf_rmf_paths [lindex [lindex $ann_cross_arf_matching_rmf_paths $sp_a] $acc_i]
+        }}
+        lappend final_ann_spec_paths $final_sel_spec_paths
+        lappend final_ann_spec_cross_arf_paths $final_sel_c_arf_paths
+        lappend final_ann_spec_cross_arf_rmf_paths $final_sel_c_arf_rmf_paths
     }}
     #############################################
 
