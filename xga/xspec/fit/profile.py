@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/05/2023, 22:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/05/2023, 22:16. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -12,7 +12,7 @@ from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError, NoProductAvailableError
 from ...products import Spectrum
 from ...samples.base import BaseSample
-from ...sas import spectrum_set
+from ...sas import spectrum_set, cross_arf
 from ...sources import BaseSource
 
 
@@ -188,6 +188,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout
 
 
+# @xspec_call
 def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, List[Quantity]],
                                       first_pass_start_pars: bool = True,
                                       default_start_temp: Quantity = Quantity(3.0, "keV"),
@@ -206,7 +207,7 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
                              min_sn, over_sample, one_rmf, num_cores, spectrum_checking, timeout)
 
     # We make sure to run the XGA function that uses SAS to generate the cross-arfs necessary for
-    # cross_arf(sources, radii, group_spec, min_counts, min_sn, over_sample, detmap_bin=detmap_bin, num_cores=num_cores)
+    cross_arf(sources, radii, group_spec, min_counts, min_sn, over_sample, detmap_bin=detmap_bin, num_cores=num_cores)
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
