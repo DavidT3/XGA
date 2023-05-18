@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/05/2023, 21:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/05/2023, 21:48. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -240,10 +240,19 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
             raise NoProductAvailableError("The requested AnnularSpectra cannot be located for {sn}, and this function "
                                           "will not automatically generate annular spectra.".format(sn=src.name))
 
+        # This will now try to fetch starting values for the annuli from a previously created profile - we set the
+        #  start values to None so that we can check for cases where we failed to grab the start values from a profile.
+        # This won't happen if the user turns of the first_pass_start_pars option
         start_temp = None
         start_met = None
         start_norm = None
         if first_pass_start_pars:
+            # This is all fairly self explanatory - fetching profiles from the source, using the annular spectrum
+            #  unique identifier. If the previous annular spectra fits were a success, then a projected temperature
+            #  and normalisation profile will certainly exist, the metallicity profile only exists if the metallicity
+            #  was freed in the first profile fit.
+            # TODO figure out how to identify the profile which belongs to the original run in the case where there
+            #  have been multiple profile runs
             try:
                 pt_prof = src.get_proj_temp_profiles(set_id=ann_spec.set_ident)
                 start_temp = pt_prof.values.value
@@ -262,6 +271,9 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
             except NoProductAvailableError:
                 pass
 
+        # If the start temperature, normalisation, or metallicity values have not yet been set then we revert to
+        #  the default values. The default temperature and metallicity values can be set by the user, but default
+        #  normalisation will currently always be one
         if start_temp is None:
             start_temp = [t.to("keV", equivalencies=u.temperature_energy()).value for t in default_start_temp]
 
@@ -271,10 +283,15 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
         if start_met is None:
             start_met = [default_start_met] * (len(radii[src_ind]) - 1)
 
+        # The start constants will always be one
         start_con = [1]*(len(radii[src_ind])-1)
+        # The nH and redshift values are known quantities that can just be set from information in the source. The
+        #  nH can be allowed to vary though
         start_nh = [src.nH.to("10^22 cm^-2").value]*(len(radii[src_ind])-1)
         start_z = [src.redshift]*(len(radii[src_ind])-1)
 
+        # This creates the string which is formatted into the XSPEC script template that is a list of lists of
+        #  start values for the different annuli
         par_values = "{{{c} {nh} {t} {a} {z} {n}}}".format(c="{" + " ".join([str(c) for c in start_con]) + "}",
                                                            nh="{" + " ".join([str(nh) for nh in start_nh]) + "}",
                                                            t="{" + " ".join([str(t) for t in start_temp]) + "}",
@@ -282,18 +299,28 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
                                                            z="{" + " ".join([str(z) for z in start_z]) + "}",
                                                            n="{" + " ".join([str(n) for n in start_norm]) + "}")
 
+        # This helps us run through the different ObsID-instrument combinations that are present in the
+        #  annular spectrum we're dealing with
         oi_combos = [(o_id, inst) for o_id, insts in ann_spec.instruments.items() for inst in insts]
 
+        # These lists will store the strings representing tcl lists of annular spectra paths, list of lists of paths
+        #  to cross-arf paths for those annular spectra, and the RMF files those cross-arfs were generated with
         ann_spec_paths = []
         cross_arf_paths = []
         cross_arf_rmf_paths = []
         # Assembling spectrum list strings for the annuli, as well as cross-arf paths, and paths to the rmfs they
         #  were generated with
         for ann_id in ann_spec.annulus_ids:
+            # We can just fetch the annular spectra paths from the annular spectrum object we fetched earlier,
+            #  for the current source annulus defined by ann_id
             ann_spec_paths.append("{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).path
                                                   for oi in oi_combos]) + "}")
+            # Same deal with the RMFs
             cross_arf_rmf_paths.append("{" + " ".join([ann_spec.get_spectra(ann_id, oi[0], oi[1]).rmf
                                                        for oi in oi_combos]) + "}")
+            # As each source annulus has a list of cross-arfs associated with it, we need another for loop here to
+            #  go through them - this list will store lists of cross-arfs for each ObsID-instrument combo, as they
+            #  have to be generated separately for each instrument of each observation
             cur_ann_cross_arfs = []
             for oi in oi_combos:
                 rel_c_arfs = ann_spec.get_cross_arf_paths(oi[0], oi[1], ann_id)
@@ -303,21 +330,16 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
                 cross_ids.sort()
                 cur_ann_cross_arfs.append("{" + " ".join([rel_c_arfs[c_id] for c_id in cross_ids]) + "}")
 
+            # Creates the list of lists of cross-arfs for the current source annulus
             cross_arf_paths.append("{" + " ".join(cur_ann_cross_arfs) + "}")
 
+        # Finally, the final strings for inserting into the XSPEC script template are constructed
         ann_spec_paths = "{" + " ".join(ann_spec_paths) + "}"
         cross_arf_rmf_paths = "{" + " ".join(cross_arf_rmf_paths) + "}"
         cross_arf_paths = "{" + " ".join(cross_arf_paths) + "}"
 
-        # Set up the TCL list that defines which parameters are frozen, dependant on user input
-        if freeze_nh and freeze_met:
-            freezing = "{F T F T T F}"
-        elif not freeze_nh and freeze_met:
-            freezing = "{F F F T T F}"
-        elif freeze_nh and not freeze_met:
-            freezing = "{F T F F T F}"
-        elif not freeze_nh and not freeze_met:
-            freezing = "{F F F F T F}"
+        # Set up the TCL list that defines which parameters are frozen, dependent on user input
+        freezing = "{{F {n} F {ab} T F}}".format(n='T' if freeze_nh else 'F', ab='T' if freeze_met else 'F')
 
         # Set up the TCL list that defines which parameters are linked across different spectra
         linking = "{F T T T T T}"
@@ -348,16 +370,13 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
         with open(CROSS_ARF_XSPEC_SCRIPT, 'r') as x_script:
             script = x_script.read()
 
-        # TODO REMOVE THE MACHINERY THAT GIVES A CHOICE HERE - IT HAS TO BE THIS WAY FOR CROSS ARF TO WORK
-        nuclear_option = True
-
         pop = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=src.cosmo.H0.value,
-                           q0=0., lamb0=src.cosmo.Ode0, sp=ann_spec_paths, lo_cut=lo_en.to("keV").value,
-                           hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
-                           lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
-                           of='thingy', redshift=src.redshift, lel=lum_conf, check=spectrum_checking, cps=check_list,
-                           cpsl=check_lo_lims, cpsh=check_hi_lims, cpse=check_err_lims, cpea=nuclear_option, ns=True,
-                           nhmtz=nh_to_zero, cap=cross_arf_paths, carp=cross_arf_rmf_paths)
+                            q0=0., lamb0=src.cosmo.Ode0, sp=ann_spec_paths, lo_cut=lo_en.to("keV").value,
+                            hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
+                            lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
+                            of='thingy', redshift=src.redshift, lel=lum_conf, check=spectrum_checking, cps=check_list,
+                            cpsl=check_lo_lims, cpsh=check_hi_lims, cpse=check_err_lims, ns=True,
+                            nhmtz=nh_to_zero, cap=cross_arf_paths, carp=cross_arf_rmf_paths)
         with open('/Users/dt237/Desktop/testo.xcm', 'w') as writo:
             writo.writelines(pop)
         return pop
