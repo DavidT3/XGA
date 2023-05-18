@@ -1,12 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/05/2023, 21:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/05/2023, 22:14. Copyright (c) The Contributors
 
 from typing import List, Union
 
 import astropy.units as u
 from astropy.units import Quantity
 
-from ._common import _write_xspec_script, _check_inputs
+from ._common import _write_xspec_script, _check_inputs, _write_crossarf_xspec_script
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError, NoProductAvailableError
@@ -345,8 +345,8 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
         linking = "{F T T T T T}"
 
         # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
-        #  limits. For this function they will be hardcoded, for simplicities sake, and we're only going to
-        #  check the temperature, as its the main thing we're fitting for with constant*tbabs*apec
+        #  limits. For this function they will be hardcoded, for simplicities' sake, and we're only going to
+        #  check the temperature, as it's the main thing we're fitting for with constant*tbabs*apec
         if spectrum_checking:
             check_list = "{kT}"
             check_lo_lims = "{0.01}"
@@ -364,23 +364,24 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
         #  setup, so zeroing one will zero them all.
         nh_to_zero = "{2}"
 
-        # TODO Make this a permanent solution - might be I can still use the original _write_xspec_script function
-        from ... import CROSS_ARF_XSPEC_SCRIPT, XGA_EXTRACT
-        # Read in the template file for the XSPEC script.
-        with open(CROSS_ARF_XSPEC_SCRIPT, 'r') as x_script:
-            script = x_script.read()
+        file_prefix = ann_spec.storage_key + "_crossarf"
+        out_file, script_file = _write_crossarf_xspec_script(src, file_prefix, model, abund_table, fit_method,
+                                                             ann_spec_paths, lo_en, hi_en, par_names, par_values,
+                                                             linking, freezing, par_fit_stat, lum_low_lims,
+                                                             lum_upp_lims, lum_conf, src.redshift, spectrum_checking,
+                                                             check_list, check_lo_lims, check_hi_lims, check_err_lims,
+                                                             True, cross_arf_paths, cross_arf_rmf_paths, nh_to_zero)
 
-        pop = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=src.cosmo.H0.value,
-                            q0=0., lamb0=src.cosmo.Ode0, sp=ann_spec_paths, lo_cut=lo_en.to("keV").value,
-                            hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
-                            lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
-                            of='thingy', redshift=src.redshift, lel=lum_conf, check=spectrum_checking, cps=check_list,
-                            cpsl=check_lo_lims, cpsh=check_hi_lims, cpse=check_err_lims, ns=True,
-                            nhmtz=nh_to_zero, cap=cross_arf_paths, carp=cross_arf_rmf_paths)
-        with open('/Users/dt237/Desktop/testo.xcm', 'w') as writo:
-            writo.writelines(pop)
-        return pop
+        try:
+            # TODO REVISIT THIS WHEN IT IS ACTUALLY POSSIBLE THAT IT WORKS - RIGHT NOW THE ANNULAR SPECTRA CANNOT
+            #  DIFFERENTIATE BETWEEN CROSS-ARF AND NORMAL PROFILE FITS
+            res = ann_spec.get_results(0, model, 'kT')
+        except ModelNotAssociatedError:
+            script_paths.append(script_file)
+            outfile_paths.append(out_file)
+            src_inds.append(src_ind)
 
-
+    run_type = "fit"
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout
 
 
