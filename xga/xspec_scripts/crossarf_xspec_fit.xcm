@@ -542,7 +542,7 @@ model $model_name
 # Get the number of parameters in a variable, for iterating through later
 set num_pars [tcloutr modpar]
 # This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
-set num_uniq_par [expr {{$num_pars / ($num_spec*$num_ann)}}]
+set num_uniq_par [expr {{$num_pars / ($num_spec_per_ann*$num_ann)}}]
 
 set ann_par_incr [expr {{$num_pars / $num_ann}}]
 
