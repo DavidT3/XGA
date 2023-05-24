@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/05/2023, 23:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/05/2023, 22:29. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -207,6 +207,7 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
                              min_sn, over_sample, one_rmf, num_cores, spectrum_checking, timeout)
 
     # We make sure to run the XGA function that uses SAS to generate the cross-arfs necessary for
+    # TODO RESTORE THIS OBVIOUSLY
     cross_arf(sources, radii, group_spec, min_counts, min_sn, over_sample, detmap_bin=detmap_bin, num_cores=num_cores)
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
@@ -366,6 +367,8 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
         nh_to_zero = "{2}"
 
         file_prefix = ann_spec.storage_key + "_crossarf"
+        # TODO Obviously remove this
+        file_prefix = "laaaaaads"
         out_file, script_file = _write_crossarf_xspec_script(src, file_prefix, model, abund_table, fit_method,
                                                              ann_spec_paths, lo_en, hi_en, par_names, par_values,
                                                              linking, freezing, par_fit_stat, lum_low_lims,
