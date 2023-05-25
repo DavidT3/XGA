@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/05/2023, 13:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/05/2023, 14:51. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -376,15 +376,15 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
                                                              check_list, check_lo_lims, check_hi_lims, check_err_lims,
                                                              True, cross_arf_paths, cross_arf_rmf_paths, nh_to_zero)
 
-        try:
-            # TODO REVISIT THIS WHEN IT IS ACTUALLY POSSIBLE THAT IT WORKS - RIGHT NOW THE ANNULAR SPECTRA CANNOT
-            #  DIFFERENTIATE BETWEEN CROSS-ARF AND NORMAL PROFILE FITS
-            # res = ann_spec.get_results(0, model, 'kT')
-            pass
-        except ModelNotAssociatedError:
-            script_paths.append(script_file)
-            outfile_paths.append(out_file)
-            src_inds.append(src_ind)
+        # try:
+        #     # TODO REVISIT THIS WHEN IT IS ACTUALLY POSSIBLE THAT IT WORKS - RIGHT NOW THE ANNULAR SPECTRA CANNOT
+        #     #  DIFFERENTIATE BETWEEN CROSS-ARF AND NORMAL PROFILE FITS
+        #     # res = ann_spec.get_results(0, model, 'kT')
+        #     pass
+        # except ModelNotAssociatedError:
+        script_paths.append(script_file)
+        outfile_paths.append(out_file)
+        src_inds.append(src_ind)
 
     run_type = "fit"
     return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout
