@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/05/2023, 22:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/05/2023, 13:27. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -188,7 +188,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout
 
 
-# @xspec_call
+@xspec_call
 def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, List[Quantity]],
                                       first_pass_start_pars: bool = True,
                                       default_start_temp: Quantity = Quantity(3.0, "keV"),
