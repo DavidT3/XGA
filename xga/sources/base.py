@@ -864,7 +864,7 @@ class BaseSource:
                     r_inner = Quantity(np.array(sp_info[5].strip('ri').split('and')).astype(float), 'deg')
                     r_outer = Quantity(np.array(sp_info[6].strip('ro').split('and')).astype(float), 'deg')
                     # Check if there is only one r_inner and r_outer value each, if so its a circle
-                    #  (otherwise its an ellipse)
+                    #  (otherwise it's an ellipse)
                     if len(r_inner) == 1:
                         r_inner = r_inner[0]
                         r_outer = r_outer[0]
@@ -909,6 +909,14 @@ class BaseSource:
                     #  spectrum
                     arf = [f for f in named if "arf" in f and "back" not in f and sp_info_str == f.split('.arf')[0]]
                     rmf = [f for f in named if "rmf" in f and "back" not in f and sp_info_str == f.split('.rmf')[0]]
+
+                    # This tries to find any cross-arfs that might have been generated that match the current spectrum
+                    #  - though of course this is only relevant for annular spectra
+                    # TODO make this actually work/do something, also this would fall over if 'cross' were in a
+                    #  source name I think?
+                    c_arf = [f for f in named if "arf" in f and 'cross' in f and "back" not in f and
+                             sp_info_str == f.split('.arf')[0]]
+
                     # As RMFs can be generated for source and background spectra separately, or one for both,
                     #  we need to check for matching RMFs to the spectrum we found
                     if len(rmf) == 0:
