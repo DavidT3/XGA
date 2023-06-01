@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 13:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 13:24. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1464,7 +1464,8 @@ class BaseProfile1D:
                  back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
-                 show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {}):
+                 show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
+                 auto_legend: bool = True):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
@@ -1505,6 +1506,9 @@ class BaseProfile1D:
             formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
             passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$': Quantity([6, 0.2, 0.3], 'keV')},
             where 0.2 is the negative error, and 0.3 is the positive error.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -1729,7 +1733,12 @@ class BaseProfile1D:
 
         # If the user wants a legend to be shown, then we create one
         if show_legend:
-            main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+            # In this case the user wants matplotlib to decide where best to put the legend
+            if auto_legend:
+                main_leg = main_ax.legend(loc="best", ncol=1)
+            # Otherwise the legend is placed outside the main axis, on the right hand side.
+            else:
+                main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
             # This makes sure legend keys are shown, even if the data is hidden
             for leg_key in main_leg.legendHandles:
                 leg_key.set_visible(True)
@@ -1757,7 +1766,7 @@ class BaseProfile1D:
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
              x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
              y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen', show_legend: bool = True,
-             show_residual_ax: bool = True, draw_vals: dict = {}):
+             show_residual_ax: bool = True, draw_vals: dict = {}, auto_legend: bool = True):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1797,6 +1806,9 @@ class BaseProfile1D:
             formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
             passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$': Quantity([6, 0.2, 0.3], 'keV')},
             where 0.2 is the negative error, and 0.3 is the positive error.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1805,7 +1817,7 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend, show_residual_ax, draw_vals)
+                                        model_colour, show_legend, show_residual_ax, draw_vals, auto_legend)
 
         # plt.tight_layout()
         plt.show()
@@ -1817,7 +1829,8 @@ class BaseProfile1D:
                   back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                   x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                   y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
-                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {}):
+                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
+                  auto_legend: bool = True):
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
         fitted to it, and their residuals. The models are plotted by generating random model realisations from
@@ -1860,6 +1873,9 @@ class BaseProfile1D:
             formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
             passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$': Quantity([6, 0.2, 0.3], 'keV')},
             where 0.2 is the negative error, and 0.3 is the positive error.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1868,7 +1884,7 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend, show_residual_ax, draw_vals)
+                                        model_colour, show_legend, show_residual_ax, draw_vals, auto_legend)
 
         fig.savefig(save_path, bbox_inches='tight')
 
