@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 13:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 14:27. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2463,9 +2463,10 @@ class BaseAggregateProfile1D:
                              " as the original.")
 
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
-             ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
-             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, normalise_x: bool = False,
-             normalise_y: bool = False, x_label: str = None, y_label: str = None, save_path: str = None):
+             ylim: Tuple = None, model: str = None, back_sub: bool = True, show_legend: bool = True,
+             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, x_norm: bool = False,
+             y_norm: bool = False, x_label: str = None, y_label: str = None, save_path: str = None,
+             draw_vals: dict = {}, auto_legend: bool = True):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -2480,21 +2481,32 @@ class BaseAggregateProfile1D:
         :param str model: The name of the model fit to display, default is None. If the model
             hasn't been fitted, or it failed, then it won't be displayed.
         :param bool back_sub: Should the plotted data be background subtracted, default is True.
-        :param bool legend: Should a legend with source names be added to the figure, default is True.
+        :param bool show_legend: Should a legend with source names be added to the figure, default is True.
         :param bool just_model: Should only the models, not the data, be plotted. Default is False.
         :param str custom_title: A plot title to replace the automatically generated title, default is None.
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
             the dictionary key they are stored under is what they will be labelled.
             e.g. ({'r500': Quantity(), 'r200': Quantity()}. If normalise_x option is also used, and the x-norm values
             are not the same for each profile, then draw_rads will be disabled.
-        :param bool normalise_x: Should the x-axis values be normalised with the x_norm value passed on the
+        :param bool x_norm: Should the x-axis values be normalised with the x_norm value passed on the
             definition of the constituent profile objects.
-        :param bool normalise_y: Should the y-axis values be normalised with the y_norm value passed on the
+        :param bool y_norm: Should the y-axis values be normalised with the y_norm value passed on the
             definition of the constituent profile objects.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+                    dictionary key they are stored under is what they will be labelled (keys can be LaTeX formatted);
+                    e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+                    passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$':
+                    Quantity([6, 0.2, 0.3], 'keV')}, where 0.2 is the negative error, and 0.3 is the positive error.
+                    Finally, plotting colour may be specified by setting the value to a list, with the first entry
+                    being the quantity, and the second being a colour;
+                    e.g. {r'$T_{\rm{X,500}}$': [Quantity([6, 0.2, 0.3], 'keV'), 'tab:blue']}.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -2503,13 +2515,25 @@ class BaseAggregateProfile1D:
             raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
                                       "{}".format(self.radii_unit.to_string()))
 
+        # Checks that any entries in draw_vals are either quantities or lists
+        if not all([isinstance(v, (Quantity, list)) for v in draw_vals.values()]):
+            raise TypeError("All values in draw_vals must either be an astropy quantity, or list with the first"
+                            "element being the astropy quantity, and the second being a string matplotlib colour.")
+
+        # Checks that any extra y-axis values that have been passed are the correct units (i.e. the same as the
+        #  y-value units used in this profile)
+        if not all([v.unit == self.values_unit if isinstance(v, Quantity) else v[0].unit == self.values_unit
+                    for v in draw_vals.values()]):
+            raise UnitConversionError("All values in draw_vals have to be in the same units as this profile, "
+                                      "{}".format(self.values_unit.to_string()))
+
         # Set up the x normalisation and y normalisation variables
-        if normalise_x:
+        if x_norm:
             x_norms = self.x_norms
         else:
             x_norms = [Quantity(1, '') for n in self.x_norms]
 
-        if normalise_y:
+        if y_norm:
             y_norms = self.y_norms
         else:
             y_norms = [Quantity(1, '') for n in self.y_norms]
@@ -2518,6 +2542,9 @@ class BaseAggregateProfile1D:
         #  if the profiles all have different normalisations then the draw_rads values can't be normalised
         if len(draw_rads) != 0 and len(set(x_norms)) != 1:
             draw_rads = {}
+        # Same deal with draw_vals, different y-norms would screw up plotting draw_vals
+        if len(draw_vals) != 0 and len(set(y_norms)) != 1:
+            draw_vals = {}
 
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -2567,8 +2594,8 @@ class BaseAggregateProfile1D:
             elif p.radii_err is not None and p.values_err is not None:
                 x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
                 y_errs = (p.values_err.copy() / y_norms[p_ind]).value
-                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
-                                        label=leg_label)
+                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x",
+                                        capsize=2, label=leg_label)
             else:
                 line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
 
@@ -2648,8 +2675,12 @@ class BaseAggregateProfile1D:
 
         # Adds a legend with source names to the side if the user requested it
         # I let the user decide because there could be quite a few names in it and it could get messy
-        if legend:
-            main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+        if show_legend:
+            # This allows the user to exercise some control over where the legend is placed.
+            if auto_legend:
+                main_leg = main_ax.legend(loc="best", ncol=1)
+            else:
+                main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
             # This makes sure legend keys are shown, even if the data is hidden
             for leg_key in main_leg.legendHandles:
                 leg_key.set_visible(True)
@@ -2694,9 +2725,39 @@ class BaseAggregateProfile1D:
             main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
                              color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
+        # Reads out the axis limits of the plot thus far
+        x_axis_lims = main_ax.get_xlim()
+        # If the user has passed extra values to plot, then we plot them
+        for v_name in draw_vals:
+            if isinstance(draw_vals[v_name], Quantity):
+                d_val = draw_vals[v_name].value
+                cur_col = None
+                is_scalar = draw_vals[v_name].isscalar
+            else:
+                d_val = draw_vals[v_name][0].value
+                cur_col = draw_vals[v_name][1]
+                is_scalar = draw_vals[v_name][0].isscalar
+
+            print(d_val)
+            if is_scalar:
+                main_ax.axhline(d_val, linestyle='dashed', color=cur_col, alpha=0.8,
+                                label=v_name)
+            elif len(d_val) == 2:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=cur_col,
+                                     alpha=0.5)
+            elif len(d_val) == 3:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=cur_col,
+                                     alpha=0.5)
+
+            main_ax.set_xlim(x_axis_lims)
+
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
-            plt.savefig(save_path)
+            fig.savefig(save_path, bbox_inches='tight')
 
         # And of course actually showing it
         plt.show()
