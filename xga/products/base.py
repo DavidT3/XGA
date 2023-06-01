@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 14:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 15:03. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2466,7 +2466,7 @@ class BaseAggregateProfile1D:
              ylim: Tuple = None, model: str = None, back_sub: bool = True, show_legend: bool = True,
              just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, x_norm: bool = False,
              y_norm: bool = False, x_label: str = None, y_label: str = None, save_path: str = None,
-             draw_vals: dict = {}, auto_legend: bool = True):
+             draw_vals: dict = {}, auto_legend: bool = True, axis_formatters: dict = {}):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -2507,6 +2507,9 @@ class BaseAggregateProfile1D:
         :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
             will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
             plot outside the main axes.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -2526,6 +2529,10 @@ class BaseAggregateProfile1D:
                     for v in draw_vals.values()]):
             raise UnitConversionError("All values in draw_vals have to be in the same units as this profile, "
                                       "{}".format(self.values_unit.to_string()))
+
+        if not all([k in ['xmajor', 'xminor', 'ymajor', 'yminor'] for k in axis_formatters.keys()]):
+            raise KeyError("The axis_formatters dictionary may only contain the following keys; xmajor, xminor, "
+                           "ymajor, and yminor.")
 
         # Set up the x normalisation and y normalisation variables
         if x_norm:
@@ -2673,18 +2680,6 @@ class BaseAggregateProfile1D:
         elif y_label is not None:
             main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
 
-        # Adds a legend with source names to the side if the user requested it
-        # I let the user decide because there could be quite a few names in it and it could get messy
-        if show_legend:
-            # This allows the user to exercise some control over where the legend is placed.
-            if auto_legend:
-                main_leg = main_ax.legend(loc="best", ncol=1)
-            else:
-                main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
-            # This makes sure legend keys are shown, even if the data is hidden
-            for leg_key in main_leg.legendHandles:
-                leg_key.set_visible(True)
-
         # If the user has manually set limits then we can use them, only on the main axis because
         #  we grab those limits from the axes object for the residual axis later
         if xlim is not None:
@@ -2738,7 +2733,6 @@ class BaseAggregateProfile1D:
                 cur_col = draw_vals[v_name][1]
                 is_scalar = draw_vals[v_name][0].isscalar
 
-            print(d_val)
             if is_scalar:
                 main_ax.axhline(d_val, linestyle='dashed', color=cur_col, alpha=0.8,
                                 label=v_name)
@@ -2754,6 +2748,28 @@ class BaseAggregateProfile1D:
                                      alpha=0.5)
 
             main_ax.set_xlim(x_axis_lims)
+
+        # Adds a legend with source names to the side if the user requested it
+        # I let the user decide because there could be quite a few names in it and it could get messy
+        if show_legend:
+            # This allows the user to exercise some control over where the legend is placed.
+            if auto_legend:
+                main_leg = main_ax.legend(loc="best", ncol=1)
+            else:
+                main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+            # This makes sure legend keys are shown, even if the data is hidden
+            for leg_key in main_leg.legendHandles:
+                leg_key.set_visible(True)
+
+        # Checks for and uses formatters that the user may have specified for the plot
+        if 'xminor' in axis_formatters:
+            main_ax.xaxis.set_minor_formatter(axis_formatters['xminor'])
+        if 'xmajor' in axis_formatters:
+            main_ax.xaxis.set_major_formatter(axis_formatters['xmajor'])
+        if 'yminor' in axis_formatters:
+            main_ax.yaxis.set_minor_formatter(axis_formatters['yminor'])
+        if 'ymajor' in axis_formatters:
+            main_ax.yaxis.set_major_formatter(axis_formatters['ymajor'])
 
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
