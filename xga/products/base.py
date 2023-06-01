@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 12:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 12:46. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1502,7 +1502,9 @@ class BaseProfile1D:
             model (if a model is fitted and being shown) is displayed. Default is True.
         :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
             dictionary key they are stored under is what they will be labelled (keys can be LaTeX
-            formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}.
+            formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$': Quantity([6, 0.2, 0.3], 'keV')},
+            where 0.2 is the negative error, and 0.3 is the positive error.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -1657,13 +1659,6 @@ class BaseProfile1D:
         elif y_label is not None:
             main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
 
-        # If the user wants a legend to be shown, then we create one
-        if show_legend:
-            main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
-            # This makes sure legend keys are shown, even if the data is hidden
-            for leg_key in main_leg.legendHandles:
-                leg_key.set_visible(True)
-
         # If the user has manually set limits then we can use them, only on the main axis because
         #  we grab those limits from the axes object for the residual axis later
         if xlim is not None:
@@ -1711,16 +1706,33 @@ class BaseProfile1D:
             main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
                              color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
-        # If the user has passed extra values to plot, then we plot them
-        for v_name in draw_vals:
-            d_val = (draw_vals[v_name] / x_norm).value
-            main_ax.axhline(d_val, linestyle='dashed', color=data_colour)
-            # main_ax.annotate(v_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
-            #                  color='black', fontsize=14, xycoords=('data', 'axes fraction'))
-
-        # Use the axis limits quite a lot in this next bit, so read them out into variables
+        # Use the axis limits quite a lot in these next bits, so read them out into variables
         x_axis_lims = main_ax.get_xlim()
         y_axis_lims = main_ax.get_ylim()
+
+        # If the user has passed extra values to plot, then we plot them
+        for v_name in draw_vals:
+            d_val = (draw_vals[v_name] / y_norm).value
+            if draw_vals[v_name].isscalar:
+                main_ax.axhline(d_val, linestyle='dashed', color=data_colour, alpha=0.8,
+                                label=v_name)
+            elif len(d_val) == 2:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0]-d_val[1], d_val[0]+d_val[1], color=data_colour, alpha=0.5)
+            elif len(d_val) == 3:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0]-d_val[1], d_val[0]+d_val[2], color=data_colour, alpha=0.5)
+
+            main_ax.set_xlim(x_axis_lims)
+
+        # If the user wants a legend to be shown, then we create one
+        if show_legend:
+            main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+            # This makes sure legend keys are shown, even if the data is hidden
+            for leg_key in main_leg.legendHandles:
+                leg_key.set_visible(True)
 
         # This dynamically changes how tick labels are formatted depending on the values displayed
         if max(x_axis_lims) < 100 and not models and min(x_axis_lims) > 0.1:
@@ -1782,7 +1794,9 @@ class BaseProfile1D:
             model (if a model is fitted and being shown) is displayed. Default is True.
         :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
             dictionary key they are stored under is what they will be labelled (keys can be LaTeX
-            formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}.
+            formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$': Quantity([6, 0.2, 0.3], 'keV')},
+            where 0.2 is the negative error, and 0.3 is the positive error.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1803,7 +1817,7 @@ class BaseProfile1D:
                   back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                   x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                   y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
-                  show_legend: bool = True, show_residual_ax: bool = True):
+                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {}):
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
         fitted to it, and their residuals. The models are plotted by generating random model realisations from
@@ -1841,6 +1855,11 @@ class BaseProfile1D:
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
             model (if a model is fitted and being shown) is displayed. Default is True.
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX
+            formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$': Quantity([6, 0.2, 0.3], 'keV')},
+            where 0.2 is the negative error, and 0.3 is the positive error.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1849,7 +1868,7 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend, show_residual_ax)
+                                        model_colour, show_legend, show_residual_ax, draw_vals)
 
         plt.savefig(save_path)
 
