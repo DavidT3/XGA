@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 12:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 12:52. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1870,10 +1870,7 @@ class BaseProfile1D:
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
                                         model_colour, show_legend, show_residual_ax, draw_vals)
 
-        plt.savefig(save_path)
-
-        # plt.tight_layout()
-        plt.show()
+        plt.savefig(save_path, bbox_inches='tight')
 
         # Wipe the figure
         plt.close("all")
