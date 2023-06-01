@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 16:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 12:02. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1464,7 +1464,7 @@ class BaseProfile1D:
                  back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
-                 show_legend: bool = True, show_residual_ax: bool = True):
+                 show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {}):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
@@ -1484,7 +1484,7 @@ class BaseProfile1D:
         :param str custom_title: A plot title to replace the automatically generated title, default is None.
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
             the dictionary key they are stored under is what they will be labelled.
-            e.g. ({'r500': Quantity(), 'r200': Quantity()}
+            e.g. {'r500': Quantity(), 'r200': Quantity()}
         :param bool x_norm: Controls whether the x-axis of the profile is normalised by another value, the default is
             False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
             internal normalisation value (which can be set with the x_norm property), and if a quantity is passed it
@@ -1500,6 +1500,9 @@ class BaseProfile1D:
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
             model (if a model is fitted and being shown) is displayed. Default is True.
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX
+            formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -1507,6 +1510,12 @@ class BaseProfile1D:
         if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
             raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
                                       "{}".format(self.radii_unit.to_string()))
+
+        # Checks that any extra y-axis values that have been passed are the correct units (i.e. the same as the
+        #  y-value units used in this profile)
+        if not all([v.unit == self.values_unit for v in draw_vals.values()]):
+            raise UnitConversionError("All values in draw_vals have to be in the same units as this profile, "
+                                      "{}".format(self.values_unit.to_string()))
 
         # Default is to show models, but that flag is set to False here if there are none, otherwise we get
         #  extra plotted stuff that doesn't make sense
@@ -1702,6 +1711,13 @@ class BaseProfile1D:
             main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
                              color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
+        # If the user has passed extra values to plot, then we plot them
+        for v_name in draw_vals:
+            d_val = (draw_vals[v_name] / x_norm).value
+            main_ax.axhline(d_val, linestyle='dashed', color=data_colour)
+            # main_ax.annotate(v_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
+            #                  color='black', fontsize=14, xycoords=('data', 'axes fraction'))
+
         # Use the axis limits quite a lot in this next bit, so read them out into variables
         x_axis_lims = main_ax.get_xlim()
         y_axis_lims = main_ax.get_ylim()
@@ -1729,7 +1745,7 @@ class BaseProfile1D:
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
              x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
              y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen', show_legend: bool = True,
-             show_residual_ax: bool = True):
+             show_residual_ax: bool = True, draw_vals: dict = {}):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1764,6 +1780,9 @@ class BaseProfile1D:
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
             model (if a model is fitted and being shown) is displayed. Default is True.
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX
+            formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1772,7 +1791,7 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend, show_residual_ax)
+                                        model_colour, show_legend, show_residual_ax, draw_vals)
 
         # plt.tight_layout()
         plt.show()
