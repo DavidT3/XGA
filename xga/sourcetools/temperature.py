@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/06/2023, 14:53. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -746,7 +746,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             #  projected annuli
             vol_intersects = shell_ann_vol_intersect(cur_rads, cur_rads)
 
-            # Then its a simple inverse problem to recover the 3D temperatures
+            # Then it's an inverse matrix problem to recover the 3D temperatures
             temp_3d = (np.linalg.inv(vol_intersects.T) @ (proj_temp.values * em_prof.values)) / (np.linalg.inv(
                 vol_intersects.T) @ em_prof.values)
 
