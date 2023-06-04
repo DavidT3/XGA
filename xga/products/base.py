@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/06/2023, 15:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2023, 15:51. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1455,6 +1455,7 @@ class BaseProfile1D:
         # The user can choose to ensure that the realisation distributions are truncated at zero, in which case we
         #  use a truncated normal distribution.
         if truncate_zero:
+            # The truncnorm setup wants the limits in units of scale essentially
             trunc_lims = ((0 - self.values) / self.values_err, (np.inf - self.values) / self.values_err)
             realisations = truncnorm(trunc_lims[0], trunc_lims[1], loc=self.values,
                                      scale=self.values_err).rvs([num_real, len(self.values)])

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/04/2023, 13:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2023, 15:51. Copyright (c) The Contributors
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -892,7 +892,7 @@ class APECNormalisation1D(BaseProfile1D):
         conv_mass = MEAN_MOL_WEIGHT*m_p
 
         # Generating random normalisation profile realisations from DATA
-        norm_real = self.generate_data_realisations(num_real)
+        norm_real = self.generate_data_realisations(num_real, truncate_zero=True)
 
         if num_dens:
             gas_dens_reals = Quantity(np.zeros(norm_real.shape), "cm^-3")
@@ -945,7 +945,7 @@ class APECNormalisation1D(BaseProfile1D):
         conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (hy_to_elec * 10 ** -14)
         em_meas = self.values * conv_factor
 
-        norm_real = self.generate_data_realisations(num_real)
+        norm_real = self.generate_data_realisations(num_real, truncate_zero=True)
         em_meas_reals = norm_real * conv_factor
 
         # Calculates the standard deviation of each data point, this is how we estimate the density errors

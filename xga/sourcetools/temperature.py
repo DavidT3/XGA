@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/06/2023, 14:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2023, 15:51. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -609,7 +609,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
-                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 300,
+                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 3000,
                            sigma: int = 1, num_cores: int = NUM_CORES) \
         -> List[GasTemperature3D]:
     """
@@ -671,7 +671,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         calculation, and the XSPEC fit.
     :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
-    :param int num_data_real: The number of random realisations to generate when propagating profile uncertainties.
+    :param int num_data_real: The number of random realisations to generate when propagating profile
+        uncertainties, the default is 3000.
     :param int sigma: What sigma uncertainties should newly created profiles have, the default is 1σ.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :return: A list of the 3D temperature profiles measured by this function, though if the measurement was not
@@ -752,8 +753,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
 
             # I generate random realisations of the projected temperature profile and the emission measure profile
             #  to help me with error propagation
-            proj_temp_reals = proj_temp.generate_data_realisations(num_data_real)
-            em_reals = em_prof.generate_data_realisations(num_data_real)
+            proj_temp_reals = proj_temp.generate_data_realisations(num_data_real, truncate_zero=True)
+            em_reals = em_prof.generate_data_realisations(num_data_real, truncate_zero=True)
 
             # Set up an N x R array for the random realisations of the 3D temperature, where N is the number
             #  of realisations and R is the number of radius data points

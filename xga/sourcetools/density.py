@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2023, 15:51. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -280,7 +280,7 @@ def _onion_peel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius:
             plt.imshow(vol_intersects.value)
             plt.show()
             # Generating random normalisation profile realisations from DATA
-            sb_reals = sb_prof.generate_data_realisations(num_samples) * sb_prof.areas
+            sb_reals = sb_prof.generate_data_realisations(num_samples, truncate_zero=True) * sb_prof.areas
 
             # Using a loop here is ugly and relatively slow, but it should be okay
             transformed = []
