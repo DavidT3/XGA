@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/06/2023, 15:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2023, 15:26. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -19,6 +19,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
+from scipy.stats import truncnorm
 from tabulate import tabulate
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
@@ -1433,29 +1434,41 @@ class BaseProfile1D:
         g.triangle_plot([gd_samp], filled=True)
         plt.show()
 
-    def generate_data_realisations(self, num_real: int):
+    def generate_data_realisations(self, num_real: int, truncate_zero: bool = False):
         """
         A method to generate random realisations of the data points in this profile, using their y-axis values
         and uncertainties. This can be useful for error propagation for instance, and does not require a model fit
         to work. This method assumes that the y-errors are 1-sigma, which isn't necessarily the case.
 
         :param int num_real: The number of random realisations to generate.
+        :param bool truncate_zero: Should the data realisations be truncated at zero, default is False. This could
+            be used for generating realisations of profiles where negative values are not physical.
         :return: An N x R astropy quantity, where N is the number of realisations and R is the number of radii
             at which there are data points in this profile.
         :rtype: Quantity
         """
+        # If we have no error information on the profile y values, then we can hardly generate distributions from them
         if self.values_err is None:
             raise ValueError("This profile has no y-error information, and as such you cannot generate random"
                              " realisations of the data.")
 
-        # Here I copy the values and value uncertainties N times, where N is the number of realisations
-        #  the user wants
-        ext_values = np.repeat(self.values[..., None], num_real, axis=1).T
-        ext_value_errs = np.repeat(self.values_err[..., None], num_real, axis=1).T
+        # The user can choose to ensure that the realisation distributions are truncated at zero, in which case we
+        #  use a truncated normal distribution.
+        if truncate_zero:
+            trunc_lims = ((0 - self.values) / self.values_err, (np.inf - self.values) / self.values_err)
+            realisations = truncnorm(trunc_lims[0], trunc_lims[1], loc=self.values,
+                                     scale=self.values_err).rvs([num_real, len(self.values)])
+        # But the default behaviour is to just use a normal distribution
+        else:
+            # Here I copy the values and value uncertainties N times, where N is the number of realisations
+            #  the user wants
+            ext_values = np.repeat(self.values[..., None], num_real, axis=1).T
+            ext_value_errs = np.repeat(self.values_err[..., None], num_real, axis=1).T
+            # Here I just generate N realisations of the profiles using a normal distribution, though this does assume
+            #  that the errors are one sigma which isn't necessarily true
+            realisations = np.random.normal(ext_values, ext_value_errs)
 
-        # Then I just generate N realisations of the profiles using a normal distribution, though this does assume
-        #  that the errors are one sigma which isn't necessarily true
-        realisations = np.random.normal(ext_values, ext_value_errs)
+        # Ensure that our value distributions are passed back as quantities with the correct units
         realisations = Quantity(realisations, self.values_unit)
 
         return realisations
