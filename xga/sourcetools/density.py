@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/06/2023, 15:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 14:26. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -159,8 +159,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         src: GalaxyCluster
         # Both the angular_diameter_distance and redshift are guaranteed to be present here because redshift
         #  is REQUIRED to define GalaxyCluster objects
-        factor = ((4 * e_to_p_ratio * np.pi * (src.angular_diameter_distance.to("cm") * (1 + src.redshift)) ** 2)
-                  / 10 ** -14)
+        factor = ((4 * np.pi * (src.angular_diameter_distance.to("cm") * (1 + src.redshift)) ** 2)
+                  / (e_to_p_ratio * 10 ** -14))
         total_factor = factor * src.norm_conv_factor(conv_outer_radius, lo_en, hi_en, inner_radius, group_spec,
                                                      min_counts, min_sn, over_sample, obs_id[src_ind], inst[src_ind])
         to_dens_convs.append(total_factor)
