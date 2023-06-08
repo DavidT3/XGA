@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 15:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 17:31. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -504,8 +504,9 @@ class GasDensity3D(BaseProfile1D):
         elif radius_err is not None and not radius_err.unit.is_equivalent(outer_rad.unit):
             raise UnitConversionError("The radius_err quantity must be in units that are equivalent to units "
                                       "of {}.".format(outer_rad.unit.to_string()))
+
         # Now we make absolutely sure that the radius error(s) are in the correct units
-        elif radius_err is not None:
+        if radius_err is not None:
             radius_err = radius_err.to(self.radii_unit)
 
         # Doing an extra check to warn the user if the radius they supplied is outside the radii
@@ -1285,7 +1286,8 @@ class HydrostaticMass(BaseProfile1D):
         # Setting up a dictionary to store hydro mass results in.
         self._masses = {}
 
-    def mass(self, radius: Quantity, conf_level: float = 68.2) -> Union[Quantity, Quantity]:
+    def mass(self, radius: Quantity, conf_level: float = 68.2,
+             radius_err: Quantity = None) -> Union[Quantity, Quantity]:
         """
         A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
         radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
@@ -1298,6 +1300,8 @@ class HydrostaticMass(BaseProfile1D):
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
         :param float conf_level: The confidence level for the mass uncertainties, the default is 68.2% (~1σ).
+        :param Quantity radius_err: A standard deviation on radius, which will be taken into account during the
+            calculation of hydrostatic mass.
         :return: An astropy quantity containing the mass/masses, lower and upper uncertainties, and another containing
             the mass realisation distribution.
         :rtype: Union[Quantity, Quantity]
@@ -1307,6 +1311,24 @@ class HydrostaticMass(BaseProfile1D):
 
         # Prints a warning of the mass is outside the range of the data
         self.rad_check(radius)
+
+        # We need check that, if the user has passed uncertainty information on radii, it is how we expect it to be.
+        #  First off, are there the right number of entries?
+        if not radius.isscalar and radius_err is not None and (radius_err.isscalar or len(radius) != len(radius_err)):
+            raise ValueError("If a set of radii are passed, and radius uncertainty information is provided, the "
+                             "'radius_err' argument must contain the same number of entries as the 'radius' argument.")
+        # Same deal here, if only one radius is passed, only one error may be passed
+        elif radius.isscalar and radius_err is not None and not radius_err.isscalar:
+            raise ValueError("When a radius uncertainty ('radius_err') is passed for a single radius value, "
+                             "'radius_err' must be scalar.")
+        # Now we check that the units of the radius and radius error quantities are compatible
+        elif radius_err is not None and not radius_err.unit.is_equivalent(radius.unit):
+            raise UnitConversionError("The radius_err quantity must be in units that are equivalent to units "
+                                      "of {}.".format(radius.unit.to_string()))
+
+        # Now we make absolutely sure that the radius error(s) are in the correct units
+        if radius_err is not None:
+            radius_err = radius_err.to(self.radii_unit)
 
         if radius.isscalar and radius in self._masses:
             already_run = True
