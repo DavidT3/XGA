@@ -1,11 +1,13 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/06/2023, 15:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 15:54. Copyright (c) The Contributors
+
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
 
 import numpy as np
 from astropy.constants import k_B, G, m_p
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
@@ -811,7 +813,7 @@ class APECNormalisation1D(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "APEC Normalisation"
 
-    def _gen_profile_setup(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr') \
+    def _gen_profile_setup(self, redshift: float, cosmo: Cosmology, abund_table: str = 'angr') \
             -> Tuple[Quantity, Quantity, float]:
         """
         There are many common steps in the gas_density_profile and emission_measure_profile methods, so I decided to
@@ -887,7 +889,7 @@ class APECNormalisation1D(BaseProfile1D):
         # This is essentially the constants bit of the XSPEC APEC normalisation
         # Angular diameter distance is calculated using the cosmology which was associated with the cluster
         #  at definition
-        conv_factor = (4 * np.pi * e_to_p_ratio * (ang_dist * (1 + redshift)) ** 2) / 10 ** -14
+        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (e_to_p_ratio * 10 ** -14)
         num_gas_scale = (1+e_to_p_ratio)
         conv_mass = MEAN_MOL_WEIGHT*m_p
 
@@ -922,7 +924,7 @@ class APECNormalisation1D(BaseProfile1D):
                                  self.associated_set_storage_key, self.deg_radii)
         return dens_prof
 
-    def emission_measure_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr',
+    def emission_measure_profile(self, redshift: float, cosmo: Cosmology, abund_table: str = 'angr',
                                  num_real: int = 100, sigma: int = 2):
         """
         A method to calculate the emission measure profile from the APEC normalisation profile, which in turn was
@@ -942,7 +944,7 @@ class APECNormalisation1D(BaseProfile1D):
         # This is essentially the constants bit of the XSPEC APEC normalisation
         # Angular diameter distance is calculated using the cosmology which was associated with the cluster
         #  at definition
-        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (hy_to_elec * 10 ** -14)
+        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (10 ** -14)
         em_meas = self.values * conv_factor
 
         norm_real = self.generate_data_realisations(num_real, truncate_zero=True)
@@ -1334,9 +1336,9 @@ class HydrostaticMass(BaseProfile1D):
                 temp = self._temp_model.get_realisations(radius).to('K')
                 temp_der = self._temp_model.derivative(radius, dx, True).to('K')
 
-            # Please note that this is just the vanilla hydrostatic mass equation, but not written in the standard form.
-            # Here there are no logs in the derivatives, because its easier to take advantage of astropy's quantities
-            #  that way.
+            # Please note that this is just the vanilla hydrostatic mass equation, but not written in the "standard
+            #  form". Here there are no logs in the derivatives, because it's easier to take advantage of astropy's
+            #  quantities that way.
             mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT*m_p) * G)) * \
                         ((dens * temp_der) + (temp * dens_der))
 
