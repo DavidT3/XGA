@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 15:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 15:50. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2651,8 +2651,15 @@ class BaseAggregateProfile1D:
                 for method in ['mcmc', 'odr', 'curve_fit']:
                     try:
                         model_obj = p.get_model_fit(model, method)
-                        lo_rad = p.radii.min()
-                        hi_rad = p.radii.max()
+
+                        # This makes sure that, if there are radius 'uncertainties' - the models are created so they
+                        #  plot all the way from the leftmost errorbar, to the end of the rightmost
+                        if p.radii_err is not None:
+                            lo_rad = (p.fit_radii - p.radii_err).min()
+                            hi_rad = (p.fit_radii + p.radii_err).max()
+                        else:
+                            lo_rad = p.fit_radii.min()
+                            hi_rad = p.fit_radii.max()
                         mod_rads = np.linspace(lo_rad, hi_rad, 100)
                         mod_reals = model_obj.get_realisations(mod_rads)
                         median_model = np.percentile(mod_reals, 50, axis=1)
