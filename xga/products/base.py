@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 17:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 17:42. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2795,8 +2795,8 @@ class BaseAggregateProfile1D:
                 leg_key.set_visible(True)
 
         # We specify which axes object needs formatters applied, depends on whether the residual ax is being
-        #  shown or not
-        if show_residual_ax:
+        #  shown or not - slightly dodgy way of checking for a local declaration of the residual axes
+        if show_residual_ax and 'res_ax' in locals():
             form_ax = res_ax
         else:
             form_ax = main_ax
