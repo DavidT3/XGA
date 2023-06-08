@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 15:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 17:01. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2489,7 +2489,7 @@ class BaseAggregateProfile1D:
              ylim: Tuple = None, model: str = None, back_sub: bool = True, show_legend: bool = True,
              just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, x_norm: bool = False,
              y_norm: bool = False, x_label: str = None, y_label: str = None, save_path: str = None,
-             draw_vals: dict = {}, auto_legend: bool = True, axis_formatters: dict = {}):
+             draw_vals: dict = {}, auto_legend: bool = True, axis_formatters: dict = {}, show_residual_ax: bool = True):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -2533,6 +2533,8 @@ class BaseAggregateProfile1D:
         :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
             can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
             keys should be instantiated matplotlib formatters.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -2581,7 +2583,7 @@ class BaseAggregateProfile1D:
         # Grabbing the axis object and making sure the ticks are set up how we want
         main_ax = plt.gca()
         main_ax.minorticks_on()
-        if model is not None:
+        if model is not None and show_residual_ax:
             # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
             res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
             res_ax.minorticks_on()
@@ -2682,11 +2684,12 @@ class BaseAggregateProfile1D:
                         main_ax.plot(mod_rads.value / x_norms[p_ind].value, upper_model.value / y_norms[p_ind].value,
                                      color=colour, linestyle="dashed")
 
-                        # This calculates and plots the residuals between the model and the data on the extra
-                        #  axis we added near the beginning of this method
-                        res = np.percentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
-                              (plot_y_vals * y_norms[p_ind])
-                        res_ax.plot(rad_vals.value, res.value, 'D', color=colour)
+                        if show_residual_ax:
+                            # This calculates and plots the residuals between the model and the data on the extra
+                            #  axis we added near the beginning of this method
+                            res = np.percentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
+                                  (plot_y_vals * y_norms[p_ind])
+                            res_ax.plot(rad_vals.value, res.value, 'D', color=colour)
 
                         break
                     except ModelNotAssociatedError:
@@ -2720,7 +2723,7 @@ class BaseAggregateProfile1D:
         # Setup the scale that the user wants to see, again on the main axis
         main_ax.set_xscale(xscale)
         main_ax.set_yscale(yscale)
-        if model is not None:
+        if model is not None and show_residual_ax:
             # We want the residual x axis limits to be identical to the main axis, as the
             # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
