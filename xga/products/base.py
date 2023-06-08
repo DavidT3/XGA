@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 17:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 17:37. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2794,15 +2794,21 @@ class BaseAggregateProfile1D:
             for leg_key in main_leg.legendHandles:
                 leg_key.set_visible(True)
 
+        # We specify which axes object needs formatters applied, depends on whether the residual ax is being
+        #  shown or not
+        if show_residual_ax:
+            form_ax = res_ax
+        else:
+            form_ax = main_ax
         # Checks for and uses formatters that the user may have specified for the plot
         if 'xminor' in axis_formatters:
-            main_ax.xaxis.set_minor_formatter(axis_formatters['xminor'])
+            form_ax.xaxis.set_minor_formatter(axis_formatters['xminor'])
         if 'xmajor' in axis_formatters:
-            main_ax.xaxis.set_major_formatter(axis_formatters['xmajor'])
+            form_ax.xaxis.set_major_formatter(axis_formatters['xmajor'])
         if 'yminor' in axis_formatters:
-            main_ax.yaxis.set_minor_formatter(axis_formatters['yminor'])
+            form_ax.yaxis.set_minor_formatter(axis_formatters['yminor'])
         if 'ymajor' in axis_formatters:
-            main_ax.yaxis.set_major_formatter(axis_formatters['ymajor'])
+            form_ax.yaxis.set_major_formatter(axis_formatters['ymajor'])
 
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
