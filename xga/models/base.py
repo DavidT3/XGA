@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 20:38. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -203,7 +203,12 @@ class BaseModel1D(metaclass=ABCMeta):
         random realisations of this model at a given x-position (or positions).
 
         :param Quantity x: The x-position(s) at which realisations of the model should be generated
-            from the associated parameter distributions.
+            from the associated parameter distributions. If multiple, non-distribution, radii are to be used, make sure
+             to pass them as an (M,), single dimension, astropy quantity, where M is the number of separate radii to
+             generate realisations for. To marginalise over a radius distribution when generating realisations, pass
+             a multi-dimensional astropy quantity; i.e. for a single set of realisations pass a (1, N) quantity, where
+             N is the number of samples in the parameter posteriors, for realisations for M different radii pass a
+             (M, N) quantity.
         :return: The model realisations, in a Quantity with shape (len(x), num_samples) if x has multiple
             radii in it (num_samples is the number of samples in the parameter distributions), and (num_samples,) if
             only a single x value is passed.
@@ -213,13 +218,22 @@ class BaseModel1D(metaclass=ABCMeta):
             raise UnitConversionError("You have passed an x value in units of {p}, but this model expects units of "
                                       "{e}".format(p=x.unit.to_string(), e=self._x_unit.to_string()))
         else:
-            # Just to be sure its in exactly the right units
+            # Just to be sure it's in exactly the right units
             x = x.to(self._x_unit)
 
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
             warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.")
 
-        realisations = self.model(x[..., None], *self._par_dists)
+        if x.isscalar or (not x.isscalar and x.ndim == 1):
+            realisations = self.model(x[..., None], *self._par_dists)
+        else:
+            # This case is for marginalising over a radius distribution (or distributions), so in other words we want
+            #  distribution(s) of N values out (where N is the number of values in the model parameter posterior
+            #  distributions).
+            # Note the lack of [..., None] on x here, this is what makes it different to the first part of the if
+            #  statement
+            realisations = self.model(x, *self._par_dists)
+
         return realisations
 
     @staticmethod
