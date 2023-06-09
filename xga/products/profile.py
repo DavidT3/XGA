@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 17:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 23:13. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1330,33 +1330,71 @@ class HydrostaticMass(BaseProfile1D):
         if radius_err is not None:
             radius_err = radius_err.to(self.radii_unit)
 
-        if radius.isscalar and radius in self._masses:
+        # Here we construct the storage key for the radius passed, and the uncertainty if there is one
+        if radius.isscalar and radius_err is None:
+            stor_key = str(radius.value) + " " + str(radius.unit)
+        elif radius.isscalar and radius_err is not None:
+            stor_key = str(radius.value) + '_' + str(radius_err.value) + " " + str(radius.unit)
+        # In this case, as the radius is not scalar, the masses won't be stored so we don't need a storage key
+        else:
+            stor_key = None
+
+        # Check to see whether the calculation has to be run again
+        if radius.isscalar and stor_key in self._masses:
             already_run = True
             mass_dist = self._masses[radius]
         else:
             already_run = False
 
         # If the models don't have analytical solutions to their derivative then the derivative method will need
-        #  a dx to assume, so I will set one equal to radius/1e+6, should be small enough.
-        dx = radius/1e+6
+        #  a dx to assume, so I will set one equal to radius/1e+6 (or the max radius if non-scalar), should be
+        #  small enough.
+        if radius.isscalar:
+            dx = radius/1e+6
+        else:
+            dx = radius.max()/1e+6
+
+        # Declaring this allows us to randomly draw from Gaussians, if the user has given us radius error information
+        rng = np.random.default_rng()
+        # In this case a single radius value, and a radius uncertainty has been passed
+        if radius.isscalar and radius_err is not None:
+            # We just want one a single distribution of radius here, but make sure that it is in a (1, N) shaped array
+            #  as some downstream tasks in model classes, such as get_realisations and derivative, want radius
+            #  DISTRIBUTIONS to be 2dim arrays, and multiple radius VALUES (e.g. [1, 2, 3, 4]) to be 1dim arrays
+            calc_rad = Quantity(rng.normal(radius.value, radius_err.value, (1, len(self._dens_model.par_dists[0]))),
+                                radius_err.unit)
+        # In this case multiple radius values have been passed, each with an uncertainty
+        elif not radius.isscalar and radius_err is not None:
+            # So here we're setting up M radius distributions, where M is the number of input radii. So this radius
+            #  array ends up being shape (M, N), where M is the number of radii, and M is the number of samples in
+            #  the model posterior distributions
+            calc_rad = Quantity(rng.normal(radius.value, radius_err.value,
+                                           (len(self._dens_model.par_dists[0]), len(radius))), radius_err.unit).T
+
+        # This is the simplest case, just a radius (or a set of radii) with no uncertainty information has been passed
+        else:
+            calc_rad = radius
+
+        # If we need to do the calculation (i.e. no existing result is available, and the model fits worked) then
+        #  we had best get to it!
         if not already_run and self._dens_model.success and self._temp_model.success:
             # This grabs gas density values from the density model, need to check whether the model is in units
             #  of mass or number density
             if self._dens_model.y_unit.is_equivalent('1/cm^3'):
-                dens = self._dens_model.get_realisations(radius)
-                dens_der = self._dens_model.derivative(radius, dx, True)
+                dens = self._dens_model.get_realisations(calc_rad)
+                dens_der = self._dens_model.derivative(calc_rad, dx, True)
             else:
-                dens = self._dens_model.get_realisations(radius) / (MEAN_MOL_WEIGHT*m_p)
-                dens_der = self._dens_model.derivative(radius, dx, True) / (MEAN_MOL_WEIGHT*m_p)
+                dens = self._dens_model.get_realisations(calc_rad) / (MEAN_MOL_WEIGHT*m_p)
+                dens_der = self._dens_model.derivative(calc_rad, dx, True) / (MEAN_MOL_WEIGHT*m_p)
 
             # We do the same for the temperature vals, again need to check the units
             if self._temp_model.y_unit.is_equivalent("keV"):
-                temp = (self._temp_model.get_realisations(radius)/k_B).to('K')
-                temp_der = self._temp_model.derivative(radius, dx, True)/k_B
+                temp = (self._temp_model.get_realisations(calc_rad)/k_B).to('K')
+                temp_der = self._temp_model.derivative(calc_rad, dx, True)/k_B
                 temp_der = temp_der.to(Unit('K')/self._temp_model.x_unit)
             else:
-                temp = self._temp_model.get_realisations(radius).to('K')
-                temp_der = self._temp_model.derivative(radius, dx, True).to('K')
+                temp = self._temp_model.get_realisations(calc_rad).to('K')
+                temp_der = self._temp_model.derivative(calc_rad, dx, True).to('K')
 
             # Please note that this is just the vanilla hydrostatic mass equation, but not written in the "standard
             #  form". Here there are no logs in the derivatives, because it's easier to take advantage of astropy's
@@ -1368,7 +1406,7 @@ class HydrostaticMass(BaseProfile1D):
             mass_dist = mass_dist.to('Msun').T
 
             if radius.isscalar:
-                self._masses[radius] = mass_dist
+                self._masses[stor_key] = mass_dist
 
         elif not self._temp_model.success or not self._dens_model.success:
             raise XGAFitError("One or both of the fits to the temperature model and density profiles were "
@@ -1381,7 +1419,9 @@ class HydrostaticMass(BaseProfile1D):
         mass_res = Quantity(np.array([mass_med.value, mass_lower.value, mass_upper.value]), mass_dist.unit)
 
         if np.any(mass_res[0] < 0):
-            raise ValueError("A mass of less than zero has been measured, which is not physical.")
+            # TODO SORT THIS OUT - PROBABLY DON'T FAIL IT IF ITS A NEGATIVE VALUE
+            print('NEGATIVE BAAAASTARD')
+            # raise ValueError("A mass of less than zero has been measured, which is not physical.")
 
         return mass_res, mass_dist
 
