@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/06/2023, 12:06. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2461,7 +2461,7 @@ class ExpMap(Image):
         # Need to overwrite the data unit attribute set by the Image init
         self._data_unit = Unit("s")
 
-    def get_exp(self, at_coord: Quantity) -> float:
+    def get_exp(self, at_coord: Quantity) -> Quantity:
         """
         A simple method that converts the given coordinates to pixels, then finds the exposure time
         at those coordinates.

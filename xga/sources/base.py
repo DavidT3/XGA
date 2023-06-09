@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/05/2023, 17:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/06/2023, 12:06. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3597,7 +3597,7 @@ class BaseSource:
         print("\n-----------------------------------------------------")
         print("Source Name - {}".format(self._name))
         print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
-        if self._peaks is not None:
+        if self._use_peak is not None and self._use_peak:
             print("X-ray Peak - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
         print("nH - {}".format(self.nH))
         if self._redshift is not None:
@@ -3613,6 +3613,14 @@ class BaseSource:
                                                     self._initial_region_matches[o].sum() == 1])))
         print("Obs with >1 matches - {}".format(sum([1 for o in self._initial_region_matches if
                                                      self._initial_region_matches[o].sum() > 1])))
+        # If a combined exposure map exists, we'll use it to give the user an idea of the total exposure
+        try:
+            ex = self.get_combined_expmaps()
+            if isinstance(ex, list):
+                ex = ex[0]
+            print("Total exposure - {}".format(ex.get_exp(self.ra_dec).to('ks').round(2)))
+        except NoProductAvailableError:
+            pass
         print("Images associated - {}".format(len(self.get_products("image"))))
         print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
         print("Combined Ratemaps associated - {}".format(len(self.get_products("combined_ratemap"))))
@@ -3631,27 +3639,28 @@ class BaseSource:
                 print("Custom Region SNR - {}".format(self.get_snr("custom", self._default_coord).round(2)))
 
         if self._r200 is not None:
-            print("R200 - {}".format(self._r200))
+            print("R200 - {}".format(self._r200.round(2)))
             if len(self.get_products('combined_image')) != 0:
                 print("R200 SNR - {}".format(self.get_snr("r200", self._default_coord).round(2)))
         if self._r500 is not None:
-            print("R500 - {}".format(self._r500))
+            print("R500 - {}".format(self._r500.round(2)))
             if len(self.get_products('combined_image')) != 0:
                 print("R500 SNR - {}".format(self.get_snr("r500", self._default_coord).round(2)))
         if self._r2500 is not None:
-            print("R2500 - {}".format(self._r2500))
+            print("R2500 - {}".format(self._r2500.round(2)))
             if len(self.get_products('combined_image')) != 0:
                 print("R2500 SNR - {}".format(self.get_snr("r2500", self._default_coord).round(2)))
 
         # There's probably a neater way of doing the observables - maybe a formatting function?
         if self._richness is not None and self._richness_err is not None \
                 and not isinstance(self._richness_err, (list, tuple, ndarray)):
-            print("Richness - {0}±{1}".format(self._richness, self._richness_err))
+            print("Richness - {0}±{1}".format(self._richness.round(2), self._richness_err.round(2)))
         elif self._richness is not None and self._richness_err is not None \
                 and isinstance(self._richness_err, (list, tuple, ndarray)):
-            print("Richness - {0} -{1}+{2}".format(self._richness, self._richness_err[0], self._richness_err[1]))
+            print("Richness - {0} -{1}+{2}".format(self._richness.round(2), self._richness_err[0].round(2),
+                                                   self._richness_err[1].round(2)))
         elif self._richness is not None and self._richness_err is None:
-            print("Richness - {0}".format(self._richness))
+            print("Richness - {0}".format(self._richness.round(2)))
 
         if self._wl_mass is not None and self._wl_mass_err is not None \
                 and not isinstance(self._wl_mass_err, (list, tuple, ndarray)):
@@ -3667,14 +3676,14 @@ class BaseSource:
             try:
                 tx = self.get_temperature('r500', 'constant*tbabs*apec').value.round(2)
                 # Just average the uncertainty for this
-                print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean()))
+                print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean().round(2)))
             except (ModelNotAssociatedError, NoProductAvailableError):
                 pass
 
             try:
                 lx = self.get_luminosities('r500', 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
                                            hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
-                print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean()))
+                print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean().round(2)))
 
             except (ModelNotAssociatedError, NoProductAvailableError):
                 pass
