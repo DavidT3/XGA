@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 17:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 18:05. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2665,15 +2665,15 @@ class BaseAggregateProfile1D:
             rad_vals /= x_norms[p_ind]
 
             # Now the actual plotting of the data
-            if p.radii_err is not None and p.values_err is None:
+            if p.radii_err is not None and p.values_err is None and not joined_points:
                 x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
                 line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
                                         label=leg_label)
-            elif p.radii_err is None and p.values_err is not None:
+            elif p.radii_err is None and p.values_err is not None and not joined_points:
                 y_errs = (p.values_err.copy() / y_norms[p_ind]).value
                 line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
                                         label=leg_label)
-            elif p.radii_err is not None and p.values_err is not None:
+            elif p.radii_err is not None and p.values_err is not None and not joined_points:
                 x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
                 y_errs = (p.values_err.copy() / y_norms[p_ind]).value
                 line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x",
