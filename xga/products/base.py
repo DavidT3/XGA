@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 17:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 15:48. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1479,7 +1479,7 @@ class BaseProfile1D:
                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
-                 auto_legend: bool = True):
+                 auto_legend: bool = True, joined_points: bool = False):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
@@ -1523,6 +1523,8 @@ class BaseProfile1D:
         :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
             will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
             plot outside the main axes.
+        :param bool joined_points: If True, the data in the profile will be plotted as a line, rather than points, as
+            will any uncertainty regions.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -1590,19 +1592,25 @@ class BaseProfile1D:
         rad_vals /= x_norm
 
         # Now the actual plotting of the data
-        if self.radii_err is not None and self.values_err is None:
+        if self.radii_err is not None and self.values_err is None and not joined_points:
             x_errs = (self.radii_err.copy() / x_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
                                     label=leg_label, color=data_colour)
-        elif self.radii_err is None and self.values_err is not None:
+        elif self.radii_err is None and self.values_err is not None and not joined_points:
             y_errs = (self.values_err.copy() / y_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
                                     label=leg_label, color=data_colour)
-        elif self.radii_err is not None and self.values_err is not None:
+        elif self.radii_err is not None and self.values_err is not None and not joined_points:
             x_errs = (self.radii_err.copy() / x_norm).value
             y_errs = (self.values_err.copy() / y_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
                                     label=leg_label, color=data_colour)
+        elif not joined_points:
+            line = main_ax.plot(rad_vals.value, plot_y_vals.value, label=leg_label, color=data_colour)
+            if self.values_err is not None:
+                y_errs = (self.values_err.copy() / y_norm).value
+                main_ax.fill_between(rad_vals, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
+                                     color=data_colour,  linestyle='dashdot', alpha=0.7)
         else:
             line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label, color=data_colour)
 
@@ -1789,7 +1797,8 @@ class BaseProfile1D:
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
              x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
              y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen', show_legend: bool = True,
-             show_residual_ax: bool = True, draw_vals: dict = {}, auto_legend: bool = True):
+             show_residual_ax: bool = True, draw_vals: dict = {}, auto_legend: bool = True,
+             joined_points: bool = False):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1832,6 +1841,8 @@ class BaseProfile1D:
         :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
             will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
             plot outside the main axes.
+        :param bool joined_points: If True, the data in the profile will be plotted as a line, rather than points, as
+            will any uncertainty regions.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1840,7 +1851,8 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend, show_residual_ax, draw_vals, auto_legend)
+                                        model_colour, show_legend, show_residual_ax, draw_vals, auto_legend,
+                                        joined_points)
 
         # plt.tight_layout()
         plt.show()
@@ -1853,7 +1865,7 @@ class BaseProfile1D:
                   x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                   y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
                   show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
-                  auto_legend: bool = True):
+                  auto_legend: bool = True, joined_points: bool = False):
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
         fitted to it, and their residuals. The models are plotted by generating random model realisations from
@@ -1899,6 +1911,8 @@ class BaseProfile1D:
         :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
             will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
             plot outside the main axes.
+        :param bool joined_points: If True, the data in the profile will be plotted as a line, rather than points, as
+            will any uncertainty regions.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1907,7 +1921,8 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend, show_residual_ax, draw_vals, auto_legend)
+                                        model_colour, show_legend, show_residual_ax, draw_vals, auto_legend,
+                                        joined_points)
 
         fig.savefig(save_path, bbox_inches='tight')
 
