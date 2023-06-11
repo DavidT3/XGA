@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 15:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 16:01. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1605,7 +1605,7 @@ class BaseProfile1D:
             y_errs = (self.values_err.copy() / y_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
                                     label=leg_label, color=data_colour)
-        elif not joined_points:
+        elif joined_points:
             line = main_ax.plot(rad_vals.value, plot_y_vals.value, label=leg_label, color=data_colour)
             if self.values_err is not None:
                 y_errs = (self.values_err.copy() / y_norm).value
