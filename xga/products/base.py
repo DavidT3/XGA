@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 16:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 17:51. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2537,7 +2537,7 @@ class BaseAggregateProfile1D:
              just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, x_norm: bool = False,
              y_norm: bool = False, x_label: str = None, y_label: str = None, save_path: str = None,
              draw_vals: dict = {}, auto_legend: bool = True, axis_formatters: dict = None,
-             show_residual_ax: bool = True):
+             show_residual_ax: bool = True, joined_points: bool = False):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -2583,6 +2583,8 @@ class BaseAggregateProfile1D:
             keys should be instantiated matplotlib formatters.
         :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
             model (if a model is fitted and being shown) is displayed. Default is True.
+        :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
+            will any uncertainty regions.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -2676,6 +2678,12 @@ class BaseAggregateProfile1D:
                 y_errs = (p.values_err.copy() / y_norms[p_ind]).value
                 line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x",
                                         capsize=2, label=leg_label)
+            elif joined_points:
+                line = main_ax.plot(rad_vals.value, plot_y_vals.value, label=leg_label)
+                if p.values_err is not None:
+                    y_errs = (p.values_err.copy() / y_norm[p_ind]).value
+                    main_ax.fill_between(rad_vals, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
+                                         linestyle='dashdot', alpha=0.7)
             else:
                 line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
 
