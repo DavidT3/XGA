@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 23:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 14:13. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1418,10 +1418,11 @@ class HydrostaticMass(BaseProfile1D):
 
         mass_res = Quantity(np.array([mass_med.value, mass_lower.value, mass_upper.value]), mass_dist.unit)
 
-        if np.any(mass_res[0] < 0):
-            # TODO SORT THIS OUT - PROBABLY DON'T FAIL IT IF ITS A NEGATIVE VALUE
-            print('NEGATIVE BAAAASTARD')
-            # raise ValueError("A mass of less than zero has been measured, which is not physical.")
+        # We check to see if any of the upper limits (i.e. measured value plus +ve error) are below zero, and if so
+        #  then we throw an exception up
+        if np.any((mass_res[0] + mass_res[1]) < 0):
+            raise ValueError("A mass upper limit (i.e. measured value plus +ve error) of less than zero has been "
+                             "measured, which is not physical.")
 
         return mass_res, mass_dist
 
