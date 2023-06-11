@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 16:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 16:23. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1479,7 +1479,7 @@ class BaseProfile1D:
                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
-                 auto_legend: bool = True, joined_points: bool = False):
+                 auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
@@ -1525,6 +1525,9 @@ class BaseProfile1D:
             plot outside the main axes.
         :param bool joined_points: If True, the data in the profile will be plotted as a line, rather than points, as
             will any uncertainty regions.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -1774,19 +1777,42 @@ class BaseProfile1D:
             for leg_key in main_leg.legendHandles:
                 leg_key.set_visible(True)
 
-        # This dynamically changes how tick labels are formatted depending on the values displayed
-        if max(x_axis_lims) < 100 and not models and min(x_axis_lims) > 0.1:
-            main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-            main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        elif max(x_axis_lims) < 100 and models and show_residual_ax:
-            res_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-            res_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        # If this variable is not None it means that the user has specified their own formatters, and these will
+        #  now override the automatic formatting
 
-        if max(y_axis_lims) < 100 and min(y_axis_lims) > 0.1:
-            main_ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-            main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        elif max(y_axis_lims) < 100 and min(y_axis_lims) <= 0.1:
-            main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        if axis_formatters is not None:
+            # We specify which axes object needs formatters applied, depends on whether the residual ax is being
+            #  shown or not - slightly dodgy way of checking for a local declaration of the residual axes
+            if show_residual_ax and 'res_ax' in locals():
+                form_ax = res_ax
+            else:
+                form_ax = main_ax
+            # Checks for and uses formatters that the user may have specified for the plot
+            if 'xminor' in axis_formatters:
+                form_ax.xaxis.set_minor_formatter(axis_formatters['xminor'])
+            if 'xmajor' in axis_formatters:
+                form_ax.xaxis.set_major_formatter(axis_formatters['xmajor'])
+
+            # The y-axis formatters are applied to the main axis
+            if 'yminor' in axis_formatters:
+                main_ax.yaxis.set_minor_formatter(axis_formatters['yminor'])
+            if 'ymajor' in axis_formatters:
+                main_ax.yaxis.set_major_formatter(axis_formatters['ymajor'])
+
+        else:
+            # This dynamically changes how tick labels are formatted depending on the values displayed
+            if max(x_axis_lims) < 100 and not models and min(x_axis_lims) > 0.1:
+                main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            elif max(x_axis_lims) < 100 and models and show_residual_ax:
+                res_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                res_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+            if max(y_axis_lims) < 100 and min(y_axis_lims) > 0.1:
+                main_ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            elif max(y_axis_lims) < 100 and min(y_axis_lims) <= 0.1:
+                main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         if models and show_residual_ax:
             return main_ax, res_ax
@@ -2504,7 +2530,8 @@ class BaseAggregateProfile1D:
              ylim: Tuple = None, model: str = None, back_sub: bool = True, show_legend: bool = True,
              just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, x_norm: bool = False,
              y_norm: bool = False, x_label: str = None, y_label: str = None, save_path: str = None,
-             draw_vals: dict = {}, auto_legend: bool = True, axis_formatters: dict = {}, show_residual_ax: bool = True):
+             draw_vals: dict = {}, auto_legend: bool = True, axis_formatters: dict = None,
+             show_residual_ax: bool = True):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -2816,14 +2843,16 @@ class BaseAggregateProfile1D:
         else:
             form_ax = main_ax
         # Checks for and uses formatters that the user may have specified for the plot
-        if 'xminor' in axis_formatters:
+        if axis_formatters is not None and 'xminor' in axis_formatters:
             form_ax.xaxis.set_minor_formatter(axis_formatters['xminor'])
-        if 'xmajor' in axis_formatters:
+        if axis_formatters is not None and 'xmajor' in axis_formatters:
             form_ax.xaxis.set_major_formatter(axis_formatters['xmajor'])
-        if 'yminor' in axis_formatters:
-            form_ax.yaxis.set_minor_formatter(axis_formatters['yminor'])
-        if 'ymajor' in axis_formatters:
-            form_ax.yaxis.set_major_formatter(axis_formatters['ymajor'])
+
+        # The y-axis formatters are applied to the main axis
+        if axis_formatters is not None and 'yminor' in axis_formatters:
+            main_ax.yaxis.set_minor_formatter(axis_formatters['yminor'])
+        if axis_formatters is not None and 'ymajor' in axis_formatters:
+            main_ax.yaxis.set_major_formatter(axis_formatters['ymajor'])
 
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
