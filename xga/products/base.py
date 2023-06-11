@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 16:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 16:24. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1824,7 +1824,7 @@ class BaseProfile1D:
              x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
              y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen', show_legend: bool = True,
              show_residual_ax: bool = True, draw_vals: dict = {}, auto_legend: bool = True,
-             joined_points: bool = False):
+             joined_points: bool = False, axis_formatters: dict = None):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1869,6 +1869,9 @@ class BaseProfile1D:
             plot outside the main axes.
         :param bool joined_points: If True, the data in the profile will be plotted as a line, rather than points, as
             will any uncertainty regions.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1878,7 +1881,7 @@ class BaseProfile1D:
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
                                         model_colour, show_legend, show_residual_ax, draw_vals, auto_legend,
-                                        joined_points)
+                                        joined_points, axis_formatters)
 
         # plt.tight_layout()
         plt.show()
@@ -1891,7 +1894,7 @@ class BaseProfile1D:
                   x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                   y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
                   show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
-                  auto_legend: bool = True, joined_points: bool = False):
+                  auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
         fitted to it, and their residuals. The models are plotted by generating random model realisations from
@@ -1939,6 +1942,9 @@ class BaseProfile1D:
             plot outside the main axes.
         :param bool joined_points: If True, the data in the profile will be plotted as a line, rather than points, as
             will any uncertainty regions.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1948,7 +1954,7 @@ class BaseProfile1D:
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
                                         model_colour, show_legend, show_residual_ax, draw_vals, auto_legend,
-                                        joined_points)
+                                        joined_points, axis_formatters)
 
         fig.savefig(save_path, bbox_inches='tight')
 
