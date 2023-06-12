@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 18:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 21:27. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1542,6 +1542,11 @@ class BaseProfile1D:
             raise UnitConversionError("All values in draw_vals have to be in the same units as this profile, "
                                       "{}".format(self.values_unit.to_string()))
 
+        if axis_formatters is not None and \
+                not all([k in ['xmajor', 'xminor', 'ymajor', 'yminor'] for k in axis_formatters.keys()]):
+            raise KeyError("The axis_formatters dictionary may only contain the following keys; xmajor, xminor, "
+                           "ymajor, and yminor.")
+
         # Default is to show models, but that flag is set to False here if there are none, otherwise we get
         #  extra plotted stuff that doesn't make sense
         if len(self.good_model_fits) == 0:
@@ -2605,7 +2610,8 @@ class BaseAggregateProfile1D:
             raise UnitConversionError("All values in draw_vals have to be in the same units as this profile, "
                                       "{}".format(self.values_unit.to_string()))
 
-        if not all([k in ['xmajor', 'xminor', 'ymajor', 'yminor'] for k in axis_formatters.keys()]):
+        if axis_formatters is not None and \
+                not all([k in ['xmajor', 'xminor', 'ymajor', 'yminor'] for k in axis_formatters.keys()]):
             raise KeyError("The axis_formatters dictionary may only contain the following keys; xmajor, xminor, "
                            "ymajor, and yminor.")
 
