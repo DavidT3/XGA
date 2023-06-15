@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 14:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:25. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -431,7 +431,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
 
-    # Need to sort out the type of model input that the user chose, and make sure its ready to be passed into the
+    # Need to sort out the type of model input that the user chose, and make sure its ready to be passed into
     #  the fit method of the surface brightness profile(s)
     # First we check the number of arguments passed for the model
     model = model_check(sources, model)
