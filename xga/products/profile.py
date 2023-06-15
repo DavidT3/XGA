@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 14:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/06/2023, 14:28. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1342,7 +1342,7 @@ class HydrostaticMass(BaseProfile1D):
         # Check to see whether the calculation has to be run again
         if radius.isscalar and stor_key in self._masses:
             already_run = True
-            mass_dist = self._masses[radius]
+            mass_dist = self._masses[stor_key]
         else:
             already_run = False
 
