@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/06/2023, 14:19. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2148,8 +2148,6 @@ class AnnularSpectra(BaseAggregateProduct):
         mid_radii = [(pr[r_ind] + pr[r_ind + 1]) / 2 for r_ind in range(len(pr) - 1)]
         # Makes mid_radii a quantity
         self._proper_ann_centres = Quantity(mid_radii, new_vals.unit)
-        if self.proper_radii[0].value == 0:
-            self._proper_ann_centres[0] = 0
 
     @property
     def proper_annulus_centres(self) -> Quantity:
