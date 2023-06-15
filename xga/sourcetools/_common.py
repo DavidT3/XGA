@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:48. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -69,7 +69,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                     temp_hi_en: Quantity = Quantity(7.9, 'keV'),
                                     group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
                                     over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                                    show_warn: bool = True):
+                                    show_warn: bool = True, psf_bins: int = 4):
 
     sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, abund_table, group_spec,
                                                        spec_min_counts, spec_min_sn, over_sample, num_cores)
@@ -120,7 +120,8 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                        min_snr=sb_min_snr, abund_table=abund_table, num_steps=num_steps,
                                        num_walkers=num_walkers, group_spec=group_spec, min_counts=spec_min_counts,
                                        min_sn=spec_min_sn, over_sample=over_sample, conv_outer_radius=global_radius,
-                                       inv_abel_method=inv_abel_method, num_cores=num_cores, show_warn=show_warn)
+                                       inv_abel_method=inv_abel_method, num_cores=num_cores, show_warn=show_warn,
+                                       psf_bins=psf_bins)
     # Set this up to lookup density profiles based on source
     dens_prof_dict = {str(cut_cut_sources[p_ind]): p for p_ind, p in enumerate(dens_profs)}
 
