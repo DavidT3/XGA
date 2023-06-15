@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 15:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:18. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1502,10 +1502,10 @@ class Spectrum(BaseProduct):
         plt.show()
 
     def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
-                 hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
-                 src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
-                 yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
-                 save_path: str = None):
+             hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
+             src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
+             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
+             save_path: str = None):
         """
         A method for viewing the data associated with this Spectrum instance.
 
@@ -1784,8 +1784,6 @@ class AnnularSpectra(BaseAggregateProduct):
         self._radii = Quantity([r.value for r in radii], self._rad_unit)
         self._ann_centres = Quantity([(self._radii[r_ind] + self._radii[r_ind + 1]) / 2 for r_ind in
                                       range(len(self._radii) - 1)], self._rad_unit)
-        if self.radii[0].value == 0:
-            self._ann_centres[0] = 0
 
         # This can be set through a property, as products shouldn't have any knowledge of their source
         #  other than the name. And someone might define one of these source-lessly. It will contain radii
