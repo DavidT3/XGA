@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/06/2023, 12:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/06/2023, 00:17. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3203,11 +3203,11 @@ class PSF(Image):
 
     def get_val(self, at_coord: Quantity) -> float:
         """
-        A simple method that converts the given coordinates to pixels, then finds the exposure time
+        A simple method that converts the given coordinates to pixels, then finds the PSF value
         at those coordinates.
 
-        :param Quantity at_coord: A pair of coordinates to find the exposure time for.
-        :return: The exposure time at the supplied coordinates.
+        :param Quantity at_coord: A pair of coordinates to find the PSF value time for.
+        :return: The PSF value at the supplied coordinates.
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
