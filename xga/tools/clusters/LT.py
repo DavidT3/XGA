@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/06/2023, 17:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/07/2023, 14:01. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -348,6 +348,11 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     # Then the column names get added
                     cols += ['Lx' + o_dens[1:] + lum_name.split('bound')[-1] + p_fix for p_fix in ['', '-', '+']]
 
+                if not freeze_met:
+                    met = rel_src.get_results(rel_rad, par='Abundanc')
+                    vals += list(met.value)
+                    cols += ['Zmet' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+
             except ModelNotAssociatedError:
                 pass
 
@@ -365,6 +370,11 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                         vals += list(lum.value)
                         cols += ['Lx' + o_dens[1:] + 'ce' + lum_name.split('bound')[-1] + p_fix
                                  for p_fix in ['', '-', '+']]
+
+                    if not freeze_met:
+                        metce = rel_src.get_results(rel_rad, par='Abundanc', inner_radius=0.15*rel_rad)
+                        vals += list(metce.value)
+                        cols += ['Zmet' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                 except ModelNotAssociatedError:
                     pass
