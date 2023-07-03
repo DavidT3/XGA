@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/05/2023, 15:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2023, 10:44. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1359,8 +1359,8 @@ class Spectrum(BaseProduct):
         #  value is 1. After that -1 values indicate that the channel belongs to a group, but we won't actually need
         #  to use them
         grp_bnds = np.where(grouping == 1)[0]
-        # As I am setting these up as boundaries, I append the length of the group start indices as a final boundary
-        grp_bnds = np.append(grp_bnds, len(grp_bnds))
+        # As I am setting these up as boundaries, I append the length of the grouping array as a final boundary
+        grp_bnds = np.append(grp_bnds, len(grouping))
 
         # Setting up empty quantities to store the grouped counts in later, both source and background
         src_grpd_cnts = Quantity(np.zeros(len(grp_bnds) - 1), 'ct')
