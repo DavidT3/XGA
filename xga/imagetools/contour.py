@@ -1,14 +1,14 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by McKenna Leichty 20/02/2023, 14:04. Copyright (c) The Contributors
-import xga
+#import xga
 #xga.NUM_CORES = 30
 
-from astropy.units import Quantity
+#from astropy.units import Quantity
 #from astropy.visualization import LinearStretch
 import numpy as np
-import pandas as pd
+#import pandas as pd
 
-from xga.sources import GalaxyCluster, NullSource
+#from xga.sources import GalaxyCluster, NullSource
 #from xga.samples import ClusterSample
 #from xga.sas import evselect_image, eexpmap, emosaic
 #from xga.utils import xmm_sky
@@ -35,8 +35,8 @@ from astropy.visualization import ImageNormalize, LogStretch
 #cutting contours
 #from xga.imagetools.misc import pix_rad_to_physical, physical_rad_to_pix
 #from astropy.cosmology import Cosmology
-from astropy.cosmology import LambdaCDM
-DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
+#from astropy.cosmology import LambdaCDM
+#DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
 #from xga.imagetools.profile import annular_mask
 
 def contour_lvl(my_ratemap_data, flux_per, sigma, mask):
@@ -65,45 +65,82 @@ def contour_lvl(my_ratemap_data, flux_per, sigma, mask):
     
     return contour_level, smoothed_array
 
-def view_contours(my_ratemap_data, demo_src, flux_per, sigma, mask, cmap, smoothed_plot = False):
+def view_contours(demo_src, flux_per, sigma, mask, cmap, smoothed_plot = False, masked = False):
 
+    my_ratemap_data = demo_src.get_combined_ratemaps().data
     contour_level, smoothed_array = contour_lvl(my_ratemap_data, flux_per = flux_per, sigma = sigma, mask = mask)
     
     #apply a logarithmic stretch to the image data
-    norm = ImageNormalize(demo_src.get_combined_ratemaps().data, stretch=LogStretch())
+    norm = ImageNormalize(my_ratemap_data, stretch=LogStretch())
     
     #if user wants a smoothed final image
     if smoothed_plot == True:
-        #plot the original X-ray image
-        fig, ax = plt.subplots(figsize=(12, 10))
-        im = ax.imshow(smoothed_array, cmap=cmap, norm=norm, origin = 'lower')
-        plt.colorbar(im)
-        plt.title('Smoothed')
+        #if user wants the smoothed image to be masked
+        if masked == True:
+            #plot the original X-ray image
+            fig, ax = plt.subplots(figsize=(12, 10))
+            im = ax.imshow(smoothed_array*mask, cmap=cmap, norm=norm, origin = 'lower')
+            plt.colorbar(im)
+            plt.title('Smoothed')
+            
+            #adding contours to image
+            contours = plt.contour(smoothed_array, levels=[contour_level], colors='red')
+            
+            #write a function here to get custom legend for as many contours as you want
+            custom_legend = plt.Line2D([], [], color='red', label=f'{flux_per}% max flux')
+            plt.legend(handles=[custom_legend])
+            
+            plt.show()
         
-        #adding contours to image
-        contours = plt.contour(smoothed_array, levels=[contour_level], colors='red')
+        else: #not masked
+            #plot the original X-ray image
+            fig, ax = plt.subplots(figsize=(12, 10))
+            im = ax.imshow(smoothed_array, cmap=cmap, norm=norm, origin = 'lower')
+            plt.colorbar(im)
+            plt.title('Smoothed')
+            
+            #adding contours to image
+            contours = plt.contour(smoothed_array, levels=[contour_level], colors='red')
+            
+            #write a function here to get custom legend for as many contours as you want
+            custom_legend = plt.Line2D([], [], color='red', label=f'{flux_per}% max flux')
+            plt.legend(handles=[custom_legend])
+            
+            plt.show()
         
-        #write a function here to get custom legend for as many contours as you want
-        custom_legend = plt.Line2D([], [], color='red', label=f'{flux_per}% max flux')
-        plt.legend(handles=[custom_legend])
-        
-        plt.show()
-    
     #if user wants a non-smoothed final image
     else:
-        #plot the original X-ray image
-        fig, ax = plt.subplots(figsize=(12, 10))
-        im = ax.imshow(my_ratemap_data*demo_src.get_mask('r500')[0], cmap='viridis', norm=norm, origin = 'lower')
-        plt.title('Non-Smoothed')
-        plt.colorbar(im)
+        #if user wants a masked non-smoothed image
+        if masked == True:
+            #plot the original X-ray image
+            fig, ax = plt.subplots(figsize=(12, 10))
+            im = ax.imshow(my_ratemap_data*mask, cmap=cmap, norm=norm, origin = 'lower')
+            plt.colorbar(im)
+            plt.title('Non-Smoothed')
+            
+            #adding contours to image
+            contours = plt.contour(smoothed_array, levels=[contour_level], colors='red')
+            
+            #write a function here to get custom legend for as many contours as you want
+            custom_legend = plt.Line2D([], [], color='red', label=f'{flux_per}% max flux')
+            plt.legend(handles=[custom_legend])
+            plt.show()
         
-        #adding contours to image
-        contours = plt.contour(smoothed_array, levels=[contour_level], colors='red')
-        
-        #write a function here to get custom legend for as many contours as you want
-        custom_legend = plt.Line2D([], [], color='red', label=f'{flux_per}% max flux')
-        plt.legend(handles=[custom_legend])
-        plt.show()
+        else: #not masked
+            #plot the original X-ray image
+            fig, ax = plt.subplots(figsize=(12, 10))
+            im = ax.imshow(my_ratemap_data, cmap=cmap, norm=norm, origin = 'lower')
+            plt.colorbar(im)
+            plt.title('Smoothed')
+            
+            #adding contours to image
+            contours = plt.contour(smoothed_array, levels=[contour_level], colors='red')
+            
+            #write a function here to get custom legend for as many contours as you want
+            custom_legend = plt.Line2D([], [], color='red', label=f'{flux_per}% max flux')
+            plt.legend(handles=[custom_legend])
+            
+            plt.show()
         
     return contours
 
