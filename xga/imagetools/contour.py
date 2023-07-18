@@ -60,16 +60,18 @@ def view_contours(im_prod: Union[Image, RateMap, np.ndarray], flux_per, sigma, m
     if isinstance(im_prod, (Image, RateMap)):
         # For the XGA Image or RateMap products
         my_ratemap_data = im_prod.data
+        name = im_prod.header["OBJECT"]
     elif isinstance(im_prod, np.ndarray):
         # For numpy arrays
-        my_ratemap_data = im_prod  
+        my_ratemap_data = im_prod
+        name = "nd.array need to fix this"
 
     #my_ratemap_data = demo_src.get_combined_ratemaps().data
     contour_level, smoothed_array = contour_lvl(my_ratemap_data, flux_per = flux_per, sigma = sigma, mask = mask)
     
     #apply a logarithmic stretch to the image data
     norm = ImageNormalize(my_ratemap_data, stretch=LogStretch())
-    name = my_ratemap_data.header["OBJECT"]
+    #name = my_ratemap_data.header["OBJECT"]
     
     #if user wants a smoothed final image
     if smoothed_plot == True:
