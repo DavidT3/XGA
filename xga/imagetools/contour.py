@@ -3,7 +3,7 @@
 import xga
 #xga.NUM_CORES = 30
 
-#from astropy.units import Quantity
+from astropy.units import Quantity
 #from astropy.visualization import LinearStretch
 import numpy as np
 import pandas as pd
@@ -35,7 +35,6 @@ from astropy.visualization import ImageNormalize, LogStretch
 #cutting contours
 #from xga.imagetools.misc import pix_rad_to_physical, physical_rad_to_pix
 #from astropy.cosmology import Cosmology
-#from astropy.units import Quantity
 from astropy.cosmology import LambdaCDM
 DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
 #from xga.imagetools.profile import annular_mask
@@ -107,8 +106,6 @@ def view_contours(my_ratemap_data, demo_src, flux_per, sigma, mask, cmap, smooth
         plt.show()
         
     return contours
-
-view_contours(my_ratemap_data, demo_src, flux_per = 0.50, sigma = 3, mask = demo_src.get_mask('r500')[0], cmap = 'viridis', smoothed_plot = False)
 
 
 
