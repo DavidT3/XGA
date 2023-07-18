@@ -1,43 +1,11 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by McKenna Leichty 20/02/2023, 14:04. Copyright (c) The Contributors
-#import xga
-#xga.NUM_CORES = 30
 
-#from astropy.units import Quantity
-#from astropy.visualization import LinearStretch
+#imported modules
 import numpy as np
-#import pandas as pd
-
-#from xga.sources import GalaxyCluster, NullSource
-#from xga.samples import ClusterSample
-#from xga.sas import evselect_image, eexpmap, emosaic
-#from xga.utils import xmm_sky
-
-#from xga.sources import PointSource
-#from xga.sas import evselect_spectrum
-#from xga.xspec import single_temp_apec, power_law
-
-#need this for using OnDemand to plot images
-#%matplotlib inline
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
-#from matplotlib.colors import LogNorm
-#from matplotlib.ticker import LogLocator, LogFormatter
-#from matplotlib.colors import Normalize
-
 from astropy.visualization import ImageNormalize, LogStretch
-#from astropy.visualization.mpl_normalize import ImageNormalize
-#from photutils.isophote import EllipseGeometry
-#from photutils.aperture import EllipticalAperture
-#import matplotlib.patches as patches
-#from scipy.optimize import minimize
-
-#cutting contours
-#from xga.imagetools.misc import pix_rad_to_physical, physical_rad_to_pix
-#from astropy.cosmology import Cosmology
-#from astropy.cosmology import LambdaCDM
-#DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
-#from xga.imagetools.profile import annular_mask
 
 def contour_lvl(my_ratemap_data, flux_per, sigma, mask):
     """
@@ -81,13 +49,13 @@ def view_contours(demo_src, flux_per, sigma, mask, cmap, smoothed_plot = False, 
             fig, ax = plt.subplots(figsize=(12, 10))
             im = ax.imshow(smoothed_array*mask, cmap=cmap, norm=norm, origin = 'lower')
             plt.colorbar(im)
-            plt.title('Smoothed')
+            plt.title(f'Smoothed - {demo_src.name}')
             
             #adding contours to image
             contours = plt.contour(smoothed_array, levels=[contour_level], colors='red')
             
             #write a function here to get custom legend for as many contours as you want
-            custom_legend = plt.Line2D([], [], color='red', label=f'{flux_per}% max flux')
+            custom_legend = plt.Line2D([], [], color='red', label=f'{100*flux_per}% max flux')
             plt.legend(handles=[custom_legend])
             
             plt.show()
@@ -97,13 +65,13 @@ def view_contours(demo_src, flux_per, sigma, mask, cmap, smoothed_plot = False, 
             fig, ax = plt.subplots(figsize=(12, 10))
             im = ax.imshow(smoothed_array, cmap=cmap, norm=norm, origin = 'lower')
             plt.colorbar(im)
-            plt.title('Smoothed')
+            plt.title(f'Smoothed - {demo_src.name}')
             
             #adding contours to image
             contours = plt.contour(smoothed_array, levels=[contour_level], colors='red')
             
             #write a function here to get custom legend for as many contours as you want
-            custom_legend = plt.Line2D([], [], color='red', label=f'{flux_per}% max flux')
+            custom_legend = plt.Line2D([], [], color='red', label=f'{100*flux_per}% max flux')
             plt.legend(handles=[custom_legend])
             
             plt.show()
@@ -116,13 +84,13 @@ def view_contours(demo_src, flux_per, sigma, mask, cmap, smoothed_plot = False, 
             fig, ax = plt.subplots(figsize=(12, 10))
             im = ax.imshow(my_ratemap_data*mask, cmap=cmap, norm=norm, origin = 'lower')
             plt.colorbar(im)
-            plt.title('Non-Smoothed')
+            plt.title(f'Non-Smoothed - {demo_src.name}')
             
             #adding contours to image
             contours = plt.contour(smoothed_array, levels=[contour_level], colors='red')
             
             #write a function here to get custom legend for as many contours as you want
-            custom_legend = plt.Line2D([], [], color='red', label=f'{flux_per}% max flux')
+            custom_legend = plt.Line2D([], [], color='red', label=f'{100*flux_per}% max flux')
             plt.legend(handles=[custom_legend])
             plt.show()
         
@@ -131,13 +99,13 @@ def view_contours(demo_src, flux_per, sigma, mask, cmap, smoothed_plot = False, 
             fig, ax = plt.subplots(figsize=(12, 10))
             im = ax.imshow(my_ratemap_data, cmap=cmap, norm=norm, origin = 'lower')
             plt.colorbar(im)
-            plt.title('Smoothed')
+            plt.title(f'Non-Smoothed - {demo_src.name}')
             
             #adding contours to image
             contours = plt.contour(smoothed_array, levels=[contour_level], colors='red')
             
             #write a function here to get custom legend for as many contours as you want
-            custom_legend = plt.Line2D([], [], color='red', label=f'{flux_per}% max flux')
+            custom_legend = plt.Line2D([], [], color='red', label=f'{100*flux_per}% max flux')
             plt.legend(handles=[custom_legend])
             
             plt.show()
