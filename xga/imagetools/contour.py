@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
 from astropy.visualization import ImageNormalize, LogStretch
 
+from typing import Tuple, List, Union
+from ..products import Image, RateMap, ExpMap
+
 def contour_lvl(my_ratemap_data, flux_per, sigma, mask):
     """
     returns the flux level to make contours at
@@ -33,9 +36,16 @@ def contour_lvl(my_ratemap_data, flux_per, sigma, mask):
     
     return contour_level, smoothed_array
 
-def view_contours(demo_src, flux_per, sigma, mask, cmap, smoothed_plot = False, masked = False):
+def view_contours(im_prod: Union[Image, RateMap, np.ndarray], demo_src, flux_per, sigma, mask, cmap, smoothed_plot = False, masked = False):
 
-    my_ratemap_data = demo_src.get_combined_ratemaps().data
+    if isinstance(im_prod, (Image, RateMap)):
+        # For the XGA Image or RateMap products
+        my_ratemap_data = im_prod.data
+    elif isinstance(im_prod, np.ndarray):
+        # For numpy arrays
+        my_ratemap_data = im_prod  
+
+    #my_ratemap_data = demo_src.get_combined_ratemaps().data
     contour_level, smoothed_array = contour_lvl(my_ratemap_data, flux_per = flux_per, sigma = sigma, mask = mask)
     
     #apply a logarithmic stretch to the image data
