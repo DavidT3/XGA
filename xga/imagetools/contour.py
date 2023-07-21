@@ -21,7 +21,7 @@ def contour_lvl(my_ratemap_data, flux_per, sigma, mask):
     :param mask: the mask to use if wanted on plot, and mask to smooth with gaussian filter (so as not to include pixels outside of cluster)
     
     :return: levels at which to plot the contours and a smoothed array to plot a smoothed final image
-    :rtype: np.array
+    :rtype: numpy.float64, np.array
     """
     
     #smooth using a gaussian filter after applying mask
@@ -38,7 +38,7 @@ def contour_lvl(my_ratemap_data, flux_per, sigma, mask):
     #determine the contour level that corresponds to flux threshold
     contour_index = np.argmax(cumulative_flux >= flux_threshold) #argmax to find max index where flux is just above threshold
     contour_level = sorted_flux[contour_index]
-    print('contour levels', type(contour_level))
+    
     return contour_level, smoothed_array
 
 def view_contours(im_prod: Union[Image, RateMap, np.ndarray], flux_per, sigma, mask, cmap, smoothed_plot = False, masked = False):
@@ -55,7 +55,7 @@ def view_contours(im_prod: Union[Image, RateMap, np.ndarray], flux_per, sigma, m
     :param masked = False: if true, final image will show mask inputted by user
     
     :return: the contours produced at specified flux level
-    :rtype:
+    :rtype: matplotlib.contour.QuadContourSet
     """
 
     if isinstance(im_prod, (Image, RateMap)):
@@ -141,7 +141,7 @@ def view_contours(im_prod: Union[Image, RateMap, np.ndarray], flux_per, sigma, m
             plt.legend(handles=[custom_legend])
             
             plt.show()
-    print('contours', type(contours))
+    
     return contours
 
 def contour_coords(contours):
