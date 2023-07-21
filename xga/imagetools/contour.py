@@ -20,8 +20,8 @@ def contour_lvl(my_ratemap_data, flux_per, sigma, mask):
     :param sigma: used to change the level of smoothness via a gaussian filter
     :param mask: the mask to use if wanted on plot, and mask to smooth with gaussian filter (so as not to include pixels outside of cluster)
     
-    :return contour_level: levels at which to plot the contours
-    :return smoothed_array: used to plot a smoothed final image
+    :return: levels at which to plot the contours and a smoothed array to plot a smoothed final image
+    :rtype: np.array
     """
     
     #smooth using a gaussian filter after applying mask
@@ -38,7 +38,7 @@ def contour_lvl(my_ratemap_data, flux_per, sigma, mask):
     #determine the contour level that corresponds to flux threshold
     contour_index = np.argmax(cumulative_flux >= flux_threshold) #argmax to find max index where flux is just above threshold
     contour_level = sorted_flux[contour_index]
-    
+    print('contour levels', type(contour_level))
     return contour_level, smoothed_array
 
 def view_contours(im_prod: Union[Image, RateMap, np.ndarray], flux_per, sigma, mask, cmap, smoothed_plot = False, masked = False):
@@ -54,24 +54,24 @@ def view_contours(im_prod: Union[Image, RateMap, np.ndarray], flux_per, sigma, m
     :param smoothed_plot = False: if true, final image will be shown smoothed
     :param masked = False: if true, final image will show mask inputted by user
     
-    :return contours: the contours produced at specified flux level
+    :return: the contours produced at specified flux level
+    :rtype:
     """
 
     if isinstance(im_prod, (Image, RateMap)):
         # For the XGA Image or RateMap products
         my_ratemap_data = im_prod.data
-        name = im_prod.header["OBJECT"]
+        name = im_prod.src_name
     elif isinstance(im_prod, np.ndarray):
         # For numpy arrays
         my_ratemap_data = im_prod
-        name = "nd.array need to fix this"
+        name = ""
 
     #my_ratemap_data = demo_src.get_combined_ratemaps().data
     contour_level, smoothed_array = contour_lvl(my_ratemap_data, flux_per = flux_per, sigma = sigma, mask = mask)
     
     #apply a logarithmic stretch to the image data
     norm = ImageNormalize(my_ratemap_data, stretch=LogStretch())
-    #name = my_ratemap_data.header["OBJECT"]
     
     #if user wants a smoothed final image
     if smoothed_plot == True:
@@ -141,7 +141,7 @@ def view_contours(im_prod: Union[Image, RateMap, np.ndarray], flux_per, sigma, m
             plt.legend(handles=[custom_legend])
             
             plt.show()
-        
+    print('contours', type(contours))
     return contours
 
 def contour_coords(contours):
@@ -149,8 +149,7 @@ def contour_coords(contours):
     Extracts the x and y points of the contours.
     
     :param contours: the contours produced at specified flux level
-    :return x_points: the x coordinates of contours generated
-    :return y_points: the y coordinates of contours generated
+    :return: the x and y coordinates of contours generated
     :rtype: np.ndarray
     """
     #extract the contour coordinates
