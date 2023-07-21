@@ -139,7 +139,7 @@ def view_contours(im_prod: Union[Image, RateMap, np.ndarray], flux_per, sigma, m
             #write a function here to get custom legend for as many contours as you want
             custom_legend = plt.Line2D([], [], color='red', label=f'{100*flux_per}% max flux')
             plt.legend(handles=[custom_legend])
-            
+
             plt.show()
     
     return contours
