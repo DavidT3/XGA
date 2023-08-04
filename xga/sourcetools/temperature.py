@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/06/2023, 15:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/08/2023, 17:40. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -147,8 +147,8 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
         # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
         #  as they are, while also issuing a warning
         acceptable = True
-        warn("The min_width combined with the outer radius of the source means that there are only {} initial"
-             " annuli, normally four is the minimum number I will allow, so I will do no re-binning.".format(max_ann))
+        warn("The min_width combined with the outer radius of the source creates only {} initial"
+             " annuli, so no re-binning will take place.".format(max_ann), stacklevel=2)
         cur_num_ann = ann_masks.shape[2]
         snrs = []
         for i in range(cur_num_ann):
@@ -248,8 +248,8 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
         # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
         #  as they are, while also issuing a warning
         acceptable = True
-        warn("The min_width combined with the outer radius of the source means that there are only {} initial"
-             " annuli, normally four is the minimum number I will allow, so I will do no re-binning.".format(max_ann))
+        warn("The min_width combined with the outer radius of the source creates only {} initial"
+             " annuli, so no re-binning will take place.".format(max_ann), stacklevel=2)
         cur_num_ann = ann_masks.shape[2]
         cnts = []
         for i in range(cur_num_ann):
@@ -282,16 +282,24 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
         elif len(bad_cnts) != 0 and bad_cnts[-1] == cur_num_ann - 1:
             cur_rads = np.delete(cur_rads, -2)
             ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
-        # Otherwise if the outermost bad annulus is NOT right at the end of the profile, we merge to the right
+        # A special case must also be added for if the zeroth annulus (i.e. the innermost annulus) isn't meeting the
+        #  criteria, because if we leave it to the 'else' statement below then there will be no annulus bound at zero,
+        #  which we do require - in this case it means we deleted the 1st annulus
+        elif len(bad_cnts) != 0 and bad_cnts[-1] == 0:
+            # For where the zeroth annulus is not meeting requirements, we set up this to merge the zeroth and first
+            #  annular boundaries
+            cur_rads = np.delete(cur_rads, 1)
+            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+        # Otherwise if the outermost bad annulus is NOT right at the end (either end) of the profile, we merge
+        #  to the right
         else:
             cur_rads = np.delete(cur_rads, bad_cnts[-1])
             ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
 
         if ann_masks.shape[2] == 4 and not acceptable:
             warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
-                 "of four annuli will be returned".format(s=source.name))
+                 "of four annuli will be returned".format(s=source.name), stacklevel=2)
             break
-
     # Now of course, pixels must become a more useful unit again
     final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg).to("arcsec")
 
