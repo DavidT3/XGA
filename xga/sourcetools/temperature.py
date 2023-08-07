@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/08/2023, 17:56. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -147,8 +147,8 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
         # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
         #  as they are, while also issuing a warning
         acceptable = True
-        warn("The min_width combined with the outer radius of the source means that there are only {} initial"
-             " annuli, normally four is the minimum number I will allow, so I will do no re-binning.".format(max_ann))
+        warn("The min_width combined with the outer radius of the source creates only {} initial"
+             " annuli, so no re-binning will take place.".format(max_ann), stacklevel=2)
         cur_num_ann = ann_masks.shape[2]
         snrs = []
         for i in range(cur_num_ann):
@@ -179,6 +179,14 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
         #  end of the SNR profile, then we merge that leftwards into the N-1th annuli
         elif len(bad_snrs) != 0 and bad_snrs[-1] == cur_num_ann - 1:
             cur_rads = np.delete(cur_rads, -2)
+            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+        # A special case must also be added for if the zeroth annulus (i.e. the innermost annulus) isn't meeting the
+        #  criteria, because if we leave it to the 'else' statement below then there will be no annulus bound at zero,
+        #  which we do require - in this case it means we deleted the 1st annulus
+        elif len(bad_snrs) != 0 and bad_snrs[-1] == 0:
+            # For where the zeroth annulus is not meeting requirements, we set up this to merge the zeroth and first
+            #  annular boundaries
+            cur_rads = np.delete(cur_rads, 1)
             ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
         # Otherwise if the outermost bad annulus is NOT right at the end of the profile, we merge to the right
         else:
@@ -248,8 +256,8 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
         # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
         #  as they are, while also issuing a warning
         acceptable = True
-        warn("The min_width combined with the outer radius of the source means that there are only {} initial"
-             " annuli, normally four is the minimum number I will allow, so I will do no re-binning.".format(max_ann))
+        warn("The min_width combined with the outer radius of the source creates only {} initial"
+             " annuli, so no re-binning will take place.".format(max_ann), stacklevel=2)
         cur_num_ann = ann_masks.shape[2]
         cnts = []
         for i in range(cur_num_ann):
@@ -282,16 +290,24 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
         elif len(bad_cnts) != 0 and bad_cnts[-1] == cur_num_ann - 1:
             cur_rads = np.delete(cur_rads, -2)
             ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
-        # Otherwise if the outermost bad annulus is NOT right at the end of the profile, we merge to the right
+        # A special case must also be added for if the zeroth annulus (i.e. the innermost annulus) isn't meeting the
+        #  criteria, because if we leave it to the 'else' statement below then there will be no annulus bound at zero,
+        #  which we do require - in this case it means we deleted the 1st annulus
+        elif len(bad_cnts) != 0 and bad_cnts[-1] == 0:
+            # For where the zeroth annulus is not meeting requirements, we set up this to merge the zeroth and first
+            #  annular boundaries
+            cur_rads = np.delete(cur_rads, 1)
+            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+        # Otherwise if the outermost bad annulus is NOT right at the end (either end) of the profile, we merge
+        #  to the right
         else:
             cur_rads = np.delete(cur_rads, bad_cnts[-1])
             ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
 
         if ann_masks.shape[2] == 4 and not acceptable:
             warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
-                 "of four annuli will be returned".format(s=source.name))
+                 "of four annuli will be returned".format(s=source.name), stacklevel=2)
             break
-
     # Now of course, pixels must become a more useful unit again
     final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg).to("arcsec")
 
@@ -609,7 +625,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
-                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 300,
+                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 3000,
                            sigma: int = 1, num_cores: int = NUM_CORES) \
         -> List[GasTemperature3D]:
     """
@@ -671,7 +687,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         calculation, and the XSPEC fit.
     :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
-    :param int num_data_real: The number of random realisations to generate when propagating profile uncertainties.
+    :param int num_data_real: The number of random realisations to generate when propagating profile
+        uncertainties, the default is 3000.
     :param int sigma: What sigma uncertainties should newly created profiles have, the default is 1σ.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :return: A list of the 3D temperature profiles measured by this function, though if the measurement was not
@@ -746,14 +763,14 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             #  projected annuli
             vol_intersects = shell_ann_vol_intersect(cur_rads, cur_rads)
 
-            # Then its a simple inverse problem to recover the 3D temperatures
+            # Then it's an inverse matrix problem to recover the 3D temperatures
             temp_3d = (np.linalg.inv(vol_intersects.T) @ (proj_temp.values * em_prof.values)) / (np.linalg.inv(
                 vol_intersects.T) @ em_prof.values)
 
             # I generate random realisations of the projected temperature profile and the emission measure profile
             #  to help me with error propagation
-            proj_temp_reals = proj_temp.generate_data_realisations(num_data_real)
-            em_reals = em_prof.generate_data_realisations(num_data_real)
+            proj_temp_reals = proj_temp.generate_data_realisations(num_data_real, truncate_zero=True)
+            em_reals = em_prof.generate_data_realisations(num_data_real, truncate_zero=True)
 
             # Set up an N x R array for the random realisations of the 3D temperature, where N is the number
             #  of realisations and R is the number of radius data points

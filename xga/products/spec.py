@@ -1,6 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 03/07/2023, 10:44. Copyright (c) The Contributors
 
+
 import os
 import warnings
 from typing import Tuple, Union, List, Dict
@@ -1502,10 +1503,10 @@ class Spectrum(BaseProduct):
         plt.show()
 
     def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
-                 hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
-                 src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
-                 yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
-                 save_path: str = None):
+             hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
+             src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
+             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
+             save_path: str = None):
         """
         A method for viewing the data associated with this Spectrum instance.
 
@@ -1784,8 +1785,6 @@ class AnnularSpectra(BaseAggregateProduct):
         self._radii = Quantity([r.value for r in radii], self._rad_unit)
         self._ann_centres = Quantity([(self._radii[r_ind] + self._radii[r_ind + 1]) / 2 for r_ind in
                                       range(len(self._radii) - 1)], self._rad_unit)
-        if self.radii[0].value == 0:
-            self._ann_centres[0] = 0
 
         # This can be set through a property, as products shouldn't have any knowledge of their source
         #  other than the name. And someone might define one of these source-lessly. It will contain radii
@@ -2150,8 +2149,6 @@ class AnnularSpectra(BaseAggregateProduct):
         mid_radii = [(pr[r_ind] + pr[r_ind + 1]) / 2 for r_ind in range(len(pr) - 1)]
         # Makes mid_radii a quantity
         self._proper_ann_centres = Quantity(mid_radii, new_vals.unit)
-        if self.proper_radii[0].value == 0:
-            self._proper_ann_centres[0] = 0
 
     @property
     def proper_annulus_centres(self) -> Quantity:

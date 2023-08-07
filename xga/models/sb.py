@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 22:40. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -113,7 +113,14 @@ class BetaProfile1D(BaseModel1D):
         """
         # Just makes sure that if there are multiple x values then the broadcasting will go to the correct shape of
         #  numpy array
-        x = x[..., None]
+        # This makes sure that the input radius, or radii, are being used properly. For a single x value, or a set of
+        #  x values, we use [..., None] to ensure that (if the user has decided to use the parameter distribution) we
+        #  get M distributions of the derivative. In the case where the user has passed a distribution of radii, really
+        #  representative of a single radius but with uncertainty, then this does not trigger, and rather than an N
+        #  by N (where N is the number of samples in each posterior) array, you get an M x N array
+        if x.isscalar or (not x.isscalar and x.ndim == 1):
+            x = x[..., None]
+
         # Generates a distribution of derivatives using the parameter distributions
         if not use_par_dist:
             beta, r_core, norm = self._model_pars
@@ -294,7 +301,14 @@ class DoubleBetaProfile1D(BaseModel1D):
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        x = x[..., None]
+        # This makes sure that the input radius, or radii, are being used properly. For a single x value, or a set of
+        #  x values, we use [..., None] to ensure that (if the user has decided to use the parameter distribution) we
+        #  get M distributions of the derivative. In the case where the user has passed a distribution of radii, really
+        #  representative of a single radius but with uncertainty, then this does not trigger, and rather than an N
+        #  by N (where N is the number of samples in each posterior) array, you get an M x N array
+        if x.isscalar or (not x.isscalar and x.ndim == 1):
+            x = x[..., None]
+
         if not use_par_dist:
             beta_one, r_core_one, norm_one, beta_two, r_core_two, norm_two = self._model_pars
         else:

@@ -1,11 +1,13 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/04/2023, 13:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/06/2023, 14:28. Copyright (c) The Contributors
+
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
 
 import numpy as np
 from astropy.constants import k_B, G, m_p
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
@@ -502,8 +504,9 @@ class GasDensity3D(BaseProfile1D):
         elif radius_err is not None and not radius_err.unit.is_equivalent(outer_rad.unit):
             raise UnitConversionError("The radius_err quantity must be in units that are equivalent to units "
                                       "of {}.".format(outer_rad.unit.to_string()))
+
         # Now we make absolutely sure that the radius error(s) are in the correct units
-        elif radius_err is not None:
+        if radius_err is not None:
             radius_err = radius_err.to(self.radii_unit)
 
         # Doing an extra check to warn the user if the radius they supplied is outside the radii
@@ -811,7 +814,7 @@ class APECNormalisation1D(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "APEC Normalisation"
 
-    def _gen_profile_setup(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr') \
+    def _gen_profile_setup(self, redshift: float, cosmo: Cosmology, abund_table: str = 'angr') \
             -> Tuple[Quantity, Quantity, float]:
         """
         There are many common steps in the gas_density_profile and emission_measure_profile methods, so I decided to
@@ -887,12 +890,12 @@ class APECNormalisation1D(BaseProfile1D):
         # This is essentially the constants bit of the XSPEC APEC normalisation
         # Angular diameter distance is calculated using the cosmology which was associated with the cluster
         #  at definition
-        conv_factor = (4 * np.pi * e_to_p_ratio * (ang_dist * (1 + redshift)) ** 2) / 10 ** -14
+        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (e_to_p_ratio * 10 ** -14)
         num_gas_scale = (1+e_to_p_ratio)
         conv_mass = MEAN_MOL_WEIGHT*m_p
 
         # Generating random normalisation profile realisations from DATA
-        norm_real = self.generate_data_realisations(num_real)
+        norm_real = self.generate_data_realisations(num_real, truncate_zero=True)
 
         if num_dens:
             gas_dens_reals = Quantity(np.zeros(norm_real.shape), "cm^-3")
@@ -922,7 +925,7 @@ class APECNormalisation1D(BaseProfile1D):
                                  self.associated_set_storage_key, self.deg_radii)
         return dens_prof
 
-    def emission_measure_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr',
+    def emission_measure_profile(self, redshift: float, cosmo: Cosmology, abund_table: str = 'angr',
                                  num_real: int = 100, sigma: int = 2):
         """
         A method to calculate the emission measure profile from the APEC normalisation profile, which in turn was
@@ -942,10 +945,10 @@ class APECNormalisation1D(BaseProfile1D):
         # This is essentially the constants bit of the XSPEC APEC normalisation
         # Angular diameter distance is calculated using the cosmology which was associated with the cluster
         #  at definition
-        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (hy_to_elec * 10 ** -14)
+        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (10 ** -14)
         em_meas = self.values * conv_factor
 
-        norm_real = self.generate_data_realisations(num_real)
+        norm_real = self.generate_data_realisations(num_real, truncate_zero=True)
         em_meas_reals = norm_real * conv_factor
 
         # Calculates the standard deviation of each data point, this is how we estimate the density errors
@@ -1283,7 +1286,8 @@ class HydrostaticMass(BaseProfile1D):
         # Setting up a dictionary to store hydro mass results in.
         self._masses = {}
 
-    def mass(self, radius: Quantity, conf_level: float = 68.2) -> Union[Quantity, Quantity]:
+    def mass(self, radius: Quantity, conf_level: float = 68.2,
+             radius_err: Quantity = None) -> Union[Quantity, Quantity]:
         """
         A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
         radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
@@ -1296,6 +1300,8 @@ class HydrostaticMass(BaseProfile1D):
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
         :param float conf_level: The confidence level for the mass uncertainties, the default is 68.2% (~1σ).
+        :param Quantity radius_err: A standard deviation on radius, which will be taken into account during the
+            calculation of hydrostatic mass.
         :return: An astropy quantity containing the mass/masses, lower and upper uncertainties, and another containing
             the mass realisation distribution.
         :rtype: Union[Quantity, Quantity]
@@ -1306,37 +1312,93 @@ class HydrostaticMass(BaseProfile1D):
         # Prints a warning of the mass is outside the range of the data
         self.rad_check(radius)
 
-        if radius.isscalar and radius in self._masses:
+        # We need check that, if the user has passed uncertainty information on radii, it is how we expect it to be.
+        #  First off, are there the right number of entries?
+        if not radius.isscalar and radius_err is not None and (radius_err.isscalar or len(radius) != len(radius_err)):
+            raise ValueError("If a set of radii are passed, and radius uncertainty information is provided, the "
+                             "'radius_err' argument must contain the same number of entries as the 'radius' argument.")
+        # Same deal here, if only one radius is passed, only one error may be passed
+        elif radius.isscalar and radius_err is not None and not radius_err.isscalar:
+            raise ValueError("When a radius uncertainty ('radius_err') is passed for a single radius value, "
+                             "'radius_err' must be scalar.")
+        # Now we check that the units of the radius and radius error quantities are compatible
+        elif radius_err is not None and not radius_err.unit.is_equivalent(radius.unit):
+            raise UnitConversionError("The radius_err quantity must be in units that are equivalent to units "
+                                      "of {}.".format(radius.unit.to_string()))
+
+        # Now we make absolutely sure that the radius error(s) are in the correct units
+        if radius_err is not None:
+            radius_err = radius_err.to(self.radii_unit)
+
+        # Here we construct the storage key for the radius passed, and the uncertainty if there is one
+        if radius.isscalar and radius_err is None:
+            stor_key = str(radius.value) + " " + str(radius.unit)
+        elif radius.isscalar and radius_err is not None:
+            stor_key = str(radius.value) + '_' + str(radius_err.value) + " " + str(radius.unit)
+        # In this case, as the radius is not scalar, the masses won't be stored so we don't need a storage key
+        else:
+            stor_key = None
+
+        # Check to see whether the calculation has to be run again
+        if radius.isscalar and stor_key in self._masses:
             already_run = True
-            mass_dist = self._masses[radius]
+            mass_dist = self._masses[stor_key]
         else:
             already_run = False
 
         # If the models don't have analytical solutions to their derivative then the derivative method will need
-        #  a dx to assume, so I will set one equal to radius/1e+6, should be small enough.
-        dx = radius/1e+6
+        #  a dx to assume, so I will set one equal to radius/1e+6 (or the max radius if non-scalar), should be
+        #  small enough.
+        if radius.isscalar:
+            dx = radius/1e+6
+        else:
+            dx = radius.max()/1e+6
+
+        # Declaring this allows us to randomly draw from Gaussians, if the user has given us radius error information
+        rng = np.random.default_rng()
+        # In this case a single radius value, and a radius uncertainty has been passed
+        if radius.isscalar and radius_err is not None:
+            # We just want one a single distribution of radius here, but make sure that it is in a (1, N) shaped array
+            #  as some downstream tasks in model classes, such as get_realisations and derivative, want radius
+            #  DISTRIBUTIONS to be 2dim arrays, and multiple radius VALUES (e.g. [1, 2, 3, 4]) to be 1dim arrays
+            calc_rad = Quantity(rng.normal(radius.value, radius_err.value, (1, len(self._dens_model.par_dists[0]))),
+                                radius_err.unit)
+        # In this case multiple radius values have been passed, each with an uncertainty
+        elif not radius.isscalar and radius_err is not None:
+            # So here we're setting up M radius distributions, where M is the number of input radii. So this radius
+            #  array ends up being shape (M, N), where M is the number of radii, and M is the number of samples in
+            #  the model posterior distributions
+            calc_rad = Quantity(rng.normal(radius.value, radius_err.value,
+                                           (len(self._dens_model.par_dists[0]), len(radius))), radius_err.unit).T
+
+        # This is the simplest case, just a radius (or a set of radii) with no uncertainty information has been passed
+        else:
+            calc_rad = radius
+
+        # If we need to do the calculation (i.e. no existing result is available, and the model fits worked) then
+        #  we had best get to it!
         if not already_run and self._dens_model.success and self._temp_model.success:
             # This grabs gas density values from the density model, need to check whether the model is in units
             #  of mass or number density
             if self._dens_model.y_unit.is_equivalent('1/cm^3'):
-                dens = self._dens_model.get_realisations(radius)
-                dens_der = self._dens_model.derivative(radius, dx, True)
+                dens = self._dens_model.get_realisations(calc_rad)
+                dens_der = self._dens_model.derivative(calc_rad, dx, True)
             else:
-                dens = self._dens_model.get_realisations(radius) / (MEAN_MOL_WEIGHT*m_p)
-                dens_der = self._dens_model.derivative(radius, dx, True) / (MEAN_MOL_WEIGHT*m_p)
+                dens = self._dens_model.get_realisations(calc_rad) / (MEAN_MOL_WEIGHT*m_p)
+                dens_der = self._dens_model.derivative(calc_rad, dx, True) / (MEAN_MOL_WEIGHT*m_p)
 
             # We do the same for the temperature vals, again need to check the units
             if self._temp_model.y_unit.is_equivalent("keV"):
-                temp = (self._temp_model.get_realisations(radius)/k_B).to('K')
-                temp_der = self._temp_model.derivative(radius, dx, True)/k_B
+                temp = (self._temp_model.get_realisations(calc_rad)/k_B).to('K')
+                temp_der = self._temp_model.derivative(calc_rad, dx, True)/k_B
                 temp_der = temp_der.to(Unit('K')/self._temp_model.x_unit)
             else:
-                temp = self._temp_model.get_realisations(radius).to('K')
-                temp_der = self._temp_model.derivative(radius, dx, True).to('K')
+                temp = self._temp_model.get_realisations(calc_rad).to('K')
+                temp_der = self._temp_model.derivative(calc_rad, dx, True).to('K')
 
-            # Please note that this is just the vanilla hydrostatic mass equation, but not written in the standard form.
-            # Here there are no logs in the derivatives, because its easier to take advantage of astropy's quantities
-            #  that way.
+            # Please note that this is just the vanilla hydrostatic mass equation, but not written in the "standard
+            #  form". Here there are no logs in the derivatives, because it's easier to take advantage of astropy's
+            #  quantities that way.
             mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT*m_p) * G)) * \
                         ((dens * temp_der) + (temp * dens_der))
 
@@ -1344,7 +1406,7 @@ class HydrostaticMass(BaseProfile1D):
             mass_dist = mass_dist.to('Msun').T
 
             if radius.isscalar:
-                self._masses[radius] = mass_dist
+                self._masses[stor_key] = mass_dist
 
         elif not self._temp_model.success or not self._dens_model.success:
             raise XGAFitError("One or both of the fits to the temperature model and density profiles were "
@@ -1356,8 +1418,11 @@ class HydrostaticMass(BaseProfile1D):
 
         mass_res = Quantity(np.array([mass_med.value, mass_lower.value, mass_upper.value]), mass_dist.unit)
 
-        if np.any(mass_res[0] < 0):
-            raise ValueError("A mass of less than zero has been measured, which is not physical.")
+        # We check to see if any of the upper limits (i.e. measured value plus +ve error) are below zero, and if so
+        #  then we throw an exception up
+        if np.any((mass_res[0] + mass_res[1]) < 0):
+            raise ValueError("A mass upper limit (i.e. measured value plus +ve error) of less than zero has been "
+                             "measured, which is not physical.")
 
         return mass_res, mass_dist
 

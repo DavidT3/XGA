@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 15:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/06/2023, 14:53. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -367,9 +367,6 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
     if psf_model not in allowed_models:
         raise SASInputInvalid("{0} is not a valid PSF model. Allowed models are "
                               "{1}".format(psf_model, ", ".join(allowed_models)))
-    elif bins > 10:
-        raise ValueError("While I appreciate your desire for fine binning, I think {0}x{0} bins would"
-                         " probably take too long...".format(bins))
 
     # Need a valid CIF for this task, so run cifbuild first
     cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)

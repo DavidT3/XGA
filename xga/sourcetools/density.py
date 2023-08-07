@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:25. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -159,8 +159,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         src: GalaxyCluster
         # Both the angular_diameter_distance and redshift are guaranteed to be present here because redshift
         #  is REQUIRED to define GalaxyCluster objects
-        factor = ((4 * e_to_p_ratio * np.pi * (src.angular_diameter_distance.to("cm") * (1 + src.redshift)) ** 2)
-                  / 10 ** -14)
+        factor = ((4 * np.pi * (src.angular_diameter_distance.to("cm") * (1 + src.redshift)) ** 2)
+                  / (e_to_p_ratio * 10 ** -14))
         total_factor = factor * src.norm_conv_factor(conv_outer_radius, lo_en, hi_en, inner_radius, group_spec,
                                                      min_counts, min_sn, over_sample, obs_id[src_ind], inst[src_ind])
         to_dens_convs.append(total_factor)
@@ -280,7 +280,7 @@ def _onion_peel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius:
             plt.imshow(vol_intersects.value)
             plt.show()
             # Generating random normalisation profile realisations from DATA
-            sb_reals = sb_prof.generate_data_realisations(num_samples) * sb_prof.areas
+            sb_reals = sb_prof.generate_data_realisations(num_samples, truncate_zero=True) * sb_prof.areas
 
             # Using a loop here is ugly and relatively slow, but it should be okay
             transformed = []
@@ -431,7 +431,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
 
-    # Need to sort out the type of model input that the user chose, and make sure its ready to be passed into the
+    # Need to sort out the type of model input that the user chose, and make sure its ready to be passed into
     #  the fit method of the surface brightness profile(s)
     # First we check the number of arguments passed for the model
     model = model_check(sources, model)
