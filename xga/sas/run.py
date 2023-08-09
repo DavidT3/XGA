@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 17:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/08/2023, 13:01. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -231,9 +231,9 @@ def sas_call(sas_func):
                     ann_spec_comps[entry].append(product)
                 # In case they are components of an annular spectrum but they are either none or not usable
                 elif prod_type_str == "annular spectrum set components":
-                    raise warn("An annular spectrum component ({a}) for {n} has not been generated properly, contact "
-                               "the development team if a SAS error is not "
-                               "shown.".format(a=product.storage_key, n=product.src_name), stacklevel=2)
+                    warn("An annular spectrum component ({a}) for {o}{i} has not been generated properly, contact "
+                         "the development team if a SAS error is not "
+                         "shown.".format(a=product.storage_key, o=product.obs_id, i=product.instrument), stacklevel=2)
                 # Here the generated product was a cross-arf, and needs to be added to the right annular spectrum
                 #  object that already exists in our source
                 elif prod_type_str == "cross arfs":
