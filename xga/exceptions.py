@@ -41,6 +41,26 @@ class SASNotFoundError(Exception):
         else:
             return 'SASNotFoundError has been raised'
 
+class eSASSNotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the eROSITA Science Analysis Software 
+        System can not be found on the system.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eSASSNotFoundError has been raised'
+
 
 class XSPECNotFoundError(Exception):
     def __init__(self, *args):
