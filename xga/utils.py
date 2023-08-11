@@ -420,7 +420,14 @@ else:
         warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
              "functions in xga.sas will not work.")
         SAS_AVAIL = False
-
+    
+    # This checks for an installation of eSASS
+    eSASS_AVAIL = False
+    if shutil.which("evtool") is None:
+        warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.")
+    else:
+        eSASS_AVAIL = True
+        
     # Equivelant for the XSPEC dependency
     XSPEC_VERSION = None
     # Got to make sure we can access command line XSPEC.
