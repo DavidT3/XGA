@@ -1,6 +1,3 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2023, 13:01. Copyright (c) The Contributors
-
 from functools import wraps
 from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
@@ -9,118 +6,46 @@ from warnings import warn
 
 from tqdm import tqdm
 
-from .. import SAS_AVAIL, SAS_VERSION
-from ..exceptions import SASGenerationError, SASNotFoundError, SourceNotFoundError
-from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpectra
-from ..samples.base import BaseSample
-from ..sources import BaseSource
-from ..sources.base import NullSource
+from ...products import BaseProduct
+from ... import eSASS_AVAIL
+from ...exceptions import eSASSNotFoundError, SourceNotFoundError
+from _common import execute_cmd
+from ...samples.base import BaseSample
+from ...sources import BaseSource
+from ...sources.base import NullSource
 
-
-def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
+def esass_call(esass_func):
     """
-    This function is called for the local compute option, and runs the passed command in a Popen shell.
-    It then creates an appropriate product object, and passes it back to the callback function of the Pool
-    it was called from.
-
-    :param str cmd: SAS command to be executed on the command line.
-    :param str p_type: The product type that will be produced by this command.
-    :param str p_path: The final output path of the product.
-    :param dict extra_info: Any extra information required to define the product object.
-    :param str src: A string representation of the source object that this product is associated with.
-    :return: The product object, and the string representation of the associated source object.
-    :rtype: Tuple[BaseProduct, str]
-    """
-    out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
-    out = out.decode("UTF-8", errors='ignore')
-    err = err.decode("UTF-8", errors='ignore')
-
-    # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
-    #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
-    #  pre-existing image
-    if p_type == "image":
-        # Maybe let the user decide not to raise errors detected in stderr
-        prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd, extra_info["lo_en"],
-                     extra_info["hi_en"])
-        if "psf_corr" in extra_info and extra_info["psf_corr"]:
-            prod.psf_corrected = True
-            prod.psf_bins = extra_info["psf_bins"]
-            prod.psf_model = extra_info["psf_model"]
-            prod.psf_iterations = extra_info["psf_iter"]
-            prod.psf_algorithm = extra_info["psf_algo"]
-    elif p_type == "expmap":
-        prod = ExpMap(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                      extra_info["lo_en"], extra_info["hi_en"])
-    elif p_type == "ccf" and "NullSource" not in src:
-        # ccf files may not be destined to spend life as product objects, but that doesn't mean
-        # I can't take momentarily advantage of the error parsing I built into the product classes
-        prod = BaseProduct(p_path[0], "", "", out, err, cmd)
-    elif (p_type == "spectrum" or p_type == "annular spectrum set components") and "NullSource" not in src:
-        prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
-                        extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
-                        extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"],
-                        extra_info["min_sn"], extra_info["over_sample"], out, err, cmd, extra_info["from_region"],
-                        extra_info["b_rmf_path"], extra_info["b_arf_path"])
-    elif p_type == "psf" and "NullSource" not in src:
-        prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
-                       extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
-                       extra_info["instrument"], out, err, cmd)
-    elif p_type == "cross arfs":
-        prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info)
-    elif "NullSource" in src:
-        prod = None
-    else:
-        raise NotImplementedError("Not implemented yet")
-
-    # An extra step is required for annular spectrum set components
-    if p_type == "annular spectrum set components":
-        prod.annulus_ident = extra_info["ann_ident"]
-        prod.set_ident = extra_info["set_ident"]
-
-    return prod, src
-
-
-def sas_call(sas_func):
-    """
-    This is used as a decorator for functions that produce SAS command strings. Depending on the
+    This is used as a decorator for functions that produce eSASS command strings. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
-    executing the SAS command will change. This supports both simple multi-threading and submission
+    executing the eSASS command will change. This supports both simple multi-threading and submission
     with the Sun Grid Engine.
     :return:
     """
-    # This is a horrible bodge to make Pycharm not remove SAS_AVAIL and SAS_VERSION from import when it cleans
-    #  up prior to committing.
-    new_sas_avail = SAS_AVAIL
-    new_sas_version = SAS_VERSION
-
-    @wraps(sas_func)
+    @wraps(esass_func)
     def wrapper(*args, **kwargs):
-        # This has to be here to let autodoc do its noble work without falling foul of these errors
-        if not new_sas_avail and new_sas_version is None:
-            raise SASNotFoundError("No SAS installation has been found on this machine")
-        elif not new_sas_avail:
-            raise SASNotFoundError(
-                "A SAS installation (v{}) has been found, but the SAS_CCFPATH environment variable is"
-                " not set.".format(new_sas_version))
+        # Checking eSASS is installed and available on the system
+        if not eSASS_AVAIL:
+            raise eSASSNotFoundError("No eSASS installation has been found on this machine.")
 
-        # The first argument of all of these SAS functions will be the source object (or a list of),
-        # so rather than return them from the sas function I'll just access them like this.
+        # The first argument of all of these eSASS functions will be the source object (or a list of),
+        # so rather than return them from the eSASS function I'll just access them like this.
         if isinstance(args[0], (BaseSource, NullSource)):
             sources = [args[0]]
         elif isinstance(args[0], (BaseSample, list)):
             sources = args[0]
         else:
             raise TypeError("Please pass a source, NullSource, or sample object.")
-        
-        # Checking that at least some of the sources have XMM data associated with them
-        # ASSUMPTION2 self._telescope will list xmm as 'xmm'
-        sources = [src for src in sources if 'xmm' in src._telescope]
+
+        # Checking that at least some of the sources have eROSITA data associated with them
+        # ASSUMPTION2 self._telescope will list erosita as 'erosita'
+        sources = [src for src in sources if 'erosita' in src._telescope]
         # Raising an error if no erosita sources have been passed
         if len(sources) == 0:
-            raise SourceNotFoundError("Please pass a source that has XMM data associated with it.")
+            raise SourceNotFoundError("Please pass a source that has eROSITA data associated with it.")
 
         # This is the output from whatever function this is a decorator for
-        cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = sas_func(*args, **kwargs)
+        cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = esass_func(*args, **kwargs)
 
         src_lookup = {}
         all_run = []  # Combined command list for all sources
@@ -282,5 +207,3 @@ def sas_call(sas_func):
             sources = sources[0]
         return sources
     return wrapper
-
-

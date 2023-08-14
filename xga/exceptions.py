@@ -125,6 +125,26 @@ class UnknownCommandlineError(Exception):
         else:
             return 'A generic UnknownCommandlineError has been raised'
 
+class SourceNotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the user tries to run a SAS (or eSASS)
+        function that has no XMM (or eROSITA) data associated with it. 
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'SourceNotFoundError has been raised'
+
 
 class FailedProductError(Exception):
     def __init__(self, *args):
