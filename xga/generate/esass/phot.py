@@ -52,10 +52,6 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
         (hi_en < Quantity(200, 'eV') or hi_en > Quantity(10000, 'eV')):
         raise ValueError("The lo_en and hi_en value must be between 0.2 keV and 10 keV.")
 
-    # Converting the parameters to the correct format for the esass command
-    lo_en = lo_en.value
-    hi_en = hi_en.value
-
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function
     sources_cmds = []
@@ -94,8 +90,8 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
             os.makedirs(dest_dir)
             cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes "
-                        "emin={lo} emax={hi}; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
-                                                                                 i=im, lo=lo_en, hi=hi_en ))
+                        "emin={l} emax={u}; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
+                                                                                 i=im, l=lo_en.value, u=hi_en.value ))
 
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
