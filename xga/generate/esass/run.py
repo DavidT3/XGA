@@ -46,9 +46,6 @@ def esass_call(esass_func):
 
         # This is the output from whatever function this is a decorator for
         cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = esass_func(*args, **kwargs)
-
-        # Appending a telescope key into the extra_info dictionary
-        extra_info['telescope'] = 'erosita'
         
         src_lookup = {}
         all_run = []  # Combined command list for all sources

@@ -27,7 +27,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     if p_type == "image":
         # Maybe let the user decide not to raise errors detected in stderr
         # ASSUMPTION1 - tscope attribute in BaseProduct
-        prod = Image(p_path[0], extra_info["tscope"], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+        prod = Image(p_path[0], extra_info["telescope"], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                      extra_info["lo_en"], extra_info["hi_en"])
         if "psf_corr" in extra_info and extra_info["psf_corr"]:
             prod.psf_corrected = True
@@ -37,7 +37,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
             prod.psf_algorithm = extra_info["psf_algo"]
     elif p_type == "expmap":
         # ASSUMPTION1 - tscope attribute in BaseProduct
-        prod = ExpMap(p_path[0], extra_info["tscope"], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+        prod = ExpMap(p_path[0], extra_info["telescope"], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                       extra_info["lo_en"], extra_info["hi_en"])
     elif p_type == "ccf" and "NullSource" not in src:
         # ccf files may not be destined to spend life as product objects, but that doesn't mean
@@ -46,7 +46,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = BaseProduct(p_path[0], "", "", "", out, err, cmd)
     elif (p_type == "spectrum" or p_type == "annular spectrum set components") and "NullSource" not in src:
         # ASSUMPTION1 - tscope attribute in BaseProduct
-        prod = Spectrum(p_path[0], extra_info["tscope"], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
+        prod = Spectrum(p_path[0], extra_info["telescope"], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
                         extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
                         extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"],
                         extra_info["min_sn"], extra_info["over_sample"], out, err, cmd, extra_info["from_region"],
@@ -57,7 +57,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
                        extra_info["instrument"], out, err, cmd)
     elif p_type == "cross arfs":
         # ASSUMPTION1 - tscope attribute in BaseProduct
-        prod = BaseProduct(p_path[0], extra_info["tscope"], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info)
+        prod = BaseProduct(p_path[0], extra_info["telescope"], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info)
     elif "NullSource" in src:
         prod = None
     else:
