@@ -123,7 +123,7 @@ def sas_call(sas_func):
         cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = sas_func(*args, **kwargs)
 
         # Appending a telescope key into the extra_info dictionary
-        extra_info['tscope'] = 'xmm'
+        extra_info['telescope'] = 'xmm'
 
         src_lookup = {}
         all_run = []  # Combined command list for all sources
