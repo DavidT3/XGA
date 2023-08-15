@@ -93,13 +93,12 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
                 rmtree(dest_dir)
 
             os.makedirs(dest_dir)
-            cmds.append("cd {d};evselect table={e} imageset={i} xcolumn=X ycolumn=Y ximagebinsize=87 "
-                        "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize "
-                        "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 "
-                        "withyranges=yes {ex}; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
-                                                                                  i=im, ex=expr))
+            cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes "
+                        "emin={lo} emax={hi}; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
+                                                                                 i=im, lo=lo_en, hi=hi_en ))
 
             # This is the products final resting place, if it exists at the end of this command
+            # ASSUMPTION4 new output directory structure
             final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, im))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst, "telescope": "erosita"})
         sources_cmds.append(np.array(cmds))
