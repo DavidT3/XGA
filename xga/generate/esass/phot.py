@@ -1,8 +1,12 @@
+import os
 from typing import Union
+from shutil import rmtree
 
-from astropy.units import Quantity
+import numpy as np
+from astropy.units import Quantity, UnitConversionError
+from tqdm import tqdm
 
-from .. import NUM_CORES
+from .. import OUTPUT, NUM_CORES
 from .run import esass_call
 from ...sources import BaseSource
 from ...sources.base import NullSource
@@ -23,4 +27,90 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
+        # Checking user's choice of energy limit parameters
+    if not isinstance(lo_en, Quantity) or not isinstance(hi_en, Quantity):
+        raise TypeError("The lo_en and hi_en arguments must be astropy quantities in units "
+                        "that can be converted to keV.")
+    
+    # Have to make sure that the energy bounds are in units that can be converted to keV (which is what evtool
+    #  expects for these arguments).
+    elif not lo_en.unit.is_equivalent('eV') or not hi_en.unit.is_equivalent('eV'):
+        raise UnitConversionError("The lo_en and hi_en arguments must be astropy quantities in units "
+                                  "that can be converted to keV.")
+
+    # Checking that the upper energy limit is not below the lower energy limit
+    elif hi_en <= lo_en:
+        raise ValueError("The hi_en argument must be larger than the lo_en argument.")
+    
+    # Converting to the right unit
+    else:
+        lo_en = lo_en.to('keV')
+        hi_en = hi_en.to('keV')
+
+    # Checking user's lo_en and hi_en inputs are in the valid energy range for eROSITA
+    if (lo_en < Quantity(200, 'eV') or lo_en > Quantity(10000, 'eV')) or \
+        (hi_en < Quantity(200, 'eV') or hi_en > Quantity(10000, 'eV')):
+        raise ValueError("The lo_en and hi_en value must be between 0.2 keV and 10 keV.")
+
+    # Converting the parameters to the correct format for the esass command
+    lo_en = lo_en.value
+    hi_en = hi_en.value
+
+    # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
+    # to this function
+    sources_cmds = []
+    sources_paths = []
+    sources_extras = []
+    sources_types = []
+    for source in sources:
+        cmds = []
+        final_paths = []
+        extra_info = []
+        # Check which event lists are associated with each individual source
+        # ASSUMPTION3 output of products is now a dictionary with telescope keys
+        for pack in source.get_products("events", just_obj=False)['erosita']:
+            obs_id = pack[0]
+            inst = pack[1]
+            # ASSUMPTION4 new output directory structure
+            if not os.path.exists(OUTPUT + 'erosita' + obs_id):
+                os.mkdir(OUTPUT + 'erosita' + obs_id)
+
+            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+            # ASSUMPTION5 source.get_products has a telescope parameter
+            exists = [match for match in source.get_products("image", 'erosita', obs_id, inst, just_obj=False)
+                      if en_id in match]
+            if len(exists) == 1 and exists[0][-1].usable:
+                continue
+
+            evt_list = pack[-1]
+            # ASSUMPTION4 new output directory structure
+            dest_dir = OUTPUT + "erosita" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
+                                                                   n=source.name)
+            im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
+
+            # If something got interrupted and the temp directory still exists, this will remove it
+            if os.path.exists(dest_dir):
+                rmtree(dest_dir)
+
+            os.makedirs(dest_dir)
+            cmds.append("cd {d};evselect table={e} imageset={i} xcolumn=X ycolumn=Y ximagebinsize=87 "
+                        "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize "
+                        "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 "
+                        "withyranges=yes {ex}; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
+                                                                                  i=im, ex=expr))
+
+            # This is the products final resting place, if it exists at the end of this command
+            final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, im))
+            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst, "tscope": "erosita"})
+        sources_cmds.append(np.array(cmds))
+        sources_paths.append(np.array(final_paths))
+        # This contains any other information that will be needed to instantiate the class
+        # once the SAS cmd has run
+        sources_extras.append(np.array(extra_info))
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="image"))
+
+    # I only return num_cores here so it has a reason to be passed to this function, really
+    # it could just be picked up in the decorator.
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
+
     pass
