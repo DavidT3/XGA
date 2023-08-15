@@ -104,12 +104,10 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
-        # once the SAS cmd has run
+        # once the eSASS cmd has run
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="image"))
 
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
-
-    pass
