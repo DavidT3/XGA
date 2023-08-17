@@ -27,8 +27,8 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
-    stack = False
-    execute = True
+    stack = False # This tells the esass_call routine that this command won't be part of a stack
+    execute = True # This should be executed immediately
 
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, (BaseSource, NullSource)):
@@ -131,26 +131,42 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
     """
-    # I know that a lot of this code is the same as the evselect_image code, but its 1am so please don't
-    #  judge me too much.
+    stack = False # This tells the esass_call routine that this command won't be part of a stack
+    execute = True # This should be executed immediately
 
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, (BaseSource, NullSource)):
         sources = [sources]
 
-    # Don't do much value checking in this module, but this one is so fundamental that I will do it
-    if lo_en > hi_en:
-        raise ValueError("lo_en cannot be greater than hi_en")
-    else:
-        # Calls a useful little function that takes an astropy energy quantity to the XMM channels
-        # required by SAS commands
-        lo_chan = energy_to_channel(lo_en)
-        hi_chan = energy_to_channel(hi_en)
+    # Checking user's choice of energy limit parameters
+    if not isinstance(lo_en, Quantity) or not isinstance(hi_en, Quantity):
+        raise TypeError("The lo_en and hi_en arguments must be astropy quantities in units "
+                        "that can be converted to keV.")
+    
+    # Have to make sure that the energy bounds are in units that can be converted to keV (which is what evtool
+    #  expects for these arguments).
+    elif not lo_en.unit.is_equivalent('eV') or not hi_en.unit.is_equivalent('eV'):
+        raise UnitConversionError("The lo_en and hi_en arguments must be astropy quantities in units "
+                                  "that can be converted to keV.")
 
-    # These are crucial, to generate an exposure map one must have a ccf.cif calibration file, and a reference
-    # image. If they do not already exist, these commands should generate them.
-    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
-    sources = evselect_image(sources, lo_en, hi_en)
+    # Checking that the upper energy limit is not below the lower energy limit
+    elif hi_en <= lo_en:
+        raise ValueError("The hi_en argument must be larger than the lo_en argument.")
+    
+    # Converting to the right unit
+    else:
+        lo_en = lo_en.to('keV')
+        hi_en = hi_en.to('keV')
+
+    # Checking user's lo_en and hi_en inputs are in the valid energy range for eROSITA
+    if (lo_en < Quantity(200, 'eV') or lo_en > Quantity(10000, 'eV')) or \
+        (hi_en < Quantity(200, 'eV') or hi_en > Quantity(10000, 'eV')):
+        raise ValueError("The lo_en and hi_en value must be between 0.2 keV and 10 keV.")
+
+    # To generate an exposure map one must have a reference image. 
+    # If they do not already exist, these commands should generate them.
+    sources = evtool_image(sources, lo_en, hi_en)
+
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
     if not isinstance(sources, (list, BaseSample)):
@@ -167,27 +183,29 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events", just_obj=False):
+        # ASSUMPTION3 output of products is now a dictionary with telescope keys
+        for pack in source.get_products("events", just_obj=False)['erosita']:
             obs_id = pack[0]
             inst = pack[1]
-
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            # ASSUMPTION4 new output directory structure
+            if not os.path.exists(OUTPUT + 'erosita' + obs_id):
+                os.mkdir(OUTPUT + 'erosita' + obs_id)
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False)
+            # ASSUMPTION5 source.get_products has a telescope parameter
+            exists = [match for match in source.get_products("expmap", "erosita", obs_id, inst, just_obj=False)
                       if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
             # Generating an exposure map requires a reference image.
-            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
+            # ASSUMPTION5 source.get_products has a telescope parameter
+            ref_im = [match for match in source.get_products("image","erosita", obs_id, inst, just_obj=False)
                       if en_id in match][0][-1]
-            # It also requires an attitude file
-            att = source.get_att_file(obs_id)
             # Set up the paths and names of files
             evt_list = pack[-1]
-            dest_dir = OUTPUT + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
-                                                                   n=source.name)
+            # ASSUMPTION4 new output directory structure
+            dest_dir = OUTPUT + "erosita" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, 
+                                                                               u=hi_en.value, n=source.name)
             exp_map = "{o}_{i}_{l}-{u}keVexpmap.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -202,12 +220,13 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                                            u=hi_chan, d=dest_dir, ccf=dest_dir + "ccf.cif"))
 
             # This is the products final resting place, if it exists at the end of this command
-            final_paths.append(os.path.join(OUTPUT, obs_id, exp_map))
-            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
+            # ASSUMPTION4 new output directory structure
+            final_paths.append(os.path.join(OUTPUT,"erosita", obs_id, exp_map))
+            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst, "telescope": "erosita"})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
-        # once the SAS cmd has run
+        # once the eSASS cmd has run
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="expmap"))
 
