@@ -27,6 +27,9 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
+    stack = False
+    execute = True
+
         # Checking user's choice of energy limit parameters
     if not isinstance(lo_en, Quantity) or not isinstance(hi_en, Quantity):
         raise TypeError("The lo_en and hi_en arguments must be astropy quantities in units "
