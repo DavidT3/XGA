@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/08/2023, 17:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/08/2023, 15:21. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -626,8 +626,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                            temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 3000,
-                           sigma: int = 1, num_cores: int = NUM_CORES) \
-        -> List[GasTemperature3D]:
+                           conf_level: int = 68.2, num_cores: int = NUM_CORES) -> List[GasTemperature3D]:
     """
     This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using
     the 'onion peeling' deprojection method. It will also generate any projected temperature profiles that may be
@@ -689,7 +688,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_data_real: The number of random realisations to generate when propagating profile
         uncertainties, the default is 3000.
-    :param int sigma: What sigma uncertainties should newly created profiles have, the default is 1σ.
+    :param int conf_level: What sigma uncertainties should newly created profiles have, the default is 1σ.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :return: A list of the 3D temperature profiles measured by this function, though if the measurement was not
         successful an entry of None will be added to the list.
@@ -753,7 +752,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             # Also make an Emission Measure profile, used for weighting the contributions from different
             #  shells to annuli
             em_prof = apec_norm_prof.emission_measure_profile(src.redshift, src.cosmo, abund_table,
-                                                              num_data_real, sigma)
+                                                              num_data_real, conf_level)
             src.update_products(em_prof)
 
             # Need to make sure the annular boundaries are a) in a proper distance unit rather than degrees, and b)
@@ -781,8 +780,13 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                     vol_intersects.T) @ em_reals[i, :])
                 temp_3d_reals[i, :] = interim
 
-            # Calculate a standard deviation for each bin to use as the uncertainty
-            temp_3d_sigma = np.std(temp_3d_reals, axis=0) * sigma
+            # Calculate the upper and lower confidence level values as specified by the user
+            med = np.percentile(temp_3d_reals, 50, axis=0)
+            upper = np.percentile(temp_3d_reals, 50 + (conf_level / 2), axis=0)
+            lower = np.percentile(temp_3d_reals, 50 - (conf_level / 2), axis=0)
+
+            # Bit dodgy to do this but oh well
+            temp_3d_sigma = Quantity(np.average([med - lower, upper - med], axis=0), 'keV')
 
             # And finally actually set up a 3D temperature profile
             temp_3d_prof = GasTemperature3D(proj_temp.radii, temp_3d, proj_temp.centre, src.name, obs_id, inst,
@@ -792,7 +796,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             all_3d_temp_profs.append(temp_3d_prof)
 
         else:
-            warn("The projected temperature profile for {src} is not considered usable by XGA".format(src=src.name))
+            warn("The projected temperature profile for {src} is not considered usable by XGA".format(src=src.name),
+                 stacklevel=2)
             all_3d_temp_profs.append(None)
 
     return all_3d_temp_profs

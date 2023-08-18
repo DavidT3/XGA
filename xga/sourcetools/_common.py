@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/06/2023, 09:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/08/2023, 15:21. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -97,8 +97,8 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     temp_profs = onion_deproj_temp_prof(cut_sources, cut_rads, temp_annulus_method, temp_min_snr, temp_min_cnt,
                                         temp_min_width, temp_use_combined, temp_use_worst, min_counts=spec_min_counts,
                                         min_sn=spec_min_sn, over_sample=over_sample, one_rmf=one_rmf,
-                                        abund_table=abund_table, num_cores=num_cores, freeze_met=freeze_met,
-                                        temp_lo_en=temp_lo_en, temp_hi_en=temp_hi_en)
+                                        freeze_met=freeze_met, abund_table=abund_table, temp_lo_en=temp_lo_en,
+                                        temp_hi_en=temp_hi_en, num_cores=num_cores)
 
     # This just allows us to quickly look-up the temperature profile we need later
     temp_prof_dict = {str(cut_sources[p_ind]): p for p_ind, p in enumerate(temp_profs)}
