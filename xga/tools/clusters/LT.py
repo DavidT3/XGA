@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/07/2023, 14:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2023, 21:53. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -24,7 +24,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
                                     min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
                                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                    core_excised: bool = False, freeze_met: bool = True,
+                                    core_excised: bool = False, freeze_nh: bool = True, freeze_met: bool = True,
+                                    lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
                                     save_samp_results_path: str = None, save_rad_history_path: str = None,
                                     cosmo: Cosmology = DEFAULT_COSMO, timeout: Quantity = Quantity(1, 'hr'),
                                     num_cores: int = NUM_CORES) \
@@ -85,8 +86,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     :param bool core_excised: Should final measurements of temperature and luminosity be made with core-excision in
         addition to measurements within the overdensity radius specified by the scaling relation. This will involve
         multiplying the radii by 0.15 to determine the inner radius. Default is False.
+    :param bool freeze_nh: Controls whether the hydrogen column density (nH) should be frozen during XSPEC fits to
+        spectra, the default is True.
     :param bool freeze_met: Controls whether metallicity should be frozen during XSPEC fits to spectra, the default
         is False. Leaving metallicity free to vary tends to require more photons to achieve a good fit.
+    :param Quantity lo_en: The lower energy limit for the data to be fitted by XSPEC. The default is 0.3 keV.
+    :param Quantity hi_en: The upper energy limit for the data to be fitted by XSPEC. The default is 7.9 keV, but
+        reducing this value may help achieve a good fit for suspected lower temperature systems.
     :param str save_samp_results_path: The path to save the final results (temperatures, luminosities, radii) to.
         The default is None, in which case no file will be created. This information is also returned from this
         function.
@@ -235,7 +241,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
         # We generate and fit spectra for the current value of the overdensity radius
         single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, num_cores=num_cores, timeout=timeout,
-                         lum_en=lum_en, freeze_met=freeze_met)
+                         lum_en=lum_en, freeze_met=freeze_met, freeze_nh=freeze_nh, lo_en=lo_en, hi_en=hi_en)
 
         # Just reading out the temperatures, not the uncertainties at the moment
         txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False)[:, 0]
@@ -300,13 +306,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
     single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, lum_en=lum_en, num_cores=num_cores,
-                     freeze_met=freeze_met)
+                     freeze_met=freeze_met, freeze_nh=freeze_nh, lo_en=lo_en, hi_en=hi_en)
 
     # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
     #  just multiply the current radius by 0.15 and use that for the inner radius.
     if core_excised:
         single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens)*0.15, one_rmf=False, lum_en=lum_en,
-                         num_cores=num_cores, freeze_met=freeze_met)
+                         num_cores=num_cores, freeze_met=freeze_met, freeze_nh=freeze_nh, lo_en=lo_en, hi_en=hi_en)
 
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
@@ -348,10 +354,17 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     # Then the column names get added
                     cols += ['Lx' + o_dens[1:] + lum_name.split('bound')[-1] + p_fix for p_fix in ['', '-', '+']]
 
+                # If we note that the metallicity and/or nH were left free to vary, we had better save those values
+                #  as well!
                 if not freeze_met:
                     met = rel_src.get_results(rel_rad, par='Abundanc')
                     vals += list(met)
                     cols += ['Zmet' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+
+                if not freeze_nh:
+                    nh = rel_src.get_results(rel_rad, par='nH')
+                    vals += list(nh)
+                    cols += ['nH' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
             except ModelNotAssociatedError:
                 pass
@@ -371,10 +384,17 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                         cols += ['Lx' + o_dens[1:] + 'ce' + lum_name.split('bound')[-1] + p_fix
                                  for p_fix in ['', '-', '+']]
 
+                    # If we note that the metallicity and/or nH were left free to vary, we had better save those values
+                    #  as well!
                     if not freeze_met:
                         metce = rel_src.get_results(rel_rad, par='Abundanc', inner_radius=0.15*rel_rad)
                         vals += list(metce)
                         cols += ['Zmet' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
+
+                    if not freeze_nh:
+                        nhce = rel_src.get_results(rel_rad, par='nH', inner_radius=0.15*rel_rad)
+                        vals += list(nhce)
+                        cols += ['nH' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                 except ModelNotAssociatedError:
                     pass
