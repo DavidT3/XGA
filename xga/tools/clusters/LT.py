@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2023, 21:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2023, 21:53. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -354,10 +354,17 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     # Then the column names get added
                     cols += ['Lx' + o_dens[1:] + lum_name.split('bound')[-1] + p_fix for p_fix in ['', '-', '+']]
 
+                # If we note that the metallicity and/or nH were left free to vary, we had better save those values
+                #  as well!
                 if not freeze_met:
                     met = rel_src.get_results(rel_rad, par='Abundanc')
                     vals += list(met)
                     cols += ['Zmet' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+
+                if not freeze_nh:
+                    nh = rel_src.get_results(rel_rad, par='nH')
+                    vals += list(nh)
+                    cols += ['nH' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
             except ModelNotAssociatedError:
                 pass
@@ -377,10 +384,17 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                         cols += ['Lx' + o_dens[1:] + 'ce' + lum_name.split('bound')[-1] + p_fix
                                  for p_fix in ['', '-', '+']]
 
+                    # If we note that the metallicity and/or nH were left free to vary, we had better save those values
+                    #  as well!
                     if not freeze_met:
                         metce = rel_src.get_results(rel_rad, par='Abundanc', inner_radius=0.15*rel_rad)
                         vals += list(metce)
                         cols += ['Zmet' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
+
+                    if not freeze_nh:
+                        nhce = rel_src.get_results(rel_rad, par='nH', inner_radius=0.15*rel_rad)
+                        vals += list(nhce)
+                        cols += ['nH' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                 except ModelNotAssociatedError:
                     pass
