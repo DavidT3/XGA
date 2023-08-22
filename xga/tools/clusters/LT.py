@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2023, 16:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2023, 18:29. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -254,7 +254,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                          group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
 
         # Just reading out the temperatures, not the uncertainties at the moment
-        txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False)[:, 0]
+        txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
+                      min_sn=min_sn, over_sample=over_sample)[:, 0]
 
         # This uses the scaling relation to predict the overdensity radius from the measured temperatures
         pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
@@ -354,13 +355,16 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             #  cluster will be NaN
             try:
                 # The temperature measured within the overdensity radius, with its - and + uncertainties are read out
-                vals += list(rel_src.get_temperature(rel_rad).value)
+                vals += list(rel_src.get_temperature(rel_rad, group_spec=group_spec, min_counts=min_counts,
+                                                     min_sn=min_sn, over_sample=over_sample).value)
                 # We add columns with informative names
                 cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
                 # Cycle through every available luminosity, this will return all luminosities in all energy bands
                 #  requested by the user with lum_en
-                for lum_name, lum in rel_src.get_luminosities(rel_rad).items():
+                for lum_name, lum in rel_src.get_luminosities(rel_rad, group_spec=group_spec,
+                                                              min_counts=min_counts, min_sn=min_sn,
+                                                              over_sample=over_sample).items():
                     # The luminosity and its uncertainties gets added to the values list
                     vals += list(lum.value)
                     # Then the column names get added
@@ -369,12 +373,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 # If we note that the metallicity and/or nH were left free to vary, we had better save those values
                 #  as well!
                 if not freeze_met:
-                    met = rel_src.get_results(rel_rad, par='Abundanc')
+                    met = rel_src.get_results(rel_rad, par='Abundanc', group_spec=group_spec, min_counts=min_counts,
+                                              min_sn=min_sn, over_sample=over_sample)
                     vals += list(met)
                     cols += ['Zmet' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
                 if not freeze_nh:
-                    nh = rel_src.get_results(rel_rad, par='nH')
+                    nh = rel_src.get_results(rel_rad, par='nH', group_spec=group_spec, min_counts=min_counts,
+                                             min_sn=min_sn, over_sample=over_sample)
                     vals += list(nh)
                     cols += ['nH' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
@@ -385,12 +391,15 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             if core_excised:
                 try:
                     # Adding temperature value and uncertainties
-                    vals += list(rel_src.get_temperature(rel_rad, inner_radius=0.15*rel_rad).value)
+                    vals += list(rel_src.get_temperature(rel_rad, inner_radius=0.15*rel_rad, group_spec=group_spec,
+                                                         min_counts=min_counts, min_sn=min_sn,
+                                                         over_sample=over_sample).value)
                     # Corresponding column names (with ce now included to indicate core-excised).
                     cols += ['Tx' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                     # The same process again for core-excised luminosities
-                    lce_res = rel_src.get_luminosities(rel_rad, inner_radius=0.15*rel_rad)
+                    lce_res = rel_src.get_luminosities(rel_rad, inner_radius=0.15*rel_rad, group_spec=group_spec,
+                                                       min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
                     for lum_name, lum in lce_res.items():
                         vals += list(lum.value)
                         cols += ['Lx' + o_dens[1:] + 'ce' + lum_name.split('bound')[-1] + p_fix
@@ -399,12 +408,15 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     # If we note that the metallicity and/or nH were left free to vary, we had better save those values
                     #  as well!
                     if not freeze_met:
-                        metce = rel_src.get_results(rel_rad, par='Abundanc', inner_radius=0.15*rel_rad)
+                        metce = rel_src.get_results(rel_rad, par='Abundanc', inner_radius=0.15*rel_rad,
+                                                    group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                                    over_sample=over_sample)
                         vals += list(metce)
                         cols += ['Zmet' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                     if not freeze_nh:
-                        nhce = rel_src.get_results(rel_rad, par='nH', inner_radius=0.15*rel_rad)
+                        nhce = rel_src.get_results(rel_rad, par='nH', inner_radius=0.15*rel_rad, group_spec=group_spec,
+                                                   min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
                         vals += list(nhce)
                         cols += ['nH' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
