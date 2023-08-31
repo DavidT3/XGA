@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 13/06/2022, 11:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/08/2023, 11:32. Copyright (c) The Contributors
 
 import json
 import os
@@ -70,13 +70,14 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required_for_erosita/erosita_obs/
 # default_section, config_section - holds the variables that contain all the input file paths in each section
 # root_dir_key - the root directory label in the config file
 # used - a bool to indicate whether the telescope has been set up in the config file
-TELESCOPE_DICT = {"xmm":{"event_path_key":["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts", "attitude_file"],
-                         "default_section": XMM_FILES,
-                         "config_section": "XMM_FILES",
-                         "root_dir_key": "root_xmm_dir",
-                         "instruments": ["PN", "MOS1", "MOS2"],
-                         "used": False},
-                  "erosita": {"event_path_key":["root_erosita_dir", "erosita_calibration_database", "erosita_evts"],
+TELESCOPE_DICT = {"xmm": {"event_path_key": ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts",
+                                             "attitude_file"],
+                          "default_section": XMM_FILES,
+                          "config_section": "XMM_FILES",
+                          "root_dir_key": "root_xmm_dir",
+                          "instruments": ["PN", "MOS1", "MOS2"],
+                          "used": False},
+                  "erosita": {"event_path_key": ["root_erosita_dir", "erosita_calibration_database", "erosita_evts"],
                               "default_section": EROSITA_FILES,
                               "config_section": "EROSITA_FILES",
                               "root_dir_key": "root_erosita_dir",
@@ -131,6 +132,7 @@ MEAN_MOL_WEIGHT = 0.61
 
 # A centralised constant to define what radius labels are allowed
 RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
+
 
 def obs_id_test(telescope: str, test_string: str) -> bool:
     """
@@ -224,6 +226,7 @@ def erosita_observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.D
     """
     # JESS_TODO check if returning None will break lines ~120 in base.py, might need to be an empty obs_lookup
     return None
+
 
 def build_observation_census(telescope: str, config: ConfigParser) -> None:
     """
@@ -320,6 +323,7 @@ def build_observation_census(telescope: str, config: ConfigParser) -> None:
         obs_lookup["USE_{}".format(inst)] = obs_lookup["USE_{}".format(inst)].replace('T', True).replace('F', False)
     return obs_lookup, blacklist
 
+
 def to_list(str_rep_list: str) -> list:
     """
     Convenience function to change a string representation of a Python list into an actual list object.
@@ -400,6 +404,7 @@ def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
         wcses.append(w)
 
     return wcses
+
 
 if not os.path.exists(CONFIG_PATH):
     os.makedirs(CONFIG_PATH)
