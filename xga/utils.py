@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/08/2023, 11:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/08/2023, 13:36. Copyright (c) The Contributors
 
 import json
 import os
@@ -21,22 +21,27 @@ from tqdm import tqdm
 
 from .exceptions import XGAConfigError
 
-# The telescopes xga can analyse 
+# The telescopes XGA is compatible with
 COMPATIBLE_TELESCOPES = ["xmm", "erosita"]
+
 # If XDG_CONFIG_HOME is set, then use that, otherwise use this default config path
 CONFIG_PATH = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))
-# Nested dictonary containing paths to the censuses and blacklists 
+
+# Nested dictionary containing paths to the censuses and blacklists
 # Top layer is the telescope, second layer contains the telescope directory, census, and blacklist paths
-CENSUSES_DICT = {"xmm": {}, "erosita": {}}
+CENSUSES = {}
 for telescope in COMPATIBLE_TELESCOPES:
+    CENSUSES[telescope] = {}
+
     # The path to the directory containing the census and blacklist files
-    CENSUSES_DICT[telescope]["DIRECTORY"] = os.path.join(CONFIG_PATH, '{}/'.format(telescope))
+    CENSUSES[telescope]["DIRECTORY"] = os.path.join(CONFIG_PATH, '{}/'.format(telescope))
     # Only doing this to make the next lines more readable
-    directory = CENSUSES_DICT[telescope]["DIRECTORY"]
+    directory = CENSUSES[telescope]["DIRECTORY"]
     # The path to the census file, which documents all available ObsIDs and their pointings
-    CENSUSES_DICT[telescope]["CENSUS_FILE"] = os.path.join(directory, '{}_census.csv'.format(telescope))
+    CENSUSES[telescope]["CENSUS_FILE"] = os.path.join(directory, '{}_census.csv'.format(telescope))
     # The path to the blacklist file, which is where users can specify ObsIDs they don't want to be used in analyses
-    CENSUSES_DICT[telescope]["BLACKLIST_FILE"] = os.path.join(directory, '{}_blacklist.csv'.format(telescope))
+    CENSUSES[telescope]["BLACKLIST_FILE"] = os.path.join(directory, '{}_blacklist.csv'.format(telescope))
+
 # XGA config file path
 CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 # Section of the config file for setting up the XGA module
@@ -56,6 +61,7 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required_for_xmm/xmm_obs/data/",
              "mos1_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos1_merged_expmap.fits",
              "mos2_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_expmap.fits",
              "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
+
 EROSITA_FILES = {"root_erosita_dir": "/this/is/required_for_erosita/erosita_obs/data/", 
                  "erosita_evts": "/this/is/required_for_erosita/{obs_id}/{obs_id}.fits", 
                  "erosita_calibration_database": "/this/is/required_for_erosita/erosita_calibration/",
@@ -63,7 +69,7 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required_for_erosita/erosita_obs/
                  "hi_en_erosita": ['2.00', '10.00'],
                  "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
 
-# Nested dictionary to be used to cyle over different telescopes in the following functions in this script
+# Nested dictionary to be used to cycle over different telescopes in the following functions in this script
 # Top Layer is the telescope
 # Second layer contains: 
 # event_path_key - the mandatory directories that are needed for xga to function
@@ -242,23 +248,23 @@ def build_observation_census(telescope: str, config: ConfigParser) -> None:
     old_census_path = os.path.join(CONFIG_PATH, 'census.csv')
     if os.path.exists(old_census_path):
         # Chaning the .config/xga directory to the updated structure for the mulit-telescope version of xga
-        os.makedirs(CENSUSES_DICT["xmm"]["DIRECTORY"])
-        new_census_path = os.path.join(CENSUSES_DICT["xmm"]["DIRECTORY"], 'xmm_census.csv')
+        os.makedirs(CENSUSES["xmm"]["DIRECTORY"])
+        new_census_path = os.path.join(CENSUSES["xmm"]["DIRECTORY"], 'xmm_census.csv')
         # Moving the xmm census to the correct place and renaming it with the updated naming scheme
         shutil.move(old_census_path, new_census_path)
         # Doing the same for the blacklist
         old_bl_path = os.path.join(CONFIG_PATH, 'blacklist.csv')
-        new_bl_path = os.path.join(CENSUSES_DICT["xmm"]["DIRECTORY"], 'xmm_blacklist.csv')
+        new_bl_path = os.path.join(CENSUSES["xmm"]["DIRECTORY"], 'xmm_blacklist.csv')
         shutil.move(old_bl_path, new_bl_path)
 
     # CENSUS_DIR is the directory containing the blacklist and census for each telescope
-    CENSUS_DIR = CENSUSES_DICT[telescope]["DIRECTORY"]
+    CENSUS_DIR = CENSUSES[telescope]["DIRECTORY"]
     # If it doesn't exist yet we create the directory
     if not os.path.exists(CENSUS_DIR):
         os.makedirs(CENSUS_DIR)
     
     # BLACKLIST FILE stores the path to the blacklist file, and lives in CENSUS_DIR
-    BLACKLIST_FILE = CENSUSES_DICT[telescope]["BLACKLIST_FILE"]
+    BLACKLIST_FILE = CENSUSES[telescope]["BLACKLIST_FILE"]
     # INST is a list of the instruments of the telescope
     INST = TELESCOPE_DICT[telescope]["instruments"]
     # Creates black list file if one doesn't exist, then reads it in
@@ -280,7 +286,7 @@ def build_observation_census(telescope: str, config: ConfigParser) -> None:
         blacklist.to_csv(BLACKLIST_FILE, index=False)
 
     # CENSUS FILE stores the path to the census file, and lives in CENSUS_DIR
-    CENSUS_FILE = CENSUSES_DICT[telescope]["CENSUS_FILE"]
+    CENSUS_FILE = CENSUSES[telescope]["CENSUS_FILE"]
     obs_lookup = []
     obs_lookup_obs = []
     # If CENSUS FILE exists, it is read in, otherwise empty lists are initialised to be appended to.
