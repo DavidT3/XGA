@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/08/2023, 20:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/09/2023, 14:21. Copyright (c) The Contributors
 
 import json
 import os
@@ -41,7 +41,12 @@ XMM_INST = ALLOWED_INST['xmm']
 #  depends on what data are available to the user.
 CENSUS_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_census.csv'.format(tel)) for tel in ALLOWED_INST}
 BLACKLIST_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_blacklist.csv'.format(tel)) for tel in ALLOWED_INST}
+
+# This list contains banned filter types - these occur in observations that I don't want XGA to try and use
+BANNED_FILTS = {"xmm": ['CalClosed', 'Closed'],
+                "erosita": []}
 # ----------------------------------------------------------------------------
+
 
 # ------------- Defining constants to do with the configuration file -------------
 # These will largely be the dictionaries that get turned into the various discrete sections of the configuration
@@ -58,8 +63,11 @@ CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/",
               "num_cores": 'auto'}
 
+# Will have to make it clear in the documentation which paths can be left unspecified, and indeed that whole sections
+#  can be left out if there are no relevant data archives for those telescopes. There will be a section for each
+#  mission/telescope's configuration
 
-# Will have to make it clear in the documentation what is allowed here, and which can be left out
+# These are the pertinent bits of information for XMM - mainly the general 'where does data live' stuff
 XMM_FILES = {"root_xmm_dir": "/this/is/required_for_xmm/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required_for_xmm/{obs_id}/pn_exp1_clean_evts.fits",
              "clean_mos1_evts": "/this/is/required_for_xmm/{obs_id}/mos1_exp1_clean_evts.fits",
@@ -75,14 +83,166 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required_for_xmm/xmm_obs/data/",
              "mos2_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_expmap.fits",
              "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
 
+# The information required to use eROSITA data
 EROSITA_FILES = {"root_erosita_dir": "/this/is/required_for_erosita/erosita_obs/data/",
                  "erosita_evts": "/this/is/required_for_erosita/{obs_id}/{obs_id}.fits",
-                 "erosita_calibration_database": "/this/is/required_for_erosita/erosita_calibration/",
-                 "lo_en_erosita": ['0.50', '2.00'],
-                 "hi_en_erosita": ['2.00', '10.00'],
+                 "lo_en": ['0.50', '2.00'],
+                 "hi_en": ['2.00', '10.00'],
                  "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
 
 # -------------------------------------------------------------------------------
+
+
+# ------------- Defining constants to do with general XGA stuff -------------
+
+# List of products supported by XGA that are allowed to be energy bound
+ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap"]
+# These are the built-in profile types
+PROFILE_PRODUCTS = ["brightness_profile", "gas_density_profile", "gas_mass_profile", "1d_apec_norm_profile",
+                    "1d_proj_temperature_profile", "gas_temperature_profile", "baryon_fraction_profile",
+                    "1d_proj_metallicity_profile", "1d_emission_measure_profile", "hydrostatic_mass_profile"]
+COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
+# List of all products supported by XGA
+ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
+                    ] + ENERGY_BOUND_PRODUCTS + PROFILE_PRODUCTS + COMBINED_PROFILE_PRODUCTS
+
+# A centralised constant to define what radius labels are allowed
+RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
+
+# Adding a default concordance cosmology set up here - this replaces the original default choice of Planck15
+DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
+
+# This defines the meaning of different colours of region - this will eventually be user configurable in the
+#  configuration file, but putting it here means that the user can still change the definitions programmatically
+# Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
+#  University of Edinburgh - 2005.
+# Red - Point source
+# Green - Extended source
+# Magenta - PSF-sized extended source
+# Blue - Extended source with significant point source contribution
+# Cyan - Extended source with significant Run1 contribution
+# Yellow - Extended source with less than 10 counts
+SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan", "yellow"]}
+
+# XSPEC file extraction (and base fit) scripts
+XGA_EXTRACT = pkg_resources.resource_filename(__name__, "xspec_scripts/xga_extract.tcl")
+BASE_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/general_xspec_fit.xcm")
+COUNTRATE_CONV_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/cr_conv_calc.xcm")
+# Useful jsons of all XSPEC models, their required parameters, and those parameter's units
+with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json5"), 'r') as filey:
+    MODEL_PARS = json.load(filey)
+with open(pkg_resources.resource_filename(__name__, "files/xspec_model_units.json5"), 'r') as filey:
+    MODEL_UNITS = json.load(filey)
+# ---------------------------------------------------------------------------
+
+
+# ------------- Defining constants to do with physics -------------
+# I know this is practically pointless, I could just use m_p, but I like doing things properly.
+HY_MASS = m_p + m_e
+
+# Mean molecular weight, mu
+# TODO Make sure this doesn't change with abundance table, I think it might?
+MEAN_MOL_WEIGHT = 0.61
+
+# TODO Populate this further, also actually calculate and verify these myself, the value here is taken
+#  from pyproffit code
+# For a fully ionised plasma, this is the electron-to-proton ratio
+NHC = {"angr": 1.199}
+# -----------------------------------------------------------------
+
+
+# ------------- Defining constants to do with units -------------
+# Any new units we set up for the module will live in this section
+
+# These are largely defined so that I can use them for when I'm normalising profile plots, that way
+#  the view method can just write the units nicely the way it normally does
+r200 = def_unit('r200', format={'latex': r"\mathrm{R_{200}}"})
+r500 = def_unit('r500', format={'latex': r"\mathrm{R_{500}}"})
+r2500 = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
+
+# These allow us to set up astropy quantities in units of some of the internal systems of telescopes - obviously
+#  they don't convert to anything, but they still let us work within the astropy coordinate framework
+xmm_sky = def_unit("xmm_sky")
+xmm_det = def_unit("xmm_det")
+erosita_sky = def_unit("erosita_sky")
+erosita_det = def_unit("erosita_det")
+
+# This is a dumb and annoying work-around for a readthedocs problem where units were being added multiple times
+try:
+    Quantity(1, 'r200')
+except ValueError:
+    # Adding the unit instances we created to the astropy pool of units - means we can do things like just defining
+    #  Quantity(10000, 'xmm_det') rather than importing xmm_det from utils and using it that way
+    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det])
+# ---------------------------------------------------------------
+
+
+# ------------- Defining constants to do with backend software -------------
+# Various parts of XGA can rely on different pieces of backend software, so we have this section to set up constants
+#  that tell the relevant parts of XGA whether the software is installed, and what version it is
+
+# Here we check to see whether XSPEC is installed (along with all the necessary paths)
+XSPEC_VERSION = None
+# Got to make sure we can access command line XSPEC.
+if shutil.which("xspec") is None:
+    warn("Unable to locate an XSPEC installation.", stacklevel=2)
+else:
+    try:
+        # The XSPEC intro text includes the version, so I read that out and parse it. That null_script that I'm running
+        #  does absolutely nothing, it's just a way for me to get the version out
+        null_path = pkg_resources.resource_filename(__name__, "xspec_scripts/null_script.xcm")
+        xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE,
+                                     shell=True).communicate()
+        # Got to parse the stdout to get the XSPEC version, which is what these two lines do
+        xspec_vline = [line for line in xspec_out.decode("UTF-8").split('\n') if 'XSPEC version' in line][0]
+        XSPEC_VERSION = xspec_vline.split(': ')[-1]
+    # I know broad exceptions are a sin, but if anything goes wrong here then XGA needs to assume that XSPEC
+    #  is messed up in some way
+    except:
+        # Not necessary as the default XSPEC_VERSION value is None, but oh well - something has to be here!
+        XSPEC_VERSION = None
+# Then I setup these constants of fit methods and abundance tables - just so I can pre-check a user's choice in any
+#  of the XSPEC interface parts of XGA, rather than failing unhelpfully when they try to run the fit
+XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
+ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
+
+# Next up, we
+# Here we check to see whether SAS is installed (along with all the necessary paths)
+SAS_VERSION = None
+if "SAS_DIR" not in os.environ:
+    warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
+        "all functions in xga.sas will not work.")
+    SAS_VERSION = None
+    SAS_AVAIL = False
+else:
+    # This way, the user can just import the SAS_VERSION from this utils code
+    sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+    SAS_VERSION = sas_out.decode("UTF-8").strip("]\n").split('-')[-1]
+    SAS_AVAIL = True
+
+# This checks for the CCF path, which is required to use cifbuild, which is required to do basically
+#  anything with SAS
+if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
+    warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
+        "functions in xga.sas will not work.")
+    SAS_AVAIL = False
+
+# Here we read in files that list the errors and warnings in SAS
+errors = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_errors.csv"), header="infer")
+warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warnings.csv"), header="infer")
+# Just the names of the errors in two handy constants
+SASERROR_LIST = errors["ErrName"].values
+SASWARNING_LIST = warnings["WarnName"].values
+
+# TODO THIS WILL BE FLESHED OUT INTO A SECTION FOR eROSITA
+ESASS_VERSION = None
+
+# We set up a mapping from telescope name to software version constant
+# Don't really expect the user to use this, hence why it isn't a constant, more for checks at the end of this
+#  file. Previously a warning for missing software would be shown at the time of checking, but now we wait to see
+#  which telescopes are configured in the XGA config file before warning that telescope software is missing
+tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION}
+# --------------------------------------------------------------------------
 
 
 # Nested dictionary to be used to cycle over different telescopes in the following functions in this script
@@ -106,55 +266,7 @@ TELESCOPE_DICT = {"xmm": {"event_path_key": ["root_xmm_dir", "clean_pn_evts", "c
                               "instruments": ["TM1", "TM2", "TM3", "TM4", "TM5", "TM6", "TM7"],
                               "used": False}}
 
-# List of products supported by XGA that are allowed to be energy bound
-ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combined_expmap", "combined_ratemap"]
-# These are the built in profile types
-PROFILE_PRODUCTS = ["brightness_profile", "gas_density_profile", "gas_mass_profile", "1d_apec_norm_profile",
-                    "1d_proj_temperature_profile", "gas_temperature_profile", "baryon_fraction_profile",
-                    "1d_proj_metallicity_profile", "1d_emission_measure_profile", "hydrostatic_mass_profile"]
-COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
-# List of all products supported by XGA
-ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
-                    ] + ENERGY_BOUND_PRODUCTS + PROFILE_PRODUCTS + COMBINED_PROFILE_PRODUCTS
 
-# This list contains banned filter types - these occur in observations that I don't want XGA to try and use
-BANNED_FILTS = {"xmm": ['CalClosed', 'Closed'],
-                "erosita": []}
-# Here we read in files that list the errors and warnings in SAS
-errors = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_errors.csv"), header="infer")
-warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warnings.csv"), header="infer")
-# Just the names of the errors in two handy constants
-SASERROR_LIST = errors["ErrName"].values
-SASWARNING_LIST = warnings["WarnName"].values
-
-# XSPEC file extraction (and base fit) scripts
-XGA_EXTRACT = pkg_resources.resource_filename(__name__, "xspec_scripts/xga_extract.tcl")
-BASE_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/general_xspec_fit.xcm")
-COUNTRATE_CONV_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/cr_conv_calc.xcm")
-# Useful jsons of all XSPEC models, their required parameters, and those parameter's units
-with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json5"), 'r') as filey:
-    MODEL_PARS = json.load(filey)
-with open(pkg_resources.resource_filename(__name__, "files/xspec_model_units.json5"), 'r') as filey:
-    MODEL_UNITS = json.load(filey)
-ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
-# TODO Populate this further, also actually calculate and verify these myself, the value here is taken
-#  from pyproffit code
-# For a fully ionised plasma, this is the electron-to-proton ratio
-NHC = {"angr": 1.199}
-XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
-
-# I know this is practically pointless, I could just use m_p, but I like doing things properly.
-HY_MASS = m_p + m_e
-
-# Mean molecular weight, mu
-# TODO Make sure this doesn't change with abundance table, I think it might?
-MEAN_MOL_WEIGHT = 0.61
-
-# A centralised constant to define what radius labels are allowed
-RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
-
-# Adding a default concordance cosmology set up here - this replaces the original default choice of Planck15
-DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
 
 
 # JESS_TODO used to be called xmm_obs_id_test, its used in observation_census
@@ -571,25 +683,8 @@ else:
             CENSUS[telescope], BLACKLIST[telescope] = build_observation_census(telescope, xga_conf)
             # Checking that the relevant analysis software is installed for the setup telescopes
             if telescope == "xmm":
-                # Here we check to see whether SAS is installed (along with all the necessary paths)
-                SAS_VERSION = None
-                if "SAS_DIR" not in os.environ:
-                    warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
-                        "all functions in xga.sas will not work.")
-                    SAS_VERSION = None
-                    SAS_AVAIL = False
-                else:
-                    # This way, the user can just import the SAS_VERSION from this utils code
-                    sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
-                    SAS_VERSION = sas_out.decode("UTF-8").strip("]\n").split('-')[-1]
-                    SAS_AVAIL = True
+                pass
 
-                # This checks for the CCF path, which is required to use cifbuild, which is required to do basically
-                #  anything with SAS
-                if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
-                    warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
-                        "functions in xga.sas will not work.")
-                    SAS_AVAIL = False
             elif telescope == "erosita":
                 raise NotImplementedError("Erosita isn't supported yet.")
                 # Checking if Docker is installed
@@ -639,52 +734,12 @@ else:
         # this can be over-ridden in individual SAS calls.
         NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
 
-    xmm_sky = def_unit("xmm_sky")
-    xmm_det = def_unit("xmm_det")
-    erosita_sky = def_unit("erosita_sky")
-    erosita_det = def_unit("erosita_det")
 
-    # These are largely defined so that I can use them for when I'm normalising profile plots, that way
-    #  the view method can just write the units nicely the way it normally does
-    r200 = def_unit('r200', format={'latex': r"\mathrm{R_{200}}"})
-    r500 = def_unit('r500', format={'latex': r"\mathrm{R_{500}}"})
-    r2500 = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
 
-    # This is a dumb and annoying work-around for a readthedocs problem where units were being added multiple times
-    try:
-        Quantity(1, 'r200')
-    except ValueError:
-        # DAVID_QUESTION in master you have xmm_det twice in this array
-        add_enabled_units([r200, r500, r2500, sky["xmm"], sky["erosita"], det["xmm"], det["erosita"]])
 
-    # Here we check to see whether XSPEC is installed (along with all the necessary paths)
-    XSPEC_VERSION = None
-    # Got to make sure we can access command line XSPEC.
-    if shutil.which("xspec") is None:
-        warn("Unable to locate an XSPEC installation.")
-    else:
-        try:
-            # The XSPEC into text includes the version, so I read that out and parse it
-            null_path = pkg_resources.resource_filename(__name__, "xspec_scripts/null_script.xcm")
-            xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE,
-                                         shell=True).communicate()
-            xspec_vline = [line for line in xspec_out.decode("UTF-8").split('\n') if 'XSPEC version' in line][0]
-            XSPEC_VERSION = xspec_vline.split(': ')[-1]
-        # I know broad exceptions are a sin, but if anything goes wrong here then XGA needs to assume that XSPEC
-        #  is messed up in some way
-        except:
-            XSPEC_VERSION = None
+
+
 
 SETUP_TELESCOPES = [telescope for telescope in TELESCOPE_DICT.keys() if TELESCOPE_DICT[telescope]["used"]]
 
-# This defines the meaning of different colours of region - this will eventually be user configurable in the
-#  configuration file, but putting it here means that the user can still change the definitions programmatically
-# Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
-#  University of Edinburgh - 2005.
-# Red - Point source
-# Green - Extended source
-# Magenta - PSF-sized extended source
-# Blue - Extended source with significant point source contribution
-# Cyan - Extended source with significant Run1 contribution
-# Yellow - Extended source with less than 10 counts
-SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan", "yellow"]}
+
