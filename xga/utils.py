@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 15:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/08/2023, 20:25. Copyright (c) The Contributors
 
 import json
 import os
@@ -22,39 +22,51 @@ from tqdm import tqdm
 
 from .exceptions import XGAConfigError
 
-# The telescopes XGA is compatible with
-COMPATIBLE_TELESCOPES = ["xmm", "erosita"]
-
-# If XDG_CONFIG_HOME is set, then use that, otherwise use this default config path
+# We need to know where the configuration file which tells XGA what data and settings to use lives. If XDG_CONFIG_HOME
+#  is set then use that, otherwise use this default config path. We'll create this path later if it doesn't exist
 CONFIG_PATH = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))
 
-# Nested dictionary containing paths to the censuses and blacklists
-# Top layer is the telescope, second layer contains the telescope directory, census, and blacklist paths
-CENSUSES = {}
-for telescope in COMPATIBLE_TELESCOPES:
-    CENSUSES[telescope] = {}
+# ------------- Defining constants to do with the telescope data -------------
+# This chunk of this file sets
 
-    # The path to the directory containing the census and blacklist files
-    CENSUSES[telescope]["DIRECTORY"] = os.path.join(CONFIG_PATH, '{}/'.format(telescope))
-    # Only doing this to make the next lines more readable
-    directory = CENSUSES[telescope]["DIRECTORY"]
-    # The path to the census file, which documents all available ObsIDs and their pointings
-    CENSUSES[telescope]["CENSUS_FILE"] = os.path.join(directory, '{}_census.csv'.format(telescope))
-    # The path to the blacklist file, which is where users can specify ObsIDs they don't want to be used in analyses
-    CENSUSES[telescope]["BLACKLIST_FILE"] = os.path.join(directory, '{}_blacklist.csv'.format(telescope))
+# This dictionary both defines the telescopes that XGA is compatible with, and their allowed instruments. These mission
+#  and instrument names should all be lowercase, that will be the general storage convention throughout XGA
+ALLOWED_INST = {"xmm": ["pn", "mos1", "mos2"],
+                "erosita": ["tm1, tm2, tm3, tm4, tm5, tm6, tm7"]}
+# TODO remove this when everything is generalised and a specific XMM_INST constant isn't required
+XMM_INST = ALLOWED_INST['xmm']
 
-# XGA config file path
+# This defines where the observation census files would be located for each of the allowed telescopes (the top level
+#  keys of ALLOWED_INST are telescope/mission names) - not every telescope is guaranteed to have a file created, it
+#  depends on what data are available to the user.
+CENSUS_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_census.csv'.format(tel)) for tel in ALLOWED_INST}
+BLACKLIST_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_blacklist.csv'.format(tel)) for tel in ALLOWED_INST}
+# ----------------------------------------------------------------------------
+
+# ------------- Defining constants to do with the configuration file -------------
+# These will largely be the dictionaries that get turned into the various discrete sections of the configuration
+#  file, with one for 'general configuration', and one for each separate telescope supported by XGA. Those dictionaries
+#  will contain different entries, depending on the telescope, but the general idea is to point XGA at the available
+#  events lists, images, and source regions
+
+# XGA config file path - this one is obviously important so that we know where to look for/generate the config file
 CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
-# Section of the config file for setting up the XGA module
-XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/"}
+
+# Section of the config file for setting up the XGA module. The output path is where XGA generated files get stored
+#  and the num_cores entry allows you to manually set the maximum number of cores that XGA can use - though by default
+#  it is set to auto, which will use 90% of the total on your system
+XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/",
+              "num_cores": 'auto'}
+
+
 # Will have to make it clear in the documentation what is allowed here, and which can be left out
 XMM_FILES = {"root_xmm_dir": "/this/is/required_for_xmm/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required_for_xmm/{obs_id}/pn_exp1_clean_evts.fits",
              "clean_mos1_evts": "/this/is/required_for_xmm/{obs_id}/mos1_exp1_clean_evts.fits",
              "clean_mos2_evts": "/this/is/required_for_xmm/{obs_id}/mos2_exp1_clean_evts.fits",
              "attitude_file": "/this/is/required_for_xmm/{obs_id}/attitude.fits",
-             "lo_en_xmm": ['0.50', '2.00'],
-             "hi_en_xmm": ['2.00', '10.00'],
+             "lo_en": ['0.50', '2.00'],
+             "hi_en": ['2.00', '10.00'],
              "pn_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-pn_merged_img.fits",
              "mos1_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos1_merged_img.fits",
              "mos2_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-mos2_merged_img.fits",
@@ -69,6 +81,9 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required_for_erosita/erosita_obs/
                  "lo_en_erosita": ['0.50', '2.00'],
                  "hi_en_erosita": ['2.00', '10.00'],
                  "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
+
+# -------------------------------------------------------------------------------
+
 
 # Nested dictionary to be used to cycle over different telescopes in the following functions in this script
 # Top Layer is the telescope
@@ -101,9 +116,7 @@ COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
 # List of all products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
                     ] + ENERGY_BOUND_PRODUCTS + PROFILE_PRODUCTS + COMBINED_PROFILE_PRODUCTS
-# JESS_TODO changed this to a dict will break lots of big functions in base.py
-XMM_INST = {"xmm": ["pn", "mos1", "mos2"],
-            "erosita": ["tm1, tm2, tm3, tm4, tm5, tm6, tm7"]}
+
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
 BANNED_FILTS = {"xmm": ['CalClosed', 'Closed'],
                 "erosita": []}
@@ -617,7 +630,8 @@ else:
             with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
                 inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
 
-    if "num_cores" in xga_conf["XGA_SETUP"]:
+    # The default behaviour is now to
+    if "num_cores" in xga_conf["XGA_SETUP"] and xga_conf["XGA_SETUP"]["num_cores"] != "auto":
         # If the user has set a number of cores in the config file then we'll use that.
         NUM_CORES = int(xga_conf["XGA_SETUP"]["num_cores"])
     else:
