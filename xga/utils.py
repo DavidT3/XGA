@@ -64,7 +64,7 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required_for_xmm/xmm_obs/data/",
              "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
 
 EROSITA_FILES = {"root_erosita_dir": "/this/is/required_for_erosita/erosita_obs/data/",
-                 "erosita_evts": "/this/is/required_for_erosita/{obs_id}/{obs_id}.fits", 
+                 "erosita_evts": "/this/is/required_for_erosita/{obs_id}/{obs_id}.fits",
                  "erosita_calibration_database": "/this/is/required_for_erosita/erosita_calibration/",
                  "lo_en_erosita": ['0.50', '2.00'],
                  "hi_en_erosita": ['2.00', '10.00'],
@@ -298,7 +298,7 @@ def build_observation_census(telescope: str, config: ConfigParser) -> None:
     # If it doesn't exist yet we create the directory
     if not os.path.exists(CENSUS_DIR):
         os.makedirs(CENSUS_DIR)
-    
+
     # BLACKLIST FILE stores the path to the blacklist file, and lives in CENSUS_DIR
     BLACKLIST_FILE = CENSUSES[telescope]["BLACKLIST_FILE"]
     # INST is a list of the instruments of the telescope
@@ -475,7 +475,7 @@ else:
     # Dictonary to keep track of which telescopes the installer has changed event file paths from the default
     setup_telescope_counter = {}
     for telescope, tel_dict in TELESCOPE_DICT.items():
-         # Here I check that the installer has actually changed the events file paths 
+         # Here I check that the installer has actually changed the events file paths
         setup_telescope_counter[telescope] = all([xga_conf[tel_dict["config_section"]][key] != tel_dict["default_section"][key] for key in tel_dict["event_path_key"]])
         # JESS_TODO need to change the values in TELESCOPE_DICT
         # JESS_TODO do the warnings/ errors appear in a logical order?
