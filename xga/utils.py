@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/09/2023, 14:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/09/2023, 16:37. Copyright (c) The Contributors
 
 import json
 import os
@@ -17,14 +17,18 @@ from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import read_header
 from fitsio.header import FITSHDR
-from numpy import nan, floor
+from numpy import nan
 from tqdm import tqdm
 
 from .exceptions import XGAConfigError
 
 # We need to know where the configuration file which tells XGA what data and settings to use lives. If XDG_CONFIG_HOME
-#  is set then use that, otherwise use this default config path. We'll create this path later if it doesn't exist
+#  is set then use that, otherwise use this default config path. We'll then create this configuration directory
+#  if it doesn't already exist
 CONFIG_PATH = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))
+if not os.path.exists(CONFIG_PATH):
+    os.makedirs(CONFIG_PATH)
+
 
 # ------------- Defining constants to do with the telescope data -------------
 # This chunk of this file sets
@@ -35,6 +39,9 @@ ALLOWED_INST = {"xmm": ["pn", "mos1", "mos2"],
                 "erosita": ["tm1, tm2, tm3, tm4, tm5, tm6, tm7"]}
 # TODO remove this when everything is generalised and a specific XMM_INST constant isn't required
 XMM_INST = ALLOWED_INST['xmm']
+# I provide a list of the top-level keys of the ALLOWED_INST dictionary, as a quick way of accessing the supported
+#  telescope names
+TELESCOPES = list(ALLOWED_INST.keys())
 
 # This defines where the observation census files would be located for each of the allowed telescopes (the top level
 #  keys of ALLOWED_INST are telescope/mission names) - not every telescope is guaranteed to have a file created, it
@@ -60,7 +67,7 @@ CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
 # Section of the config file for setting up the XGA module. The output path is where XGA generated files get stored
 #  and the num_cores entry allows you to manually set the maximum number of cores that XGA can use - though by default
 #  it is set to auto, which will use 90% of the total on your system
-XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/",
+XGA_CONFIG = {"xga_save_path": "xga_output",
               "num_cores": 'auto'}
 
 # Will have to make it clear in the documentation which paths can be left unspecified, and indeed that whole sections
@@ -68,11 +75,11 @@ XGA_CONFIG = {"xga_save_path": "/this/is/required/xga_output/",
 #  mission/telescope's configuration
 
 # These are the pertinent bits of information for XMM - mainly the general 'where does data live' stuff
-XMM_FILES = {"root_xmm_dir": "/this/is/required_for_xmm/xmm_obs/data/",
-             "clean_pn_evts": "/this/is/required_for_xmm/{obs_id}/pn_exp1_clean_evts.fits",
-             "clean_mos1_evts": "/this/is/required_for_xmm/{obs_id}/mos1_exp1_clean_evts.fits",
-             "clean_mos2_evts": "/this/is/required_for_xmm/{obs_id}/mos2_exp1_clean_evts.fits",
-             "attitude_file": "/this/is/required_for_xmm/{obs_id}/attitude.fits",
+XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
+             "clean_pn_evts": "/this/is/required/{obs_id}/pn_exp1_clean_evts.fits",
+             "clean_mos1_evts": "/this/is/required/{obs_id}/mos1_exp1_clean_evts.fits",
+             "clean_mos2_evts": "/this/is/required/{obs_id}/mos2_exp1_clean_evts.fits",
+             "attitude_file": "/this/is/required/{obs_id}/attitude.fits",
              "lo_en": ['0.50', '2.00'],
              "hi_en": ['2.00', '10.00'],
              "pn_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV-pn_merged_img.fits",
@@ -84,12 +91,14 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required_for_xmm/xmm_obs/data/",
              "region_file": "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg"}
 
 # The information required to use eROSITA data
-EROSITA_FILES = {"root_erosita_dir": "/this/is/required_for_erosita/erosita_obs/data/",
-                 "erosita_evts": "/this/is/required_for_erosita/{obs_id}/{obs_id}.fits",
+EROSITA_FILES = {"root_erosita_dir": "/this/is/required/erosita_obs/data/",
+                 "erosita_evts": "/this/is/required/{obs_id}/{obs_id}.fits",
                  "lo_en": ['0.50', '2.00'],
                  "hi_en": ['2.00', '10.00'],
                  "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
 
+# We set up this dictionary for later, it makes programmatically grabbing the section dictionaries easier.
+tele_conf_sects = {'xmm': XMM_FILES, 'erosita': EROSITA_FILES}
 # -------------------------------------------------------------------------------
 
 
@@ -206,7 +215,7 @@ else:
 XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
 ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
 
-# Next up, we
+# Next up, we check to see what version of SAS (if any) is installed - for the XMM-Newton mission
 # Here we check to see whether SAS is installed (along with all the necessary paths)
 SAS_VERSION = None
 if "SAS_DIR" not in os.environ:
@@ -252,19 +261,19 @@ tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION}
 # default_section, config_section - holds the variables that contain all the input file paths in each section
 # root_dir_key - the root directory label in the config file
 # used - a bool to indicate whether the telescope has been set up in the config file
-TELESCOPE_DICT = {"xmm": {"event_path_key": ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts",
-                                             "attitude_file"],
-                          "default_section": XMM_FILES,
-                          "config_section": "XMM_FILES",
-                          "root_dir_key": "root_xmm_dir",
-                          "instruments": ["PN", "MOS1", "MOS2"],
-                          "used": False},
-                  "erosita": {"event_path_key": ["root_erosita_dir", "erosita_calibration_database", "erosita_evts"],
-                              "default_section": EROSITA_FILES,
-                              "config_section": "EROSITA_FILES",
-                              "root_dir_key": "root_erosita_dir",
-                              "instruments": ["TM1", "TM2", "TM3", "TM4", "TM5", "TM6", "TM7"],
-                              "used": False}}
+# TELESCOPE_DICT = {"xmm": {"event_path_key": ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts",
+#                                              "attitude_file"],
+#                           "default_section": XMM_FILES,
+#                           "config_section": "XMM_FILES",
+#                           "root_dir_key": "root_xmm_dir",
+#                           "instruments": ["PN", "MOS1", "MOS2"],
+#                           "used": False},
+#                   "erosita": {"event_path_key": ["root_erosita_dir", "erosita_calibration_database", "erosita_evts"],
+#                               "default_section": EROSITA_FILES,
+#                               "config_section": "EROSITA_FILES",
+#                               "root_dir_key": "root_erosita_dir",
+#                               "instruments": ["TM1", "TM2", "TM3", "TM4", "TM5", "TM6", "TM7"],
+#                               "used": False}}
 
 
 
@@ -573,166 +582,223 @@ def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
     return wcses
 
 
-if not os.path.exists(CONFIG_PATH):
-    os.makedirs(CONFIG_PATH)
+# ------------- Creating/checking the entries in the configuration file -------------
+# This chunk of utils will be dedicated to making sure that the configuration file has been created (by default with
+#  sections for every telescope that XGA supports), or that if it already exists it contains valid entries.
+# THIS STAGE USED TO FAIL ENTIRELY IF THERE WEREN'T VALID ENTRIES - but now I realise that sometimes you just want
+#  to use the XGA products with your own data files without using the source/sample classes, so it will no longer fail
+#  at this stage.
 
-# If first XGA run, creates default config file
+# We're going to be assessing the configuration sections and determining whether they are configured in such a way
+#  that XGA can use them - if the configuration is valid and can be used then that telescope's entry in this
+#  dictionary wll be set to True. That is likely to be checked in the source class init at some point
+VALID_CONFIG = {tel: False for tel in TELESCOPES}
+
+# In this case we find that the configuration file does not exist, and we set it up using the default sections and
+#  configurations that were set up toward the top of this file
 if not os.path.exists(CONFIG_FILE):
+    # Define a configuration object
     xga_default = ConfigParser()
+    # This adds the overall XGA setup section - controls global things like where XGA generated files are stored, and
+    #  how many cores XGA is allowed to use (though that can also be set at import time).
     xga_default.add_section("XGA_SETUP")
     xga_default["XGA_SETUP"] = XGA_CONFIG
-    xga_default.add_section("XMM_FILES")
-    xga_default["XMM_FILES"] = XMM_FILES
-    xga_default.add_section("EROSTIA_FILES")
-    xga_default["EROSITA_FILES"] = EROSITA_FILES
+
+    # Now we cycle through all the telescopes supported by XGA, adding their default sections to the configuration.
+    #  I now regret calling the sections {telescope}_FILES, but honestly it doesn't bother me enough to endure the
+    #  hassle of changing it now - it would be a breaking change for any existing installations
+    for tel in TELESCOPES:
+        cur_sec = "{}_FILES".format(tel.upper())
+        xga_default.add_section(cur_sec)
+        xga_default[cur_sec] = tele_conf_sects[tel]
+
+    # The default configuration file is now written to the path that we expect to find the config file at
     with open(CONFIG_FILE, 'w') as new_cfg:
         xga_default.write(new_cfg)
 
-    # First time run triggers this message
-    raise XGAConfigError("As this is the first time you've used XGA, "
-                         "please configure {} to match your setup".format(CONFIG_FILE))
+    # First time run triggers this message - it used to be an error, and so XGA wouldn't advance beyond this point
+    #  with a new configuration file, but we want people to be able to use the product classes without configuring
+    warn("This is the first time you've used XGA; to use most functionality you will need to configure {} to match "
+         "your setup, though you can use product classes regardless.".format(CONFIG_FILE), stacklevel=2)
+
+xga_conf = ConfigParser()
+# It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
+xga_conf.read(CONFIG_FILE)
+
+# Firstly, we check if the entries in the general XGA configuration section are valid - the output path is the first to
+#  check, though we are actually only checking for a very unlikely edge case. That somebody is using this new version
+#  of XGA with an old, unmodified, configuration file.
+if xga_conf['XGA_SETUP']['xga_save_path'] == "/this/is/required/xga_output/":
+    raise XGAConfigError("The 'xga_save_path' entry is currently '/this/is/required/xga_output/', which at one point"
+                         " was the default entry in new configuration files; please change it before proceeding.")
+
+# Optionally there can be a num_cores entry in the overall settings section, and if there is we check that it is
+#  a valid value - though we don't throw an error if it isn't, we just default to XGA automatically determining
+#  the number of cores to use.
+if 'num_cores' in xga_conf['XGA_SETUP'] and xga_conf['XGA_SETUP']['num_cores'] != 'auto' and \
+        not isinstance(xga_conf['XGA_SETUP']['num_cores'], int):
+    warn("The 'num_cores' entry ({}) in the configuration file is not valid, it should either be an integer or "
+         "auto; here we default to 'auto'.".format(xga_conf['XGA_SETUP']['num_cores']), stacklevel=2)
+    xga_conf['XGA_SETUP']['num_cores'] = 'auto'
+
+# Now we check the telescope-specific sections
+for tel in TELESCOPES:
+    cur_sec = "{}_FILES".format(tel.upper())
+
+
+# Dictonary to keep track of which telescopes the installer has changed event file paths from the default
+setup_telescope_counter = {}
+for telescope, tel_dict in TELESCOPE_DICT.items():
+    # Here I check that the installer has actually changed the events file paths
+    setup_telescope_counter[telescope] = all(
+        [xga_conf[tel_dict["config_section"]][key] != tel_dict["default_section"][key] for key in
+         tel_dict["event_path_key"]])
+    # JESS_TODO need to change the values in TELESCOPE_DICT
+    # JESS_TODO do the warnings/ errors appear in a logical order?
+    if setup_telescope_counter[telescope]:
+        # For telescopes that have been setup, check the root directory exists
+        if not os.path.exists(xga_conf[tel_dict["config_section"]][tel_dict["root_dir_key"]]):
+            raise FileNotFoundError("{ROOT_DIR}={d} does not appear to exist, if it an SFTP mount check the "
+                                    "connection.".format(ROOT_DIR=tel_dict["root_dir_key"],
+                                                         d=xga_conf[tel_dict["config_section"]][
+                                                             tel_dict["root_di_key"]]))
+# Checking there is at least one telescope that has been setup
+# JESS_TODO probably need to word the warnings better
+# also maybe define the dict["example"] as a new variable to make it more readable
+if sum(setup_telescope_counter.values()) == 0:
+    warn("No event file paths in the config have been changed from their defaults. "
+         "Please configure {CONFIG_FILE} to match your setup "
+         "for at least one telescope").format(CONFIG_FILE=CONFIG_FILE)
+# If not all telescopes are set up, print some warnings
+elif sum(setup_telescope_counter.values()) != len(setup_telescope_counter):
+    setup_telescopes = [telescope for telescope, setup_bool in setup_telescope_counter.items() if setup_bool]
+    unsetup_telescopes = [telescope for telescope, setup_bool in setup_telescope_counter.items() if not setup_bool]
+    warn("XGA has been configured for {setup}, to use {unsetup} please configure {CONFIG_FILE} "
+         "to match your setup.".format(setup=', '.join(setup_telescopes),
+                                       unsetup=', '.join(unsetup_telescopes),
+                                       CONFIG_FILE=CONFIG_FILE))
+
+# Now I do the same for the XGA_SETUP section
+keys_to_check = ["xga_save_path"]
+# Here I check that the installer has actually changed the three events file paths
+all_changed = all([xga_conf["XGA_SETUP"][key] != XGA_CONFIG[key] for key in keys_to_check])
+if not all_changed:
+    raise XGAConfigError("You have not changed the xga_save_path value in the config file")
+elif not os.path.exists(xga_conf["XGA_SETUP"]["xga_save_path"]):
+    # This is the folder where any files generated by XGA get written
+    # Its taken as is from the config file, so it can be absolute, or relative to the project directory
+    # Can also be overwritten at runtime by the user, so that's nice innit
+    os.makedirs(xga_conf["XGA_SETUP"]["xga_save_path"])
+
+for telescope in TELESCOPE_DICT.keys():
+    # Defining these to make the next lines easier to read
+    # This is the section of the config file corresponding to each telescope
+    section = xga_conf[TELESCOPE_DICT[telescope]["config_section"]]
+    # This is the root directory in that section
+    root_dir = section[TELESCOPE_DICT[telescope]["root_dir_key"]]
+
+    no_check = {"xmm": ["root_xmm_dir", "lo_en_xmm", "hi_en_xmm"],
+                "erosita": []}
+    for key, value in section.items():
+        # Here we attempt to deal with files where people have defined their file paths
+        # relative to the root_dir
+        if key not in no_check and root_dir not in section[key] and section[key][0] != '/':
+            section[key] = os.path.join(os.path.abspath(root_dir), section[key])
+
+    # As it turns out, the ConfigParser class is a pain to work with, so we're converting to a dict here
+    # Addressing works just the same
+    xga_conf = {str(sect): dict(xga_conf[str(sect)]) for sect in xga_conf}
+    # need to redefine this variable with the new definition of xga_conf
+    section = xga_conf[TELESCOPE_DICT[telescope]["config_section"]]
+    energy_bounds_key = ["lo_en", "hi_en"]
+    for energy in energy_bounds_key:
+        try:
+            section[energy + "_{}".format(telescope)] = to_list(section[energy + "_{}".format(telescope)])
+        except KeyError:
+            raise KeyError("Entries have been removed from config file, "
+                           "please leave all in place, even if they are empty")
+
+    # Do a little pre-checking for the energy entries
+    if len(section["lo_en" + "_{}".format(telescope)]) != len(section["hi_en" + "_{}".format(telescope)]):
+        raise ValueError("lo_en and hi_en entries in the config "
+                         "file for {} do not parse to lists of the same length.".format(telescope))
+
+    # Make sure that this is the absolute path
+    root_dir = os.path.abspath(root_dir) + "/"
+# Read dataframe of ObsIDs and pointing coordinates into dictionaries
+CENSUS = {}
+BLACKLIST = {}
+for telescope in setup_telescopes:
+    if setup_telescope_counter[telescope]:
+        # JESS_TODO check if they have the old setup and then rearrange
+        # only doing this for telescopes that are setup in the config file
+        CENSUS[telescope], BLACKLIST[telescope] = build_observation_census(telescope, xga_conf)
+        # Checking that the relevant analysis software is installed for the setup telescopes
+        if telescope == "xmm":
+            pass
+
+        elif telescope == "erosita":
+            raise NotImplementedError("Erosita isn't supported yet.")
+            # Checking if Docker is installed
+            if shutil.which("docker") is None:
+                warn("Unable to locate a Docker installation.")
+
+# First time run triggers this message - it used to be an error, and so XGA wouldn't advance beyond this point
+#  with a new configuration file, but we want people to be able to use the product classes without configuring
+raise XGAConfigError("As this is the first time you've used XGA, "
+                     "please configure {} to match your setup".format(CONFIG_FILE))
+# -----------------------------------------------------------------------------------
+
+
+
+
+# If first XGA run, creates default config file
+
 
 # But if the config file is found, some preprocessing and checks are applied
+
+OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
+
+# Checking if the user was using the xmm only verison of xga previously
+# Do this by looking for the 'profile' directory in the xga_save_path directory
+# JESS_TODO this would only work if they hadnt changed their xga_save_path
+profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
+if sum(profiles) != 0:
+    # if there is a directory called combined, then they have used an old version of xga
+    new_directory = os.path.join(OUTPUT, "xmm")
+    for direct in os.listdir(OUTPUT):
+        # rearranging their xga_save_path directory to the updated multi-telescope format
+        old_path = os.path.join(OUTPUT, direct)
+        new_path = os.path.join(new_directory, direct)
+        shutil.move(old_path, new_path)
+# Created for those sources will be saved
+for telescope in setup_telescopes:
+    # Telescope specific path where products are stored in xga output directory
+    OUTPUT_TEL = os.path.join(OUTPUT, telescope)
+    if not os.path.exists(OUTPUT_TEL):
+        os.makedirs(OUTPUT_TEL)
+    # Make a storage directory where specific source name directories will then be created, there profile objects
+    if not os.path.exists(OUTPUT_TEL + "/profiles"):
+        os.makedirs(OUTPUT_TEL + "/profiles")
+
+    # Also making a storage directory specifically for products which are combinations of different ObsIDs
+    #  and instruments
+    if not os.path.exists(OUTPUT_TEL + "/combined"):
+        os.makedirs(OUTPUT_TEL + "/combined")
+
+    # And create an inventory file for that directory
+    if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
+        with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
+            inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
+
+# The default behaviour is now to
+if "num_cores" in xga_conf["XGA_SETUP"] and xga_conf["XGA_SETUP"]["num_cores"] != "auto":
+    # If the user has set a number of cores in the config file then we'll use that.
+    NUM_CORES = int(xga_conf["XGA_SETUP"]["num_cores"])
 else:
-    xga_conf = ConfigParser()
-    # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
-    xga_conf.read(CONFIG_FILE)
-    # Dictonary to keep track of which telescopes the installer has changed event file paths from the default
-    setup_telescope_counter = {}
-    for telescope, tel_dict in TELESCOPE_DICT.items():
-         # Here I check that the installer has actually changed the events file paths
-        setup_telescope_counter[telescope] = all([xga_conf[tel_dict["config_section"]][key] != tel_dict["default_section"][key] for key in tel_dict["event_path_key"]])
-        # JESS_TODO need to change the values in TELESCOPE_DICT
-        # JESS_TODO do the warnings/ errors appear in a logical order?
-        if setup_telescope_counter[telescope]:
-            # For telescopes that have been setup, check the root directory exists
-            if not os.path.exists(xga_conf[tel_dict["config_section"]][tel_dict["root_dir_key"]]):
-                raise FileNotFoundError("{ROOT_DIR}={d} does not appear to exist, if it an SFTP mount check the "
-                                    "connection.".format(ROOT_DIR=tel_dict["root_dir_key"],
-                                    d=xga_conf[tel_dict["config_section"]][tel_dict["root_di_key"]]))
-    # Checking there is at least one telescope that has been setup
-    # JESS_TODO probably need to word the warnings better
-    # also maybe define the dict["example"] as a new variable to make it more readable
-    if sum(setup_telescope_counter.values()) == 0:
-        warn("No event file paths in the config have been changed from their defaults. "
-             "Please configure {CONFIG_FILE} to match your setup "
-             "for at least one telescope").format(CONFIG_FILE=CONFIG_FILE)
-    # If not all telescopes are set up, print some warnings
-    elif sum(setup_telescope_counter.values()) != len(setup_telescope_counter):
-        setup_telescopes = [telescope for telescope, setup_bool in setup_telescope_counter.items() if setup_bool]
-        unsetup_telescopes = [telescope for telescope, setup_bool in setup_telescope_counter.items() if not setup_bool]
-        warn("XGA has been configured for {setup}, to use {unsetup} please configure {CONFIG_FILE} "
-              "to match your setup.".format(setup=', '.join(setup_telescopes),
-                                            unsetup=', '.join(unsetup_telescopes),
-                                            CONFIG_FILE=CONFIG_FILE))
-
-    # Now I do the same for the XGA_SETUP section
-    keys_to_check = ["xga_save_path"]
-    # Here I check that the installer has actually changed the three events file paths
-    all_changed = all([xga_conf["XGA_SETUP"][key] != XGA_CONFIG[key] for key in keys_to_check])
-    if not all_changed:
-        raise XGAConfigError("You have not changed the xga_save_path value in the config file")
-    elif not os.path.exists(xga_conf["XGA_SETUP"]["xga_save_path"]):
-        # This is the folder where any files generated by XGA get written
-        # Its taken as is from the config file, so it can be absolute, or relative to the project directory
-        # Can also be overwritten at runtime by the user, so that's nice innit
-        os.makedirs(xga_conf["XGA_SETUP"]["xga_save_path"])
-
-    for telescope in TELESCOPE_DICT.keys():
-        # Defining these to make the next lines easier to read
-        #This is the section of the config file corresponding to each telescope
-        section = xga_conf[TELESCOPE_DICT[telescope]["config_section"]]
-        #This is the root directory in that section
-        root_dir = section[TELESCOPE_DICT[telescope]["root_dir_key"]]
-
-        no_check = {"xmm": ["root_xmm_dir", "lo_en_xmm", "hi_en_xmm"],
-                "erosita": []}
-        for key, value in section.items():
-            # Here we attempt to deal with files where people have defined their file paths
-            # relative to the root_dir
-            if key not in no_check and root_dir not in section[key] and section[key][0] != '/':
-                section[key] = os.path.join(os.path.abspath(root_dir), section[key])
-
-        # As it turns out, the ConfigParser class is a pain to work with, so we're converting to a dict here
-        # Addressing works just the same
-        xga_conf = {str(sect): dict(xga_conf[str(sect)]) for sect in xga_conf}
-        # need to redefine this variable with the new definition of xga_conf
-        section = xga_conf[TELESCOPE_DICT[telescope]["config_section"]]
-        energy_bounds_key = ["lo_en", "hi_en"]
-        for energy in energy_bounds_key:
-            try:
-                section[energy + "_{}".format(telescope)] = to_list(section[energy + "_{}".format(telescope)])
-            except KeyError:
-                raise KeyError("Entries have been removed from config file, "
-                            "please leave all in place, even if they are empty")
-
-        # Do a little pre-checking for the energy entries
-        if len(section["lo_en" + "_{}".format(telescope)]) != len(section["hi_en" + "_{}".format(telescope)]):
-            raise ValueError("lo_en and hi_en entries in the config "
-                            "file for {} do not parse to lists of the same length.".format(telescope))
-
-        # Make sure that this is the absolute path
-        root_dir = os.path.abspath(root_dir) + "/"
-    # Read dataframe of ObsIDs and pointing coordinates into dictionaries
-    CENSUS = {}
-    BLACKLIST = {}
-    for telescope in setup_telescopes:
-        if setup_telescope_counter[telescope]:
-            # JESS_TODO check if they have the old setup and then rearrange
-            # only doing this for telescopes that are setup in the config file
-            CENSUS[telescope], BLACKLIST[telescope] = build_observation_census(telescope, xga_conf)
-            # Checking that the relevant analysis software is installed for the setup telescopes
-            if telescope == "xmm":
-                pass
-
-            elif telescope == "erosita":
-                raise NotImplementedError("Erosita isn't supported yet.")
-                # Checking if Docker is installed
-                if shutil.which("docker") is None:
-                    warn("Unable to locate a Docker installation.")
-
-    OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
-
-    # Checking if the user was using the xmm only verison of xga previously
-    # Do this by looking for the 'profile' directory in the xga_save_path directory
-    # JESS_TODO this would only work if they hadnt changed their xga_save_path
-    profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
-    if sum(profiles) != 0:
-        # if there is a directory called combined, then they have used an old version of xga
-        new_directory = os.path.join(OUTPUT, "xmm")
-        for direct in os.listdir(OUTPUT):
-            # rearranging their xga_save_path directory to the updated multi-telescope format
-            old_path = os.path.join(OUTPUT, direct)
-            new_path = os.path.join(new_directory, direct)
-            shutil.move(old_path, new_path)
-    # Created for those sources will be saved
-    for telescope in setup_telescopes:
-        # Telescope specific path where products are stored in xga output directory
-        OUTPUT_TEL = os.path.join(OUTPUT, telescope)
-        if not os.path.exists(OUTPUT_TEL):
-            os.makedirs(OUTPUT_TEL)
-        # Make a storage directory where specific source name directories will then be created, there profile objects
-        if not os.path.exists(OUTPUT_TEL + "/profiles"):
-            os.makedirs(OUTPUT_TEL + "/profiles")
-
-        # Also making a storage directory specifically for products which are combinations of different ObsIDs
-        #  and instruments
-        if not os.path.exists(OUTPUT_TEL + "/combined"):
-            os.makedirs(OUTPUT_TEL + "/combined")
-
-        # And create an inventory file for that directory
-        if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
-            with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
-                inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
-
-    # The default behaviour is now to
-    if "num_cores" in xga_conf["XGA_SETUP"] and xga_conf["XGA_SETUP"]["num_cores"] != "auto":
-        # If the user has set a number of cores in the config file then we'll use that.
-        NUM_CORES = int(xga_conf["XGA_SETUP"]["num_cores"])
-    else:
-        # Going to allow multi-core processing to use 90% of available cores by default, but
-        # this can be over-ridden in individual SAS calls.
-        NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
+    # Going to allow multi-core processing to use 90% of available cores by default, but
+    # this can be over-ridden in individual SAS calls.
+    NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
 
 
 
