@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 14:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 16:58. Copyright (c) The Contributors
 
 import json
 import os
@@ -37,7 +37,7 @@ if not os.path.exists(CONFIG_PATH):
 # This dictionary both defines the telescopes that XGA is compatible with, and their allowed instruments. These mission
 #  and instrument names should all be lowercase, that will be the general storage convention throughout XGA
 ALLOWED_INST = {"xmm": ["pn", "mos1", "mos2"],
-                "erosita": ["tm1, tm2, tm3, tm4, tm5, tm6, tm7"]}
+                "erosita": ["tm1", "tm2", "tm3", "tm4", "tm5", "tm6", "tm7"]}
 # TODO remove this when everything is generalised and a specific XMM_INST constant isn't required
 XMM_INST = ALLOWED_INST['xmm']
 # I provide a list of the top-level keys of the ALLOWED_INST dictionary, as a quick way of accessing the supported
@@ -400,72 +400,55 @@ def erosita_observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.D
     return None
 
 
-def build_observation_census(telescope: str, config: ConfigParser) -> None:
+def build_observation_census(tel: str) -> None:
     """
-    JESS_TODO write this doc string properly please
-    A function that builds/ updates the census and blacklist for each telescope
-    CURRENTLY THIS WILL NOT UPDATE TO DEAL WITH OBSID FOLDERS THAT HAVE BEEN DELETED.
+    A function that builds/updates the census and blacklist for each telescope.
 
-    :param config: The XGA configuration object.
-    :return: ObsIDs and pointing coordinates of available XMM observations.
+    :param str tel: The name of the telescope we are setting up a census/blacklist for.
+    :return: The census and blacklist dataframes for the input telescope.
     :rtype: Tuple[pd.DataFrame, pd.DataFrame]
     """
-    # Checking if someone had been using the XMM only version of xga previously
-    old_census_path = os.path.join(CONFIG_PATH, 'census.csv')
-    if os.path.exists(old_census_path):
-        # Chaning the .config/xga directory to the updated structure for the mulit-telescope version of xga
-        os.makedirs(CENSUSES["xmm"]["DIRECTORY"])
-        new_census_path = os.path.join(CENSUSES["xmm"]["DIRECTORY"], 'xmm_census.csv')
-        # Moving the xmm census to the correct place and renaming it with the updated naming scheme
-        shutil.move(old_census_path, new_census_path)
-        # Doing the same for the blacklist
-        old_bl_path = os.path.join(CONFIG_PATH, 'blacklist.csv')
-        new_bl_path = os.path.join(CENSUSES["xmm"]["DIRECTORY"], 'xmm_blacklist.csv')
-        shutil.move(old_bl_path, new_bl_path)
 
-    # CENSUS_DIR is the directory containing the blacklist and census for each telescope
-    CENSUS_DIR = CENSUSES[telescope]["DIRECTORY"]
+    # The census_dir is the directory containing the blacklist and census for each telescope
+    census_dir = os.path.join(CONFIG_PATH, tel) + '/'
     # If it doesn't exist yet we create the directory
-    if not os.path.exists(CENSUS_DIR):
-        os.makedirs(CENSUS_DIR)
+    if not os.path.exists(census_dir):
+        os.makedirs(census_dir)
 
-    # BLACKLIST FILE stores the path to the blacklist file, and lives in CENSUS_DIR
-    BLACKLIST_FILE = CENSUSES[telescope]["BLACKLIST_FILE"]
-    # INST is a list of the instruments of the telescope
-    INST = TELESCOPE_DICT[telescope]["instruments"]
-    # Creates black list file if one doesn't exist, then reads it in
-    if not os.path.exists(BLACKLIST_FILE):
-        with open(BLACKLIST_FILE, 'w') as bl:
-            inst_list = ["EXCLUDE_{},".format(inst) for inst in INST]
-            inst_list = "".join(inst_list)[:-1]
-            bl.write("ObsID," + inst_list)
-    blacklist = pd.read_csv(BLACKLIST_FILE, header="infer", dtype=str)
+    # This variable stores the path to the blacklist file
+    blacklist_file = os.path.join(CONFIG_PATH, tel, "{}_blacklist.csv".format(tel))
+    # This extracts the relevant list of the instruments for this telescope
+    rel_insts = ALLOWED_INST[tel]
+    # Creates blacklist file if one doesn't exist, then reads it in
+    if not os.path.exists(blacklist_file):
+        inst_list = ["EXCLUDE_{}".format(inst.upper()) for inst in rel_insts]
+        blacklist = pd.DataFrame(columns=["ObsID"] + inst_list)
+        blacklist.to_csv(blacklist_file, index=False)
+    # If a blacklist already exists then of course we don't need to make one, just read it in
+    else:
+        blacklist = pd.read_csv(blacklist_file, header="infer", dtype=str)
 
     # This part here is to support blacklists used by older versions of XGA, where only a full ObsID was excluded.
-    #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected
+    #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected.
+    # THIS WON'T CAUSE ANY PROBLEMS WITH THE MULTI-TELESCOPE XGA BECAUSE ANY BLACKLIST WITH ONLY ONE COLUMN *MUST*
+    #  BELONG TO XMM, AS IT PRE-DATED OUR ADDING SUPPORT FOR MULTIPLE TELESCOPE
     if len(blacklist.columns) == 1:
         # Adds the four new columns, all with a default value of True. So any ObsID already in the blacklist
         #  will have the same behaviour as before, all instruments for the ObsID are excluded
-        blacklist_columns = ["EXCLUDE_{}".format(inst) for inst in INST]
+        blacklist_columns = ["EXCLUDE_{}".format(inst) for inst in rel_insts]
         blacklist[blacklist_columns] = 'T'
         # If we have even gotten to this stage then the actual blacklist file needs re-writing, so I do
-        blacklist.to_csv(BLACKLIST_FILE, index=False)
+        blacklist.to_csv(blacklist_file, index=False)
 
-    # CENSUS FILE stores the path to the census file, and lives in CENSUS_DIR
-    CENSUS_FILE = CENSUSES[telescope]["CENSUS_FILE"]
-    obs_lookup = []
-    obs_lookup_obs = []
-    # If CENSUS FILE exists, it is read in, otherwise empty lists are initialised to be appended to.
-    if os.path.exists(CENSUS_FILE):
-        with open(CENSUS_FILE, 'r') as census:
-            obs_lookup = census.readlines()  # Reads the lines of the files
-            # This is just ObsIDs, needed to see which ObsIDs have already been processed.
-            obs_lookup_obs.append(entry.split(',')[0] for entry in obs_lookup[1:])
+    # This variable stores the path to the census file for this telescope
+    census_file = os.path.join(CONFIG_PATH, tel, "{}_census.csv".format(tel))
+    # If CENSUS FILE exists, it is read in, otherwise an empty dataframe is initialised
+    if os.path.exists(census_file):
+        obs_lookup = pd.read_csv(census_file, header="infer", dtype=str)
     else:
         # Making the columns in the census
-        inst_list = ["USE_{},".format(inst) for inst in INST]
-        inst_list = "".join(inst_list)[:-1] + "\n"
-        obs_lookup.append("ObsID,RA_PNT,DEC_PNT," + inst_list)
+        inst_list = ["USE_{}".format(inst) for inst in rel_insts]
+        obs_lookup = pd.DataFrame(columns=["ObsID", "RA_PNT", "DEC_PNT"] + inst_list)
 
     # Need to find out which observations are available, crude way of making sure they are ObsID directories
     # This also checks that I haven't run them before
@@ -493,20 +476,8 @@ def build_observation_census(telescope: str, config: ConfigParser) -> None:
     # Adding in columns for the instruments
     for inst in INST:
         obs_lookup["USE_{}".format(inst)] = obs_lookup["USE_{}".format(inst)].replace('T', True).replace('F', False)
-    return obs_lookup, blacklist
-
-
-def to_list(str_rep_list: str) -> list:
-    """
-    Convenience function to change a string representation of a Python list into an actual list object.
-
-    :param str str_rep_list: String that represents a Python list. e.g. "['0.5', '2.0']"
-    :return: The parsed representative string.
-    :rtype: list
-    """
-    in_parts = str_rep_list.strip("[").strip("]").split(',')
-    real_list = [part.strip(' ').strip("'").strip('"') for part in in_parts if part != '' and part != ' ']
-    return real_list
+    # return obs_lookup, blacklist
+    return [], []
 
 
 # TODO THIS WAS AN ILL-CONSIDERED FUNCTION FROM A LESS EXPERIENCED DAVID - YOU NEED RMFS TO DO THIS PROPERLY AND
@@ -694,14 +665,111 @@ for tel in TELESCOPES:
     #  the USABLE entry for the current telescope will stay at the default value of False
     if all_req_changed and root_dir_exists:
         USABLE[tel] = True
+# -----------------------------------------------------------------------------------
 
-print(xga_conf['EROSITA_FILES'])
+
+# ------------- Generating the observation censuses for all USABLE telescopes -------------
+
+# Read dataframe of ObsIDs and pointing coordinates into dictionaries
+CENSUS = {}
+BLACKLIST = {}
+
+# Checking if someone had been using the XMM only version of XGA previously - with this update to implement the
+#  infrastructure to support different telescopes the census/blacklist files will exist for EACH telescope
+#  individually
+old_census_path = os.path.join(CONFIG_PATH, 'census.csv')
+if os.path.exists(old_census_path):
+    # Changing the .config/xga directory to the updated structure for the multi-telescope version of xga
+    os.makedirs(CONFIG_PATH + '/xmm/')
+    new_xmm_census_path = os.path.join(CONFIG_PATH, 'xmm', 'xmm_census.csv')
+    # Moving the xmm census to the correct place and renaming it with the updated naming scheme
+    shutil.move(old_census_path, new_xmm_census_path)
+    # Doing the same for the blacklist
+    old_bl_path = os.path.join(CONFIG_PATH, 'blacklist.csv')
+    new_bl_path = os.path.join(CONFIG_PATH, 'xmm', 'xmm_blacklist.csv')
+    shutil.move(old_bl_path, new_bl_path)
+
+# TODO REMOVE THIS OBVIOUSLY
+USABLE['erosita'] = True
+
+for tel in USABLE:
+    # We only care to have/make a census if the telescope is actually set up and usable
+    if USABLE[tel]:
+        # JESS_TODO check if they have the old setup and then rearrange
+        # only doing this for telescopes that are set up in the config file
+        CENSUS[tel], BLACKLIST[tel] = build_observation_census(tel)
+
+# -----------------------------------------------------------------------------------------
+
 stop
 
-print(USABLE)
+# First time run triggers this message - it used to be an error, and so XGA wouldn't advance beyond this point
+#  with a new configuration file, but we want people to be able to use the product classes without configuring
+raise XGAConfigError("As this is the first time you've used XGA, "
+                     "please configure {} to match your setup".format(CONFIG_FILE))
+# -----------------------------------------------------------------------------------
+
+
+
+
+# If first XGA run, creates default config file
+
+
+# But if the config file is found, some preprocessing and checks are applied
+# TODO DECIDE WHAT TO DO ABOUT THIS
+OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
+
+# Checking if the user was using the xmm only verison of xga previously
+# Do this by looking for the 'profile' directory in the xga_save_path directory
+# JESS_TODO this would only work if they hadnt changed their xga_save_path
+profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
+if sum(profiles) != 0:
+    # if there is a directory called combined, then they have used an old version of xga
+    new_directory = os.path.join(OUTPUT, "xmm")
+    for direct in os.listdir(OUTPUT):
+        # rearranging their xga_save_path directory to the updated multi-telescope format
+        old_path = os.path.join(OUTPUT, direct)
+        new_path = os.path.join(new_directory, direct)
+        shutil.move(old_path, new_path)
+# Created for those sources will be saved
+for telescope in setup_telescopes:
+    # Telescope specific path where products are stored in xga output directory
+    OUTPUT_TEL = os.path.join(OUTPUT, telescope)
+    if not os.path.exists(OUTPUT_TEL):
+        os.makedirs(OUTPUT_TEL)
+    # Make a storage directory where specific source name directories will then be created, there profile objects
+    if not os.path.exists(OUTPUT_TEL + "/profiles"):
+        os.makedirs(OUTPUT_TEL + "/profiles")
+
+    # Also making a storage directory specifically for products which are combinations of different ObsIDs
+    #  and instruments
+    if not os.path.exists(OUTPUT_TEL + "/combined"):
+        os.makedirs(OUTPUT_TEL + "/combined")
+
+    # And create an inventory file for that directory
+    if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
+        with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
+            inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
+
+# The default behaviour is now to
+if "num_cores" in xga_conf["XGA_SETUP"] and xga_conf["XGA_SETUP"]["num_cores"] != "auto":
+    # If the user has set a number of cores in the config file then we'll use that.
+    NUM_CORES = int(xga_conf["XGA_SETUP"]["num_cores"])
+else:
+    # Going to allow multi-core processing to use 90% of available cores by default, but
+    # this can be over-ridden in individual SAS calls.
+    NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
+
+
+# TODO I don't like that the output directory is created just when XGA is imported - so the bit of utils that
+#  made said output directory (and setup stuff inside of it) will be moved to the init of BaseSource
+
 stop
 
-# Dictionary to keep track of which telescopes the installer has changed event file paths from the default
+
+SETUP_TELESCOPES = [telescope for telescope in TELESCOPE_DICT.keys() if TELESCOPE_DICT[telescope]["used"]]
+
+"""# Dictionary to keep track of which telescopes the installer has changed event file paths from the default
 setup_telescope_counter = {}
 for telescope, tel_dict in TELESCOPE_DICT.items():
     # Here I check that the installer has actually changed the events file paths
@@ -779,89 +847,4 @@ for telescope in TELESCOPE_DICT.keys():
                          "file for {} do not parse to lists of the same length.".format(telescope))
 
     # Make sure that this is the absolute path
-    root_dir = os.path.abspath(root_dir) + "/"
-# Read dataframe of ObsIDs and pointing coordinates into dictionaries
-CENSUS = {}
-BLACKLIST = {}
-for telescope in setup_telescopes:
-    if setup_telescope_counter[telescope]:
-        # JESS_TODO check if they have the old setup and then rearrange
-        # only doing this for telescopes that are setup in the config file
-        CENSUS[telescope], BLACKLIST[telescope] = build_observation_census(telescope, xga_conf)
-        # Checking that the relevant analysis software is installed for the setup telescopes
-        if telescope == "xmm":
-            pass
-
-        elif telescope == "erosita":
-            raise NotImplementedError("Erosita isn't supported yet.")
-            # Checking if Docker is installed
-            if shutil.which("docker") is None:
-                warn("Unable to locate a Docker installation.")
-
-# First time run triggers this message - it used to be an error, and so XGA wouldn't advance beyond this point
-#  with a new configuration file, but we want people to be able to use the product classes without configuring
-raise XGAConfigError("As this is the first time you've used XGA, "
-                     "please configure {} to match your setup".format(CONFIG_FILE))
-# -----------------------------------------------------------------------------------
-
-
-
-
-# If first XGA run, creates default config file
-
-
-# But if the config file is found, some preprocessing and checks are applied
-
-OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
-
-# Checking if the user was using the xmm only verison of xga previously
-# Do this by looking for the 'profile' directory in the xga_save_path directory
-# JESS_TODO this would only work if they hadnt changed their xga_save_path
-profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
-if sum(profiles) != 0:
-    # if there is a directory called combined, then they have used an old version of xga
-    new_directory = os.path.join(OUTPUT, "xmm")
-    for direct in os.listdir(OUTPUT):
-        # rearranging their xga_save_path directory to the updated multi-telescope format
-        old_path = os.path.join(OUTPUT, direct)
-        new_path = os.path.join(new_directory, direct)
-        shutil.move(old_path, new_path)
-# Created for those sources will be saved
-for telescope in setup_telescopes:
-    # Telescope specific path where products are stored in xga output directory
-    OUTPUT_TEL = os.path.join(OUTPUT, telescope)
-    if not os.path.exists(OUTPUT_TEL):
-        os.makedirs(OUTPUT_TEL)
-    # Make a storage directory where specific source name directories will then be created, there profile objects
-    if not os.path.exists(OUTPUT_TEL + "/profiles"):
-        os.makedirs(OUTPUT_TEL + "/profiles")
-
-    # Also making a storage directory specifically for products which are combinations of different ObsIDs
-    #  and instruments
-    if not os.path.exists(OUTPUT_TEL + "/combined"):
-        os.makedirs(OUTPUT_TEL + "/combined")
-
-    # And create an inventory file for that directory
-    if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
-        with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
-            inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
-
-# The default behaviour is now to
-if "num_cores" in xga_conf["XGA_SETUP"] and xga_conf["XGA_SETUP"]["num_cores"] != "auto":
-    # If the user has set a number of cores in the config file then we'll use that.
-    NUM_CORES = int(xga_conf["XGA_SETUP"]["num_cores"])
-else:
-    # Going to allow multi-core processing to use 90% of available cores by default, but
-    # this can be over-ridden in individual SAS calls.
-    NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
-
-
-# TODO I don't like that the output directory is created just when XGA is imported - so the bit of utils that
-#  made said output directory (and setup stuff inside of it) will be moved to the init of BaseSource
-
-stop
-
-
-SETUP_TELESCOPES = [telescope for telescope in TELESCOPE_DICT.keys() if TELESCOPE_DICT[telescope]["used"]]
-
-
+    root_dir = os.path.abspath(root_dir) + "/"""
