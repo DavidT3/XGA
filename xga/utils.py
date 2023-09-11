@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 11:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 14:52. Copyright (c) The Contributors
 
 import json
 import os
@@ -84,6 +84,7 @@ XGA_CONFIG = {"xga_save_path": "xga_output",
 #  can be left out if there are no relevant data archives for those telescopes. There will be a section for each
 #  mission/telescope's configuration
 
+# NOTE - THE 'root_{telescope name}_dir' IS REQUIRED - MAKE SURE TO ADD ONE FOR EVERY SUPPORTED TELESCOPE
 # These are the pertinent bits of information for XMM - mainly the general 'where does data live' stuff
 XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required/{obs_id}/pn_exp1_clean_evts.fits",
@@ -230,7 +231,7 @@ ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
 SAS_VERSION = None
 if "SAS_DIR" not in os.environ:
     warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
-        "all functions in xga.sas will not work.")
+         "all functions in xga.sas will not work.")
     SAS_VERSION = None
     SAS_AVAIL = False
 else:
@@ -243,7 +244,7 @@ else:
 #  anything with SAS
 if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
     warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
-        "functions in xga.sas will not work.")
+         "functions in xga.sas will not work.")
     SAS_AVAIL = False
 
 # Here we read in files that list the errors and warnings in SAS
@@ -278,7 +279,7 @@ tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION}
 #                           "root_dir_key": "root_xmm_dir",
 #                           "instruments": ["PN", "MOS1", "MOS2"],
 #                           "used": False},
-#                   "erosita": {"event_path_key": ["root_erosita_dir", "erosita_calibration_database", "erosita_evts"],
+#                   "erosita": {"event_path_key": ["root_erosita_dir", "erosita_evts"],
 #                               "default_section": EROSITA_FILES,
 #                               "config_section": "EROSITA_FILES",
 #                               "root_dir_key": "root_erosita_dir",
@@ -618,6 +619,9 @@ if not os.path.exists(CONFIG_FILE):
     warn("This is the first time you've used XGA; to use most functionality you will need to configure {} to match "
          "your setup, though you can use product classes regardless.".format(CONFIG_FILE), stacklevel=2)
 
+# TODO ADD A SECTION HERE THAT ADDS ANY TELESCOPE CONFIGURATION DEFAULT SECTIONS TO AN EXISTING CONFIGURATION FILE
+#  WHICH AREN'T IN THERE ALREADY - MEANS THAT CONFIGURATION FILES WILL UPDATE AS THE SOFTWARE UPDATES
+
 xga_conf = ConfigParser()
 # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
 xga_conf.read(CONFIG_FILE)
@@ -646,16 +650,56 @@ for tel in TELESCOPES:
     cur_sec_name = "{}_FILES".format(tel.upper())
     cur_sec = xga_conf[cur_sec_name]
 
+    # The upper and lower energy bounds defined in the config file for existing image/exposure maps files are a
+    #  string representation of a list, and we want to turn them back into an actual list
     poss_ens = ['lo_en', 'hi_en']
     if sum([en in cur_sec for en in poss_ens]) == 1:
         raise XGAConfigError("Both lo_en and hi_en entries must be present, not one or the other.")
-
+    # This just converts the string representation of the energy list into an actual list of energies
     elif sum([en in cur_sec for en in poss_ens]) == 2:
         for en_conf in poss_ens:
             in_parts = cur_sec[en_conf].strip("[").strip("]").split(',')
             real_list = [part.strip(' ').strip("'").strip('"') for part in in_parts if part != '' and part != ' ']
             cur_sec[en_conf] = real_list
 
+    # Now we check that the directory we're pointed to for the root data directory of the current telescope actually
+    #  exists
+    # This variable keeps track of if the root_dir for this telescope actually exists
+    root_dir_exists = False
+    if os.path.exists(cur_sec['root_{t}_dir'.format(t=tel)]):
+        root_dir_exists = True
+
+    # This is a pretty blunt-force approach, but honestly I think it should work fine consider we just want to
+    #  check whether any of the required sections have been left as the default values (meaning that telescope
+    #  hasn't been configured and can't be used).
+    # We use this 'all_req_changed' flag to store if any of the required entries have been left at their default
+    #  values - even one of these being left at default means we can't use this telescope.
+    all_req_changed = True
+    # As we're already iterating through the entries in this section we will also check to see if the file paths
+    #  have been defined relative to the root directory, so we'll define this list of entries not to check
+    #  for that
+    no_check = poss_ens + ['root_{t}_dir'.format(t=tel)]
+    for entry in cur_sec:
+        if "/this/is/required/" in cur_sec[entry]:
+            any_req_defaults = False
+        elif entry not in no_check and cur_sec['root_{t}_dir'.format(t=tel)] not in cur_sec[entry] and \
+                cur_sec[entry][0] != '/':
+            # Replace the current definition with an absolute one s
+            cur_sec[entry] = os.path.join(os.path.abspath(cur_sec['root_{t}_dir'.format(t=tel)]), cur_sec[entry])
+
+    # We make sure that the root directory is an absolute path, just for our sanity later on
+    cur_sec['root_{t}_dir'.format(t=tel)] = os.path.abspath(cur_sec['root_{t}_dir'.format(t=tel)]) + "/"
+
+    # This tells the rest of XGA that the current telescope is usable! If these conditions aren't fulfilled then
+    #  the USABLE entry for the current telescope will stay at the default value of False
+    if all_req_changed and root_dir_exists:
+        USABLE[tel] = True
+
+print(xga_conf['EROSITA_FILES'])
+stop
+
+print(USABLE)
+stop
 
 # Dictionary to keep track of which telescopes the installer has changed event file paths from the default
 setup_telescope_counter = {}
@@ -812,9 +856,10 @@ else:
     NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
 
 
+# TODO I don't like that the output directory is created just when XGA is imported - so the bit of utils that
+#  made said output directory (and setup stuff inside of it) will be moved to the init of BaseSource
 
-
-
+stop
 
 
 SETUP_TELESCOPES = [telescope for telescope in TELESCOPE_DICT.keys() if TELESCOPE_DICT[telescope]["used"]]
