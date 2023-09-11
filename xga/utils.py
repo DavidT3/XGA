@@ -1,8 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/09/2023, 16:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 11:58. Copyright (c) The Contributors
 
 import json
 import os
+import re
 import shutil
 from configparser import ConfigParser
 from subprocess import Popen, PIPE
@@ -42,6 +43,15 @@ XMM_INST = ALLOWED_INST['xmm']
 # I provide a list of the top-level keys of the ALLOWED_INST dictionary, as a quick way of accessing the supported
 #  telescope names
 TELESCOPES = list(ALLOWED_INST.keys())
+# This dictionary is an important one, it will be set during the course of the setup process in this file, and
+#  defines whether a particular telescope that XGA supports seems to have the files necessary to be used by sources
+#  and samples. The default is False, and if we find otherwise during this process then that will be changed
+USABLE = {tele: False for tele in TELESCOPES}
+
+# Here we define regular expressions that will allow use to verify the structure of an ObsID for a particular
+#  telescope - this functionality is also in DAXA mission classes, so we may just switch to using them in the
+#  future to avoid features duplication
+OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$'}
 
 # This defines where the observation census files would be located for each of the allowed telescopes (the top level
 #  keys of ALLOWED_INST are telescope/mission names) - not every telescope is guaranteed to have a file created, it
@@ -276,39 +286,24 @@ tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION}
 #                               "used": False}}
 
 
-
-
-# JESS_TODO used to be called xmm_obs_id_test, its used in observation_census
-def obs_id_test(telescope: str, test_string: str) -> bool:
+def obs_id_test(test_tele: str, test_string: str) -> bool:
     """
-    Crude function to try and determine if a string follows the pattern
-    of an ObsID from the supported telescopes.
+    This function uses regular expressions for the structure of different telescope's ObsIDs to check that a
+    given string conforms with the structure expected for an ObsID.
 
-    :param str telescope: The telescope for the ObsID we wish to check.
+    :param str test_tele: The telescope for the ObsID we wish to check, different missions have different
+        ObsID structures.
     :param str test_string: The string we wish to test.
-    :return: Whether the string is probably an ObsID from the corresponding telescope or not.
+    :return: Whether the string an ObsID from the specified telescope or not.
     :rtype: bool
     """
-    if telescope == "xmm":
-        probably_xmm = False
-        # XMM ObsIDs are ten characters long, and making sure there is no . that might indicate a file extension.
-        if len(test_string) == 10 and '.' not in test_string:
-            try:
-                # To our constant pain, XMM ObsIDs can convert to integers, so if this works then its likely
-                # an XMM ObsID.
-                int(test_string)
-                probably_xmm = True
-            except ValueError:
-                pass
-        return probably_xmm
+    # Just in case an integer ObsID is passed, we'll try to catch it here
+    if not isinstance(test_string, str):
+        test_string = str(test_string)
 
-    if telescope == "erosita":
-        probably_erosita = False
-        # JESS_TODO Obviously a terrible test, but only have 4 obs ids to work with at the moment
-        if not test_string.isnumeric():
-            probably_erosita = True
-        return probably_erosita
-
+    # This uses a dictionary of ObsID regex patterns defined in the telescope data section at the top of this
+    #  file to check that the given test string is a match to the structure defined by the regex for this telescope
+    return bool(re.match(OBS_ID_REGEX[test_tele], test_string))
 
 def xmm_observation_census(config: ConfigParser, obs_census: List, obs_lookup: List) -> List:
     """
@@ -513,6 +508,8 @@ def to_list(str_rep_list: str) -> list:
     return real_list
 
 
+# TODO THIS WAS AN ILL-CONSIDERED FUNCTION FROM A LESS EXPERIENCED DAVID - YOU NEED RMFS TO DO THIS PROPERLY AND
+#  IT IS ABSOLUTELY NOT A GIVEN THAT 1 CHANNEL == 1eV (WHICH YOU CAN ASSUME FOR XMM)
 def energy_to_channel(energy: Quantity) -> int:
     """
     # QUESTION not sure if this would need to change for erosita?
@@ -608,9 +605,9 @@ if not os.path.exists(CONFIG_FILE):
     #  I now regret calling the sections {telescope}_FILES, but honestly it doesn't bother me enough to endure the
     #  hassle of changing it now - it would be a breaking change for any existing installations
     for tel in TELESCOPES:
-        cur_sec = "{}_FILES".format(tel.upper())
-        xga_default.add_section(cur_sec)
-        xga_default[cur_sec] = tele_conf_sects[tel]
+        cur_sec_name = "{}_FILES".format(tel.upper())
+        xga_default.add_section(cur_sec_name)
+        xga_default[cur_sec_name] = tele_conf_sects[tel]
 
     # The default configuration file is now written to the path that we expect to find the config file at
     with open(CONFIG_FILE, 'w') as new_cfg:
@@ -624,6 +621,9 @@ if not os.path.exists(CONFIG_FILE):
 xga_conf = ConfigParser()
 # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
 xga_conf.read(CONFIG_FILE)
+# As it turns out, the ConfigParser class is a pain to work with, so we're converting to a dict here
+# Addressing works just the same
+xga_conf = {str(sect): dict(xga_conf[str(sect)]) for sect in xga_conf}
 
 # Firstly, we check if the entries in the general XGA configuration section are valid - the output path is the first to
 #  check, though we are actually only checking for a very unlikely edge case. That somebody is using this new version
@@ -643,10 +643,21 @@ if 'num_cores' in xga_conf['XGA_SETUP'] and xga_conf['XGA_SETUP']['num_cores'] !
 
 # Now we check the telescope-specific sections
 for tel in TELESCOPES:
-    cur_sec = "{}_FILES".format(tel.upper())
+    cur_sec_name = "{}_FILES".format(tel.upper())
+    cur_sec = xga_conf[cur_sec_name]
+
+    poss_ens = ['lo_en', 'hi_en']
+    if sum([en in cur_sec for en in poss_ens]) == 1:
+        raise XGAConfigError("Both lo_en and hi_en entries must be present, not one or the other.")
+
+    elif sum([en in cur_sec for en in poss_ens]) == 2:
+        for en_conf in poss_ens:
+            in_parts = cur_sec[en_conf].strip("[").strip("]").split(',')
+            real_list = [part.strip(' ').strip("'").strip('"') for part in in_parts if part != '' and part != ' ']
+            cur_sec[en_conf] = real_list
 
 
-# Dictonary to keep track of which telescopes the installer has changed event file paths from the default
+# Dictionary to keep track of which telescopes the installer has changed event file paths from the default
 setup_telescope_counter = {}
 for telescope, tel_dict in TELESCOPE_DICT.items():
     # Here I check that the installer has actually changed the events file paths
