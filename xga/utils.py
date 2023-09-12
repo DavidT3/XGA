@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 22:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 23:06. Copyright (c) The Contributors
 
 import json
 import os
@@ -23,12 +23,214 @@ from tqdm import tqdm
 
 from .exceptions import XGAConfigError
 
+
+# ------------- Defining functions useful in the rest of the setup process -------------
+def obs_id_test(test_tele: str, test_string: str) -> bool:
+    """
+    This function uses regular expressions for the structure of different telescope's ObsIDs to check that a
+    given string conforms with the structure expected for an ObsID.
+
+    :param str test_tele: The telescope for the ObsID we wish to check, different missions have different
+        ObsID structures.
+    :param str test_string: The string we wish to test.
+    :return: Whether the string an ObsID from the specified telescope or not.
+    :rtype: bool
+    """
+    # Just in case an integer ObsID is passed, we'll try to catch it here
+    if not isinstance(test_string, str):
+        test_string = str(test_string)
+
+    # This uses a dictionary of ObsID regex patterns defined in the telescope data section at the top of this
+    #  file to check that the given test string is a match to the structure defined by the regex for this telescope
+    return bool(re.match(OBS_ID_REGEX[test_tele], test_string))
+
+
+def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    A function that builds/updates the census and blacklist for each telescope.
+
+    :param str tel: The name of the telescope we are setting up a census/blacklist for.
+    :return: The census and blacklist dataframes for the input telescope.
+    :rtype: Tuple[pd.DataFrame, pd.DataFrame]
+    """
+
+    # The census_dir is the directory containing the blacklist and census for each telescope
+    census_dir = os.path.join(CONFIG_PATH, tel) + '/'
+    # If it doesn't exist yet we create the directory
+    if not os.path.exists(census_dir):
+        os.makedirs(census_dir)
+
+    # This variable stores the path to the blacklist file
+    blacklist_file = os.path.join(CONFIG_PATH, tel, "{}_blacklist.csv".format(tel))
+    # This extracts the relevant list of the instruments for this telescope
+    rel_insts = ALLOWED_INST[tel]
+    # Creates blacklist file if one doesn't exist, then reads it in
+    if not os.path.exists(blacklist_file):
+        inst_list = ["EXCLUDE_{}".format(inst.upper()) for inst in rel_insts]
+        blacklist = pd.DataFrame(columns=["ObsID"] + inst_list)
+        blacklist.to_csv(blacklist_file, index=False)
+    # If a blacklist already exists then of course we don't need to make one, just read it in
+    else:
+        blacklist = pd.read_csv(blacklist_file, header="infer", dtype=str)
+
+    # This part here is to support blacklists used by older versions of XGA, where only a full ObsID was excluded.
+    #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected.
+    # THIS WON'T CAUSE ANY PROBLEMS WITH THE MULTI-TELESCOPE XGA BECAUSE ANY BLACKLIST WITH ONLY ONE COLUMN *MUST*
+    #  BELONG TO XMM, AS IT PRE-DATED OUR ADDING SUPPORT FOR MULTIPLE TELESCOPE
+    if len(blacklist.columns) == 1:
+        # Adds the four new columns, all with a default value of True. So any ObsID already in the blacklist
+        #  will have the same behaviour as before, all instruments for the ObsID are excluded
+        blacklist_columns = ["EXCLUDE_{}".format(inst.upper()) for inst in rel_insts]
+        blacklist[blacklist_columns] = 'T'
+        # If we have even gotten to this stage then the actual blacklist file needs re-writing, so I do
+        blacklist.to_csv(blacklist_file, index=False)
+
+    # This variable stores the path to the census file for this telescope
+    census_file = os.path.join(CONFIG_PATH, tel, "{}_census.csv".format(tel))
+    # If CENSUS FILE exists, it is read in, otherwise an empty dataframe is initialised
+    if os.path.exists(census_file):
+        obs_lookup = pd.read_csv(census_file, header="infer", dtype=str)
+    else:
+        # Making the columns in the census
+        inst_list = ["USE_{}".format(inst.upper()) for inst in rel_insts]
+        obs_lookup = pd.DataFrame(columns=["ObsID", "RA_PNT", "DEC_PNT"] + inst_list)
+
+    # Need to find out which observations are available - this lists every file/directory in the root data directory
+    #  for this telescope and a) checks that the entry is a directory, and b) checks that the name of the directory
+    #  matches the pattern expected for an ObsID of this telescope. We also check that the ObsID isn't already in the
+    #  census, to avoid duplicates
+
+    rel_root_dir = xga_conf[tel.upper() + '_FILES']['root_{t}_dir'.format(t=tel)]
+    new_obs_census = [poss_oi for poss_oi in os.listdir(rel_root_dir) if os.path.isdir(rel_root_dir + poss_oi) and
+                      obs_id_test(tel, poss_oi) and poss_oi not in obs_lookup['ObsID'].values]
+
+    if len(new_obs_census) != 0:
+        # This just finds the configuration entries that are relevant to specifying where cleaned events live for
+        #  the current instrument - I could have just set up a dictionary like Jess originally did, but I'm trying
+        #  to be clever and dynamically support new telescopes without changes in much of this file - all the dev
+        #  should need to do is add new entries in some dictionaries near the top
+        evt_path_keys = [e_key for e_key in xga_conf[tel.upper() + '_FILES'] if 'evts' in e_key and 'clean' in e_key]
+        # If new telescope sections have been implemented like I specified they should be, the structure of these keys
+        #  should be predictable - whatever is being counted as an 'instrument' should be in the middle. I put
+        #  'instrument' in quotes because it is possible (as it may be with eROSITA) that the different instruments
+        #  are all contained in the same event list.
+        evt_path_insts = [e_key.split('_')[1] for e_key in evt_path_keys]
+
+        # If the number of instruments specified in the configuration file headers doesn't match the number of
+        #  different instruments in the ALLOWED_INST dictionary entry for this telescope, then we can infer that
+        #  the event list headers should be used to specify the instruments - as either one ObsID always has only
+        #  one instrument associated (as with Chandra for instance), or there aren't separate event lists for
+        #  separate instruments (as may be the case for eROSITA).
+        inst_from_evt = False if len(evt_path_insts) == len(ALLOWED_INST[tel]) else True
+
+        # Essentially what we want to learn here, and store in the census, are the pointing coordinates of the
+        #  telescope and whether each instrument can be used for science (for instance do they have a filter we don't
+        #  allow, in which case the entry will be 'False')
+        with tqdm(desc="Assembling list of {} ObsIDs".format(tel), total=len(new_obs_census)) as census_progress:
+
+            new_census_rows = []
+            for obs in new_obs_census:
+                # Set up the data that will be added to the census for the current observation, dictionary form
+                #  seemed easiest to begin with
+                info = {col: '' for col in obs_lookup.columns}
+                info['ObsID'] = obs
+
+                # Iterating through the identified event list keys in the config for the current telescope
+                for evt_key_ind, evt_key in enumerate(evt_path_keys):
+                    evt_path = xga_conf[tel.upper() + '_FILES'][evt_key].format(obs_id=obs)
+
+                    if os.path.exists(evt_path):
+                        # Just read in the header of the events file - want to avoid reading a big old table of
+                        #  events into memory, as we might be doing this a bunch of times
+                        evts_header = read_header(evt_path)
+
+                        # I think this *should* be a fairly universal way of accessing the pointing coordinates, but
+                        #  I guess I'll find out if it isn't when I add more telescopes! For cases with multiple
+                        #  instruments this is going to overwrite the pointing coordinates each time, but as of now
+                        #  I am assuming they are co-aligned (or co-aligned enough for searching for observations). If
+                        #  that is not the case for a telescope I support in the future then I'll have to change this
+                        info['RA_PNT'] = evts_header["RA_PNT"]
+                        info['DEC_PNT'] = evts_header["DEC_PNT"]
+
+                        # We check that the filter value isn't in the list of unacceptable filters for the
+                        #  current telescope
+                        good_filt = evts_header['FILTER'] not in BANNED_FILTS[tel]
+
+                        # If we determined further up in this process that the current telescope's event lists are
+                        #  actually combined from multiple instruments, and we need to determine which of the
+                        #  instruments are present from the event lists, then we do that here
+                        if inst_from_evt:
+                            # What it says on the tin really, just a hopefully useful warning
+                            if tel != 'erosita':
+                                warn("There may be unintended behaviours, as the current section was designed with"
+                                     " eROSITA in mind - contact the developers (though I'd be surprised if anyone"
+                                     " who isn't a dev sees this...", stacklevel=2)
+
+                            # Use INSTRUM and not INSTRUME as the search here because it is what finds you the
+                            #  instruments in eROSITA evts lists, and honestly at the moment they're the only ones
+                            #  I think are going to be structured like this (unless we change DAXA to break them up).
+                            hdr_insts = [evts_header[h_key] for h_key in list(evts_header.keys())
+                                         if 'INSTRUM' in h_key and 'INSTRUME' not in h_key]
+
+                            # Now we put our newly gained knowledge of which instruments were turned on in the
+                            #  info dictionary that is being assembled
+                            for i in ALLOWED_INST[tel]:
+                                use_key = 'USE_{}'.format(i.upper())
+                                # If we don't have a good filter then we set them to usable False
+                                if i.upper() in hdr_insts and good_filt:
+                                    info[use_key] = 'T'
+                                else:
+                                    info[use_key] = 'F'
+                        # In this case there are separate event lists for separate instruments
+                        else:
+                            use_key = 'USE_{}'.format(evt_path_insts[evt_key_ind].upper())
+                            # If the filter is good, then so are we!
+                            if good_filt:
+                                info[use_key] = 'T'
+                            else:
+                                info[use_key] = 'F'
+
+                    else:
+                        # If the file path doesn't exist then we have to set the usable column(s) to False!
+                        if inst_from_evt:
+                            for i in ALLOWED_INST[tel]:
+                                use_key = 'USE_{}'.format(i.upper())
+                                info[use_key] = 'F'
+                        else:
+                            use_key = 'USE_{}'.format(evt_path_insts[evt_key_ind].upper())
+                            info[use_key] = 'F'
+
+                new_census_rows.append(info)
+                census_progress.update(1)
+
+        # We add the new observations into our existing census dataframe, whether it existed from an earlier XGA run
+        #  or because we created an empty one earlier, makes no difference
+        obs_lookup = pd.concat([obs_lookup, pd.DataFrame(new_census_rows)], ignore_index=True)
+        # This then saves the dataframe to its rightful place
+        obs_lookup.to_csv(census_file, index=False)
+
+    # We do actually convert some values from what they are stored in the file as, to Python bools
+    obs_lookup["RA_PNT"] = obs_lookup["RA_PNT"].replace('', np.nan).astype(float)
+    obs_lookup["DEC_PNT"] = obs_lookup["DEC_PNT"].replace('', np.nan).astype(float)
+    # Adding in columns for the instruments
+    for inst in rel_insts:
+        obs_lookup["USE_{}".format(inst.upper())] = \
+            obs_lookup["USE_{}".format(inst.upper())].replace('T', True).replace('F', False)
+
+    # Finally we return the census and the blacklist
+    return obs_lookup, blacklist
+# --------------------------------------------------------------------------------------
+
+
+# ------------- Defining where the configuration file (and eventually observation census) lives -------------
+
 # We need to know where the configuration file which tells XGA what data and settings to use lives. If XDG_CONFIG_HOME
 #  is set then use that, otherwise use this default config path. We'll then create this configuration directory
 #  if it doesn't already exist
 CONFIG_PATH = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))
 if not os.path.exists(CONFIG_PATH):
     os.makedirs(CONFIG_PATH)
+# -----------------------------------------------------------------------------------------------------------
 
 
 # ------------- Defining constants to do with the telescope data -------------
@@ -267,387 +469,6 @@ tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION}
 # --------------------------------------------------------------------------
 
 
-# Nested dictionary to be used to cycle over different telescopes in the following functions in this script
-# Top Layer is the telescope
-# Second layer contains:
-# event_path_key - the mandatory directories that are needed for xga to function
-# default_section, config_section - holds the variables that contain all the input file paths in each section
-# root_dir_key - the root directory label in the config file
-# used - a bool to indicate whether the telescope has been set up in the config file
-# TELESCOPE_DICT = {"xmm": {"event_path_key": ["root_xmm_dir", "clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts",
-#                                              "attitude_file"],
-#                           "default_section": XMM_FILES,
-#                           "config_section": "XMM_FILES",
-#                           "root_dir_key": "root_xmm_dir",
-#                           "instruments": ["PN", "MOS1", "MOS2"],
-#                           "used": False},
-#                   "erosita": {"event_path_key": ["root_erosita_dir", "erosita_evts"],
-#                               "default_section": EROSITA_FILES,
-#                               "config_section": "EROSITA_FILES",
-#                               "root_dir_key": "root_erosita_dir",
-#                               "instruments": ["TM1", "TM2", "TM3", "TM4", "TM5", "TM6", "TM7"],
-#                               "used": False}}
-
-
-def obs_id_test(test_tele: str, test_string: str) -> bool:
-    """
-    This function uses regular expressions for the structure of different telescope's ObsIDs to check that a
-    given string conforms with the structure expected for an ObsID.
-
-    :param str test_tele: The telescope for the ObsID we wish to check, different missions have different
-        ObsID structures.
-    :param str test_string: The string we wish to test.
-    :return: Whether the string an ObsID from the specified telescope or not.
-    :rtype: bool
-    """
-    # Just in case an integer ObsID is passed, we'll try to catch it here
-    if not isinstance(test_string, str):
-        test_string = str(test_string)
-
-    # This uses a dictionary of ObsID regex patterns defined in the telescope data section at the top of this
-    #  file to check that the given test string is a match to the structure defined by the regex for this telescope
-    return bool(re.match(OBS_ID_REGEX[test_tele], test_string))
-
-def xmm_observation_census(config: ConfigParser, obs_census: List, obs_lookup: List) -> List:
-    """
-    JESS_TODO write this doc string properly please
-    A function to initialise or update the file that stores which observations are available in the user
-    specified XMM data directory, and what their pointing coordinates are.
-    CURRENTLY THIS WILL NOT UPDATE TO DEAL WITH OBSID FOLDERS THAT HAVE BEEN DELETED.
-
-    :param config: The XGA configuration object.
-    :return: ObsIDs and pointing coordinates of available XMM observations.
-    :rtype: Tuple[pd.DataFrame, pd.DataFrame]
-    """
-    # The census lives in the XGA config folder, and CENSUS_FILE stores the path to it.
-    # If it exists, it is read in, otherwise empty lists are initialised to be appended to.
-    if os.path.exists(CENSUS_FILE):
-        with open(CENSUS_FILE, 'r') as census:
-            obs_lookup = census.readlines()  # Reads the lines of the files
-            # This is just ObsIDs, needed to see which ObsIDs have already been processed.
-            obs_lookup_obs = [entry.split(',')[0] for entry in obs_lookup[1:]]
-    else:
-        obs_lookup = ["ObsID,RA_PNT,DEC_PNT,USE_PN,USE_MOS1,USE_MOS2\n"]
-        obs_lookup_obs = []
-
-    # Creates black list file if one doesn't exist, then reads it in
-    if not os.path.exists(BLACKLIST_FILE):
-        with open(BLACKLIST_FILE, 'w') as bl:
-            bl.write("ObsID,EXCLUDE_PN,EXCLUDE_MOS1,EXCLUDE_MOS2")
-    blacklist = pd.read_csv(BLACKLIST_FILE, header="infer", dtype=str)
-
-    # This part here is to support blacklists used by older versions of XGA, where only a full ObsID was excluded.
-    #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected
-    if len(blacklist.columns) == 1:
-        # Adds the three new columns, all with a default value of True. So any ObsID already in the blacklist
-        #  will have the same behaviour as before, all instruments for the ObsID are excluded
-        blacklist[["EXCLUDE_PN", "EXCLUDE_MOS1", "EXCLUDE_MOS2"]] = 'T'
-        # If we have even gotten to this stage then the actual blacklist file needs re-writing, so I do
-        blacklist.to_csv(BLACKLIST_FILE, index=False)
-
-    # Need to find out which observations are available, crude way of making sure they are ObsID directories
-    # This also checks that I haven't run them before
-    obs_census = [entry for entry in os.listdir(config["XMM_FILES"]["root_xmm_dir"]) if obs_id_test('xmm', entry)
-                  and entry not in obs_lookup_obs]
-    if len(obs_census) != 0:
-        with tqdm(desc="Assembling list of ObsIDs", total=len(obs_census)) as census_progress:
-            for obs in obs_census:
-                info = {'ra': None, 'dec': None, "the_rest": []}
-                for key in ["clean_pn_evts", "clean_mos1_evts", "clean_mos2_evts"]:
-                    evt_path = config["XMM_FILES"][key].format(obs_id=obs)
-                    if os.path.exists(evt_path):
-                        evts_header = read_header(evt_path)
-                        try:
-                            # Reads out the filter header, if it is CalClosed/Closed then we can't use it
-                            filt = evts_header["FILTER"]
-                            info['ra'] = evts_header["RA_PNT"]
-                            info['dec'] = evts_header["DEC_PNT"]
-                        except KeyError:
-                            # It won't actually, but this will trigger the if statement that tells XGA not to use
-                            #  this particular obs/inst combo
-                            filt = "CalClosed"
-
-                    # TODO Decide if I want to disallow small window mode observations
-                    if filt not in BANNED_FILTS:
-                        info["the_rest"].append("T")
-                    else:
-                        info["the_rest"].append("F")
-                else:
-                    info["the_rest"].append("F")
-
-            use_insts = ",".join(info["the_rest"])
-            # Write the information to the line that will go in the census csv
-            if info["ra"] is not None and info["dec"] is not None:
-                # Format to write to the census.csv that lives in the config directory.
-                obs_lookup.append("{o},{r},{d},{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
-            else:
-                obs_lookup.append("{o},,,{a}\n".format(o=obs, r=info["ra"], d=info["dec"], a=use_insts))
-
-            census_progress.update(1)
-    return obs_lookup
-
-def erosita_observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    JESS_TODO write this doc string properly please
-    A function to initialise or update the file that stores which observations are available in the user
-    specified XMM data directory, and what their pointing coordinates are.
-    CURRENTLY THIS WILL NOT UPDATE TO DEAL WITH OBSID FOLDERS THAT HAVE BEEN DELETED.
-
-    :param config: The XGA configuration object.
-    :return: ObsIDs and pointing coordinates of available XMM observations.
-    :rtype: Tuple[pd.DataFrame, pd.DataFrame]
-    """
-    # JESS_TODO check if returning None will break lines ~120 in base.py, might need to be an empty obs_lookup
-    return None
-
-
-def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    A function that builds/updates the census and blacklist for each telescope.
-
-    :param str tel: The name of the telescope we are setting up a census/blacklist for.
-    :return: The census and blacklist dataframes for the input telescope.
-    :rtype: Tuple[pd.DataFrame, pd.DataFrame]
-    """
-
-    # The census_dir is the directory containing the blacklist and census for each telescope
-    census_dir = os.path.join(CONFIG_PATH, tel) + '/'
-    # If it doesn't exist yet we create the directory
-    if not os.path.exists(census_dir):
-        os.makedirs(census_dir)
-
-    # This variable stores the path to the blacklist file
-    blacklist_file = os.path.join(CONFIG_PATH, tel, "{}_blacklist.csv".format(tel))
-    # This extracts the relevant list of the instruments for this telescope
-    rel_insts = ALLOWED_INST[tel]
-    # Creates blacklist file if one doesn't exist, then reads it in
-    if not os.path.exists(blacklist_file):
-        inst_list = ["EXCLUDE_{}".format(inst.upper()) for inst in rel_insts]
-        blacklist = pd.DataFrame(columns=["ObsID"] + inst_list)
-        blacklist.to_csv(blacklist_file, index=False)
-    # If a blacklist already exists then of course we don't need to make one, just read it in
-    else:
-        blacklist = pd.read_csv(blacklist_file, header="infer", dtype=str)
-
-    # This part here is to support blacklists used by older versions of XGA, where only a full ObsID was excluded.
-    #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected.
-    # THIS WON'T CAUSE ANY PROBLEMS WITH THE MULTI-TELESCOPE XGA BECAUSE ANY BLACKLIST WITH ONLY ONE COLUMN *MUST*
-    #  BELONG TO XMM, AS IT PRE-DATED OUR ADDING SUPPORT FOR MULTIPLE TELESCOPE
-    if len(blacklist.columns) == 1:
-        # Adds the four new columns, all with a default value of True. So any ObsID already in the blacklist
-        #  will have the same behaviour as before, all instruments for the ObsID are excluded
-        blacklist_columns = ["EXCLUDE_{}".format(inst.upper()) for inst in rel_insts]
-        blacklist[blacklist_columns] = 'T'
-        # If we have even gotten to this stage then the actual blacklist file needs re-writing, so I do
-        blacklist.to_csv(blacklist_file, index=False)
-
-    # This variable stores the path to the census file for this telescope
-    census_file = os.path.join(CONFIG_PATH, tel, "{}_census.csv".format(tel))
-    # If CENSUS FILE exists, it is read in, otherwise an empty dataframe is initialised
-    if os.path.exists(census_file):
-        obs_lookup = pd.read_csv(census_file, header="infer", dtype=str)
-    else:
-        # Making the columns in the census
-        inst_list = ["USE_{}".format(inst.upper()) for inst in rel_insts]
-        obs_lookup = pd.DataFrame(columns=["ObsID", "RA_PNT", "DEC_PNT"] + inst_list)
-
-    # Need to find out which observations are available - this lists every file/directory in the root data directory
-    #  for this telescope and a) checks that the entry is a directory, and b) checks that the name of the directory
-    #  matches the pattern expected for an ObsID of this telescope. We also check that the ObsID isn't already in the
-    #  census, to avoid duplicates
-
-    rel_root_dir = xga_conf[tel.upper() + '_FILES']['root_{t}_dir'.format(t=tel)]
-    new_obs_census = [poss_oi for poss_oi in os.listdir(rel_root_dir) if os.path.isdir(rel_root_dir + poss_oi) and
-                      obs_id_test(tel, poss_oi) and poss_oi not in obs_lookup['ObsID'].values]
-
-    if len(new_obs_census) != 0:
-        # This just finds the configuration entries that are relevant to specifying where cleaned events live for
-        #  the current instrument - I could have just set up a dictionary like Jess originally did, but I'm trying
-        #  to be clever and dynamically support new telescopes without changes in much of this file - all the dev
-        #  should need to do is add new entries in some dictionaries near the top
-        evt_path_keys = [e_key for e_key in xga_conf[tel.upper() + '_FILES'] if 'evts' in e_key and 'clean' in e_key]
-        # If new telescope sections have been implemented like I specified they should be, the structure of these keys
-        #  should be predictable - whatever is being counted as an 'instrument' should be in the middle. I put
-        #  'instrument' in quotes because it is possible (as it may be with eROSITA) that the different instruments
-        #  are all contained in the same event list.
-        evt_path_insts = [e_key.split('_')[1] for e_key in evt_path_keys]
-
-        # If the number of instruments specified in the configuration file headers doesn't match the number of
-        #  different instruments in the ALLOWED_INST dictionary entry for this telescope, then we can infer that
-        #  the event list headers should be used to specify the instruments - as either one ObsID always has only
-        #  one instrument associated (as with Chandra for instance), or there aren't separate event lists for
-        #  separate instruments (as may be the case for eROSITA).
-        inst_from_evt = False if len(evt_path_insts) == len(ALLOWED_INST[tel]) else True
-
-        # Essentially what we want to learn here, and store in the census, are the pointing coordinates of the
-        #  telescope and whether each instrument can be used for science (for instance do they have a filter we don't
-        #  allow, in which case the entry will be 'False')
-        with tqdm(desc="Assembling list of {} ObsIDs".format(tel), total=len(new_obs_census)) as census_progress:
-
-            new_census_rows = []
-            for obs in new_obs_census:
-                # Set up the data that will be added to the census for the current observation, dictionary form
-                #  seemed easiest to begin with
-                info = {col: '' for col in obs_lookup.columns}
-                info['ObsID'] = obs
-
-                # Iterating through the identified event list keys in the config for the current telescope
-                for evt_key_ind, evt_key in enumerate(evt_path_keys):
-                    evt_path = xga_conf[tel.upper() + '_FILES'][evt_key].format(obs_id=obs)
-
-                    if os.path.exists(evt_path):
-                        # Just read in the header of the events file - want to avoid reading a big old table of
-                        #  events into memory, as we might be doing this a bunch of times
-                        evts_header = read_header(evt_path)
-
-                        # I think this *should* be a fairly universal way of accessing the pointing coordinates, but
-                        #  I guess I'll find out if it isn't when I add more telescopes! For cases with multiple
-                        #  instruments this is going to overwrite the pointing coordinates each time, but as of now
-                        #  I am assuming they are co-aligned (or co-aligned enough for searching for observations). If
-                        #  that is not the case for a telescope I support in the future then I'll have to change this
-                        info['RA_PNT'] = evts_header["RA_PNT"]
-                        info['DEC_PNT'] = evts_header["DEC_PNT"]
-
-                        # We check that the filter value isn't in the list of unacceptable filters for the
-                        #  current telescope
-                        good_filt = evts_header['FILTER'] not in BANNED_FILTS[tel]
-
-                        # If we determined further up in this process that the current telescope's event lists are
-                        #  actually combined from multiple instruments, and we need to determine which of the
-                        #  instruments are present from the event lists, then we do that here
-                        if inst_from_evt:
-                            # What it says on the tin really, just a hopefully useful warning
-                            if tel != 'erosita':
-                                warn("There may be unintended behaviours, as the current section was designed with"
-                                     " eROSITA in mind - contact the developers (though I'd be surprised if anyone"
-                                     " who isn't a dev sees this...", stacklevel=2)
-
-                            # Use INSTRUM and not INSTRUME as the search here because it is what finds you the
-                            #  instruments in eROSITA evts lists, and honestly at the moment they're the only ones
-                            #  I think are going to be structured like this (unless we change DAXA to break them up).
-                            hdr_insts = [evts_header[h_key] for h_key in list(evts_header.keys())
-                                         if 'INSTRUM' in h_key and 'INSTRUME' not in h_key]
-
-                            # Now we put our newly gained knowledge of which instruments were turned on in the
-                            #  info dictionary that is being assembled
-                            for i in ALLOWED_INST[tel]:
-                                use_key = 'USE_{}'.format(i.upper())
-                                # If we don't have a good filter then we set them to usable False
-                                if i.upper() in hdr_insts and good_filt:
-                                    info[use_key] = 'T'
-                                else:
-                                    info[use_key] = 'F'
-                        # In this case there are separate event lists for separate instruments
-                        else:
-                            use_key = 'USE_{}'.format(evt_path_insts[evt_key_ind].upper())
-                            # If the filter is good, then so are we!
-                            if good_filt:
-                                info[use_key] = 'T'
-                            else:
-                                info[use_key] = 'F'
-
-                    else:
-                        # If the file path doesn't exist then we have to set the usable column(s) to False!
-                        if inst_from_evt:
-                            for i in ALLOWED_INST[tel]:
-                                use_key = 'USE_{}'.format(i.upper())
-                                info[use_key] = 'F'
-                        else:
-                            use_key = 'USE_{}'.format(evt_path_insts[evt_key_ind].upper())
-                            info[use_key] = 'F'
-
-                new_census_rows.append(info)
-                census_progress.update(1)
-
-        # We add the new observations into our existing census dataframe, whether it existed from an earlier XGA run
-        #  or because we created an empty one earlier, makes no difference
-        obs_lookup = pd.concat([obs_lookup, pd.DataFrame(new_census_rows)], ignore_index=True)
-        # This then saves the dataframe to its rightful place
-        obs_lookup.to_csv(census_file, index=False)
-
-    # We do actually convert some values from what they are stored in the file as, to Python bools
-    obs_lookup["RA_PNT"] = obs_lookup["RA_PNT"].replace('', np.nan).astype(float)
-    obs_lookup["DEC_PNT"] = obs_lookup["DEC_PNT"].replace('', np.nan).astype(float)
-    # Adding in columns for the instruments
-    for inst in rel_insts:
-        obs_lookup["USE_{}".format(inst.upper())] = \
-            obs_lookup["USE_{}".format(inst.upper())].replace('T', True).replace('F', False)
-
-    # Finally we return the census and the blacklist
-    return obs_lookup, blacklist
-
-
-# TODO THIS WAS AN ILL-CONSIDERED FUNCTION FROM A LESS EXPERIENCED DAVID - YOU NEED RMFS TO DO THIS PROPERLY AND
-#  IT IS ABSOLUTELY NOT A GIVEN THAT 1 CHANNEL == 1eV (WHICH YOU CAN ASSUME FOR XMM)
-def energy_to_channel(energy: Quantity) -> int:
-    """
-    # QUESTION not sure if this would need to change for erosita?
-    Converts an astropy energy quantity into an XMM channel.
-
-    :param energy:
-    """
-    energy = energy.to("eV").value
-    chan = int(energy)
-    return chan
-
-
-def dict_search(key: str, var: dict) -> list:
-    """
-    This simple function was very lightly modified from a stackoverflow answer, and is an
-    efficient method of searching through a nested dictionary structure for specfic keys
-    (and yielding the values associated with them). In this case will extract all of a
-    specific product type for a given source.
-
-    :param key: The key in the dictionary to search for and extract values.
-    :param var: The variable to search, likely to be either a dictionary or a string.
-    :return list[list]: Returns information on keys and values
-    """
-
-    # Check that the input is actually a dictionary
-    if hasattr(var, 'items'):
-        for k, v in var.items():
-            if k == key:
-                yield v
-            # Here is where we dive deeper, recursively searching lower dictionary levels.
-            if isinstance(v, dict):
-                for result in dict_search(key, v):
-                    # We yield a string of the result and the key, as we'll need to return the
-                    # ObsID and Instrument information from these product searches as well.
-                    # This will mean the output is an unpleasantly nested list, but we can solve that.
-                    yield [str(k), result]
-
-
-def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
-    """
-    A play on the function of the same name in astropy.io.fits, except this one will take a fitsio header object
-    as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
-    header, and uses their critical values to construct astropy WCS objects.
-
-    :return: A list of astropy WCS objects extracted from the input header.
-    :rtype: List[WCS]
-    """
-    wcs_search = [k.split("CTYPE")[-1][-1] for k in hdr.keys() if "CTYPE" in k]
-    wcs_nums = [w for w in wcs_search if w.isdigit()]
-    wcs_not_nums = [w for w in wcs_search if not w.isdigit()]
-    if len(wcs_nums) != 2 and len(wcs_nums) != 0:
-        raise KeyError("There are an odd number of CTYPEs with no extra key ")
-    elif len(wcs_nums) == 2:
-        wcs_keys = [""] + list(set(wcs_not_nums))
-    elif len(wcs_nums) == 0:
-        wcs_keys = list(set(wcs_not_nums))
-
-    wcses = []
-    for key in wcs_keys:
-        w = WCS(naxis=2)
-        w.wcs.crpix = [hdr["CRPIX1{}".format(key)], hdr["CRPIX2{}".format(key)]]
-        w.wcs.cdelt = [hdr["CDELT1{}".format(key)], hdr["CDELT2{}".format(key)]]
-        w.wcs.crval = [hdr["CRVAL1{}".format(key)], hdr["CRVAL2{}".format(key)]]
-        w.wcs.ctype = [hdr["CTYPE1{}".format(key)], hdr["CTYPE2{}".format(key)]]
-        wcses.append(w)
-
-    return wcses
-
-
 # ------------- Creating/checking the entries in the configuration file -------------
 # This chunk of utils will be dedicated to making sure that the configuration file has been created (by default with
 #  sections for every telescope that XGA supports), or that if it already exists it contains valid entries.
@@ -766,7 +587,6 @@ for tel in TELESCOPES:
 
 
 # ------------- Generating the observation censuses for all USABLE telescopes -------------
-
 # Read dataframe of ObsIDs and pointing coordinates into dictionaries
 CENSUS = {}
 BLACKLIST = {}
@@ -793,27 +613,14 @@ for tel in USABLE:
 
 # -----------------------------------------------------------------------------------------
 
-stop
-
-# First time run triggers this message - it used to be an error, and so XGA wouldn't advance beyond this point
-#  with a new configuration file, but we want people to be able to use the product classes without configuring
-raise XGAConfigError("As this is the first time you've used XGA, "
-                     "please configure {} to match your setup".format(CONFIG_FILE))
-# -----------------------------------------------------------------------------------
-
-
-
-
-# If first XGA run, creates default config file
-
-
-# But if the config file is found, some preprocessing and checks are applied
-# TODO DECIDE WHAT TO DO ABOUT THIS
+# We make sure to create the absolute output path from what was specified in the configuration file
 OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
 
-# Checking if the user was using the xmm only verison of xga previously
+# TODO THIS STUFF SHOULD ALL MOVE TO THE BASESOURCE INIT - IT MAKES MORE SENSE TO BE THERE SO THE DIRECTORIES DON'T
+#  GET CREATED WHEN SOMEBODY JUST WANTS TO USE THE PRODUCTS
+# Checking if the user was using the xmm only version of xga previously
 # Do this by looking for the 'profile' directory in the xga_save_path directory
-# JESS_TODO this would only work if they hadnt changed their xga_save_path
+# JESS_TODO this would only work if they hadn't changed their xga_save_path
 profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
 if sum(profiles) != 0:
     # if there is a directory called combined, then they have used an old version of xga
@@ -850,11 +657,80 @@ if "num_cores" in xga_conf["XGA_SETUP"] and xga_conf["XGA_SETUP"]["num_cores"] !
 else:
     # Going to allow multi-core processing to use 90% of available cores by default, but
     # this can be over-ridden in individual SAS calls.
-    NUM_CORES = max(int(floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
+    NUM_CORES = max(int(np.floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
 
 
-# TODO I don't like that the output directory is created just when XGA is imported - so the bit of utils that
-#  made said output directory (and setup stuff inside of it) will be moved to the init of BaseSource
+# TODO RELOCATE THESE FUNCTIONS, THEY DON'T BELONG IN THIS PART OF THE MODULE
+# TODO THIS WAS AN ILL-CONSIDERED FUNCTION FROM A LESS EXPERIENCED DAVID - YOU NEED RMFS TO DO THIS PROPERLY AND
+#  IT IS ABSOLUTELY NOT A GIVEN THAT 1 CHANNEL == 1eV (WHICH YOU CAN ASSUME FOR XMM)
+def energy_to_channel(energy: Quantity) -> int:
+    """
+    # QUESTION not sure if this would need to change for erosita?
+    Converts an astropy energy quantity into an XMM channel.
+
+    :param energy:
+    """
+    energy = energy.to("eV").value
+    chan = int(energy)
+    return chan
+
+
+def dict_search(key: str, var: dict) -> list:
+    """
+    This simple function was very lightly modified from a stackoverflow answer, and is an
+    efficient method of searching through a nested dictionary structure for specfic keys
+    (and yielding the values associated with them). In this case will extract all of a
+    specific product type for a given source.
+
+    :param key: The key in the dictionary to search for and extract values.
+    :param var: The variable to search, likely to be either a dictionary or a string.
+    :return list[list]: Returns information on keys and values
+    """
+
+    # Check that the input is actually a dictionary
+    if hasattr(var, 'items'):
+        for k, v in var.items():
+            if k == key:
+                yield v
+            # Here is where we dive deeper, recursively searching lower dictionary levels.
+            if isinstance(v, dict):
+                for result in dict_search(key, v):
+                    # We yield a string of the result and the key, as we'll need to return the
+                    # ObsID and Instrument information from these product searches as well.
+                    # This will mean the output is an unpleasantly nested list, but we can solve that.
+                    yield [str(k), result]
+
+
+def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
+    """
+    A play on the function of the same name in astropy.io.fits, except this one will take a fitsio header object
+    as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
+    header, and uses their critical values to construct astropy WCS objects.
+
+    :return: A list of astropy WCS objects extracted from the input header.
+    :rtype: List[WCS]
+    """
+    wcs_search = [k.split("CTYPE")[-1][-1] for k in hdr.keys() if "CTYPE" in k]
+    wcs_nums = [w for w in wcs_search if w.isdigit()]
+    wcs_not_nums = [w for w in wcs_search if not w.isdigit()]
+    if len(wcs_nums) != 2 and len(wcs_nums) != 0:
+        raise KeyError("There are an odd number of CTYPEs with no extra key ")
+    elif len(wcs_nums) == 2:
+        wcs_keys = [""] + list(set(wcs_not_nums))
+    elif len(wcs_nums) == 0:
+        wcs_keys = list(set(wcs_not_nums))
+
+    wcses = []
+    for key in wcs_keys:
+        w = WCS(naxis=2)
+        w.wcs.crpix = [hdr["CRPIX1{}".format(key)], hdr["CRPIX2{}".format(key)]]
+        w.wcs.cdelt = [hdr["CDELT1{}".format(key)], hdr["CDELT2{}".format(key)]]
+        w.wcs.crval = [hdr["CRVAL1{}".format(key)], hdr["CRVAL2{}".format(key)]]
+        w.wcs.ctype = [hdr["CTYPE1{}".format(key)], hdr["CTYPE2{}".format(key)]]
+        wcses.append(w)
+
+    return wcses
+
 
 stop
 
