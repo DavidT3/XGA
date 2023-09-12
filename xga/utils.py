@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 23:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 23:15. Copyright (c) The Contributors
 
 import json
 import os
@@ -360,7 +360,7 @@ with open(pkg_resources.resource_filename(__name__, "files/xspec_model_units.jso
 # ---------------------------------------------------------------------------
 
 
-# ------------- Defining constants to do with physics -------------
+# ------------- Defining constants to do with Physics -------------
 # I know this is practically pointless, I could just use m_p, but I like doing things properly.
 HY_MASS = m_p + m_e
 
@@ -508,12 +508,29 @@ if not os.path.exists(CONFIG_FILE):
     warn("This is the first time you've used XGA; to use most functionality you will need to configure {} to match "
          "your setup, though you can use product classes regardless.".format(CONFIG_FILE), stacklevel=2)
 
-# TODO ADD A SECTION HERE THAT ADDS ANY TELESCOPE CONFIGURATION DEFAULT SECTIONS TO AN EXISTING CONFIGURATION FILE
-#  WHICH AREN'T IN THERE ALREADY - MEANS THAT CONFIGURATION FILES WILL UPDATE AS THE SOFTWARE UPDATES
-
 xga_conf = ConfigParser()
 # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
 xga_conf.read(CONFIG_FILE)
+
+# If the current section name exists in xga_conf then all is well, there hasn't been an update to XGA which added
+#  a new telescope installed - however if a section is missing then we need to add it. This is slightly inelegant
+#  because I also iterate through the telescopes slightly further down, but it is just easier for this to go here
+#  as I need to write the updated configuration file to disk, and I'm about to turn it into a dictionary so it is
+#  easier to do that here
+# Set up a flag, so we can know if any sections have been added
+altered = False
+for tel in TELESCOPES:
+    cur_sec_name = "{}_FILES".format(tel.upper())
+    if cur_sec_name not in xga_conf:
+        # If there isn't already a files section for one of the telescopes now supported by XGA, then we add it to
+        #  the existing configuration file
+        xga_conf.add_section(cur_sec_name)
+        xga_conf[cur_sec_name] = tele_conf_sects[tel]
+        altered = True
+# If we altered the existing configuration file, then we need to save the altered configuration to disk
+    with open(CONFIG_FILE, 'w') as update_cfg:
+        xga_conf.write(update_cfg)
+
 # As it turns out, the ConfigParser class is a pain to work with, so we're converting to a dict here
 # Addressing works just the same
 xga_conf = {str(sect): dict(xga_conf[str(sect)]) for sect in xga_conf}
@@ -551,8 +568,8 @@ for tel in TELESCOPES:
             real_list = [part.strip(' ').strip("'").strip('"') for part in in_parts if part != '' and part != ' ']
             cur_sec[en_conf] = real_list
 
-    # Now we check that the directory we're pointed to for the root data directory of the current telescope actually
-    #  exists
+    # Now we check that the directory we're pointed to for the root data directory of the current telescope
+    #  actually exists
     # This variable keeps track of if the root_dir for this telescope actually exists
     root_dir_exists = False
     if os.path.exists(cur_sec['root_{t}_dir'.format(t=tel)]):
