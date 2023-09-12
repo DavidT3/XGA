@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/09/2023, 13:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/09/2023, 13:52. Copyright (c) The Contributors
 
 import json
 import os
@@ -724,134 +724,21 @@ for tel in USABLE:
 
 # -----------------------------------------------------------------------------------------
 
+
+# ------------- Final setup of important constants from the configuration file -------------
 # We make sure to create the absolute output path from what was specified in the configuration file
 OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
 
-# TODO THIS STUFF SHOULD ALL MOVE TO THE BASESOURCE INIT - IT MAKES MORE SENSE TO BE THERE SO THE DIRECTORIES DON'T
-#  GET CREATED WHEN SOMEBODY JUST WANTS TO USE THE PRODUCTS
-# Checking if the user was using the xmm only version of xga previously
-# Do this by looking for the 'profile' directory in the xga_save_path directory
-# JESS_TODO this would only work if they hadn't changed their xga_save_path
-# profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
-# if sum(profiles) != 0:
-#     # if there is a directory called combined, then they have used an old version of xga
-#     new_directory = os.path.join(OUTPUT, "xmm")
-#     for direct in os.listdir(OUTPUT):
-#         # rearranging their xga_save_path directory to the updated multi-telescope format
-#         old_path = os.path.join(OUTPUT, direct)
-#         new_path = os.path.join(new_directory, direct)
-#         shutil.move(old_path, new_path)
-# # Created for those sources will be saved
-# for telescope in setup_telescopes:
-#     # Telescope specific path where products are stored in xga output directory
-#     OUTPUT_TEL = os.path.join(OUTPUT, telescope)
-#     if not os.path.exists(OUTPUT_TEL):
-#         os.makedirs(OUTPUT_TEL)
-#     # Make a storage directory where specific source name directories will then be created, there profile objects
-#     if not os.path.exists(OUTPUT_TEL + "/profiles"):
-#         os.makedirs(OUTPUT_TEL + "/profiles")
-#
-#     # Also making a storage directory specifically for products which are combinations of different ObsIDs
-#     #  and instruments
-#     if not os.path.exists(OUTPUT_TEL + "/combined"):
-#         os.makedirs(OUTPUT_TEL + "/combined")
-#
-#     # And create an inventory file for that directory
-#     if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
-#         with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
-#             inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
-
-# The default behaviour is now to
+# The default behaviour for the generation of new configuration files is to set the num_cores entry to 'auto', though
+#  that isn't a given with older configuration files - as such we check and don't assume it will be there. If the
+#  num_cores keyword is present and ISN'T auto then we use the user specified core count
 if "num_cores" in xga_conf["XGA_SETUP"] and xga_conf["XGA_SETUP"]["num_cores"] != "auto":
     # If the user has set a number of cores in the config file then we'll use that.
     NUM_CORES = int(xga_conf["XGA_SETUP"]["num_cores"])
+# In this case though the user has not specified a number of cores to use thus we will use 90% of the available
+#  cores on the system
 else:
     # Going to allow multi-core processing to use 90% of available cores by default, but
     # this can be over-ridden in individual SAS calls.
     NUM_CORES = max(int(np.floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
-
-
-# TODO RELOCATE THESE FUNCTIONS, THEY DON'T BELONG IN THIS PART OF THE MODULE
-
-
-# SETUP_TELESCOPES = [telescope for telescope in TELESCOPE_DICT.keys() if TELESCOPE_DICT[telescope]["used"]]
-
-"""# Dictionary to keep track of which telescopes the installer has changed event file paths from the default
-setup_telescope_counter = {}
-for telescope, tel_dict in TELESCOPE_DICT.items():
-    # Here I check that the installer has actually changed the events file paths
-    setup_telescope_counter[telescope] = all(
-        [xga_conf[tel_dict["config_section"]][key] != tel_dict["default_section"][key] for key in
-         tel_dict["event_path_key"]])
-    # JESS_TODO need to change the values in TELESCOPE_DICT
-    # JESS_TODO do the warnings/ errors appear in a logical order?
-    if setup_telescope_counter[telescope]:
-        # For telescopes that have been setup, check the root directory exists
-        if not os.path.exists(xga_conf[tel_dict["config_section"]][tel_dict["root_dir_key"]]):
-            raise FileNotFoundError("{ROOT_DIR}={d} does not appear to exist, if it an SFTP mount check the "
-                                    "connection.".format(ROOT_DIR=tel_dict["root_dir_key"],
-                                                         d=xga_conf[tel_dict["config_section"]][
-                                                             tel_dict["root_di_key"]]))
-# Checking there is at least one telescope that has been setup
-# JESS_TODO probably need to word the warnings better
-# also maybe define the dict["example"] as a new variable to make it more readable
-if sum(setup_telescope_counter.values()) == 0:
-    warn("No event file paths in the config have been changed from their defaults. "
-         "Please configure {CONFIG_FILE} to match your setup "
-         "for at least one telescope").format(CONFIG_FILE=CONFIG_FILE)
-# If not all telescopes are set up, print some warnings
-elif sum(setup_telescope_counter.values()) != len(setup_telescope_counter):
-    setup_telescopes = [telescope for telescope, setup_bool in setup_telescope_counter.items() if setup_bool]
-    unsetup_telescopes = [telescope for telescope, setup_bool in setup_telescope_counter.items() if not setup_bool]
-    warn("XGA has been configured for {setup}, to use {unsetup} please configure {CONFIG_FILE} "
-         "to match your setup.".format(setup=', '.join(setup_telescopes),
-                                       unsetup=', '.join(unsetup_telescopes),
-                                       CONFIG_FILE=CONFIG_FILE))
-
-# Now I do the same for the XGA_SETUP section
-keys_to_check = ["xga_save_path"]
-# Here I check that the installer has actually changed the three events file paths
-all_changed = all([xga_conf["XGA_SETUP"][key] != XGA_CONFIG[key] for key in keys_to_check])
-if not all_changed:
-    raise XGAConfigError("You have not changed the xga_save_path value in the config file")
-elif not os.path.exists(xga_conf["XGA_SETUP"]["xga_save_path"]):
-    # This is the folder where any files generated by XGA get written
-    # Its taken as is from the config file, so it can be absolute, or relative to the project directory
-    # Can also be overwritten at runtime by the user, so that's nice innit
-    os.makedirs(xga_conf["XGA_SETUP"]["xga_save_path"])
-
-for telescope in TELESCOPE_DICT.keys():
-    # Defining these to make the next lines easier to read
-    # This is the section of the config file corresponding to each telescope
-    section = xga_conf[TELESCOPE_DICT[telescope]["config_section"]]
-    # This is the root directory in that section
-    root_dir = section[TELESCOPE_DICT[telescope]["root_dir_key"]]
-
-    no_check = {"xmm": ["root_xmm_dir", "lo_en_xmm", "hi_en_xmm"],
-                "erosita": []}
-    for key, value in section.items():
-        # Here we attempt to deal with files where people have defined their file paths
-        # relative to the root_dir
-        if key not in no_check and root_dir not in section[key] and section[key][0] != '/':
-            section[key] = os.path.join(os.path.abspath(root_dir), section[key])
-
-    # As it turns out, the ConfigParser class is a pain to work with, so we're converting to a dict here
-    # Addressing works just the same
-    xga_conf = {str(sect): dict(xga_conf[str(sect)]) for sect in xga_conf}
-    # need to redefine this variable with the new definition of xga_conf
-    section = xga_conf[TELESCOPE_DICT[telescope]["config_section"]]
-    energy_bounds_key = ["lo_en", "hi_en"]
-    for energy in energy_bounds_key:
-        try:
-            section[energy + "_{}".format(telescope)] = to_list(section[energy + "_{}".format(telescope)])
-        except KeyError:
-            raise KeyError("Entries have been removed from config file, "
-                           "please leave all in place, even if they are empty")
-
-    # Do a little pre-checking for the energy entries
-    if len(section["lo_en" + "_{}".format(telescope)]) != len(section["hi_en" + "_{}".format(telescope)]):
-        raise ValueError("lo_en and hi_en entries in the config "
-                         "file for {} do not parse to lists of the same length.".format(telescope))
-
-    # Make sure that this is the absolute path
-    root_dir = os.path.abspath(root_dir) + "/"""
+# ------------------------------------------------------------------------------------------
