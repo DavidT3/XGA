@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 22:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 22:23. Copyright (c) The Contributors
 
 import json
 import os
@@ -570,7 +570,8 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     obs_lookup["DEC_PNT"] = obs_lookup["DEC_PNT"].replace('', np.nan).astype(float)
     # Adding in columns for the instruments
     for inst in rel_insts:
-        obs_lookup["USE_{}".format(inst)] = obs_lookup["USE_{}".format(inst)].replace('T', True).replace('F', False)
+        obs_lookup["USE_{}".format(inst.upper())] = \
+            obs_lookup["USE_{}".format(inst.upper())].replace('T', True).replace('F', False)
 
     # Finally we return the census and the blacklist
     return obs_lookup, blacklist
