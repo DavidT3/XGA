@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/06/2023, 00:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/09/2023, 13:22. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -25,8 +25,9 @@ from scipy.signal import fftconvolve
 
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
+from ..imagetools.misc import find_all_wcs
 from ..sourcetools import ang_to_rad
-from ..utils import xmm_sky, xmm_det, find_all_wcs
+from ..utils import xmm_sky, xmm_det
 
 EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
 plt.rcParams['keymap.save'] = ''

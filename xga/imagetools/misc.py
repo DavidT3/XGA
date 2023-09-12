@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/09/2023, 13:22. Copyright (c) The Contributors
 
 
 from typing import Tuple, List, Union
@@ -7,6 +7,7 @@ from typing import Tuple, List, Union
 import numpy as np
 from astropy.units import Quantity, pix, deg, UnitConversionError, UnitBase, Unit
 from astropy.wcs import WCS
+from fitsio import FITSHDR
 
 from ..products import Image, RateMap, ExpMap
 from ..sourcetools import ang_to_rad, rad_to_ang
@@ -290,3 +291,33 @@ def edge_finder(data: Union[RateMap, ExpMap, np.ndarray], keep_corners: bool = T
 
     return comb
 
+
+def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
+    """
+    A play on the function of the same name in astropy.io.fits, except this one will take a fitsio header object
+    as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
+    header, and uses their critical values to construct astropy WCS objects.
+
+    :return: A list of astropy WCS objects extracted from the input header.
+    :rtype: List[WCS]
+    """
+    wcs_search = [k.split("CTYPE")[-1][-1] for k in hdr.keys() if "CTYPE" in k]
+    wcs_nums = [w for w in wcs_search if w.isdigit()]
+    wcs_not_nums = [w for w in wcs_search if not w.isdigit()]
+    if len(wcs_nums) != 2 and len(wcs_nums) != 0:
+        raise KeyError("There are an odd number of CTYPEs with no extra key ")
+    elif len(wcs_nums) == 2:
+        wcs_keys = [""] + list(set(wcs_not_nums))
+    elif len(wcs_nums) == 0:
+        wcs_keys = list(set(wcs_not_nums))
+
+    wcses = []
+    for key in wcs_keys:
+        w = WCS(naxis=2)
+        w.wcs.crpix = [hdr["CRPIX1{}".format(key)], hdr["CRPIX2{}".format(key)]]
+        w.wcs.cdelt = [hdr["CDELT1{}".format(key)], hdr["CDELT2{}".format(key)]]
+        w.wcs.crval = [hdr["CRVAL1{}".format(key)], hdr["CRVAL2{}".format(key)]]
+        w.wcs.ctype = [hdr["CTYPE1{}".format(key)], hdr["CTYPE2{}".format(key)]]
+        wcses.append(w)
+
+    return wcses

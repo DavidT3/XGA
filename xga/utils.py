@@ -1,14 +1,15 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 23:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/09/2023, 13:22. Copyright (c) The Contributors
 
 import json
 import os
 import re
 import shutil
 from configparser import ConfigParser
+from functools import wraps
 from subprocess import Popen, PIPE
-from typing import List, Tuple
-from warnings import warn
+from typing import Tuple, List
+from warnings import warn, simplefilter
 
 import numpy as np
 import pandas as pd
@@ -17,11 +18,40 @@ from astropy.constants import m_p, m_e
 from astropy.cosmology import LambdaCDM
 from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
+from fitsio import FITSHDR
 from fitsio import read_header
-from fitsio.header import FITSHDR
 from tqdm import tqdm
 
 from .exceptions import XGAConfigError
+
+# This warning filter enables the DeprecationWarning which is in the _deprecated decorator
+simplefilter('default')
+
+
+def _deprecated(message):
+    """
+    An internal function designed to be used as a decorator for any methods or functions which have been
+    deprecated - means that the warning will be shown when they're imported or used.
+
+    :param str message: The warning message which should be shown.
+    """
+    # Shows the warning message - this makes sure it is shown on import as well as when the function is used.
+    warn(message, DeprecationWarning)
+
+    def deprecated_function(dep_func):
+        """
+        This ensures that the decorated, deprecated, function is actually still run.
+        :param dep_func: The method which is deprecated.
+        :return: Returns the wrapped function.
+        """
+        # The wraps decorator updates the wrapper function to look like wrapped function by copying attributes
+        #  such as __name__, __doc__ (the docstring)
+        @wraps(dep_func)
+        def wrapper(*args, **kwargs):
+            dep_func(*args, **kwargs)
+
+        return wrapper
+    return deprecated_function
 
 
 # ------------- Defining functions useful in the rest of the setup process -------------
@@ -219,6 +249,42 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     # Finally we return the census and the blacklist
     return obs_lookup, blacklist
+
+
+# This function also now exists in imagetools.miss, which is where it will live forevermore - I wouldn't normally
+#  duplicate a whole function just to show a deprecation warning, but this function isn't going to change so it is
+#  safe enough
+@_deprecated(message="The XGA 'find_all_wcs' function should be imported from imagetools.misc, in the future "
+                     "it will be removed from utils.")
+def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
+    """
+    A play on the function of the same name in astropy.io.fits, except this one will take a fitsio header object
+    as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
+    header, and uses their critical values to construct astropy WCS objects.
+
+    :return: A list of astropy WCS objects extracted from the input header.
+    :rtype: List[WCS]
+    """
+    wcs_search = [k.split("CTYPE")[-1][-1] for k in hdr.keys() if "CTYPE" in k]
+    wcs_nums = [w for w in wcs_search if w.isdigit()]
+    wcs_not_nums = [w for w in wcs_search if not w.isdigit()]
+    if len(wcs_nums) != 2 and len(wcs_nums) != 0:
+        raise KeyError("There are an odd number of CTYPEs with no extra key ")
+    elif len(wcs_nums) == 2:
+        wcs_keys = [""] + list(set(wcs_not_nums))
+    elif len(wcs_nums) == 0:
+        wcs_keys = list(set(wcs_not_nums))
+
+    wcses = []
+    for key in wcs_keys:
+        w = WCS(naxis=2)
+        w.wcs.crpix = [hdr["CRPIX1{}".format(key)], hdr["CRPIX2{}".format(key)]]
+        w.wcs.cdelt = [hdr["CDELT1{}".format(key)], hdr["CDELT2{}".format(key)]]
+        w.wcs.crval = [hdr["CRVAL1{}".format(key)], hdr["CRVAL2{}".format(key)]]
+        w.wcs.ctype = [hdr["CTYPE1{}".format(key)], hdr["CTYPE2{}".format(key)]]
+        wcses.append(w)
+
+    return wcses
 # --------------------------------------------------------------------------------------
 
 
@@ -639,34 +705,34 @@ OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
 # Checking if the user was using the xmm only version of xga previously
 # Do this by looking for the 'profile' directory in the xga_save_path directory
 # JESS_TODO this would only work if they hadn't changed their xga_save_path
-profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
-if sum(profiles) != 0:
-    # if there is a directory called combined, then they have used an old version of xga
-    new_directory = os.path.join(OUTPUT, "xmm")
-    for direct in os.listdir(OUTPUT):
-        # rearranging their xga_save_path directory to the updated multi-telescope format
-        old_path = os.path.join(OUTPUT, direct)
-        new_path = os.path.join(new_directory, direct)
-        shutil.move(old_path, new_path)
-# Created for those sources will be saved
-for telescope in setup_telescopes:
-    # Telescope specific path where products are stored in xga output directory
-    OUTPUT_TEL = os.path.join(OUTPUT, telescope)
-    if not os.path.exists(OUTPUT_TEL):
-        os.makedirs(OUTPUT_TEL)
-    # Make a storage directory where specific source name directories will then be created, there profile objects
-    if not os.path.exists(OUTPUT_TEL + "/profiles"):
-        os.makedirs(OUTPUT_TEL + "/profiles")
-
-    # Also making a storage directory specifically for products which are combinations of different ObsIDs
-    #  and instruments
-    if not os.path.exists(OUTPUT_TEL + "/combined"):
-        os.makedirs(OUTPUT_TEL + "/combined")
-
-    # And create an inventory file for that directory
-    if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
-        with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
-            inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
+# profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
+# if sum(profiles) != 0:
+#     # if there is a directory called combined, then they have used an old version of xga
+#     new_directory = os.path.join(OUTPUT, "xmm")
+#     for direct in os.listdir(OUTPUT):
+#         # rearranging their xga_save_path directory to the updated multi-telescope format
+#         old_path = os.path.join(OUTPUT, direct)
+#         new_path = os.path.join(new_directory, direct)
+#         shutil.move(old_path, new_path)
+# # Created for those sources will be saved
+# for telescope in setup_telescopes:
+#     # Telescope specific path where products are stored in xga output directory
+#     OUTPUT_TEL = os.path.join(OUTPUT, telescope)
+#     if not os.path.exists(OUTPUT_TEL):
+#         os.makedirs(OUTPUT_TEL)
+#     # Make a storage directory where specific source name directories will then be created, there profile objects
+#     if not os.path.exists(OUTPUT_TEL + "/profiles"):
+#         os.makedirs(OUTPUT_TEL + "/profiles")
+#
+#     # Also making a storage directory specifically for products which are combinations of different ObsIDs
+#     #  and instruments
+#     if not os.path.exists(OUTPUT_TEL + "/combined"):
+#         os.makedirs(OUTPUT_TEL + "/combined")
+#
+#     # And create an inventory file for that directory
+#     if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
+#         with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
+#             inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
 
 # The default behaviour is now to
 if "num_cores" in xga_conf["XGA_SETUP"] and xga_conf["XGA_SETUP"]["num_cores"] != "auto":
@@ -719,41 +785,9 @@ def dict_search(key: str, var: dict) -> list:
                     yield [str(k), result]
 
 
-def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
-    """
-    A play on the function of the same name in astropy.io.fits, except this one will take a fitsio header object
-    as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
-    header, and uses their critical values to construct astropy WCS objects.
-
-    :return: A list of astropy WCS objects extracted from the input header.
-    :rtype: List[WCS]
-    """
-    wcs_search = [k.split("CTYPE")[-1][-1] for k in hdr.keys() if "CTYPE" in k]
-    wcs_nums = [w for w in wcs_search if w.isdigit()]
-    wcs_not_nums = [w for w in wcs_search if not w.isdigit()]
-    if len(wcs_nums) != 2 and len(wcs_nums) != 0:
-        raise KeyError("There are an odd number of CTYPEs with no extra key ")
-    elif len(wcs_nums) == 2:
-        wcs_keys = [""] + list(set(wcs_not_nums))
-    elif len(wcs_nums) == 0:
-        wcs_keys = list(set(wcs_not_nums))
-
-    wcses = []
-    for key in wcs_keys:
-        w = WCS(naxis=2)
-        w.wcs.crpix = [hdr["CRPIX1{}".format(key)], hdr["CRPIX2{}".format(key)]]
-        w.wcs.cdelt = [hdr["CDELT1{}".format(key)], hdr["CDELT2{}".format(key)]]
-        w.wcs.crval = [hdr["CRVAL1{}".format(key)], hdr["CRVAL2{}".format(key)]]
-        w.wcs.ctype = [hdr["CTYPE1{}".format(key)], hdr["CTYPE2{}".format(key)]]
-        wcses.append(w)
-
-    return wcses
 
 
-stop
-
-
-SETUP_TELESCOPES = [telescope for telescope in TELESCOPE_DICT.keys() if TELESCOPE_DICT[telescope]["used"]]
+# SETUP_TELESCOPES = [telescope for telescope in TELESCOPE_DICT.keys() if TELESCOPE_DICT[telescope]["used"]]
 
 """# Dictionary to keep track of which telescopes the installer has changed event file paths from the default
 setup_telescope_counter = {}
