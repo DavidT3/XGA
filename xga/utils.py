@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 16:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/09/2023, 21:54. Copyright (c) The Contributors
 
 import json
 import os
@@ -18,7 +18,6 @@ from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import read_header
 from fitsio.header import FITSHDR
-from numpy import nan
 from tqdm import tqdm
 
 from .exceptions import XGAConfigError
@@ -61,7 +60,7 @@ BLACKLIST_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_blacklist.csv'.format
 
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
 BANNED_FILTS = {"xmm": ['CalClosed', 'Closed'],
-                "erosita": []}
+                "erosita": ['CALIB', 'CLOSED']}
 # ----------------------------------------------------------------------------
 
 
@@ -85,6 +84,8 @@ XGA_CONFIG = {"xga_save_path": "xga_output",
 #  mission/telescope's configuration
 
 # NOTE - THE 'root_{telescope name}_dir' IS REQUIRED - MAKE SURE TO ADD ONE FOR EVERY SUPPORTED TELESCOPE
+# NOTE THE SECOND - THE PATHS TO CLEANED EVENTS ARE REQUIRED TO BE STRUCTURED
+#  LIKE 'clean_{indicator of instrument}_evts' - it helps make the other bits of this setup process more generalised
 # These are the pertinent bits of information for XMM - mainly the general 'where does data live' stuff
 XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required/{obs_id}/pn_exp1_clean_evts.fits",
@@ -103,7 +104,7 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
 
 # The information required to use eROSITA data
 EROSITA_FILES = {"root_erosita_dir": "/this/is/required/erosita_obs/data/",
-                 "erosita_evts": "/this/is/required/{obs_id}/{obs_id}.fits",
+                 "clean_erosita_evts": "/this/is/required/{obs_id}/{obs_id}.fits",
                  "lo_en": ['0.50', '2.00'],
                  "hi_en": ['2.00', '10.00'],
                  "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
@@ -358,7 +359,6 @@ def xmm_observation_census(config: ConfigParser, obs_census: List, obs_lookup: L
                         try:
                             # Reads out the filter header, if it is CalClosed/Closed then we can't use it
                             filt = evts_header["FILTER"]
-                            submode = evts_header["SUBMODE"]
                             info['ra'] = evts_header["RA_PNT"]
                             info['dec'] = evts_header["DEC_PNT"]
                         except KeyError:
@@ -400,7 +400,7 @@ def erosita_observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.D
     return None
 
 
-def build_observation_census(tel: str) -> None:
+def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     A function that builds/updates the census and blacklist for each telescope.
 
@@ -435,7 +435,7 @@ def build_observation_census(tel: str) -> None:
     if len(blacklist.columns) == 1:
         # Adds the four new columns, all with a default value of True. So any ObsID already in the blacklist
         #  will have the same behaviour as before, all instruments for the ObsID are excluded
-        blacklist_columns = ["EXCLUDE_{}".format(inst) for inst in rel_insts]
+        blacklist_columns = ["EXCLUDE_{}".format(inst.upper()) for inst in rel_insts]
         blacklist[blacklist_columns] = 'T'
         # If we have even gotten to this stage then the actual blacklist file needs re-writing, so I do
         blacklist.to_csv(blacklist_file, index=False)
@@ -447,37 +447,112 @@ def build_observation_census(tel: str) -> None:
         obs_lookup = pd.read_csv(census_file, header="infer", dtype=str)
     else:
         # Making the columns in the census
-        inst_list = ["USE_{}".format(inst) for inst in rel_insts]
+        inst_list = ["USE_{}".format(inst.upper()) for inst in rel_insts]
         obs_lookup = pd.DataFrame(columns=["ObsID", "RA_PNT", "DEC_PNT"] + inst_list)
 
-    # Need to find out which observations are available, crude way of making sure they are ObsID directories
-    # This also checks that I haven't run them before
-    section_key = TELESCOPE_DICT[telescope]["config_section"]
-    root_dir_key = TELESCOPE_DICT[telescope]["root_dir_key"]
-    obs_census = [entry for entry in os.listdir(config[section_key][root_dir_key]) if obs_id_test(telescope, entry)
-                  and entry not in obs_lookup_obs]
-    if len(obs_census) != 0:
+    # Need to find out which observations are available - this lists every file/directory in the root data directory
+    #  for this telescope and a) checks that the entry is a directory, and b) checks that the name of the directory
+    #  matches the pattern expected for an ObsID of this telescope. We also check that the ObsID isn't already in the
+    #  census, to avoid duplicates
+
+    rel_root_dir = xga_conf[tel.upper() + '_FILES']['root_{t}_dir'.format(t=tel)]
+    new_obs_census = [poss_oi for poss_oi in os.listdir(rel_root_dir) if os.path.isdir(rel_root_dir + poss_oi) and
+                      obs_id_test(tel, poss_oi) and poss_oi not in obs_lookup['ObsID'].values]
+
+    if len(new_obs_census) != 0:
+        # This just finds the configuration entries that are relevant to specifying where cleaned events live for
+        #  the current instrument - I could have just set up a dictionary like Jess originally did, but I'm trying
+        #  to be clever and dynamically support new telescopes without changes in much of this file - all the dev
+        #  should need to do is add new entries in some dictionaries near the top
+        evt_path_keys = [e_key for e_key in xga_conf[tel.upper() + '_FILES'] if 'evts' in e_key and 'clean' in e_key]
+        # If new telescope sections have been implemented like I specified they should be, the structure of these keys
+        #  should be predictable - whatever is being counted as an 'instrument' should be in the middle. I put
+        #  'instrument' in quotes because it is possible (as it may be with eROSITA) that the different instruments
+        #  are all contained in the same event list.
+        evt_path_insts = [e_key.split('_')[1] for e_key in evt_path_keys]
+
+        # If the number of instruments specified in the configuration file headers doesn't match the number of
+        #  different instruments in the ALLOWED_INST dictionary entry for this telescope, then we can infer that
+        #  the event list headers should be used to specify the instruments - as either one ObsID always has only
+        #  one instrument associated (as with Chandra for instance), or there aren't separate event lists for
+        #  separate instruments (as may be the case for eROSITA).
+        inst_from_evt = False if len(evt_path_insts) == len(ALLOWED_INST[tel]) else True
+
+        # Essentially what we want to learn here, and store in the census, are the pointing coordinates of the
+        #  telescope and whether each instrument can be used for science (for instance do they have a filter we don't
+        #  allow, in which case the entry will be 'False')
+        with tqdm(desc="Assembling list of {} ObsIDs".format(tel), total=len(new_obs_census)) as census_progress:
+            for obs in new_obs_census:
+                info = {col: '' for col in obs_lookup.columns}
+                info['ObsID'] = obs
+
+                for evt_key_ind, evt_key in enumerate(evt_path_keys):
+                    evt_path = xga_conf[tel.upper() + '_FILES'][evt_key].format(obs_id=obs)
+
+                    if os.path.exists(evt_path):
+                        # Just read in the header of the events file - want to avoid reading a big old table of
+                        #  events into memory, as we might be doing this a bunch of times
+                        evts_header = read_header(evt_path)
+
+                        # I think this *should* be a fairly universal way of accessing the pointing coordinates, but
+                        #  I guess I'll find out if it isn't when I add more telescopes!
+                        info['RA_PNT'] = evts_header["RA_PNT"]
+                        info['DEC_PNT'] = evts_header["DEC_PNT"]
+
+                        # We check that the filter value isn't in the list of unacceptable filters for the
+                        #  current telescope
+                        good_filt = evts_header['FILTER'] not in BANNED_FILTS[tel]
+
+                        if inst_from_evt:
+                            if tel != 'erosita':
+                                warn("There may be unintended behaviours, as the current section was designed with"
+                                     " eROSITA in mind - contact the developers (though I'd be surprised if anyone"
+                                     " who isn't a dev sees this...", stacklevel=2)
+
+                            # Use INSTRUM and not INSTRUME as the search here because it is what finds you the
+                            #  instruments in eROSITA evts lists, and honestly at the moment they're the only ones
+                            #  I think are going to be structured like this (unless we change DAXA to break them up).
+                            hdr_insts = [evts_header[h_key] for h_key in list(evts_header.keys())
+                                         if 'INSTRUM' in h_key and 'INSTRUME' not in h_key]
+
+                            for i in ALLOWED_INST[tel]:
+                                use_key = 'USE_{}'.format(i.upper())
+                                if i.upper() in hdr_insts and good_filt:
+                                    info[use_key] = 'T'
+                                else:
+                                    info[use_key] = 'F'
+                        else:
+                            use_key = 'USE_{}'.format(evt_path_insts[evt_key_ind].upper())
+                            if good_filt:
+                                info[use_key] = 'T'
+                            else:
+                                info[use_key] = 'F'
+
+                census_progress.update(1)
+                print(info)
+                print('')
+
          # This looks in the header for each event list in the root dir and retrieves ra, dec and other info
         # Then it appends it to obs_lookup, which is then written to the census.csv file
-        if telescope == "xmm":
-            # Each telescope has differently formatted headers hence having different functions for each
-            obs_lookup = xmm_observation_census(config, obs_census, obs_lookup)
-        elif telescope == "erosita":
-            obs_lookup = erosita_observation_census(config, obs_census, obs_lookup)
-
-        with open(CENSUS_FILE, 'w') as census:
-            census.writelines(obs_lookup)
-
-    # I do the stripping and splitting to make it a 3 column array, needed to be lines to write to file
-    obs_lookup = pd.DataFrame(data=[entry.strip('\n').split(',') for entry in obs_lookup[1:]],
-                              columns=obs_lookup[0].strip("\n").split(','), dtype=str)
-    obs_lookup["RA_PNT"] = obs_lookup["RA_PNT"].replace('', nan).astype(float)
-    obs_lookup["DEC_PNT"] = obs_lookup["DEC_PNT"].replace('', nan).astype(float)
-    # Adding in columns for the instruments
-    for inst in INST:
-        obs_lookup["USE_{}".format(inst)] = obs_lookup["USE_{}".format(inst)].replace('T', True).replace('F', False)
+        # if telescope == "xmm":
+        #     # Each telescope has differently formatted headers hence having different functions for each
+        #     obs_lookup = xmm_observation_census(config, obs_census, obs_lookup)
+        # elif telescope == "erosita":
+        #     obs_lookup = erosita_observation_census(config, obs_census, obs_lookup)
+        #
+        # with open(CENSUS_FILE, 'w') as census:
+        #     census.writelines(obs_lookup)
+    #
+    # # I do the stripping and splitting to make it a 3 column array, needed to be lines to write to file
+    # obs_lookup = pd.DataFrame(data=[entry.strip('\n').split(',') for entry in obs_lookup[1:]],
+    #                           columns=obs_lookup[0].strip("\n").split(','), dtype=str)
+    # obs_lookup["RA_PNT"] = obs_lookup["RA_PNT"].replace('', nan).astype(float)
+    # obs_lookup["DEC_PNT"] = obs_lookup["DEC_PNT"].replace('', nan).astype(float)
+    # # Adding in columns for the instruments
+    # for inst in INST:
+    #     obs_lookup["USE_{}".format(inst)] = obs_lookup["USE_{}".format(inst)].replace('T', True).replace('F', False)
     # return obs_lookup, blacklist
-    return [], []
+    return 'boi', 'test'
 
 
 # TODO THIS WAS AN ILL-CONSIDERED FUNCTION FROM A LESS EXPERIENCED DAVID - YOU NEED RMFS TO DO THIS PROPERLY AND
@@ -689,14 +764,9 @@ if os.path.exists(old_census_path):
     new_bl_path = os.path.join(CONFIG_PATH, 'xmm', 'xmm_blacklist.csv')
     shutil.move(old_bl_path, new_bl_path)
 
-# TODO REMOVE THIS OBVIOUSLY
-USABLE['erosita'] = True
-
 for tel in USABLE:
     # We only care to have/make a census if the telescope is actually set up and usable
     if USABLE[tel]:
-        # JESS_TODO check if they have the old setup and then rearrange
-        # only doing this for telescopes that are set up in the config file
         CENSUS[tel], BLACKLIST[tel] = build_observation_census(tel)
 
 # -----------------------------------------------------------------------------------------
