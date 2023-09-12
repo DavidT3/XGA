@@ -528,6 +528,7 @@ for tel in TELESCOPES:
         xga_conf[cur_sec_name] = tele_conf_sects[tel]
         altered = True
 # If we altered the existing configuration file, then we need to save the altered configuration to disk
+if altered:
     with open(CONFIG_FILE, 'w') as update_cfg:
         xga_conf.write(update_cfg)
 
