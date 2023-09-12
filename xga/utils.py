@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/09/2023, 13:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/09/2023, 13:28. Copyright (c) The Contributors
 
 import json
 import os
@@ -285,6 +285,33 @@ def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
         wcses.append(w)
 
     return wcses
+
+
+# Very handy function that is used in several places - just not really sure where else to put it but here
+def dict_search(key: str, var: dict) -> list:
+    """
+    This simple function was very lightly modified from a stackoverflow answer, and is an
+    efficient method of searching through a nested dictionary structure for specfic keys
+    (and yielding the values associated with them). In this case will extract all of a
+    specific product type for a given source.
+
+    :param key: The key in the dictionary to search for and extract values.
+    :param var: The variable to search, likely to be either a dictionary or a string.
+    :return list[list]: Returns information on keys and values
+    """
+
+    # Check that the input is actually a dictionary
+    if hasattr(var, 'items'):
+        for k, v in var.items():
+            if k == key:
+                yield v
+            # Here is where we dive deeper, recursively searching lower dictionary levels.
+            if isinstance(v, dict):
+                for result in dict_search(key, v):
+                    # We yield a string of the result and the key, as we'll need to return the
+                    # ObsID and Instrument information from these product searches as well.
+                    # This will mean the output is an unpleasantly nested list, but we can solve that.
+                    yield [str(k), result]
 # --------------------------------------------------------------------------------------
 
 
@@ -745,33 +772,6 @@ else:
 
 
 # TODO RELOCATE THESE FUNCTIONS, THEY DON'T BELONG IN THIS PART OF THE MODULE
-
-def dict_search(key: str, var: dict) -> list:
-    """
-    This simple function was very lightly modified from a stackoverflow answer, and is an
-    efficient method of searching through a nested dictionary structure for specfic keys
-    (and yielding the values associated with them). In this case will extract all of a
-    specific product type for a given source.
-
-    :param key: The key in the dictionary to search for and extract values.
-    :param var: The variable to search, likely to be either a dictionary or a string.
-    :return list[list]: Returns information on keys and values
-    """
-
-    # Check that the input is actually a dictionary
-    if hasattr(var, 'items'):
-        for k, v in var.items():
-            if k == key:
-                yield v
-            # Here is where we dive deeper, recursively searching lower dictionary levels.
-            if isinstance(v, dict):
-                for result in dict_search(key, v):
-                    # We yield a string of the result and the key, as we'll need to return the
-                    # ObsID and Instrument information from these product searches as well.
-                    # This will mean the output is an unpleasantly nested list, but we can solve that.
-                    yield [str(k), result]
-
-
 
 
 # SETUP_TELESCOPES = [telescope for telescope in TELESCOPE_DICT.keys() if TELESCOPE_DICT[telescope]["used"]]
