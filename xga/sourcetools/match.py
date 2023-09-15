@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/03/2023, 21:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/09/2023, 21:04. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -22,7 +22,7 @@ from ..utils import SRC_REGION_COLOURS
 
 def _dist_from_source(search_ra: float, search_dec: float, cur_reg):
     """
-    Calculates the euclidean distance between the centre of a supplied region, and the
+    Calculates the Euclidean distance between the centre of a supplied region, and the
     position of the source.
 
     :param reg: A region object.
