@@ -21,4 +21,4 @@ pytest~=6.2.1
 cycler~=0.11.0
 docutils==0.17
 ipympl>=0.9.1
-exceptiongroup~=1.1.0
+exceptiongroup>=1.1.0
