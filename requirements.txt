@@ -1,6 +1,6 @@
 versioneer~=0.18
 setuptools~=47.3.1
-numpy>=1.18
+numpy<=1.23.4
 astropy>=4.0
 tqdm>=4.45.0
 pandas>=1.0.3
@@ -21,4 +21,4 @@ pytest~=6.2.1
 cycler~=0.11.0
 docutils==0.17
 ipympl>=0.9.1
-exceptiongroup~=1.1.0
+exceptiongroup>=1.1.0
