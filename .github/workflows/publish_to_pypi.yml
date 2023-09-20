@@ -18,8 +18,8 @@ jobs:
   # The only job in this action, building and publishing the XGA Python module
   build-n-publish:
     name: Build and publish XGA
-    # The build/publishing process runs on Ubuntu 18.04 - not super important what this is for this use case, so long as its not Windows
-    runs-on: ubuntu-18.04
+    # The build/publishing process runs on Ubuntu 20.04 - not super important what this is for this use case, so long as its not Windows
+    runs-on: ubuntu-20.04
     
     # This job has several steps
     steps:
