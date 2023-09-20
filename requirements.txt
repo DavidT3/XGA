@@ -1,6 +1,6 @@
 versioneer~=0.18
 setuptools~=47.3.1
-numpy>=1.18
+numpy<=1.23.4
 astropy>=4.0
 tqdm>=4.45.0
 pandas>=1.0.3
