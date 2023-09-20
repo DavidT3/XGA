@@ -40,6 +40,10 @@ jobs:
         pip install
         build
         --user
+
+    - name: Install wheel
+      run: >- 
+        pip install wheel
     
 #     - name: Build a binary wheel and source tarball
 #       run: >-
