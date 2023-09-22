@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/09/2023, 13:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/09/2023, 16:03. Copyright (c) The Contributors
 
 import json
 import os
@@ -347,6 +347,14 @@ USABLE = {tele: False for tele in TELESCOPES}
 #  telescope - this functionality is also in DAXA mission classes, so we may just switch to using them in the
 #  future to avoid features duplication
 OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$'}
+
+# This is another sort of duplication of a DAXA feature, and stores the default search distances to be used for
+#  each telescope in the xga.match.separation_match function. These are loosely based on the field of view of
+#  each telescope. In cases where different instruments on a telescope have significantly different field of view,
+#  there may be multi-level dictionaries
+# TODO when I chuck ROSAT in here add an entry like 'rosat': {'PSPCB': Quantity(60, 'arcmin'),
+#  'PSPCC': Quantity(60, 'arcmin'), 'HRI': Quantity(19, 'arcmin'), 'RASS': Quantity(3, 'deg')}}
+DEFAULT_TELE_SEARCH_DIST = {'xmm': Quantity(30, 'arcmin')}
 
 # This defines where the observation census files would be located for each of the allowed telescopes (the top level
 #  keys of ALLOWED_INST are telescope/mission names) - not every telescope is guaranteed to have a file created, it
