@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/09/2023, 21:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/09/2023, 15:27. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -12,7 +12,7 @@ from astropy.coordinates import SkyCoord
 from astropy.units.quantity import Quantity
 from exceptiongroup import ExceptionGroup
 from pandas import DataFrame
-from regions import read_ds9, PixelRegion
+from regions import read_ds9, PixelRegion, SkyRegion
 from tqdm import tqdm
 
 from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT, xga_conf
@@ -20,17 +20,27 @@ from ..exceptions import NoMatchFoundError, NoValidObservationsError, NoRegionsE
 from ..utils import SRC_REGION_COLOURS
 
 
-def _dist_from_source(search_ra: float, search_dec: float, cur_reg):
+def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
     """
-    Calculates the Euclidean distance between the centre of a supplied region, and the
-    position of the source.
+    Calculates the distance between the centre of a supplied region, and the position of the source. We use the
+    Haversine formula to determine the separation on the surface of a sphere.
 
-    :param reg: A region object.
-    :return: Distance between region centre and source position.
+    :param SkyRegion cur_reg: A region object.
+    :rtype: float
+    :return: Distance between region centre and source position, in degrees.
     """
-    r_ra = cur_reg.center.ra.value
-    r_dec = cur_reg.center.dec.value
-    return np.sqrt(abs(r_ra - search_ra) ** 2 + abs(r_dec - search_dec) ** 2)
+    r_ra = cur_reg.center.ra.to('radian').value
+    r_dec = cur_reg.center.dec.to('radian').value
+
+    # The numpy trig functions want everything in radians, so we make sure that is the case
+    search_ra = search_ra * (np.pi / 180)
+    search_dec = search_dec * (np.pi / 180)
+
+    # Then just use the Haversine formula to calculate the separation
+    hav_sep = 2 * np.arcsin(np.sqrt((np.sin((search_dec - r_dec) / 2) ** 2)
+                                    + np.cos(r_dec) * np.cos(search_dec) * np.sin((search_ra - r_ra) / 2) ** 2))
+    # Converted from radians to degrees - not using quantities in this internal function
+    return hav_sep / (np.pi / 180)
 
 
 def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
