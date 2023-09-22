@@ -228,7 +228,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="expmap"))
 
-    stack = False  # This tells the sas_call routine that this command won't be part of a stack
+    stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
