@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/09/2023, 21:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/09/2023, 15:33. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -30,6 +30,7 @@ from ..imagetools.profile import annular_mask
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
+from ..sourcetools.match import _dist_from_source
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS, \
     DEFAULT_COSMO
@@ -1312,19 +1313,6 @@ class BaseSource:
             furthest from the passed source coordinates.
         :rtype: Tuple[dict, dict]
         """
-
-        def dist_from_source(reg):
-            """
-            Calculates the euclidean distance between the centre of a supplied region, and the
-            position of the source.
-
-            :param reg: A region object.
-            :return: Distance between region centre and source position.
-            """
-            ra = reg.center.ra.value
-            dec = reg.center.dec.value
-            return np.sqrt(abs(ra - self._ra_dec[0]) ** 2 + abs(dec - self._ra_dec[1]) ** 2)
-
         # TODO DON'T TRUST THIS AT ALL FOR GOD'S SAKE
         reg_dict = {}
         match_dict = {}
@@ -1453,7 +1441,8 @@ class BaseSource:
                 if reg_dict[tscope][obs_id][0] is not None and len(reg_dict[tscope][obs_id]) > 1:
                     # Quickly calculating distance between source and center of regions, then sorting
                     # and getting indices. Thus I only match to the closest 5 regions.
-                    diff_sort = np.array([dist_from_source(r) for r in reg_dict[tscope][obs_id]]).argsort()
+                    diff_sort = np.array([_dist_from_source(*self._ra_dec, r)
+                                          for r in reg_dict[tscope][obs_id]]).argsort()
                     # Unfortunately due to a limitation of the regions module I think you need images
                     #  to do this contains match...
                     within = np.array([reg.contains(SkyCoord(*self._ra_dec, unit='deg'), w)
