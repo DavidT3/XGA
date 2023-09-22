@@ -213,11 +213,9 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 rmtree(dest_dir)
 
             os.makedirs(dest_dir)
-            cmds.append("cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; eexpmap eventset={e} "
-                        "imageset={im} expimageset={eim} withdetcoords=no withvignetting=yes "
-                        "attitudeset={att} pimin={l} pimax={u}; mv * ../; cd ..; "
-                        "rm -r {d}".format(e=evt_list.path, im=ref_im.path, eim=exp_map, att=att, l=lo_chan,
-                                           u=hi_chan, d=dest_dir, ccf=dest_dir + "ccf.cif"))
+            cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l}"
+                        "emax={u}; mv * ../; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path,
+                         l=lo_en.value, u=hi_en.value, d=dest_dir))
 
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
