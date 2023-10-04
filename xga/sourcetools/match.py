@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/09/2023, 17:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/10/2023, 11:13. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -374,6 +374,8 @@ def seperation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
             telescope = [t for t in telescope if USABLE[t]]
             warn("Some requested telescopes are not currently set up with XGA; {}".format(", ".join(which_bad)),
                  stacklevel=2)
+
+    # TODO I think the telescope checking should be in, just need to do the rest of the function
 
     # Extract the search distance as a float, specifically in degrees
     rad = distance.to('deg').value
