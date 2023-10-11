@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2023, 12:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/10/2023, 15:07. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -436,7 +436,7 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     elif type(distance) == dict and any([t not in distance for t in telescope]):
         warn("A dictionary of search distances that did not contain all requested telescopes has been passed, default"
              " values have been used for the missing telescopes.", stacklevel=2)
-        distance = {distance[t] if t in distance else DEFAULT_TELE_SEARCH_DIST[t] for t in telescope}
+        distance = {t: distance[t] if t in distance else DEFAULT_TELE_SEARCH_DIST[t] for t in telescope}
     elif isinstance(distance, Quantity):
         # Just make sure that distance is a dictionary whatever, to simplify the code later
         distance = {t: distance for t in telescope}
@@ -473,38 +473,59 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     # If we only want to use one core, we don't set up a pool as it could be that a pool is open where
     #  this function is being called from
     if num_cores == 1:
-        # Set up the tqdm instance in a with environment
-        with tqdm(desc='Searching for observations near source coordinates', total=len(src_ra),
-                  disable=prog_dis) as onwards:
-            # Simple enough, just iterates through the RAs and Decs calling the search function and stores the
-            #  results in the dictionary
-            for ra_ind, r in enumerate(src_ra):
-                d = src_dec[ra_ind]
-                search_results = _simple_search(r, d, rad)
-                c_matches[repr(r) + repr(d)] = search_results[2]
-                fully_blacklisted[repr(r) + repr(d)] = search_results[3]
-                order_list.append(repr(r)+repr(d))
-                onwards.update(1)
+        for tel in telescope:
+            # Set up the tqdm instance in a with environment
+            with tqdm(desc='Searching for {} observations near source coordinates'.format(tel), total=len(src_ra),
+                      disable=prog_dis) as onwards:
+                # Simple enough, just iterates through the RAs and Decs calling the search function and stores the
+                #  results in the dictionary
+                for ra_ind, r in enumerate(src_ra):
+                    d = src_dec[ra_ind]
+
+                    # TODO MORE COMMENTS
+                    if (repr(r) + repr(d)) not in c_matches:
+                        c_matches[repr(r) + repr(d)] = {}
+                        fully_blacklisted[repr(r) + repr(d)] = {}
+
+                    search_results = _separation_search(r, d, tel, distance[tel].to('deg').value)
+                    c_matches[repr(r) + repr(d)][tel] = search_results[2]
+                    fully_blacklisted[repr(r) + repr(d)][tel] = search_results[3]
+                    order_list.append(repr(r)+repr(d))
+                    onwards.update(1)
     else:
-        # This is all equivalent to what's above, but with function calls added to the multiprocessing pool
-        with tqdm(desc="Searching for observations near source coordinates", total=len(src_ra)) as onwards, \
-                Pool(num_cores) as pool:
-            def match_loop_callback(match_info):
-                nonlocal onwards  # The progress bar will need updating
-                nonlocal c_matches
-                c_matches[repr(match_info[0]) + repr(match_info[1])] = match_info[2]
-                fully_blacklisted[repr(match_info[0]) + repr(match_info[1])] = match_info[3]
+        for tel in telescope:
 
-                onwards.update(1)
+            # This is all equivalent to what's above, but with function calls added to the multiprocessing pool
+            with tqdm(desc="Searching for {} observations near source coordinates".format(tel), total=len(src_ra)) \
+                    as onwards, Pool(num_cores) as pool:
+                def match_loop_callback(match_info):
+                    nonlocal onwards  # The progress bar will need updating
+                    nonlocal c_matches
+                    nonlocal tel
 
-            for ra_ind, r in enumerate(src_ra):
-                d = src_dec[ra_ind]
-                order_list.append(repr(r)+repr(d))
-                pool.apply_async(_simple_search, args=(r, d, rad), callback=match_loop_callback)
+                    c_matches[repr(match_info[0]) + repr(match_info[1])][tel] = match_info[2]
+                    fully_blacklisted[repr(match_info[0]) + repr(match_info[1])][tel] = match_info[3]
 
-            pool.close()  # No more tasks can be added to the pool
-            pool.join()  # Joins the pool, the code will only move on once the pool is empty.
+                    onwards.update(1)
 
+                for ra_ind, r in enumerate(src_ra):
+                    d = src_dec[ra_ind]
+
+                    # TODO MORE COMMENTS
+                    if (repr(r) + repr(d)) not in c_matches:
+                        c_matches[repr(r) + repr(d)] = {}
+                        fully_blacklisted[repr(r) + repr(d)] = {}
+
+                    order_list.append(repr(r)+repr(d))
+                    pool.apply_async(_separation_search, args=(r, d, tel, distance[tel].to('deg').value),
+                                     callback=match_loop_callback)
+
+                pool.close()  # No more tasks can be added to the pool
+                pool.join()  # Joins the pool, the code will only move on once the pool is empty.
+
+    print(c_matches)
+
+    stop
     # Changes the order of the results to the original pass in order and stores them in a list
     results = [c_matches[n] for n in order_list]
     bl_results = [fully_blacklisted[n] for n in order_list]
