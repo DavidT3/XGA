@@ -1,3 +1,6 @@
+# This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+# Last modified by Jessica Pilling (jp735@sussex.ac.uk) Wed Oct 11 2023, 13:52. Copyright (c) The Contributors
+
 import os
 from typing import Union
 from shutil import rmtree

@@ -1,3 +1,6 @@
+# This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+# Last modified by Jessica Pilling (jp735@sussex.ac.uk) Wed Oct 11 2023, 13:52. Copyright (c) The Contributors
+
 from functools import wraps
 from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
@@ -72,7 +75,7 @@ def esass_call(esass_func):
 
         # This is what the returned products get stored in before they're assigned to sources
         results = {s: [] for s in src_lookup}
-        # Any errors raised shouldn't be SAS, as they are stored within the product object.
+        # Any errors raised will be stored here, including eSASS errors.
         raised_errors = []
         # Making sure something is defined for this variable
         prod_type_str = ""
@@ -123,7 +126,7 @@ def esass_call(esass_func):
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
         elif to_execute and len(all_run) == 0:
-            # It is possible to call a wrapped SAS function and find that the products already exist.
+            # It is possible to call a wrapped eSASS function and find that the products already exist.
             # print("All requested products already exist")
             pass
 
