@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 00:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/10/2023, 15:39. Copyright (c) The Contributors
 
 import warnings
 from typing import Union, Tuple, List
@@ -10,11 +10,11 @@ from .misc import cifbuild
 from ..samples.base import BaseSample
 from ..sources import BaseSource, GalaxyCluster
 from ..sources.base import NullSource
-from ..utils import RAD_LABELS
+from ..utils import RAD_LABELS, NUM_CORES
 
 
 def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                 inner_radius: Union[str, Quantity], disable_progress: bool, obs_id: str, num_cores: int) \
+                 inner_radius: Union[str, Quantity], disable_progress: bool, obs_id: str, num_cores: int = NUM_CORES) \
         -> Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]:
     """
     The preparation and value checking stage for SAS spectrum/lightcurve generation.
