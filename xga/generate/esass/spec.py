@@ -12,8 +12,7 @@ from ...sources import BaseSource
 from ...samples.base import BaseSample
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-               min_counts: int = 5, min_sn: float = None, over_sample: int = None, one_rmf: bool = True,
+               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False):
     """
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
@@ -28,16 +27,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
         the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
         default this is zero arcseconds, resulting in a circular spectrum.
-    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal to noise set this parameter to None.
-    :param int over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
-        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
-    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
-        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
-        slightly on position on the detector.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
@@ -52,3 +45,18 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
+    
+    # Just make sure these values are the expect data type, this matters when the information is
+    #  added to the storage strings and file names
+    if over_sample is not None:
+        over_sample = int(over_sample)
+    if min_counts is not None:
+        min_counts = int(min_counts)
+    if min_sn is not None:
+        min_sn = float(min_sn)
+
+    #TODO corresponding to issue #1058, need to adding in rebinning functions. relate to min_counts and min_sn parameters in SAS version
+
+    #TODO check with David about oversampling and group spectra, and the one_rmf parameter (think for erosita you want an RMF for each obsid-inst combo)
+    
+
