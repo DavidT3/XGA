@@ -18,7 +18,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
     decorated by the esass_call function, so the commands aren't immediately run. This means it can be used for
     srctool functions that generate custom sets of spectra (like a set of annular spectra for instance), as well
-    as for things like the standard srctool_spectrum function which produce relatively boring spectra.
+    as for things like the standard srctool_spectrum function which produce relatively boring spectra. At the moment 
+    each spectra will also generate a background spectra by default. 
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
@@ -58,5 +59,20 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #TODO corresponding to issue #1058, need to adding in rebinning functions. relate to min_counts and min_sn parameters in SAS version
 
     #TODO check with David about oversampling and group spectra, and the one_rmf parameter (think for erosita you want an RMF for each obsid-inst combo)
-    
 
+    # Defining the various eSASS commands that need to be populated
+    # There will be a different command for extended and point sources
+    ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
+                ' srcreg="mask {em}" backreg=NONE exttype=MAP extmap="{em}" insts="{i}" tstep={ts} xgrid={xg}' \
+                ' psftype=NONE'
+    #TODO check the point source command
+    pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF" insts="" '\
+    
+    # To deal with the object scanning across the telescopes, you need a detection map of the source
+    #TODO how to make a detection/extent map
+    ext_map_cmd = ""
+
+    # For extended sources, it is best to make a background spectra with a separate command
+    bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
+                        ' srcreg="{breg}" backreg=NONE insts="{i}"' \
+                        ' tstep={ts} xgrid={xg} psftype=NONE'
