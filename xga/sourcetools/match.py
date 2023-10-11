@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2023, 15:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/10/2023, 17:29. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -363,24 +363,34 @@ def _separation_search(ra: float, dec: float, telescope: str, search_rad: float)
     return ra, dec, matches, all_excl
 
 
-# TODO rejig the docstring, mention the new behaviour with default search distances
 def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                      distance: Union[Quantity, dict] = None, telescope: Union[str, list] = None,
                      num_cores: int = NUM_CORES) \
-        -> Tuple[Union[DataFrame, List[DataFrame]], Union[DataFrame, List[DataFrame]]]:
+        -> Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]:
     """
-    Returns ObsIDs within a given distance from the input ra and dec values.
+    Returns XGA census entries (with ObsID, ra, and dec) that match to the input coordinates (either a single
+    coordinate or a set). This is done for a set of telescopes (or a single telescope), and a match is made by the
+    source coordinates being within specified search distances for the different telescopes.
 
     :param float/np.ndarray src_ra: RA coordinate(s) of the source(s), in degrees. To find matches for multiple
         coordinate pairs, pass an array.
     :param float/np.ndarray src_dec: DEC coordinate(s) of the source(s), in degrees. To find matches for multiple
         coordinate pairs, pass an array.
-    :param Quantity distance: The distance to search for observations within, #TODO
+    :param Quantity/dict distance: The distance to search for observations within, the default is None in which case
+        standard search distances for different telescopes are used. The user may pass a single Quantity to use for
+        all telescopes, a dictionary with keys corresponding to ALL or SOME of the telescopes specified by the
+        'telescope' argument. In the case where only SOME of the telescopes are specified in a distance dictionary,
+        the default XGA values will be used for any that are missing.
+    :param str/list[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
+        which case all telescopes that have been set up with this installation of XGA will be used. The user may pass
+        a single telescope name, or a list of telescope names, to control which are used.
     :param int num_cores: The number of cores to use, default is set to 90% of system cores. This is only relevant
         if multiple coordinate pairs are passed.
-    :return: A dataframe containing ObsID, RA_PNT, and DEC_PNT of matching XMM observations, and a dataframe
-        containing information on observations that would have been a match, but that are in the blacklist.
-    :rtype: Tuple[Union[DataFrame, List[DataFrame]], Union[DataFrame, List[DataFrame]]]
+    :return: A list of dictionaries (or single dictionary for one coordinate) of dataframes of matching ObsIDs, where
+        each dictionary corresponds to an input RA-Dec (in the same order), and the dictionary keys correspond to
+        different telescopes. The second return is structured exactly the same, but represents observations that were
+        completely excluded in the blacklist.
+    :rtype: Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]
     """
 
     # If the telescope is set to None then the function will search all the telescopes for matching data, determining
@@ -482,19 +492,23 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
                 for ra_ind, r in enumerate(src_ra):
                     d = src_dec[ra_ind]
 
-                    # TODO MORE COMMENTS
+                    # The top layer of the c_matches and fully_blacklisted dictionaries are the ra-dec combinations,
+                    #  and then a layer down from that are the telescope names, and their values are the dataframes. I
+                    #  just need to make sure that there is an empty dictionary for the telescope key names to be
+                    #  written into
                     if (repr(r) + repr(d)) not in c_matches:
                         c_matches[repr(r) + repr(d)] = {}
                         fully_blacklisted[repr(r) + repr(d)] = {}
+                        # Also add to the order list here because otherwise multiple of the same entry will be entered
+                        #  because we're iterating through telescopes
+                        order_list.append(repr(r)+repr(d))
 
                     search_results = _separation_search(r, d, tel, distance[tel].to('deg').value)
                     c_matches[repr(r) + repr(d)][tel] = search_results[2]
                     fully_blacklisted[repr(r) + repr(d)][tel] = search_results[3]
-                    order_list.append(repr(r)+repr(d))
                     onwards.update(1)
     else:
         for tel in telescope:
-
             # This is all equivalent to what's above, but with function calls added to the multiprocessing pool
             with tqdm(desc="Searching for {} observations near source coordinates".format(tel), total=len(src_ra)) \
                     as onwards, Pool(num_cores) as pool:
@@ -511,21 +525,24 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
                 for ra_ind, r in enumerate(src_ra):
                     d = src_dec[ra_ind]
 
-                    # TODO MORE COMMENTS
+                    # The top layer of the c_matches and fully_blacklisted dictionaries are the ra-dec combinations,
+                    #  and then a layer down from that are the telescope names, and their values are the dataframes. I
+                    #  just need to make sure that there is an empty dictionary for the telescope key names to be
+                    #  written into
                     if (repr(r) + repr(d)) not in c_matches:
                         c_matches[repr(r) + repr(d)] = {}
                         fully_blacklisted[repr(r) + repr(d)] = {}
-
-                    order_list.append(repr(r)+repr(d))
+                        # Also add to the order list here because otherwise multiple of the same entry will be entered
+                        #  because we're iterating through telescopes
+                        order_list.append(repr(r)+repr(d))
+                    # We're searching the census of the current telescope (i.e. tel) here, with the search distance
+                    #  defined either by the user or using the default values built into XGA
                     pool.apply_async(_separation_search, args=(r, d, tel, distance[tel].to('deg').value),
                                      callback=match_loop_callback)
 
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
-    print(c_matches)
-
-    stop
     # Changes the order of the results to the original pass in order and stores them in a list
     results = [c_matches[n] for n in order_list]
     bl_results = [fully_blacklisted[n] for n in order_list]
@@ -538,14 +555,23 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         results = results[0]
         bl_results = bl_results[0]
 
-        # Checks whether the dataframe inside the single result is length zero, if so then there are no relevant ObsIDs
-        if len(results) == 0:
-            raise NoMatchFoundError("No XMM observation found within {a} of ra={r} "
-                                    "dec={d}".format(r=round(src_ra[0], 4), d=round(src_dec[0], 4), a=distance))
+        # This calculates the total number of results across all requested telescopes
+        tot_res = sum([len(results[tel]) for tel in results])
+
+        # As in this case there is only one source, we can include more information in our error message telling
+        #  the user that there are no matches
+        if tot_res == 0:
+            raise NoMatchFoundError("No {t} observations found within {a} of ra={r} "
+                                    "dec={d}.".format(r=round(src_ra[0], 4),
+                                                      d=round(src_dec[0], 4),
+                                                      a='/'.join([str(distance[t].to('deg')) for t in telescope]),
+                                                      t='/'.join(telescope)))
     # If all the dataframes in the results list are length zero, then none of the coordinates has a
     #  valid ObsID
-    elif all([len(r) == 0 for r in results]):
-        raise NoMatchFoundError("No XMM observation found within {a} of any input coordinate pairs".format(a=distance))
+    elif all([sum([len(r[tel]) for tel in r]) == 0 for r in results]):
+        raise NoMatchFoundError("No {t} observation found within {a} of any input coordinate "
+                                "pairs.".format(a='/'.join([str(distance[t].to('deg')) for t in telescope]),
+                                                t='/'.join(telescope)))
 
     return results, bl_results
 
