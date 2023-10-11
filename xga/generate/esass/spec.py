@@ -8,7 +8,7 @@ from astropy.units import Quantity
 from .._common import region_setup
 
 from .. import OUTPUT, NUM_CORES
-from ...sources import BaseSource
+from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 from ...samples.base import BaseSample
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
@@ -65,6 +65,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
                 ' srcreg="mask {em}" backreg=NONE exttype=MAP extmap="{em}" insts="{i}" tstep={ts} xgrid={xg}' \
                 ' psftype=NONE'
+    
+    # For extended sources, it is best to make a background spectra with a separate command
+    bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
+                        ' srcreg="{breg}" backreg=NONE insts="{i}"' \
+                        ' tstep={ts} xgrid={xg} psftype=NONE'
+
     #TODO check the point source command in esass with some EDR obs
     pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF" insts="{i}"' \
                       ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts} xgrid={xg}' \
@@ -74,7 +80,28 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #TODO how to make a detection/extent map
     ext_map_cmd = ""
 
-    # For extended sources, it is best to make a background spectra with a separate command
-    bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                        ' srcreg="{breg}" backreg=NONE insts="{i}"' \
-                        ' tstep={ts} xgrid={xg} psftype=NONE'
+    stack = False # This tells the esass_call routine that this command won't be part of a stack
+    execute = True # This should be executed immediately
+
+    sources_cmds = []
+    sources_paths = []
+    sources_extras = []
+    sources_types = []
+    for s_ind, source in enumerate(sources):
+        # srctool operates quite differently for extended sources and point sources
+        # we also need a detection map for an extended source, so here we check the source type
+        if isinstance(source, (ExtendedSource, GalaxyCluster)):
+            ex_src = "yes"
+            # Sets the detmap type, using an image of the source is appropriate for extended sources like clusters,
+            #  but not for point sources
+            dt = 'dataset'
+        else:
+            ex_src = "no"
+            dt = 'flat'
+        cmds = []
+        final_paths = []
+        extra_info = []
+        
+
+
+
