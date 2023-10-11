@@ -5,10 +5,11 @@ from typing import Union, List
 
 from astropy.units import Quantity
 
+from .._common import region_setup
+
 from .. import OUTPUT, NUM_CORES
 from ...sources import BaseSource
 from ...samples.base import BaseSample
-
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,

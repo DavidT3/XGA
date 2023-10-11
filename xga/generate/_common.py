@@ -3,6 +3,10 @@ from typing import Tuple
 
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 
+#TODO need to see if the current version of region_setup needs editing for eROSITA implementation
+def region_setup():
+    pass
+
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
     """
     This function is called for the local compute option, and runs the passed command in a Popen shell.
