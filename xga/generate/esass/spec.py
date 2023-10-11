@@ -65,8 +65,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
                 ' srcreg="mask {em}" backreg=NONE exttype=MAP extmap="{em}" insts="{i}" tstep={ts} xgrid={xg}' \
                 ' psftype=NONE'
-    #TODO check the point source command
-    pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF" insts="" '\
+    #TODO check the point source command in esass with some EDR obs
+    pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF" insts="{i}"' \
+                      ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts} xgrid={xg}' \
+                      ' psftype="2D_PSF"'
     
     # To deal with the object scanning across the telescopes, you need a detection map of the source
     #TODO how to make a detection/extent map
