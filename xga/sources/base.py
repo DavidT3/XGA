@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 16:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 17:28. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -564,41 +564,31 @@ class BaseSource:
                 dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            # storing 
-            bound_key = {}
-            prod_objs = {}
-            for tscope in self._obs.keys():
-                # JESS_TODO after DAXA is done, can come back to this and maybe generalise it 
-                if tscope == "xmm":
-                    not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key, "attitude_file"]
-                    # Formats the generic paths given in the config file for this particular obs and energy range
-                    # JESS_INFO files is {'image': path to obs/energy bounds-inst_merged_img.fits}
-                    # ie, the product then its path to a certain energy range instrument fits file
-                    files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
-                            for k, v in xga_conf["XMM_FILES"].items() if k not in not_these and inst in k}
+            not_these = ["root_xmm_dir", "lo_en", "hi_en", "attitude_file"] + [k for k in rel_sec if 'evts' in k]
+            # Formats the generic paths given in the config file for this particular obs and energy range
+            files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
+                     for k, v in xga_conf["XMM_FILES"].items() if k not in not_these and inst in k}
 
-                    # It is not necessary to check that the files exist, as this happens when the product classes
-                    # are instantiated. So whether the file exists or not, an object WILL exist, and you can check if
-                    # you should use it for analysis using the .usable attribute
+            # It is not necessary to check that the files exist, as this happens when the product classes
+            # are instantiated. So whether the file exists or not, an object WILL exist, and you can check if
+            # you should use it for analysis using the .usable attribute
+            # This looks up the class which corresponds to the key (which is the product ID in this case
+            #  e.g. image), then instantiates an object of that class
+            lo = Quantity(float(en_lims[0]), 'keV')
+            hi = Quantity(float(en_lims[1]), 'keV')
+            prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
+                                            gen_cmd="", lo_en=lo, hi_en=hi, telescope=tel)
+                         for key, file in files.items() if os.path.exists(file)}
+            # If both an image and an exposure map are present for this energy band, a RateMap object is generated
+            if "image" in prod_objs and "expmap" in prod_objs:
+                prod_objs["ratemap"] = RateMap(prod_objs["image"], prod_objs["expmap"])
+            # Adds in the source name to the products
+            for prod in prod_objs:
+                prod_objs[prod].src_name = self._name
+            # As these files existed already, I don't have any stdout/err strings to pass, also no
+            # command string.
+            bound_key = "bound_{l}-{u}".format(l=float(en_lims[0]), u=float(en_lims[1]))
 
-                    # This looks up the class which corresponds to the key (which is the product
-                    # ID in this case e.g. image), then instantiates an object of that class
-                    lo = Quantity(float(en_lims[0]), 'keV')
-                    hi = Quantity(float(en_lims[1]), 'keV')
-                    prod_objs[tscope] = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
-                                                    gen_cmd="", lo_en=lo, hi_en=hi)
-                                for key, file in files.items() if os.path.exists(file)}
-                    # If both an image and an exposure map are present for this energy band, a RateMap object is generated
-                    if "image" in prod_objs[tscope] and "expmap" in prod_objs[tscope]:
-                        prod_objs[tscope]["ratemap"] = RateMap(prod_objs[tscope]["image"], prod_objs[tscope]["expmap"])
-                    # Adds in the source name to the products
-                    for prod in prod_objs[tscope]:
-                        prod_objs[tscope][prod].src_name = self._name
-                    # As these files existed already, I don't have any stdout/err strings to pass, also no
-                    # command string.
-                    bound_key[tscope] = "bound_{l}-{u}".format(l=float(en_lims[0]), u=float(en_lims[1]))
-                else:
-                    raise NotImplementedError("Only XMM is supported")
             return bound_key, prod_objs
 
         # This dictionary structure will contain paths to all available data products associated with this
@@ -617,58 +607,79 @@ class BaseSource:
             #  latter parts of this method more readable
             rel_sec = xga_conf["{}_FILES".format(tel.upper())]
 
+            if not COMBINED_INSTS[tel]:
+                to_iter = [(o, i) for o, insts in cur_obs.items() for i in insts]
+            else:
+                to_iter = [(o, tel) for o in cur_obs]
+
             # We iterate through the pairs of ObsIDs and instrument defined by the initial dictionary of useful data
             #  passed into this method
-            for oi in [(o, i) for o, insts in cur_obs.items() for i in insts]:
-                print(oi)
+            for oi in to_iter:
                 # Produces a list of the combinations of upper and lower energy bounds from the config file.
                 en_comb = zip(rel_sec["lo_en"], rel_sec["hi_en"])
                 # This is purely to make the code easier to read
                 obs_id = oi[0]
-                inst = oi[1]
+                # This could be an instrument or a telescope name depending on whether the telescope in question has
+                #  combined event lists from multiple instruments as standard
+                inst_or_tel = oi[1]
+                # This is somewhat roundabout, but at points I need the name of the telescope and sometimes I need
+                #  the 'combined' flag (i.e. this is what they are stored under).
+                if inst_or_tel == tel:
+                    inst = 'combined'
+                else:
+                    inst = inst_or_tel
 
-                if not COMBINED_INSTS[tel]:
-                evt_key = "clean_{}_evts".format(inst)
-                evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=obs_id)
-                # # This is the path to the region file specified in the configuration file, but the next step is that
-                # #  we make a local copy (if the original file exists) and then make use of that so that any modifications
-                # #  don't harm the original file.
-                # reg_file = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
-                #
-                # # Attitude file is a special case of data product, only SAS should ever need it, so it doesn't
-                # # have a product object
-                # att_file = xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=obs_id)
-                #
-                # if os.path.exists(evt_file) and os.path.exists(att_file):
-                #     # An instrument subsection of an observation will ONLY be populated if the events file exists
-                #     # Otherwise nothing can be done with it.
-                #     obs_dict[tscope][obs_id][inst] = {"events": EventList(evt_file, obs_id=obs_id, instrument=inst,
-                #                                                 stdout_str="", stderr_str="", gen_cmd="")}
-                #     att_dict[tscope][obs_id] = att_file
-                #     # Dictionary updated with derived product names
-                #     map_ret = map(read_default_products, en_comb)
-                #     obs_dict[tscope][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
-                #
-                #     # As mentioned above, we make a local copy of the region file if the original file path exists
-                #     #  and if a local copy DOESN'T already exist
-                #     reg_copy_path = OUTPUT + tscope + "/{o}/{o}_xga_copy.reg".format(o=obs_id)
-                #     if os.path.exists(reg_file) and not os.path.exists(reg_copy_path):
-                #         # A local copy of the region file is made and used
-                #         copyfile(reg_file, reg_copy_path)
-                #         # Regions dictionary updated with path to local region file, if it exists
-                #         reg_dict[tscope][obs_id] = reg_copy_path
-                #     # In the case where there is already a local copy of the region file
-                #     elif os.path.exists(reg_copy_path):
-                #         reg_dict[tscope][obs_id] = reg_copy_path
-                #     else:
-                #         reg_dict[tscope][obs_id] = None
+                # First off, we set up the relevant paths to various important files that we're going to
+                #  ingest. The first one is the current relevant event list.
+                evt_file = rel_sec["clean_{}_evts".format(inst_or_tel)].format(obs_id=obs_id)
+                # Then we do the path to the region file specified in the configuration file. Note that later we
+                #  will make a local copy (if the original file exists) and then use the copy so that any
+                #  modifications don't harm the original file.
+                reg_file = rel_sec["region_file"].format(obs_id=obs_id)
+
+                # Attitude file is a special type of data product, we shouldn't ever deal with it directly so it
+                #  doesn't have a product object. It also isn't guaranteed to be a separate thing for all
+                #  telescopes, so we do check that the configuration file actually has an entry for it.
+                if 'attitude_file' in rel_sec:
+                    att_file = rel_sec["attitude_file"].format(obs_id=obs_id)
+                else:
+                    att_file = None
+
+                if os.path.exists(evt_file) and\
+                        ((att_file is not None and os.path.exists(att_file)) or att_file is None):
+                    # An instrument subsection of an observation will ONLY be populated if the events file exists
+                    # Otherwise nothing can be done with it.
+                    obs_dict[tel][obs_id][inst] = {"events": EventList(evt_file, obs_id=obs_id, instrument=inst,
+                                                                       stdout_str="", stderr_str="", gen_cmd="",
+                                                                       telescope=tel)}
+                    att_dict[tel][obs_id] = att_file
+                    # Dictionary updated with derived product names
+                    map_ret = map(read_default_products, en_comb)
+                    obs_dict[tel][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
+
+                    # As mentioned above, we make a local copy of the region file if the original file path exists
+                    #  and if a local copy DOESN'T already exist
+                    # reg_copy_path = OUTPUT + tscope + "/{o}/{o}_xga_copy.reg".format(o=obs_id)
+                    # if os.path.exists(reg_file) and not os.path.exists(reg_copy_path):
+                    #     # A local copy of the region file is made and used
+                    #     copyfile(reg_file, reg_copy_path)
+                    #     # Regions dictionary updated with path to local region file, if it exists
+                    #     reg_dict[tscope][obs_id] = reg_copy_path
+                    # # In the case where there is already a local copy of the region file
+                    # elif os.path.exists(reg_copy_path):
+                    #     reg_dict[tscope][obs_id] = reg_copy_path
+                    # else:
+                    #     reg_dict[tscope][obs_id] = None
+
+            print(obs_dict)
 
             import sys
             sys.exit()
 
             # Cleans any observations that don't have at least one instrument associated with them
             obs_dict[tscope] = {o: v for o, v in obs_dict[tscope].items() if len(v) != 0}
-    
+
+        stop
         if sum([len(obs_dict[tscope]) for tscope in obs_dict.keys()]) == 0:
             raise NoValidObservationsError("{s} has no observations with the necessary"
                                            " files.".format(s=self.name))
