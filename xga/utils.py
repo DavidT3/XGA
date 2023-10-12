@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2023, 12:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 11:27. Copyright (c) The Contributors
 
 import json
 import os
@@ -8,7 +8,7 @@ import shutil
 from configparser import ConfigParser
 from functools import wraps
 from subprocess import Popen, PIPE
-from typing import Tuple, List
+from typing import Tuple, List, Union
 from warnings import warn, simplefilter
 
 import numpy as np
@@ -22,7 +22,7 @@ from fitsio import FITSHDR
 from fitsio import read_header
 from tqdm import tqdm
 
-from .exceptions import XGAConfigError
+from .exceptions import XGAConfigError, InvalidTelescopeError, NoTelescopeDataError
 
 # This warning filter enables the DeprecationWarning which is in the _deprecated decorator
 simplefilter('default')
@@ -312,6 +312,60 @@ def dict_search(key: str, var: dict) -> list:
                     # ObsID and Instrument information from these product searches as well.
                     # This will mean the output is an unpleasantly nested list, but we can solve that.
                     yield [str(k), result]
+
+
+def check_telescope_choices(telescope: Union[str, List[str]]) -> List[str]:
+    """
+    This function centralises some checks that might be made in various places in the module. The checks are of
+    the choices which the user has made regarding which telescopes to use for a function, and it makes sure that the
+    chosen telescopes are valid names (i.e. they are real and supported by XGA), that the data have been set up with
+    XGA, and makes sure that a list of strings is returned (even if there is only one) so that the output is always
+    consistent.
+
+    :param str/List[str] telescope: The telescope choice made by the user - the formatting and validity of which will
+        be checked by this function.
+    :return: A list of telescope names (or a single name) that are valid and that have made it through the checks.
+    :rtype: List[str]
+    """
+    # If the telescope is set to None then the function will search all the telescopes for matching data, determining
+    #  which are available by grabbing all the keys from the CENSUS dictionary
+    if telescope is None:
+        telescope = list(CENSUS.keys())
+        # If there are no keys in the CENSUS dictionary then we know that no telescopes have been successfully
+        #  setup with XGA and this function isn't going to work
+        if len(telescope) == 0:
+            raise NoTelescopeDataError("No telescope data is currently available to XGA.")
+
+    else:
+        # Just making sure the telescope names supplied by the user are lowercase, as that is how they are stored in
+        #  XGA constants and products - also have to account for the fact that either a single string or a list
+        #  can be passed
+        if not isinstance(telescope, list):
+            telescope = [telescope.lower()]
+        else:
+            telescope = [t.lower() for t in telescope]
+
+        # Here we check if ANY of the passed telescopes aren't actually recognised by XGA, as I want to tell them
+        #  that they have either made a typo or are labouring under a misconception about which telescopes are
+        #  supported
+        if any([t not in TELESCOPES for t in telescope]):
+            which_bad = [t for t in telescope if t not in TELESCOPES]
+            raise InvalidTelescopeError("XGA does not support the following telescopes; "
+                                        "{}".format(', '.join(which_bad)))
+        # If the user made specific requests of telescope, and they are ALL not available, we throw an error
+        elif all([not USABLE[t] for t in telescope]):
+            raise NoTelescopeDataError("None of the requested telescopes ({}) have data available to "
+                                       "XGA.".format(', '.join(telescope)))
+        # However if the user made specific requests of telescope, and SOME are not available then they get a warning
+        elif any([not USABLE[t] for t in telescope]):
+            # This isn't elegant, but oh well - we have to make sure that we only let those telescopes through
+            #  that have actually been set up and are working with XGA
+            which_bad = [t for t in telescope if not USABLE[t]]
+            telescope = [t for t in telescope if USABLE[t]]
+            warn("Some requested telescopes are not currently set up with XGA; {}".format(", ".join(which_bad)),
+                 stacklevel=2)
+
+    return telescope
 # --------------------------------------------------------------------------------------
 
 
