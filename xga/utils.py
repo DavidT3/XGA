@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 11:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 16:42. Copyright (c) The Contributors
 
 import json
 import os
@@ -763,6 +763,9 @@ for tel in TELESCOPES:
 # Read dataframe of ObsIDs and pointing coordinates into dictionaries
 CENSUS = {}
 BLACKLIST = {}
+# Also create a dictionary that tells parts of XGA whether it should expect the event lists of the different
+#  instruments to be separate, or combined (I'm looking at you eROSITA CalPV).
+COMBINED_INSTS = {}
 
 # Checking if someone had been using the XMM only version of XGA previously - with this update to implement the
 #  infrastructure to support different telescopes the census/blacklist files will exist for EACH telescope
@@ -784,6 +787,13 @@ for tel in USABLE:
     if USABLE[tel]:
         CENSUS[tel], BLACKLIST[tel] = build_observation_census(tel)
 
+    # Populate the dictionary that says whether the event lists for a given telescope are combined or not - it would
+    #  have been so much easier if they were all always separate, but the eROSITA CalPV ones weren't released like
+    #  that and I bet eRASS won't be either
+    if 'clean_{}_events'.format(tel) in xga_conf['{}_FILES'.format(tel.upper())]:
+        COMBINED_INSTS[tel] = True
+    else:
+        COMBINED_INSTS[tel] = False
 # -----------------------------------------------------------------------------------------
 
 
