@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 12:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 18:35. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -64,15 +64,16 @@ class Image(BaseProduct):
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
         is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  lo_en: Quantity, hi_en: Quantity, regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
-                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None):
+                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None):
         """
         The initialisation method for the Image class.
         """
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._shape = None
         self._wcs_radec = None
         self._wcs_xmmXY = None
@@ -2452,14 +2453,16 @@ class ExpMap(Image):
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
         is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None):
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None,
+                 telescope: str = None):
         """
         Init of the ExpMap class.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
-                         obs_inst_combs=obs_inst_combs)
+                         obs_inst_combs=obs_inst_combs, telescope=telescope)
         self._prod_type = "expmap"
         # Need to overwrite the data unit attribute set by the Image init
         self._data_unit = Unit("s")
@@ -2542,7 +2545,8 @@ class RateMap(Image):
                                    "do not match".format(xga_image.energy_bounds, xga_expmap.energy_bounds))
 
         super().__init__(xga_image.path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
-                         xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1])
+                         xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1],
+                         telescope=xga_image.telescope)
         self._prod_type = "ratemap"
         self._data_unit = Unit("ct/s")
 
