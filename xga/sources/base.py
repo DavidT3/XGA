@@ -1,11 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/09/2023, 15:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 16:50. Copyright (c) The Contributors
 
 import os
 import pickle
 from copy import deepcopy
-from itertools import product
-from shutil import copyfile
+from shutil import move
 from typing import Tuple, List, Dict, Union
 from warnings import warn, simplefilter
 
@@ -29,11 +28,11 @@ from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
-from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
+from ..sourcetools import separation_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.match import _dist_from_source
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS, \
-    DEFAULT_COSMO
+    DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -46,34 +45,34 @@ simplefilter('ignore', wcs.FITSFixedWarning)
 # Checking if the user was using the xmm only version of xga previously
 # Do this by looking for the 'profile' directory in the xga_save_path directory
 # JESS_TODO this would only work if they hadn't changed their xga_save_path
-# profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
-# if sum(profiles) != 0:
-#     # if there is a directory called combined, then they have used an old version of xga
-#     new_directory = os.path.join(OUTPUT, "xmm")
-#     for direct in os.listdir(OUTPUT):
-#         # rearranging their xga_save_path directory to the updated multi-telescope format
-#         old_path = os.path.join(OUTPUT, direct)
-#         new_path = os.path.join(new_directory, direct)
-#         shutil.move(old_path, new_path)
-# # Created for those sources will be saved
-# for telescope in setup_telescopes:
-#     # Telescope specific path where products are stored in xga output directory
-#     OUTPUT_TEL = os.path.join(OUTPUT, telescope)
-#     if not os.path.exists(OUTPUT_TEL):
-#         os.makedirs(OUTPUT_TEL)
-#     # Make a storage directory where specific source name directories will then be created, there profile objects
-#     if not os.path.exists(OUTPUT_TEL + "/profiles"):
-#         os.makedirs(OUTPUT_TEL + "/profiles")
-#
-#     # Also making a storage directory specifically for products which are combinations of different ObsIDs
-#     #  and instruments
-#     if not os.path.exists(OUTPUT_TEL + "/combined"):
-#         os.makedirs(OUTPUT_TEL + "/combined")
-#
-#     # And create an inventory file for that directory
-#     if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
-#         with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
-#             inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
+profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
+if sum(profiles) != 0:
+    # if there is a directory called combined, then they have used an old version of xga
+    new_directory = os.path.join(OUTPUT, "xmm")
+    for direct in os.listdir(OUTPUT):
+        # rearranging their xga_save_path directory to the updated multi-telescope format
+        old_path = os.path.join(OUTPUT, direct)
+        new_path = os.path.join(new_directory, direct)
+        shutil.move(old_path, new_path)
+# Created for those sources will be saved
+for telescope in setup_telescopes:
+    # Telescope specific path where products are stored in xga output directory
+    OUTPUT_TEL = os.path.join(OUTPUT, telescope)
+    if not os.path.exists(OUTPUT_TEL):
+        os.makedirs(OUTPUT_TEL)
+    # Make a storage directory where specific source name directories will then be created, there profile objects
+    if not os.path.exists(OUTPUT_TEL + "/profiles"):
+        os.makedirs(OUTPUT_TEL + "/profiles")
+
+    # Also making a storage directory specifically for products which are combinations of different ObsIDs
+    #  and instruments
+    if not os.path.exists(OUTPUT_TEL + "/combined"):
+        os.makedirs(OUTPUT_TEL + "/combined")
+
+    # And create an inventory file for that directory
+    if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
+        with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
+            inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
 
 """
 
@@ -100,13 +99,22 @@ class BaseSource:
     :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
         to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
         is False. User should only set to True to remove warnings.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 in_sample: bool = False):
+                 in_sample: bool = False, telescope: Union[str, List[str]] = None,
+                 search_distance: Union[Quantity, dict] = None):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
-        others.
+        others. The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
+        functionality upon which the rest of XGA is built, includes selecting observations, reading in data products,
+        and storing newly created data products. Base functionality is included, but this type of source shouldn't
+        often need to be instantiated by a user.
 
         :param float ra: The right ascension (in degrees) of the source.
         :param float dec: The declination (in degrees) of the source.
@@ -123,7 +131,18 @@ class BaseSource:
         :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or
             not, setting to True suppresses some warnings so that they can be displayed at the end of the sample
             progress bar. Default is False. User should only set to True to remove warnings.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
         """
+
         # This tells the source that it is a part of a sample, which we will check to see whether to
         #  suppress (i.e. store in an attribute rather than display) warnings
         self._samp_member = in_sample
@@ -138,7 +157,127 @@ class BaseSource:
             self._name = name.replace(" ", "").replace("_", "-")
         else:
             self._name = coord_to_name(self.ra_dec)
-        
+
+        # ---------------------------------- Identifying relevant data ----------------------------------
+        # Firstly, we use the separation match function to find data relevant to this source, searching within a
+        #  telescope dependant radius. This function also validates the input that was given for 'telescope'. If
+        #  no named telescopes are valid, or no data is found, then an error is thrown.
+        # The returns are dictionaries, where the key is the telescope name, and the values are dataframes of
+        #  matching ObsIDs (for the first return, matches), or completely blacklisted (observations with SOME
+        #  blacklisted instruments aren't included in this) ObsIDs (the second return).
+        matches, excluded = separation_match(ra, dec, search_distance, telescope)
+
+        # Observations that seem like they can be used are stored in this dictionary - though some of them may be
+        #  removed later after some checks. The top level keys will be telescopes
+        obs = {}
+        # This will store information on the observations that were never included in analysis (so it's distinct from
+        #  the disassociated_obs information) - I don't know if this is the solution I'll stick with, but it'll do
+        blacklisted_obs = {}
+        # Each telescope will have a key in this dictionary, even if there were no observations that were excluded
+        for tel in excluded:
+            # Add empty dictionary entries for the current telescope, both for the observations and the blacklisted
+            #  observations dictionaries
+            obs[tel] = {}
+            blacklisted_obs[tel] = {}
+            for row_ind, row in excluded[tel].iterrows():
+                # Just blacklist all instruments for that telescope for that ObsID because for an ObsID to be in
+                #  the excluded return from separation_match this has to be the case
+                blacklisted_obs[tel][row['ObsID']] = ALLOWED_INST[tel]
+
+            # We can safely use the 'tel' from the keys of 'excluded' to access 'matches' as well, because they
+            #  will both have entries regardless of whether there is any data associated with them
+            for row_ind, row in matches[tel].iterrows():
+                # It is possible to blacklist only SOME of the instruments for a given ObsID, in which case that
+                #  ObsID would not appear in the 'excluded' dictionary's dataframes. As such we will check each
+                #  ObsID to see whether we need to add SOME of the instruments to the blacklisted observations
+                #  attribute that we started further up
+                if row['ObsID'] in BLACKLIST[tel]['ObsID'].values:
+                    # Extract the exact row of the current telescope's blacklist that is relevant to the current
+                    #  ObsID
+                    bl_row = BLACKLIST[tel][BLACKLIST[tel]['ObsID'] == row['ObsID']].iloc[0]
+                    # Find the instruments that we need to exclude because the 'EXCLUDE_{INST}' column was marked 'T'
+                    excl_inst = [col.split('_')[-1].lower() for col in BLACKLIST[tel].columns
+                                 if 'EXCLUDE' in col and bl_row[col] == 'T']
+                    # Add the partially excluded observation to the blacklist, with the excluded instrument
+                    blacklisted_obs[tel][row['ObsID']] = excl_inst
+
+                # This vaguely unpleasant looking list comprehension is actually simple - it locates the columns of
+                #  the match dataframe that tell use whether the CENSUS for this telescope says we should use the
+                #  different instruments of an observation. If the CENSUS says yes for the current ObsID (row['ObsID']),
+                #  and that particular ObsID-instrument has not appeared in the blacklist, then it gets added to the
+                #  list which will be included in the 'obs' dictionary under the current telescope and ObsID
+                acc_insts = [col.split('_')[-1].lower() for col in matches[tel].columns if 'USE' in col and row[col] and
+                             (row['ObsID'] not in blacklisted_obs[tel] or
+                              col.split('_')[-1].lower() not in blacklisted_obs[tel][row['ObsID']])]
+                # We check that there are actually some instruments that got past the above checks, and if yes then
+                #  we add an entry to the obs dictionary
+                if len(acc_insts) != 0:
+                    obs[tel][row['ObsID']] = acc_insts
+
+        # Perform a check to make sure that there are some observations left after the usable (from CENSUS) and
+        #  blacklist checks have been performed
+        if sum([len(t_obs) for t_obs in obs.values()]) == 0:
+            raise NoValidObservationsError("All {t} observations identified for {s} are either unusable or "
+                                           "blacklisted.".format(s=self.name, t=', '.join(telescope)))
+
+        self._products, region_dict, self._att_files = self._initial_products(obs)
+
+        import sys
+        sys.exit()
+        # Set the blacklisted observation attribute with our dictionary - if all has gone well then this will be a
+        #  dictionary of empty dictionaries
+        self._blacklisted_obs = blacklisted_obs
+
+        # This checks that the observations have at least one usable instrument
+        obs = matches[tscope]["ObsID"].values
+        instruments[tscope] = {o: [] for o in obs}
+        for o in obs:
+            # As the simple_xmm_match will only tell us about observations in which EVERY instrument is
+            #  blacklisted, I have to check in the blacklist to see whether some individual instruments
+            #  have to be excluded
+            # Storing which instruments are blacklisted using this dictionary
+            excl_inst = {}
+            for inst in XMM_INST[tscope]:
+                excl_inst[inst] = False
+
+                if o in BLACKLIST[tscope]['ObsID'].values:
+                    # JESS_TODO this line got horrendously long - maybe assign a variable to BLACKLIST[tscope]
+                    if BLACKLIST[tscope][BLACKLIST[tscope]['ObsID'] == o]['EXCLUDE_{}'.format(inst.upper())].values[
+                        0] == 'T':
+                        excl_inst[inst] = True
+
+                # Here we see if inst is allowed by the census (things like CalClosed observations are excluded in
+                #  the census) and if inst is allowed by the blacklist (individual instruments can be blacklisted).
+                if matches[tscope][matches[tscope]["ObsID"] == o]["USE_{}".format(inst.upper())].values[0] and not \
+                excl_inst[inst]:
+                    instruments[tscope][o].append(inst)
+                # If excluded by the blacklist, then that needs
+                elif excl_inst[inst]:
+                    # The behaviour writing PN to the dictionary changes slightly depending on whether the ObsID
+                    #  has an entry yet or not
+                    if o not in blacklisted_obs:
+                        blacklisted_obs[o] = [inst]
+                    else:
+                        blacklisted_obs[o] += [inst]
+
+            self._obs[tscope] = [o for o in obs if len(instruments[tscope][o]) > 0]
+            self._instruments[tscope] = {o: instruments[tscope][o] for o in self._obs if
+                                         len(instruments[tscope][o]) > 0}
+            self._blacklisted_obs[tscope] = blacklisted_obs
+
+        # self._obs can be empty after this cleaning step, so do quick check and raise error if so.
+        if len(sum(self._obs.values(), [])) == 0:
+            raise NoValidObservationsError("{s} has no observations which have the necessary"
+                                           " files.".format(s=self.name))
+
+
+        import sys
+        sys.exit()
+
+        # -----------------------------------------------------------------------------------------------
+
+
+
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
         # JESS_TODO need to change this function so that it will assign the telescopes that the function finds a match for
@@ -147,8 +286,7 @@ class BaseSource:
         # matches, excluded will be a dictonary of {telescope: matches_dataframe}
         # JESS_TODO user could have use simple_xmm_match in their previous analysis
         # write a new simple_xmm_match that is the same as the old functionality 
-        matches, excluded = simple_xmm_match(ra, dec)
-        
+
         # TODO UNDO THIS TRIAGE
         self._telescopes = {}
         
@@ -183,55 +321,62 @@ class BaseSource:
         # JESS_TODO need to change this function so that it will assign a self.telescope variable
         matches, excluded = simple_xmm_match(ra, dec)
 
-        #This will store information on the observations that were never included in analysis (so it's distinct from
-        #  the disassociated_obs information) - I don't know if this is the solution I'll stick with, but it'll do
-        blacklisted_obs = {}
-        for row_ind, row in excluded[tscope].iterrows():
-            # Just blacklist all instruments because for an ObsID to be in the excluded return
-            #  from simple_xmm_match this has to be the case
-            # JESS_TODO change XMM_INST to INST everywhere
-            blacklisted_obs[row['ObsID']] = XMM_INST[tscope]
-        # This will store information on the observations that were never included in analysis (so it's distinct from
-        #  the disassociated_obs information) - I don't know if this is the solution I'll stick with, but it'll do
 
-        # This checks that the observations have at least one usable instrument
-        obs = matches[tscope]["ObsID"].values
-        instruments[tscope] = {o: [] for o in obs}
-        for o in obs:
-            # As the simple_xmm_match will only tell us about observations in which EVERY instrument is
-            #  blacklisted, I have to check in the blacklist to see whether some individual instruments
-            #  have to be excluded
-            # Storing which instruments are blacklisted using this dictionary
-            excl_inst = {}
-            for inst in XMM_INST[tscope]:
-                excl_inst[inst] = False
 
-                if o in BLACKLIST[tscope]['ObsID'].values:
-                    # JESS_TODO this line got horrendously long - maybe assign a variable to BLACKLIST[tscope]
-                    if BLACKLIST[tscope][BLACKLIST[tscope]['ObsID'] == o]['EXCLUDE_{}'.format(inst.upper())].values[0] == 'T':
-                        excl_inst[inst] = True
+        # ---------------------------------- Creating directory structure ----------------------------------
+        # This will ensure that the directories in the output directory (default is xga_output, but it can be set
+        #  by the user) necessary to store the XGA output products have been created.
 
-                # Here we see if inst is allowed by the census (things like CalClosed observations are excluded in
-                #  the census) and if inst is allowed by the blacklist (individual instruments can be blacklisted).
-                if matches[tscope][matches[tscope]["ObsID"] == o]["USE_{}".format(inst.upper())].values[0] and not excl_inst[inst]:
-                    instruments[tscope][o].append(inst)
-                # If excluded by the blacklist, then that needs
-                elif excl_inst[inst]:
-                    # The behaviour writing PN to the dictionary changes slightly depending on whether the ObsID
-                    #  has an entry yet or not
-                    if o not in blacklisted_obs:
-                        blacklisted_obs[o] = [inst]
-                    else:
-                        blacklisted_obs[o] += [inst]
+        # If the old way (i.e. when XGA was just for XMM) of structuring the output directory has been detected, then
+        #  we need to rename and move things to make it compatible
 
-            self._obs[tscope] = [o for o in obs if len(instruments[tscope][o]) > 0]
-            self._instruments[tscope] = {o: instruments[tscope][o] for o in self._obs if len(instruments[tscope][o]) > 0}
-            self._blacklisted_obs[tscope] = blacklisted_obs
+        if os.path.exists(OUTPUT) and 'XSPEC' in os.listdir(OUTPUT):
+            cur_cont = os.listdir(OUTPUT)
 
-        # self._obs can be empty after this cleaning step, so do quick check and raise error if so.
-        if len(sum(self._obs.values(), [])) == 0:
-            raise NoValidObservationsError("{s} has no observations which have the necessary"
-                                        " files.".format(s=self.name))
+            xmm_dir = OUTPUT + 'xmm/'
+            os.makedirs(xmm_dir)
+            move('XSPEC', xmm_dir + 'XSPEC')
+            move('combined', xmm_dir + 'combined')
+
+
+
+
+        for tel in self._telescopes:
+
+            OUTPUT_TEL = os.path.join(OUTPUT, telescope)
+            if not os.path.exists(OUTPUT_TEL):
+                os.makedirs(OUTPUT_TEL)
+            # Make a storage directory where specific source name directories will then be created, there profile objects
+            if not os.path.exists(OUTPUT_TEL + "/profiles"):
+                os.makedirs(OUTPUT_TEL + "/profiles")
+
+            # Also making a storage directory specifically for products which are combinations of different ObsIDs
+            #  and instruments
+            if not os.path.exists(OUTPUT_TEL + "/combined"):
+                os.makedirs(OUTPUT_TEL + "/combined")
+
+            # And create an inventory file for that directory
+            if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
+                with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
+                    inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
+
+            # This is where profile products generated by XGA will live for this source
+            if not os.path.exists(OUTPUT + tscope + "/profiles/{}".format(self.name)):
+                os.makedirs(OUTPUT + tscope + "/profiles/{}".format(self.name))
+
+            # And create an inventory file for that directory
+            if not os.path.exists(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name)):
+                with open(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), 'w') as inven:
+                    inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
+
+            # We now create a directory for custom region files for the source to be stored in
+            if not os.path.exists(OUTPUT + tscope + "/regions/{0}/{0}_custom.reg".format(self.name)):
+                os.makedirs(OUTPUT + tscope + "/regions/{}".format(self.name))
+                # And a start to the custom file itself, with red (pnt src) as the default colour
+                with open(OUTPUT + tscope + "/regions/{0}/{0}_custom.reg".format(self.name), 'w') as reggo:
+                    reggo.write("global color=white\n")
+
+        # --------------------------------------------------------------------------------------------------
 
         # Here I set up the ObsID directories for products generated by XGA to be stored in, they also get an
         #  inventory file to store information about them - largely because some of the informative file names
@@ -393,10 +538,14 @@ class BaseSource:
 
         self._default_coord = new_coord
 
-    def _initial_products(self) -> Tuple[dict, dict, dict]:
+    def _initial_products(self, init_obs: dict) -> Tuple[dict, dict, dict]:
         """
-        Assembles the initial dictionary structure of existing XMM data products associated with this source.
+        Assembles the initial dictionary structure of existing data products, for all selected
+        telescopes, associated with this source.
 
+        :param dict init_obs: The dictionary (top level keys are telescopes, the lower level keys are ObsIDs with
+            values that are lists of instruments) of observations that have initially been identified as being
+            relevant to this source.
         :return: A dictionary structure detailing the data products available at initialisation, another
             dictionary containing paths to region files, and another dictionary containing paths to attitude files.
         :rtype: Tuple[dict, dict, dict]
@@ -405,9 +554,9 @@ class BaseSource:
         def read_default_products(en_lims: tuple) -> Tuple[str, dict]:
             """
             This nested function takes pairs of energy limits defined in the config file and runs
-            through the default XMM products defined in the config file, filling in the energy limits and
-            checking if the file paths exist. Those that do exist are read into the relevant product object and
-            returned.
+            through the default products for each telescope defined in the config file, filling in the
+            energy limits and checking if the file paths exist. Those that do exist are read into the relevant
+            product object and returned.
 
             :param tuple en_lims: A tuple containing a lower and upper energy limit to generate file names for,
                 the first entry should be the lower limit, the second the upper limit.
@@ -454,64 +603,68 @@ class BaseSource:
 
         # This dictionary structure will contain paths to all available data products associated with this
         # source instance, both pre-generated and made with XGA.
-        obs_dict = {}
+        obs_dict = {tel: {o: {} for o in init_obs[tel]} for tel in init_obs}
         # Regions will get their own dictionary, I don't care about keeping the reg_file paths as
         # an attribute because they get read into memory in the init of this class
-        reg_dict = {}
+        reg_dict = {tel: {} for tel in init_obs}
         # Attitude files also get their own dictionary, they won't be read into memory by XGA
-        att_dict = {}
-        # making the values for these dictionaries across each telescope xga has found observations for 
-        for tscope in self._obs:
-            if tscope == "xmm":
-                obs_dict[tscope] = {obs: {} for obs in self._obs[tscope]}
-                att_dict[tscope] = {}
-                # Use itertools to create iterable and avoid messy nested for loop
-                # product makes iterable of tuples, with all combinations of the events files and ObsIDs
-                for oi in product(obs_dict[tscope], XMM_INST[tscope]):
-                    # Produces a list of the combinations of upper and lower energy bounds from the config file.
-                    # JESS_TODO change low en and high en
-                    en_comb = zip(xga_conf["{XMM_FILES"]["lo_en"], xga_conf["XMM_FILES"]["hi_en"])
-                    # This is purely to make the code easier to read
-                    obs_id = oi[0]
-                    inst = oi[1]
-                    if inst not in self._instruments[tscope][obs_id]:
-                        continue
-                    evt_key = "clean_{}_evts".format(inst)
-                    evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=obs_id)
-                    # This is the path to the region file specified in the configuration file, but the next step is that
-                    #  we make a local copy (if the original file exists) and then make use of that so that any modifications
-                    #  don't harm the original file.
-                    reg_file = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
+        att_dict = {tel: {} for tel in init_obs}
 
-                    # Attitude file is a special case of data product, only SAS should ever need it, so it doesn't
-                    # have a product object
-                    att_file = xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=obs_id)
+        for tel in init_obs:
+            # Grab the dictionary relevant to the current telescope, for readability purposes
+            cur_obs = init_obs[tel]
+            # Also define the section of the configuration file that we'll be looking at here, again to make
+            #  latter parts of this method more readable
+            rel_sec = xga_conf["{}_FILES".format(tel.upper())]
 
-                    if os.path.exists(evt_file) and os.path.exists(att_file):
-                        # An instrument subsection of an observation will ONLY be populated if the events file exists
-                        # Otherwise nothing can be done with it.
-                        obs_dict[tscope][obs_id][inst] = {"events": EventList(evt_file, obs_id=obs_id, instrument=inst,
-                                                                    stdout_str="", stderr_str="", gen_cmd="")}
-                        att_dict[tscope][obs_id] = att_file
-                        # Dictionary updated with derived product names
-                        map_ret = map(read_default_products, en_comb)
-                        obs_dict[tscope][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
+            # We iterate through the pairs of ObsIDs and instrument defined by the initial dictionary of useful data
+            #  passed into this method
+            for oi in [(o, i) for o, insts in cur_obs.items() for i in insts]:
+                print(oi)
+                # Produces a list of the combinations of upper and lower energy bounds from the config file.
+                en_comb = zip(rel_sec["lo_en"], rel_sec["hi_en"])
+                # This is purely to make the code easier to read
+                obs_id = oi[0]
+                inst = oi[1]
 
-                        # As mentioned above, we make a local copy of the region file if the original file path exists
-                        #  and if a local copy DOESN'T already exist
-                        reg_copy_path = OUTPUT + tscope + "/{o}/{o}_xga_copy.reg".format(o=obs_id)
-                        if os.path.exists(reg_file) and not os.path.exists(reg_copy_path):
-                            # A local copy of the region file is made and used
-                            copyfile(reg_file, reg_copy_path)
-                            # Regions dictionary updated with path to local region file, if it exists
-                            reg_dict[tscope][obs_id] = reg_copy_path
-                        # In the case where there is already a local copy of the region file
-                        elif os.path.exists(reg_copy_path):
-                            reg_dict[tscope][obs_id] = reg_copy_path
-                        else:
-                            reg_dict[tscope][obs_id] = None
-            else:
-                raise NotImplementedError("Only XMM is supported")
+                if not COMBINED_INSTS[tel]:
+                evt_key = "clean_{}_evts".format(inst)
+                evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=obs_id)
+                # # This is the path to the region file specified in the configuration file, but the next step is that
+                # #  we make a local copy (if the original file exists) and then make use of that so that any modifications
+                # #  don't harm the original file.
+                # reg_file = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
+                #
+                # # Attitude file is a special case of data product, only SAS should ever need it, so it doesn't
+                # # have a product object
+                # att_file = xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=obs_id)
+                #
+                # if os.path.exists(evt_file) and os.path.exists(att_file):
+                #     # An instrument subsection of an observation will ONLY be populated if the events file exists
+                #     # Otherwise nothing can be done with it.
+                #     obs_dict[tscope][obs_id][inst] = {"events": EventList(evt_file, obs_id=obs_id, instrument=inst,
+                #                                                 stdout_str="", stderr_str="", gen_cmd="")}
+                #     att_dict[tscope][obs_id] = att_file
+                #     # Dictionary updated with derived product names
+                #     map_ret = map(read_default_products, en_comb)
+                #     obs_dict[tscope][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
+                #
+                #     # As mentioned above, we make a local copy of the region file if the original file path exists
+                #     #  and if a local copy DOESN'T already exist
+                #     reg_copy_path = OUTPUT + tscope + "/{o}/{o}_xga_copy.reg".format(o=obs_id)
+                #     if os.path.exists(reg_file) and not os.path.exists(reg_copy_path):
+                #         # A local copy of the region file is made and used
+                #         copyfile(reg_file, reg_copy_path)
+                #         # Regions dictionary updated with path to local region file, if it exists
+                #         reg_dict[tscope][obs_id] = reg_copy_path
+                #     # In the case where there is already a local copy of the region file
+                #     elif os.path.exists(reg_copy_path):
+                #         reg_dict[tscope][obs_id] = reg_copy_path
+                #     else:
+                #         reg_dict[tscope][obs_id] = None
+
+            import sys
+            sys.exit()
 
             # Cleans any observations that don't have at least one instrument associated with them
             obs_dict[tscope] = {o: v for o, v in obs_dict[tscope].items() if len(v) != 0}
@@ -1565,10 +1718,10 @@ class BaseSource:
     @property
     def blacklisted(self) -> Dict:
         """
-        A property getter that returns the dictionary of ObsIDs and their instruments which have been
+        A property getter that returns the dictionary of telescope ObsIDs and their instruments which have been
         blacklisted, and thus not considered for use in any analysis of this source.
 
-        :return: The dictionary (with ObsIDs as keys) of blacklisted data.
+        :return: The dictionary of blacklisted data, top level keys are .
         :rtype: Dict
         """
         return self._blacklisted_obs
