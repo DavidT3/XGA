@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 21:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 15:39. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -43,9 +43,10 @@ class BaseProduct:
     :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
         object for later use by another processing step. It isn't intended for use by a user and will only be
         accessible when defining a BaseProduct.
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 extra_info: dict = None):
+                 extra_info: dict = None, telescope: str = None):
         """
         The initialisation method for the BaseProduct class, the super class for all SAS generated products in XGA.
         Stores relevant file path information, parses the std_err output of the generation process, and stores the
@@ -60,6 +61,7 @@ class BaseProduct:
         :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
             object for later use by another processing step. It isn't intended for use by a user and will only be
             accessible when defining a BaseProduct.
+        :param str telescope: The telescope that this product is derived from. Default is None.
         """
         # This attribute stores strings that indicate why a product object has been deemed as unusable
         self._why_unusable = []
@@ -78,6 +80,7 @@ class BaseProduct:
         self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
         self._obs_id = obs_id
         self._inst = instrument
+        self._tele = telescope
         self._og_cmd = gen_cmd
         self._energy_bounds = (None, None)
         self._prod_type = None
@@ -246,22 +249,29 @@ class BaseProduct:
     @property
     def obs_id(self) -> str:
         """
-        Property getter for the ObsID of this image. Admittedly this information is implicit in the location
-        this object is stored in a source object, but I think it worth storing directly as a property as well.
+        Property getter for the ObsID of the observation that this product was derived from.
 
-        :return: The XMM ObsID of this image.
+        :return: The ObsID of this product.
         :rtype: str
         """
         return self._obs_id
 
     @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this product was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
+
+    @property
     def instrument(self) -> str:
         """
-        Property getter for the instrument used to take this image. Admittedly this information is implicit
-        in the location this object is stored in a source object, but I think it worth storing
-        directly as a property as well.
+        Property getter for the name of the instrument that this product was derived from.
 
-        :return: The XMM instrument used to take this image.
+        :return: The instrument name of this product.
         :rtype: str
         """
         return self._inst
