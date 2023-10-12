@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 10:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 11:29. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -16,10 +16,9 @@ from pandas import DataFrame
 from regions import read_ds9, PixelRegion, SkyRegion
 from tqdm import tqdm
 
-from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT, xga_conf, TELESCOPES, USABLE, DEFAULT_TELE_SEARCH_DIST
-from ..exceptions import NoMatchFoundError, NoValidObservationsError, NoRegionsError, XGAConfigError, \
-    NoTelescopeDataError, InvalidTelescopeError
-from ..utils import SRC_REGION_COLOURS
+from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT, xga_conf, DEFAULT_TELE_SEARCH_DIST
+from ..exceptions import NoMatchFoundError, NoValidObservationsError, NoRegionsError, XGAConfigError
+from ..utils import SRC_REGION_COLOURS, check_telescope_choices
 
 
 def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
@@ -358,43 +357,9 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     :rtype: Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]
     """
 
-    # If the telescope is set to None then the function will search all the telescopes for matching data, determining
-    #  which are available by grabbing all the keys from the CENSUS dictionary
-    if telescope is None:
-        telescope = list(CENSUS.keys())
-        # If there are no keys in the CENSUS dictionary then we know that no telescopes have been successfully
-        #  setup with XGA and this function isn't going to work
-        if len(telescope) == 0:
-            raise NoTelescopeDataError("No telescope data is currently available to XGA.")
-
-    else:
-        # Just making sure the telescope names supplied by the user are lowercase, as that is how they are stored in
-        #  XGA constants and products - also have to account for the fact that either a single string or a list
-        #  can be passed
-        if not isinstance(telescope, list):
-            telescope = [telescope.lower()]
-        else:
-            telescope = [t.lower() for t in telescope]
-
-        # Here we check if ANY of the passed telescopes aren't actually recognised by XGA, as I want to tell them
-        #  that they have either made a typo or are labouring under a misconception about which telescopes are
-        #  supported
-        if any([t not in TELESCOPES for t in telescope]):
-            which_bad = [t for t in telescope if t not in TELESCOPES]
-            raise InvalidTelescopeError("XGA does not support the following telescopes; "
-                                        "{}".format(', '.join(which_bad)))
-        # If the user made specific requests of telescope, and they are ALL not available, we throw an error
-        elif all([not USABLE[t] for t in telescope]):
-            raise NoTelescopeDataError("None of the requested telescopes ({}) have data available to "
-                                       "XGA.".format(', '.join(telescope)))
-        # However if the user made specific requests of telescope, and SOME are not available then they get a warning
-        elif any([not USABLE[t] for t in telescope]):
-            # This isn't elegant, but oh well - we have to make sure that we only let those telescopes through
-            #  that have actually been set up and are working with XGA
-            which_bad = [t for t in telescope if not USABLE[t]]
-            telescope = [t for t in telescope if USABLE[t]]
-            warn("Some requested telescopes are not currently set up with XGA; {}".format(", ".join(which_bad)),
-                 stacklevel=2)
+    # This function checks the choices of telescopes, raising errors if there are problems, and returning a list of
+    #  validated telescope names (even if there is only one).
+    telescope = check_telescope_choices(telescope)
 
     # Set up the search distance, making sure the output at the end if the same format of dictionary.
     # If the distance is not set by the user then we have to set it ourselves using the default values for each
