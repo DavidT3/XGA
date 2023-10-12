@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 15:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 15:47. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -31,8 +31,8 @@ from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT
 
 class BaseProduct:
     """
-    The super class for all SAS generated products in XGA. Stores relevant file path information, parses the std_err
-    output of the generation process, and stores the instrument and ObsID that the product was generated for.
+    The super class for all products in XGA. Stores relevant file path information, ObsID, instrument, and telescope.
+    It can also parse the std_err output of SAS generation processes.
 
     :param str path: The path to where the product file SHOULD be located.
     :param str obs_id: The ObsID related to the product being declared.
@@ -48,9 +48,9 @@ class BaseProduct:
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  extra_info: dict = None, telescope: str = None):
         """
-        The initialisation method for the BaseProduct class, the super class for all SAS generated products in XGA.
-        Stores relevant file path information, parses the std_err output of the generation process, and stores the
-        instrument and ObsID that the product was generated for.
+        The initialisation method for the BaseProduct class, the super class for all products in XGA. Stores
+        relevant file path information, ObsID, instrument, and telescope. It can also parse the std_err output of
+        SAS generation processes.
 
         :param str path: The path to where the product file SHOULD be located.
         :param str obs_id: The ObsID related to the product being declared.
