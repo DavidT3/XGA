@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 14:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 14:37. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1622,7 +1622,7 @@ class BaseSource:
 
     def _get_phot_prod(self, prod_type: str, obs_id: str = None, inst: str = None, lo_en: Quantity = None,
                        hi_en: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
-                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15) \
+                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, telescope: str = None) \
             -> Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]:
         """
         An internal method which is the basis of the get_images, get_expmaps, and get_ratemaps methods.
@@ -1643,6 +1643,8 @@ class BaseSource:
             side in the PSF grid.
         :param str psf_algo: If the images/ratemaps you want are PSF corrected, this is the algorithm used.
         :param int psf_iter: If the images/ratemaps you want are PSF corrected, this is the number of iterations.
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is
+            None, which means all images/expmaps/ratemaps matching the other criteria will be returned.
         :return: An XGA Image/RateMap/ExpMap object (if there is an exact match), or a list of XGA
             Image/RateMap/ExpMap objects (if there were multiple matching products).
         :rtype: Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]
@@ -1665,16 +1667,18 @@ class BaseSource:
 
         if not psf_corr and with_lims:
             # Simplest case, just calling get_products and passing in our information
-            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key)
+            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key, telescope=telescope)
         elif not psf_corr and not with_lims:
             broad_matches = self.get_products(prod_type, obs_id, inst)
             matched_prods = [p for p in broad_matches if not p.psf_corrected]
         elif psf_corr and with_lims:
             # Here we need to add the extra key to the energy key
-            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key + extra_key)
+            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key + extra_key,
+                                              telescope=telescope)
         elif psf_corr and not with_lims:
             # Here we don't know the energy key, so we have to look for partial matches in the get_products return
-            broad_matches = self.get_products(prod_type, obs_id, inst, extra_key=None, just_obj=False)
+            broad_matches = self.get_products(prod_type, obs_id, inst, extra_key=None, just_obj=False,
+                                              telescope=telescope)
             matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
 
         if len(matched_prods) == 1:
