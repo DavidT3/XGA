@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 15:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 15:43. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -288,11 +288,6 @@ class BaseSource:
                 with open(cur_pth + "/regions/{0}/{0}_custom.reg".format(self.name), 'w') as reggo:
                     reggo.write("global color=white\n")
         # --------------------------------------------------------------------------------------------------
-
-        # 'pn',  telescope='xmm'
-        print(self.get_products('image', '0725290147', telescope='xmm', just_obj=False))
-        print('yo')
-        stop
 
         # ---------------------------------- Loading initial region lists ----------------------------------
         # This method takes our vetted (as in we've checked that region files exist) set of region files,
@@ -2234,7 +2229,7 @@ class BaseSource:
 
     def get_combined_images(self, lo_en: Quantity = None, hi_en: Quantity = None, psf_corr: bool = False,
                             psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                            psf_iter: int = 15) -> Union[Image, List[Image]]:
+                            psf_iter: int = 15, telescope: str = None) -> Union[Image, List[Image]]:
         """
         A method to retrieve combined XGA Image objects, as in those images that have been created by
         merging all available data for this source. This supports the retrieval of both PSF corrected and non-PSF
@@ -2251,6 +2246,8 @@ class BaseSource:
             side in the PSF grid.
         :param str psf_algo: If the image you want is PSF corrected, this is the algorithm used.
         :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
+        :param str telescope: Optionally, a specific telescope to search for combined images can be supplied. The
+            default is None, which means all combined images matching the other criteria will be returned.
         :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
             were multiple matching products).
         :rtype: Union[Image, List[Image]]
@@ -2274,16 +2271,16 @@ class BaseSource:
 
         if not psf_corr and with_lims:
             # Simplest case, just calling get_products and passing in our information
-            matched_prods = self.get_products('combined_image', extra_key=energy_key)
+            matched_prods = self.get_products('combined_image', extra_key=energy_key, telescope=telescope)
         elif not psf_corr and not with_lims:
-            broad_matches = self.get_products("combined_image")
+            broad_matches = self.get_products("combined_image", telescope=telescope)
             matched_prods = [p for p in broad_matches if not p.psf_corrected]
         elif psf_corr and with_lims:
             # Here we need to add the extra key to the energy key
-            matched_prods = self.get_products('combined_image', extra_key=energy_key + extra_key)
+            matched_prods = self.get_products('combined_image', extra_key=energy_key + extra_key, telescope=telescope)
         elif psf_corr and not with_lims:
             # Here we don't know the energy key, so we have to look for partial matches in the get_products return
-            broad_matches = self.get_products('combined_image', extra_key=None, just_obj=False)
+            broad_matches = self.get_products('combined_image', extra_key=None, just_obj=False, telescope=telescope)
             matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
 
         if len(matched_prods) == 1:
@@ -2293,7 +2290,8 @@ class BaseSource:
 
         return matched_prods
 
-    def get_combined_expmaps(self, lo_en: Quantity = None, hi_en: Quantity = None) -> Union[ExpMap, List[ExpMap]]:
+    def get_combined_expmaps(self, lo_en: Quantity = None, hi_en: Quantity = None,
+                             telescope: str = None) -> Union[ExpMap, List[ExpMap]]:
         """
         A method to retrieve combined XGA ExpMap objects, as in those exposure maps that have been created by
         merging all available data for this source. This supports setting the energy limits of the specific
@@ -2303,6 +2301,9 @@ class BaseSource:
             is None (which will retrieve all images regardless of energy limit).
         :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
             is None (which will retrieve all images regardless of energy limit).
+        :param str telescope: Optionally, a specific telescope to search for combined exposure maps can be
+            supplied. The default is None, which means all combined exposure maps matching the other criteria
+            will be returned.
         :return: An XGA ExpMap object (if there is an exact match), or a list of XGA Image objects (if there
             were multiple matching products).
         :rtype: Union[ExpMap, List[ExpMap]]
@@ -2314,7 +2315,7 @@ class BaseSource:
         else:
             raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
 
-        matched_prods = self.get_products('combined_expmap', extra_key=energy_key)
+        matched_prods = self.get_products('combined_expmap', extra_key=energy_key, telescope=telescope)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
@@ -2324,7 +2325,7 @@ class BaseSource:
 
     def get_combined_ratemaps(self, lo_en: Quantity = None, hi_en: Quantity = None,  psf_corr: bool = False,
                               psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                              psf_iter: int = 15) -> Union[RateMap, List[RateMap]]:
+                              psf_iter: int = 15, telescope: str = None) -> Union[RateMap, List[RateMap]]:
         """
         A method to retrieve combined XGA RateMap objects, as in those ratemap that have been created by
         merging all available data for this source. This supports the retrieval of both PSF corrected and non-PSF
@@ -2341,6 +2342,8 @@ class BaseSource:
             side in the PSF grid.
         :param str psf_algo: If the ratemap you want is PSF corrected, this is the algorithm used.
         :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
+        :param str telescope: Optionally, a specific telescope to search for combined ratemaps can be supplied. The
+            default is None, which means all combined ratemaps matching the other criteria will be returned.
         :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
             were multiple matching products).
         :rtype: Union[RateMap, List[RateMap]]
@@ -2366,16 +2369,17 @@ class BaseSource:
 
         if not psf_corr and with_lims:
             # Simplest case, just calling get_products and passing in our information
-            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key)
+            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key, telescope=telescope)
         elif not psf_corr and not with_lims:
-            broad_matches = self.get_products("combined_ratemap")
+            broad_matches = self.get_products("combined_ratemap", telescope=telescope)
             matched_prods = [p for p in broad_matches if not p.psf_corrected]
         elif psf_corr and with_lims:
             # Here we need to add the extra key to the energy key
-            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key + extra_key)
+            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key + extra_key,
+                                              telescope=telescope)
         elif psf_corr and not with_lims:
             # Here we don't know the energy key, so we have to look for partial matches in the get_products return
-            broad_matches = self.get_products('combined_ratemap', extra_key=None, just_obj=False)
+            broad_matches = self.get_products('combined_ratemap', extra_key=None, just_obj=False, telescope=telescope)
             matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
 
         if len(matched_prods) == 1:
