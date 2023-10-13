@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 14:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 14:56. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1744,6 +1744,81 @@ class BaseSource:
 
         return matched_prods
 
+    # This is used to name files and directories so this is not allowed to change.
+    def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
+                     extra_info: np.ndarray, stack: bool = False):
+        """
+        Small function to update the numpy array that makes up the queue of products to be generated.
+
+        :param np.ndarray cmd_arr: Array containing SAS commands.
+        :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
+            by the cmd array. e.g. image or expmap.
+        :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
+        :param np.ndarray extra_info: Array of extra information dictionaries
+        :param stack: Should these commands be executed after a preceding line of commands,
+            or at the same time.
+        :return:
+        """
+        if self.queue is None:
+            # I could have done all of these in one array with 3 dimensions, but felt this was easier to read
+            # and with no real performance penalty
+            self.queue = cmd_arr
+            self.queue_type = p_type_arr
+            self.queue_path = p_path_arr
+            self.queue_extra_info = extra_info
+        elif stack:
+            self.queue = np.vstack((self.queue, cmd_arr))
+            self.queue_type = np.vstack((self.queue_type, p_type_arr))
+            self.queue_path = np.vstack((self.queue_path, p_path_arr))
+            self.queue_extra_info = np.vstack((self.queue_extra_info, extra_info))
+        else:
+            self.queue = np.append(self.queue, cmd_arr, axis=0)
+            self.queue_type = np.append(self.queue_type, p_type_arr, axis=0)
+            self.queue_path = np.append(self.queue_path, p_path_arr, axis=0)
+            self.queue_extra_info = np.append(self.queue_extra_info, extra_info, axis=0)
+
+    def get_queue(self) -> Tuple[List[str], List[str], List[List[str]], List[dict]]:
+        """
+        Calling this indicates that the queue is about to be processed, so this function combines SAS
+        commands along columns (command stacks), and returns N SAS commands to be run concurrently,
+        where N is the number of columns.
+
+        :return: List of strings, where the strings are bash commands to run SAS procedures, another
+            list of strings, where the strings are expected output types for the commands, a list of
+            lists of strings, where the strings are expected output paths for products of the SAS commands.
+        :rtype: Tuple[List[str], List[str], List[List[str]]]
+        """
+        if self.queue is None:
+            # This returns empty lists if the queue is undefined
+            processed_cmds = []
+            types = []
+            paths = []
+            extras = []
+        elif len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
+            processed_cmds = list(self.queue)
+            types = list(self.queue_type)
+            paths = [[str(path)] for path in self.queue_path]
+            extras = list(self.queue_extra_info)
+        else:
+            processed_cmds = [";".join(col) for col in self.queue.T]
+            types = list(self.queue_type[-1, :])
+            paths = [list(col.astype(str)) for col in self.queue_path.T]
+            extras = []
+            for col in self.queue_path.T:
+                # This nested dictionary comprehension combines a column of extra information
+                # dictionaries into one, for ease of access.
+                comb_extra = {k: v for ext_dict in col for k, v in ext_dict.items()}
+                extras.append(comb_extra)
+
+        # This is only likely to be called when processing is beginning, so this will wipe the queue.
+        self.queue = None
+        self.queue_type = None
+        self.queue_path = None
+        self.queue_extra_info = None
+        # The returned paths are lists of strings because we want to include every file in a stack to be able
+        # to check that exists
+        return processed_cmds, types, paths, extras
+
     def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D, List[BaseProduct],
                                               List[BaseAggregateProduct], List[BaseProfile1D]],
                         update_inv: bool = True):
@@ -1992,7 +2067,6 @@ class BaseSource:
                         inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                         inven.drop_duplicates(subset=None, keep='first', inplace=True)
                         inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
-    # This is used to name files and directories so this is not allowed to change.
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None,
                      extra_key: str = None, just_obj: bool = True, telescope: str = None) -> List[BaseProduct]:
@@ -2044,7 +2118,7 @@ class BaseSource:
                 (inst is not None and inst not in self.instruments[telescope][obs_id]):
             raise NotAssociatedError("{t}-{o} is associated with {n}, but {i} is not associated with that "
                                      "observation".format(t=telescope, o=obs_id, n=self.name, i=inst))
-        
+
         # This dictionary is used to store the matching products that are located
         matches = []
 
@@ -2065,79 +2139,518 @@ class BaseSource:
 
         return matches
 
-    def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
-                     extra_info: np.ndarray, stack: bool = False):
+    # And here I'm adding a bunch of get methods that should mean the user never has to use get_products, for
+    #  individual product types. It will also mean that they will never have to figure out extra keys themselves
+    #  and I can make lists of 1 product return just as the product without being a breaking change
+    def get_images(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                   psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                   psf_iter: int = 15) -> Union[Image, List[Image]]:
         """
-        Small function to update the numpy array that makes up the queue of products to be generated.
+        A method to retrieve XGA Image objects. This supports the retrieval of both PSF corrected and non-PSF
+        corrected images, as well as setting the energy limits of the specific image you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
 
-        :param np.ndarray cmd_arr: Array containing SAS commands.
-        :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
-            by the cmd array. e.g. image or expmap.
-        :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
-        :param np.ndarray extra_info: Array of extra information dictionaries
-        :param stack: Should these commands be executed after a preceding line of commands,
-            or at the same time.
-        :return:
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all images matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all images matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the image you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the image you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected image or not.
+        :param str psf_model: If the image you want is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the image you want is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the image you want is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
+        :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
+            were multiple matching products).
+        :rtype: Union[Image, List[Image]]
         """
-        if self.queue is None:
-            # I could have done all of these in one array with 3 dimensions, but felt this was easier to read
-            # and with no real performance penalty
-            self.queue = cmd_arr
-            self.queue_type = p_type_arr
-            self.queue_path = p_path_arr
-            self.queue_extra_info = extra_info
-        elif stack:
-            self.queue = np.vstack((self.queue, cmd_arr))
-            self.queue_type = np.vstack((self.queue_type, p_type_arr))
-            self.queue_path = np.vstack((self.queue_path, p_path_arr))
-            self.queue_extra_info = np.vstack((self.queue_extra_info, extra_info))
+        return self._get_phot_prod("image", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                                   psf_iter)
+
+    def get_expmaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[ExpMap, List[ExpMap]]:
+        """
+        A method to retrieve XGA ExpMap objects. This supports setting the energy limits of the specific
+        exposure maps you would like. A NoProductAvailableError error will be raised if no matches are found.
+
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all exposure maps matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all exposure maps matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :return: An XGA ExpMap object (if there is an exact match), or a list of XGA ExpMap objects (if there
+            were multiple matching products).
+        :rtype: Union[ExpMap, List[ExpMap]]
+        """
+        return self._get_phot_prod("expmap", obs_id, inst, lo_en, hi_en, False)
+
+    def get_ratemaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                     psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                     psf_iter: int = 15) -> Union[RateMap, List[RateMap]]:
+        """
+        A method to retrieve XGA RateMap objects. This supports the retrieval of both PSF corrected and non-PSF
+        corrected ratemaps, as well as setting the energy limits of the specific ratemap you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
+
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all ratemaps matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all ratemaps matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the ratemaps you wish to retrieve, the default
+            is None (which will retrieve all ratemaps regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the ratemaps you wish to retrieve, the default
+            is None (which will retrieve all ratemaps regardless of energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected ratemap or not.
+        :param str psf_model: If the ratemap you want is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the ratemap you want is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the ratemap you want is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
+        :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
+            were multiple matching products).
+        :rtype: Union[RateMap, List[RateMap]]
+        """
+        return self._get_phot_prod("ratemap", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                                   psf_iter)
+
+    def get_combined_images(self, lo_en: Quantity = None, hi_en: Quantity = None, psf_corr: bool = False,
+                            psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                            psf_iter: int = 15) -> Union[Image, List[Image]]:
+        """
+        A method to retrieve combined XGA Image objects, as in those images that have been created by
+        merging all available data for this source. This supports the retrieval of both PSF corrected and non-PSF
+        corrected images, as well as setting the energy limits of the specific image you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
+
+        :param Quantity lo_en: The lower energy limit of the image you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the image you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected image or not.
+        :param str psf_model: If the image you want is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the image you want is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the image you want is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
+        :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
+            were multiple matching products).
+        :rtype: Union[Image, List[Image]]
+        """
+
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
         else:
-            self.queue = np.append(self.queue, cmd_arr, axis=0)
-            self.queue_type = np.append(self.queue_type, p_type_arr, axis=0)
-            self.queue_path = np.append(self.queue_path, p_path_arr, axis=0)
-            self.queue_extra_info = np.append(self.queue_extra_info, extra_info, axis=0)
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
 
-    def get_queue(self) -> Tuple[List[str], List[str], List[List[str]], List[dict]]:
-        """
-        Calling this indicates that the queue is about to be processed, so this function combines SAS
-        commands along columns (command stacks), and returns N SAS commands to be run concurrently,
-        where N is the number of columns.
+        # If we are looking for a PSF corrected image then we assemble the extra key with PSF details
+        if psf_corr:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
 
-        :return: List of strings, where the strings are bash commands to run SAS procedures, another
-            list of strings, where the strings are expected output types for the commands, a list of
-            lists of strings, where the strings are expected output paths for products of the SAS commands.
-        :rtype: Tuple[List[str], List[str], List[List[str]]]
+        if not psf_corr and with_lims:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products('combined_image', extra_key=energy_key)
+        elif not psf_corr and not with_lims:
+            broad_matches = self.get_products("combined_image")
+            matched_prods = [p for p in broad_matches if not p.psf_corrected]
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products('combined_image', extra_key=energy_key + extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products('combined_image', extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any combined images matching your input.")
+
+        return matched_prods
+
+    def get_combined_expmaps(self, lo_en: Quantity = None, hi_en: Quantity = None) -> Union[ExpMap, List[ExpMap]]:
         """
-        if self.queue is None:
-            # This returns empty lists if the queue is undefined
-            processed_cmds = []
-            types = []
-            paths = []
-            extras = []
-        elif len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
-            processed_cmds = list(self.queue)
-            types = list(self.queue_type)
-            paths = [[str(path)] for path in self.queue_path]
-            extras = list(self.queue_extra_info)
+        A method to retrieve combined XGA ExpMap objects, as in those exposure maps that have been created by
+        merging all available data for this source. This supports setting the energy limits of the specific
+        exposure maps you would like. A NoProductAvailableError error will be raised if no matches are found.
+
+        :param Quantity lo_en: The lower energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
+            is None (which will retrieve all images regardless of energy limit).
+        :return: An XGA ExpMap object (if there is an exact match), or a list of XGA Image objects (if there
+            were multiple matching products).
+        :rtype: Union[ExpMap, List[ExpMap]]
+        """
+        if all([lo_en is None, hi_en is None]):
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
         else:
-            processed_cmds = [";".join(col) for col in self.queue.T]
-            types = list(self.queue_type[-1, :])
-            paths = [list(col.astype(str)) for col in self.queue_path.T]
-            extras = []
-            for col in self.queue_path.T:
-                # This nested dictionary comprehension combines a column of extra information
-                # dictionaries into one, for ease of access.
-                comb_extra = {k: v for ext_dict in col for k, v in ext_dict.items()}
-                extras.append(comb_extra)
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
 
-        # This is only likely to be called when processing is beginning, so this will wipe the queue.
-        self.queue = None
-        self.queue_type = None
-        self.queue_path = None
-        self.queue_extra_info = None
-        # The returned paths are lists of strings because we want to include every file in a stack to be able
-        # to check that exists
-        return processed_cmds, types, paths, extras
+        matched_prods = self.get_products('combined_expmap', extra_key=energy_key)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any combined exposure maps matching your input.")
+
+        return matched_prods
+
+    def get_combined_ratemaps(self, lo_en: Quantity = None, hi_en: Quantity = None,  psf_corr: bool = False,
+                              psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                              psf_iter: int = 15) -> Union[RateMap, List[RateMap]]:
+        """
+        A method to retrieve combined XGA RateMap objects, as in those ratemap that have been created by
+        merging all available data for this source. This supports the retrieval of both PSF corrected and non-PSF
+        corrected ratemaps, as well as setting the energy limits of the specific ratemap you would like. A
+        NoProductAvailableError error will be raised if no matches are found.
+
+        :param Quantity lo_en: The lower energy limit of the ratemaps you wish to retrieve, the default
+            is None (which will retrieve all ratemaps regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the ratemaps you wish to retrieve, the default
+            is None (which will retrieve all ratemaps regardless of energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected ratemap or not.
+        :param str psf_model: If the ratemap you want is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the ratemap you want is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the ratemap you want is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
+        :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
+            were multiple matching products).
+        :rtype: Union[RateMap, List[RateMap]]
+        """
+        # This function is essentially identical to get_images, but I'm going to be lazy and not write
+        #  a separate internal function to do both.
+
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        # If we are looking for a PSF corrected ratemap then we assemble the extra key with PSF details
+        if psf_corr:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
+
+        if not psf_corr and with_lims:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key)
+        elif not psf_corr and not with_lims:
+            broad_matches = self.get_products("combined_ratemap")
+            matched_prods = [p for p in broad_matches if not p.psf_corrected]
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key + extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products('combined_ratemap', extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any combined ratemaps matching your input.")
+
+        return matched_prods
+
+    def get_spectra(self, outer_radius: Union[str, Quantity], telescope: Union[str, List[str]] = None, obs_id: str = None,
+                    inst: str = None, inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                    min_counts: int = 5, min_sn: float = None,
+                    over_sample: float = None) -> Union[Spectrum, List[Spectrum]]:
+        """
+        A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
+        Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum
+        in evselect_spectrum, and the spectra(um) will be provided to you. If no match is found then a
+        NoProductAvailableError will be raised.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+            'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
+            default this is zero arcseconds, resulting in a circular spectrum.
+        :param bool group_spec: Was the spectrum you wish to retrieve grouped?
+        :param float min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
+            the minimum number of counts?
+        :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
+            the minimum signal to noise.
+        :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
+            over sampling used?
+        :return: An XGA Spectrum object (if there is an exact match), or a list of XGA Spectrum objects (if there
+            were multiple matching products).
+        :rtype: Union[Spectrum, List[Spectrum]]
+        """
+        # DAVID_QUESTION want to put this into another function, where is the best place to put this
+        if telescope is None:
+            telescope = self._usable_tscopes
+        elif isinstance(telescope, "str") and telescope in self._usable_tscopes:
+            # Converting the telescope to a list
+            telescope = [telescope]
+        elif not all(tscope in self._usable_tscopes for tscope in telescope):
+            # Checking that the inputted telescope is valid for this source
+            not_valid_tscopes = list(set(telescope) - set(self._usable_tscopes))
+            raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
+                    "have observations associated with this source". format(
+                        nvt=not_valid_tscopes, ut=self._usable_tscopes ))
+
+        if isinstance(inner_radius, Quantity):
+            inn_rad_num = self.convert_radius(inner_radius, 'deg')
+        elif isinstance(inner_radius, str):
+            inn_rad_num = self.get_radius(inner_radius, 'deg')
+        else:
+            raise TypeError("You may only a quantity or a string as inner_radius")
+
+        if isinstance(outer_radius, Quantity):
+            out_rad_num = self.convert_radius(outer_radius, 'deg')
+        elif isinstance(outer_radius, str):
+            out_rad_num = self.get_radius(outer_radius, 'deg')
+        else:
+            raise TypeError("You may only a quantity or a string as outer_radius")
+
+        if over_sample is not None:
+            over_sample = int(over_sample)
+        if min_counts is not None:
+            min_counts = int(min_counts)
+        if min_sn is not None:
+            min_sn = float(min_sn)
+
+        # Sets up the extra part of the storage key name depending on if grouping is enabled
+        if group_spec and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif group_spec and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+        if outer_radius != 'region':
+            # The key under which these spectra will be stored
+            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
+            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
+                                                         dec=self.default_coord[1].value,
+                                                         ri=inn_rad_num.value, ro=out_rad_num.value,
+                                                         gr=group_spec)
+        else:
+            spec_storage_name = "region_grp{gr}".format(gr=group_spec)
+
+        # Adds on the extra information about grouping to the storage key
+        spec_storage_name += extra_name
+        matched_prods = {}
+        for tscope in telescope:
+            matched_prods[tscope] = self.get_products(
+                'spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name)[tscope]
+        # DAVID_QUESTION same as the get_annular_spectra question
+        #if len(matched_prods) == 1:
+            #matched_prods = matched_prods[0]
+        if sum([len(matched_prods[tscope]) for tscope in matched_prods.keys()]) == 0:
+            raise NoProductAvailableError("Cannot find any spectra matching your input.")
+
+        return matched_prods
+
+    def get_annular_spectra(self, telescope: Union[str, List[str]] = None, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
+                            min_sn: float = None, over_sample: float = None, set_id: int = None) -> AnnularSpectra:
+        """
+        Another useful method that wraps the get_products function, though this one gets you AnnularSpectra.
+        Pass the radii used to generate the annuli, and the same settings you used to generate the spectrum
+        in spectrum_set, and the AnnularSpectra will be returned (if it exists). If no match is found then
+        a NoProductAvailableError will be raised. This method has an additional way of looking for a matching
+        spectrum, if the set ID is known then that can be passed by the user and used to find an exact match.
+
+        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
+            that you wish to retrieve. By default this is None, which means the method will return annular
+            spectra with any radii.
+        :param bool group_spec: Was the spectrum set you wish to retrieve grouped?
+        :param float min_counts: If the spectrum set you wish to retrieve was grouped on minimum counts, what was
+            the minimum number of counts?
+        :param float min_sn: If the spectrum set you wish to retrieve was grouped on minimum signal to
+            noise, what was the minimum signal to noise.
+        :param float over_sample: If the spectrum set you wish to retrieve was over sampled, what was the level of
+            over sampling used?
+        :param int set_id: The unique identifier of the annular spectrum set. Passing a value for this parameter
+            will override any other information that you have given this method.
+        :return: An XGA AnnularSpectra object if there is an exact match.
+        :rtype: AnnularSpectra
+        """
+        # DAVID_QUESTION what do you do about the input possibly being in the wrong case
+        if telescope is None:
+            telescope = self._usable_tscopes
+        elif isinstance(telescope, "str") and telescope in self._usable_tscopes:
+            # Converting the telescope to a list
+            telescope = [telescope]
+        elif not all(tscope in self._usable_tscopes for tscope in telescope):
+            # Checking that the inputted telescope is valid for this source
+            not_valid_tscopes = list(set(telescope) - set(self._usable_tscopes))
+            # DAVID_QUESTION shall I make a not valid telescope error
+            raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
+                    "have observations associated with this source". format(
+                        nvt=not_valid_tscopes, ut=self._usable_tscopes ))
+
+        if group_spec and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif group_spec and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
+        #  degrees in the storage key
+        if radii is not None:
+            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
+            #  storage key and look for a single match
+            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
+            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
+            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
+                                                        dec=self.default_coord[1].value,
+                                                        ar=ann_rad_str, gr=group_spec)
+            spec_storage_name += extra_name
+        else:
+            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
+            #  and we'll look for partial matches
+            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
+            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
+            spec_storage_name = [pos_str, grp_str]
+
+        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
+        #  properly constructed storage key
+        if set_id is None and radii is not None:
+            matched_prods = self.get_products('combined_spectrum', extra_key=spec_storage_name)
+        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
+        elif set_id is None and radii is None:
+            matched_prods = {}
+            for tscope in telescope:
+                matched_prods[tscope] = [p for p in self.get_products('combined_spectrum')[tscope]
+                            if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
+        # However if they have passed a setID then this over-rides everything else
+        else:
+            # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
+            #  whatever the user passed in
+            matched_prods = {}
+            for tscope in telescope:
+                matched_prods[tscope] = [p for p in self.get_products('combined_spectrum')[tscope] if p.set_ident == set_id]
+
+        if sum([len(matched_prods[tscope]) for tscope in matched_prods.keys()]) == 0:
+            raise NoProductAvailableError("No matching AnnularSpectra can be found.")
+
+        return matched_prods
+
+    def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
+                     radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+        """
+        This is the generic get method for XGA profile objects stored in this source. You still must remember
+        the profile type value to use it, but once entered it will return a list of all matching profiles (or a
+        single object if only one match is found).
+
+        :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
+            is None which means the method will use the default coordinate of this source.
+        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
+            used often as you likely won't know the radial values a priori.
+        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed hi_en must be too.
+        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed lo_en must be too.
+        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
+            were multiple matching products).
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if "profile" in profile_type:
+            warn("The profile_type you passed contains the word 'profile', which is appended onto "
+                          "a profile type by XGA, you need to try this again without profile on the end, unless"
+                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
+
+        search_key = profile_type + "_profile"
+        if all([obs_id is None, inst is None]):
+            search_key = "combined_" + search_key
+
+        search_key = profile_type + "_profile"
+        if search_key not in ALLOWED_PRODUCTS:
+            warn("{} seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
+
+        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any {p} profiles matching your input.".format(p=profile_type))
+
+        return matched_prods
+
+    def get_combined_profiles(self, profile_type: str, central_coord: Quantity = None, radii: Quantity = None,
+                              lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+        """
+        The generic get method for XGA profiles made using all available data which are stored in this source.
+        You still must remember the profile type value to use it, but once entered it will return a list
+        of all matching profiles (or a single object if only one match is found).
+
+        :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
+        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
+            is None which means the method will use the default coordinate of this source.
+        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
+            used often as you likely won't know the radial values a priori.
+        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed hi_en must be too.
+        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed lo_en must be too.
+        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
+            were multiple matching products).
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if "profile" in profile_type:
+            warn("The profile_type you passed contains the word 'profile', which is appended onto "
+                          "a profile type by XGA, you need to try this again without profile on the end, unless"
+                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
+
+        search_key = "combined_" + profile_type + "_profile"
+
+        if search_key not in ALLOWED_PRODUCTS:
+            warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.", stacklevel=2)
+
+        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en, hi_en)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any combined {p} profiles matching your "
+                                          "input.".format(p=profile_type))
+
+        return matched_prods
 
     def get_att_file(self, obs_id: str) -> str:
         """
@@ -2492,6 +3005,8 @@ class BaseSource:
         sn = rt.signal_to_noise(src_mask, bck_mask, exp_corr, allow_negative)
 
         return sn
+    # The combined photometric products don't really NEED their own get methods, but I figured I would just for
+    #  clarity's sake
 
     def get_counts(self, outer_radius: Union[Quantity, str], central_coord: Quantity = None, lo_en: Quantity = None,
                    hi_en: Quantity = None, obs_id: str = None, inst: str = None, psf_corr: bool = False,
@@ -2812,9 +3327,6 @@ class BaseSource:
         if spec_storage_key not in self._luminosities:
             self._luminosities[spec_storage_key] = {}
         self._luminosities[spec_storage_key][model] = lums
-    # And here I'm adding a bunch of get methods that should mean the user never has to use get_products, for
-    #  individual product types. It will also mean that they will never have to figure out extra keys themselves
-    #  and I can make lists of 1 product return just as the product without being a breaking change
 
     def get_results(self, outer_radius: Union[str, Quantity], model: str,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
@@ -3190,518 +3702,6 @@ class BaseSource:
                         reject_dict[o].append(i)
 
         return reject_dict
-    # The combined photometric products don't really NEED their own get methods, but I figured I would just for
-    #  clarity's sake
-
-    def get_spectra(self, outer_radius: Union[str, Quantity], telescope: Union[str, List[str]] = None, obs_id: str = None,
-                    inst: str = None, inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                    min_counts: int = 5, min_sn: float = None,
-                    over_sample: float = None) -> Union[Spectrum, List[Spectrum]]:
-        """
-        A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
-        Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum
-        in evselect_spectrum, and the spectra(um) will be provided to you. If no match is found then a
-        NoProductAvailableError will be raised.
-
-        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
-            the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
-            'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
-        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
-            which means all spectra matching the other criteria will be returned.
-        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
-            which means all spectra matching the other criteria will be returned.
-        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
-            the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
-            default this is zero arcseconds, resulting in a circular spectrum.
-        :param bool group_spec: Was the spectrum you wish to retrieve grouped?
-        :param float min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
-            the minimum number of counts?
-        :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
-            the minimum signal to noise.
-        :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
-            over sampling used?
-        :return: An XGA Spectrum object (if there is an exact match), or a list of XGA Spectrum objects (if there
-            were multiple matching products).
-        :rtype: Union[Spectrum, List[Spectrum]]
-        """
-        # DAVID_QUESTION want to put this into another function, where is the best place to put this
-        if telescope is None:
-            telescope = self._usable_tscopes
-        elif isinstance(telescope, "str") and telescope in self._usable_tscopes:
-            # Converting the telescope to a list
-            telescope = [telescope]
-        elif not all(tscope in self._usable_tscopes for tscope in telescope):
-            # Checking that the inputted telescope is valid for this source
-            not_valid_tscopes = list(set(telescope) - set(self._usable_tscopes))
-            raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
-                    "have observations associated with this source". format(
-                        nvt=not_valid_tscopes, ut=self._usable_tscopes ))
-
-        if isinstance(inner_radius, Quantity):
-            inn_rad_num = self.convert_radius(inner_radius, 'deg')
-        elif isinstance(inner_radius, str):
-            inn_rad_num = self.get_radius(inner_radius, 'deg')
-        else:
-            raise TypeError("You may only a quantity or a string as inner_radius")
-
-        if isinstance(outer_radius, Quantity):
-            out_rad_num = self.convert_radius(outer_radius, 'deg')
-        elif isinstance(outer_radius, str):
-            out_rad_num = self.get_radius(outer_radius, 'deg')
-        else:
-            raise TypeError("You may only a quantity or a string as outer_radius")
-
-        if over_sample is not None:
-            over_sample = int(over_sample)
-        if min_counts is not None:
-            min_counts = int(min_counts)
-        if min_sn is not None:
-            min_sn = float(min_sn)
-
-        # Sets up the extra part of the storage key name depending on if grouping is enabled
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
-
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
-
-        if outer_radius != 'region':
-            # The key under which these spectra will be stored
-            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                         dec=self.default_coord[1].value,
-                                                         ri=inn_rad_num.value, ro=out_rad_num.value,
-                                                         gr=group_spec)
-        else:
-            spec_storage_name = "region_grp{gr}".format(gr=group_spec)
-
-        # Adds on the extra information about grouping to the storage key
-        spec_storage_name += extra_name
-        matched_prods = {}
-        for tscope in telescope:
-            matched_prods[tscope] = self.get_products(
-                'spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name)[tscope]
-        # DAVID_QUESTION same as the get_annular_spectra question
-        #if len(matched_prods) == 1:
-            #matched_prods = matched_prods[0]
-        if sum([len(matched_prods[tscope]) for tscope in matched_prods.keys()]) == 0:
-            raise NoProductAvailableError("Cannot find any spectra matching your input.")
-
-        return matched_prods
-
-    def get_annular_spectra(self, telescope: Union[str, List[str]] = None, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
-                            min_sn: float = None, over_sample: float = None, set_id: int = None) -> AnnularSpectra:
-        """
-        Another useful method that wraps the get_products function, though this one gets you AnnularSpectra.
-        Pass the radii used to generate the annuli, and the same settings you used to generate the spectrum
-        in spectrum_set, and the AnnularSpectra will be returned (if it exists). If no match is found then
-        a NoProductAvailableError will be raised. This method has an additional way of looking for a matching
-        spectrum, if the set ID is known then that can be passed by the user and used to find an exact match.
-
-        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
-            that you wish to retrieve. By default this is None, which means the method will return annular
-            spectra with any radii.
-        :param bool group_spec: Was the spectrum set you wish to retrieve grouped?
-        :param float min_counts: If the spectrum set you wish to retrieve was grouped on minimum counts, what was
-            the minimum number of counts?
-        :param float min_sn: If the spectrum set you wish to retrieve was grouped on minimum signal to
-            noise, what was the minimum signal to noise.
-        :param float over_sample: If the spectrum set you wish to retrieve was over sampled, what was the level of
-            over sampling used?
-        :param int set_id: The unique identifier of the annular spectrum set. Passing a value for this parameter
-            will override any other information that you have given this method.
-        :return: An XGA AnnularSpectra object if there is an exact match.
-        :rtype: AnnularSpectra
-        """
-        # DAVID_QUESTION what do you do about the input possibly being in the wrong case
-        if telescope is None:
-            telescope = self._usable_tscopes
-        elif isinstance(telescope, "str") and telescope in self._usable_tscopes:
-            # Converting the telescope to a list
-            telescope = [telescope]
-        elif not all(tscope in self._usable_tscopes for tscope in telescope):
-            # Checking that the inputted telescope is valid for this source
-            not_valid_tscopes = list(set(telescope) - set(self._usable_tscopes))
-            # DAVID_QUESTION shall I make a not valid telescope error
-            raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
-                    "have observations associated with this source". format(
-                        nvt=not_valid_tscopes, ut=self._usable_tscopes ))
-
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
-
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
-
-        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
-        #  degrees in the storage key
-        if radii is not None:
-            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
-            #  storage key and look for a single match
-            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
-            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                        dec=self.default_coord[1].value,
-                                                        ar=ann_rad_str, gr=group_spec)
-            spec_storage_name += extra_name
-        else:
-            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
-            #  and we'll look for partial matches
-            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
-            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
-            spec_storage_name = [pos_str, grp_str]
-
-        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
-        #  properly constructed storage key
-        if set_id is None and radii is not None:
-            matched_prods = self.get_products('combined_spectrum', extra_key=spec_storage_name)
-        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
-        elif set_id is None and radii is None:
-            matched_prods = {}
-            for tscope in telescope:
-                matched_prods[tscope] = [p for p in self.get_products('combined_spectrum')[tscope]
-                            if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
-        # However if they have passed a setID then this over-rides everything else
-        else:
-            # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
-            #  whatever the user passed in
-            matched_prods = {}
-            for tscope in telescope:
-                matched_prods[tscope] = [p for p in self.get_products('combined_spectrum')[tscope] if p.set_ident == set_id]
-
-        if sum([len(matched_prods[tscope]) for tscope in matched_prods.keys()]) == 0:
-            raise NoProductAvailableError("No matching AnnularSpectra can be found.")
-
-        return matched_prods
-
-    def get_images(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
-                   psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                   psf_iter: int = 15) -> Union[Image, List[Image]]:
-        """
-        A method to retrieve XGA Image objects. This supports the retrieval of both PSF corrected and non-PSF
-        corrected images, as well as setting the energy limits of the specific image you would like. A
-        NoProductAvailableError error will be raised if no matches are found.
-
-        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
-            which means all images matching the other criteria will be returned.
-        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
-            which means all images matching the other criteria will be returned.
-        :param Quantity lo_en: The lower energy limit of the image you wish to retrieve, the default
-            is None (which will retrieve all images regardless of energy limit).
-        :param Quantity hi_en: The upper energy limit of the image you wish to retrieve, the default
-            is None (which will retrieve all images regardless of energy limit).
-        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected image or not.
-        :param str psf_model: If the image you want is PSF corrected, this is the PSF model used.
-        :param int psf_bins: If the image you want is PSF corrected, this is the number of PSFs per
-            side in the PSF grid.
-        :param str psf_algo: If the image you want is PSF corrected, this is the algorithm used.
-        :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
-        :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
-            were multiple matching products).
-        :rtype: Union[Image, List[Image]]
-        """
-        return self._get_phot_prod("image", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
-                                   psf_iter)
-
-    def get_expmaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[ExpMap, List[ExpMap]]:
-        """
-        A method to retrieve XGA ExpMap objects. This supports setting the energy limits of the specific
-        exposure maps you would like. A NoProductAvailableError error will be raised if no matches are found.
-
-        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
-            which means all exposure maps matching the other criteria will be returned.
-        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
-            which means all exposure maps matching the other criteria will be returned.
-        :param Quantity lo_en: The lower energy limit of the exposure maps you wish to retrieve, the default
-            is None (which will retrieve all images regardless of energy limit).
-        :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
-            is None (which will retrieve all images regardless of energy limit).
-        :return: An XGA ExpMap object (if there is an exact match), or a list of XGA ExpMap objects (if there
-            were multiple matching products).
-        :rtype: Union[ExpMap, List[ExpMap]]
-        """
-        return self._get_phot_prod("expmap", obs_id, inst, lo_en, hi_en, False)
-
-    def get_ratemaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
-                     psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                     psf_iter: int = 15) -> Union[RateMap, List[RateMap]]:
-        """
-        A method to retrieve XGA RateMap objects. This supports the retrieval of both PSF corrected and non-PSF
-        corrected ratemaps, as well as setting the energy limits of the specific ratemap you would like. A
-        NoProductAvailableError error will be raised if no matches are found.
-
-        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
-            which means all ratemaps matching the other criteria will be returned.
-        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
-            which means all ratemaps matching the other criteria will be returned.
-        :param Quantity lo_en: The lower energy limit of the ratemaps you wish to retrieve, the default
-            is None (which will retrieve all ratemaps regardless of energy limit).
-        :param Quantity hi_en: The upper energy limit of the ratemaps you wish to retrieve, the default
-            is None (which will retrieve all ratemaps regardless of energy limit).
-        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected ratemap or not.
-        :param str psf_model: If the ratemap you want is PSF corrected, this is the PSF model used.
-        :param int psf_bins: If the ratemap you want is PSF corrected, this is the number of PSFs per
-            side in the PSF grid.
-        :param str psf_algo: If the ratemap you want is PSF corrected, this is the algorithm used.
-        :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
-        :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
-            were multiple matching products).
-        :rtype: Union[RateMap, List[RateMap]]
-        """
-        return self._get_phot_prod("ratemap", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
-                                   psf_iter)
-
-    def get_combined_images(self, lo_en: Quantity = None, hi_en: Quantity = None, psf_corr: bool = False,
-                            psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                            psf_iter: int = 15) -> Union[Image, List[Image]]:
-        """
-        A method to retrieve combined XGA Image objects, as in those images that have been created by
-        merging all available data for this source. This supports the retrieval of both PSF corrected and non-PSF
-        corrected images, as well as setting the energy limits of the specific image you would like. A
-        NoProductAvailableError error will be raised if no matches are found.
-
-        :param Quantity lo_en: The lower energy limit of the image you wish to retrieve, the default
-            is None (which will retrieve all images regardless of energy limit).
-        :param Quantity hi_en: The upper energy limit of the image you wish to retrieve, the default
-            is None (which will retrieve all images regardless of energy limit).
-        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected image or not.
-        :param str psf_model: If the image you want is PSF corrected, this is the PSF model used.
-        :param int psf_bins: If the image you want is PSF corrected, this is the number of PSFs per
-            side in the PSF grid.
-        :param str psf_algo: If the image you want is PSF corrected, this is the algorithm used.
-        :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
-        :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
-            were multiple matching products).
-        :rtype: Union[Image, List[Image]]
-        """
-
-        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
-        if all([lo_en is None, hi_en is None]):
-            # Sets a flag to tell the rest of the method whether we have energy lims or not
-            with_lims = False
-            energy_key = None
-        elif all([lo_en is not None, hi_en is not None]):
-            with_lims = True
-            # We have energy limits here so we assemble the key that describes the energy range
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        # If we are looking for a PSF corrected image then we assemble the extra key with PSF details
-        if psf_corr:
-            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
-
-        if not psf_corr and with_lims:
-            # Simplest case, just calling get_products and passing in our information
-            matched_prods = self.get_products('combined_image', extra_key=energy_key)
-        elif not psf_corr and not with_lims:
-            broad_matches = self.get_products("combined_image")
-            matched_prods = [p for p in broad_matches if not p.psf_corrected]
-        elif psf_corr and with_lims:
-            # Here we need to add the extra key to the energy key
-            matched_prods = self.get_products('combined_image', extra_key=energy_key + extra_key)
-        elif psf_corr and not with_lims:
-            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
-            broad_matches = self.get_products('combined_image', extra_key=None, just_obj=False)
-            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
-
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any combined images matching your input.")
-
-        return matched_prods
-
-    def get_combined_expmaps(self, lo_en: Quantity = None, hi_en: Quantity = None) -> Union[ExpMap, List[ExpMap]]:
-        """
-        A method to retrieve combined XGA ExpMap objects, as in those exposure maps that have been created by
-        merging all available data for this source. This supports setting the energy limits of the specific
-        exposure maps you would like. A NoProductAvailableError error will be raised if no matches are found.
-
-        :param Quantity lo_en: The lower energy limit of the exposure maps you wish to retrieve, the default
-            is None (which will retrieve all images regardless of energy limit).
-        :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
-            is None (which will retrieve all images regardless of energy limit).
-        :return: An XGA ExpMap object (if there is an exact match), or a list of XGA Image objects (if there
-            were multiple matching products).
-        :rtype: Union[ExpMap, List[ExpMap]]
-        """
-        if all([lo_en is None, hi_en is None]):
-            energy_key = None
-        elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        matched_prods = self.get_products('combined_expmap', extra_key=energy_key)
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any combined exposure maps matching your input.")
-
-        return matched_prods
-
-    def get_combined_ratemaps(self, lo_en: Quantity = None, hi_en: Quantity = None,  psf_corr: bool = False,
-                              psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                              psf_iter: int = 15) -> Union[RateMap, List[RateMap]]:
-        """
-        A method to retrieve combined XGA RateMap objects, as in those ratemap that have been created by
-        merging all available data for this source. This supports the retrieval of both PSF corrected and non-PSF
-        corrected ratemaps, as well as setting the energy limits of the specific ratemap you would like. A
-        NoProductAvailableError error will be raised if no matches are found.
-
-        :param Quantity lo_en: The lower energy limit of the ratemaps you wish to retrieve, the default
-            is None (which will retrieve all ratemaps regardless of energy limit).
-        :param Quantity hi_en: The upper energy limit of the ratemaps you wish to retrieve, the default
-            is None (which will retrieve all ratemaps regardless of energy limit).
-        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected ratemap or not.
-        :param str psf_model: If the ratemap you want is PSF corrected, this is the PSF model used.
-        :param int psf_bins: If the ratemap you want is PSF corrected, this is the number of PSFs per
-            side in the PSF grid.
-        :param str psf_algo: If the ratemap you want is PSF corrected, this is the algorithm used.
-        :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
-        :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
-            were multiple matching products).
-        :rtype: Union[RateMap, List[RateMap]]
-        """
-        # This function is essentially identical to get_images, but I'm going to be lazy and not write
-        #  a separate internal function to do both.
-
-        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
-        if all([lo_en is None, hi_en is None]):
-            # Sets a flag to tell the rest of the method whether we have energy lims or not
-            with_lims = False
-            energy_key = None
-        elif all([lo_en is not None, hi_en is not None]):
-            with_lims = True
-            # We have energy limits here so we assemble the key that describes the energy range
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        # If we are looking for a PSF corrected ratemap then we assemble the extra key with PSF details
-        if psf_corr:
-            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
-
-        if not psf_corr and with_lims:
-            # Simplest case, just calling get_products and passing in our information
-            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key)
-        elif not psf_corr and not with_lims:
-            broad_matches = self.get_products("combined_ratemap")
-            matched_prods = [p for p in broad_matches if not p.psf_corrected]
-        elif psf_corr and with_lims:
-            # Here we need to add the extra key to the energy key
-            matched_prods = self.get_products('combined_ratemap', extra_key=energy_key + extra_key)
-        elif psf_corr and not with_lims:
-            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
-            broad_matches = self.get_products('combined_ratemap', extra_key=None, just_obj=False)
-            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
-
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any combined ratemaps matching your input.")
-
-        return matched_prods
-
-    def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                     radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[BaseProfile1D, List[BaseProfile1D]]:
-        """
-        This is the generic get method for XGA profile objects stored in this source. You still must remember
-        the profile type value to use it, but once entered it will return a list of all matching profiles (or a
-        single object if only one match is found).
-
-        :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
-        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
-            which means all profiles matching the other criteria will be returned.
-        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
-            which means all profiles matching the other criteria will be returned.
-        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
-            is None which means the method will use the default coordinate of this source.
-        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
-            used often as you likely won't know the radial values a priori.
-        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
-            is None, and if this argument is passed hi_en must be too.
-        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
-            is None, and if this argument is passed lo_en must be too.
-        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
-            were multiple matching products).
-        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
-        """
-        if "profile" in profile_type:
-            warn("The profile_type you passed contains the word 'profile', which is appended onto "
-                          "a profile type by XGA, you need to try this again without profile on the end, unless"
-                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
-
-        search_key = profile_type + "_profile"
-        if all([obs_id is None, inst is None]):
-            search_key = "combined_" + search_key
-
-        search_key = profile_type + "_profile"
-        if search_key not in ALLOWED_PRODUCTS:
-            warn("{} seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
-
-        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en)
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any {p} profiles matching your input.".format(p=profile_type))
-
-        return matched_prods
-
-    def get_combined_profiles(self, profile_type: str, central_coord: Quantity = None, radii: Quantity = None,
-                              lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[BaseProfile1D, List[BaseProfile1D]]:
-        """
-        The generic get method for XGA profiles made using all available data which are stored in this source.
-        You still must remember the profile type value to use it, but once entered it will return a list
-        of all matching profiles (or a single object if only one match is found).
-
-        :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
-        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
-            is None which means the method will use the default coordinate of this source.
-        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
-            used often as you likely won't know the radial values a priori.
-        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
-            is None, and if this argument is passed hi_en must be too.
-        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
-            is None, and if this argument is passed lo_en must be too.
-        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
-            were multiple matching products).
-        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
-        """
-        if "profile" in profile_type:
-            warn("The profile_type you passed contains the word 'profile', which is appended onto "
-                          "a profile type by XGA, you need to try this again without profile on the end, unless"
-                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
-
-        search_key = "combined_" + profile_type + "_profile"
-
-        if search_key not in ALLOWED_PRODUCTS:
-            warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.", stacklevel=2)
-
-        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en, hi_en)
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any combined {p} profiles matching your "
-                                          "input.".format(p=profile_type))
-
-        return matched_prods
 
     def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
                     allow_negative: bool = False) -> Tuple[np.ndarray, np.ndarray]:
