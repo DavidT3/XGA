@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 17:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 21:16. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -220,59 +220,24 @@ class BaseSource:
             raise NoValidObservationsError("All {t} observations identified for {s} are either unusable or "
                                            "blacklisted.".format(s=self.name, t=', '.join(telescope)))
 
+        # Now we run the method which takes those initially identified observations and goes looking for their
+        #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
         self._products, region_dict, self._att_files = self._initial_products(obs)
 
-        import sys
-        sys.exit()
+        # Now we do ANOTHER check just like the one above, as it is possible that all those files cannot be found
+        if sum([len(t_obs) for t_obs in self._products.values()]) == 0:
+            raise NoValidObservationsError("None of the {t} observations identified for this {s} have valid event "
+                                           "lists associated with them.".format(s=self.name, t='/'.join(telescope)))
+
+        # We now have the final set of initial observations, so we'll store them in an attribute - note that they
+        #  may change later as other source classes have different cleaning steps, but any observations will be
+        #  removed through the 'disassociation' mechanism
+        # NOTE that this attribute has changed considerably since the pre-multi mission version of XGA, as the
+        #  instruments attribute has been consolidated into it - plus there is an extra level for telescope names
+        self._obs = {t: {o: [i for i in self._products[t][o]] for o in self._products[t]} for t in self._products}
         # Set the blacklisted observation attribute with our dictionary - if all has gone well then this will be a
         #  dictionary of empty dictionaries
         self._blacklisted_obs = blacklisted_obs
-
-        # This checks that the observations have at least one usable instrument
-        obs = matches[tscope]["ObsID"].values
-        instruments[tscope] = {o: [] for o in obs}
-        for o in obs:
-            # As the simple_xmm_match will only tell us about observations in which EVERY instrument is
-            #  blacklisted, I have to check in the blacklist to see whether some individual instruments
-            #  have to be excluded
-            # Storing which instruments are blacklisted using this dictionary
-            excl_inst = {}
-            for inst in XMM_INST[tscope]:
-                excl_inst[inst] = False
-
-                if o in BLACKLIST[tscope]['ObsID'].values:
-                    # JESS_TODO this line got horrendously long - maybe assign a variable to BLACKLIST[tscope]
-                    if BLACKLIST[tscope][BLACKLIST[tscope]['ObsID'] == o]['EXCLUDE_{}'.format(inst.upper())].values[
-                        0] == 'T':
-                        excl_inst[inst] = True
-
-                # Here we see if inst is allowed by the census (things like CalClosed observations are excluded in
-                #  the census) and if inst is allowed by the blacklist (individual instruments can be blacklisted).
-                if matches[tscope][matches[tscope]["ObsID"] == o]["USE_{}".format(inst.upper())].values[0] and not \
-                excl_inst[inst]:
-                    instruments[tscope][o].append(inst)
-                # If excluded by the blacklist, then that needs
-                elif excl_inst[inst]:
-                    # The behaviour writing PN to the dictionary changes slightly depending on whether the ObsID
-                    #  has an entry yet or not
-                    if o not in blacklisted_obs:
-                        blacklisted_obs[o] = [inst]
-                    else:
-                        blacklisted_obs[o] += [inst]
-
-            self._obs[tscope] = [o for o in obs if len(instruments[tscope][o]) > 0]
-            self._instruments[tscope] = {o: instruments[tscope][o] for o in self._obs if
-                                         len(instruments[tscope][o]) > 0}
-            self._blacklisted_obs[tscope] = blacklisted_obs
-
-        # self._obs can be empty after this cleaning step, so do quick check and raise error if so.
-        if len(sum(self._obs.values(), [])) == 0:
-            raise NoValidObservationsError("{s} has no observations which have the necessary"
-                                           " files.".format(s=self.name))
-
-
-        import sys
-        sys.exit()
 
         # -----------------------------------------------------------------------------------------------
 
@@ -632,9 +597,9 @@ class BaseSource:
                 # First off, we set up the relevant paths to various important files that we're going to
                 #  ingest. The first one is the current relevant event list.
                 evt_file = rel_sec["clean_{}_evts".format(inst_or_tel)].format(obs_id=obs_id)
-                # Then we do the path to the region file specified in the configuration file. Note that later we
-                #  will make a local copy (if the original file exists) and then use the copy so that any
-                #  modifications don't harm the original file.
+                # Then we do the path to the region file specified in the configuration file. Note that later (in
+                #  the_load_regions method) we will make a local copy (if the original file exists) and then use
+                #  the copy so that any modifications don't harm the original file.
                 reg_file = rel_sec["region_file"].format(obs_id=obs_id)
 
                 # Attitude file is a special type of data product, we shouldn't ever deal with it directly so it
@@ -657,32 +622,18 @@ class BaseSource:
                     map_ret = map(read_default_products, en_comb)
                     obs_dict[tel][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
 
-                    # As mentioned above, we make a local copy of the region file if the original file path exists
-                    #  and if a local copy DOESN'T already exist
-                    # reg_copy_path = OUTPUT + tscope + "/{o}/{o}_xga_copy.reg".format(o=obs_id)
-                    # if os.path.exists(reg_file) and not os.path.exists(reg_copy_path):
-                    #     # A local copy of the region file is made and used
-                    #     copyfile(reg_file, reg_copy_path)
-                    #     # Regions dictionary updated with path to local region file, if it exists
-                    #     reg_dict[tscope][obs_id] = reg_copy_path
-                    # # In the case where there is already a local copy of the region file
-                    # elif os.path.exists(reg_copy_path):
-                    #     reg_dict[tscope][obs_id] = reg_copy_path
-                    # else:
-                    #     reg_dict[tscope][obs_id] = None
-
-            print(obs_dict)
-
-            import sys
-            sys.exit()
+                    # The path to the region file, as specified in the configuration file, is added to the returned
+                    #  dictionary if it exists - we'll make a copy in _load_regions because the BaseSource init
+                    #  hasn't created the directory at this stage
+                    if os.path.exists(reg_file):
+                        # Regions dictionary updated with path to local region file, if it exists
+                        reg_dict[tel][obs_id] = reg_file
+                    else:
+                        reg_dict[tel][obs_id] = None
 
             # Cleans any observations that don't have at least one instrument associated with them
-            obs_dict[tscope] = {o: v for o, v in obs_dict[tscope].items() if len(v) != 0}
+            obs_dict[tel] = {o: v for o, v in obs_dict[tel].items() if len(v) != 0}
 
-        stop
-        if sum([len(obs_dict[tscope]) for tscope in obs_dict.keys()]) == 0:
-            raise NoValidObservationsError("{s} has no observations with the necessary"
-                                           " files.".format(s=self.name))
         return obs_dict, reg_dict, att_dict
 
     def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D, List[BaseProduct],
@@ -1477,6 +1428,21 @@ class BaseSource:
             furthest from the passed source coordinates.
         :rtype: Tuple[dict, dict]
         """
+        # As mentioned above, we make a local copy of the region file if the original file path exists
+        #  and if a local copy DOESN'T already exist
+        # reg_copy_path = OUTPUT + tel + "/{o}/{o}_xga_copy.reg".format(o=obs_id)
+        # if os.path.exists(reg_file) and not os.path.exists(reg_copy_path):
+        #     # A local copy of the region file is made and used
+        #     copyfile(reg_file, reg_copy_path)
+        #     # Regions dictionary updated with path to local region file, if it exists
+        #     reg_dict[tel][obs_id] = reg_copy_path
+        #
+        # # In the case where there is already a local copy of the region file
+        # elif os.path.exists(reg_copy_path):
+        #     reg_dict[tel][obs_id] = reg_copy_path
+        # else:
+        #     reg_dict[tel][obs_id] = None
+
         # TODO DON'T TRUST THIS AT ALL FOR GOD'S SAKE
         reg_dict = {}
         match_dict = {}
