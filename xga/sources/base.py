@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 21:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 21:36. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -239,6 +239,10 @@ class BaseSource:
         #  dictionary of empty dictionaries
         self._blacklisted_obs = blacklisted_obs
 
+        print(self.obs_ids)
+
+        import sys
+        sys.exit()
         # -----------------------------------------------------------------------------------------------
 
 
@@ -1683,14 +1687,37 @@ class BaseSource:
             return self._att_files[obs_id]
 
     @property
-    def obs_ids(self) -> List[str]:
+    def instruments(self) -> Dict:
         """
-        Property getter for ObsIDs associated with this source that are confirmed to have events files.
+        A property of a source that details which instruments have valid data for which observations of
+        which telescopes.
 
-        :return: A list of the associated XMM ObsIDs.
-        :rtype: List[str]
+        :return: A dictionary where the top level keys are telescopes, the lower level keys are ObsIDs, and
+            their values are lists of valid instruments.
+        :rtype: Dict
         """
         return self._obs
+
+    @property
+    def obs_ids(self) -> Dict:
+        """
+        Property getter for ObsIDs associated with this source that are confirmed to have events files. This
+        provides the ObsIDs and the telescopes that they are associated with.
+
+        :return: A dictionary where the keys are telescope names and the values are lists of ObsIDs
+        :rtype: Dict
+        """
+        return {t: list(self._obs[t].keys()) for t in self._obs}
+
+    @property
+    def telescopes(self) -> List[str]:
+        """
+        Property getter for telescopes that are associated with this source.
+
+        :return: A list of telescope names with valid data related to this source.
+        :rtype: List[str]
+        """
+        return list(self._obs.keys())
 
     @property
     def blacklisted(self) -> Dict:
@@ -2862,17 +2889,6 @@ class BaseSource:
         :rtype: int
         """
         return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
-
-    # As this is an intrinsic property of which matched observations are valid, there will be no setter
-    @property
-    def instruments(self) -> Dict:
-        """
-        A property of a source that details which instruments have valid data for which observations.
-
-        :return: A dictionary of ObsIDs and their associated valid instruments.
-        :rtype: Dict
-        """
-        return self._instruments
 
     @property
     def disassociated(self) -> bool:
