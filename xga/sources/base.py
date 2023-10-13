@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 11:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 11:45. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -689,6 +689,7 @@ class BaseSource:
         else:
             return self._supp_warn
 
+    # Next up we define the protected methods of the class
     def _initial_products(self, init_obs: dict) -> Tuple[dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing data products, for all selected
@@ -821,255 +822,6 @@ class BaseSource:
             obs_dict[tel] = {o: v for o, v in obs_dict[tel].items() if len(v) != 0}
 
         return obs_dict, reg_dict, att_dict
-
-    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D, List[BaseProduct],
-                                              List[BaseAggregateProduct], List[BaseProfile1D]],
-                        update_inv: bool = True):
-        """
-        Setter method for the products attribute of source objects. Cannot delete existing products,
-        but will overwrite existing products. Raises errors if the ObsID is not associated
-        with this source or the instrument is not associated with the ObsID. Lists of products can also be passed
-        and will be added to the source storage structure, these lists may also contain None values, as typically
-        XGA will return None if a profile fails to generate (for instance), in which case that entry will simply
-        be ignored.
-
-        :param BaseProduct/BaseAggregateProduct/BaseProfile1D/List[BaseProduct]/List[BaseProfile1D] prod_obj: The
-            new product object(s) to be added to the source object.
-        :param bool update_inv: This flag is to avoid unnecessary read-writes when this method is called by a method
-            (such as _existing_xga_products) which want to add products to the source storage structure, but don't
-            want the inventory file altered (as they know the product is already in there).
-        """
-        # Aggregate products are things like PSF grids and sets of annular spectra.
-        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D, list)) and prod_obj is not None:
-            raise TypeError("Only product objects can be assigned to sources.")
-        elif isinstance(prod_obj, list) and not all([isinstance(p, (BaseProduct, BaseAggregateProduct, BaseProfile1D))
-                                                     or p is None for p in prod_obj]):
-            raise TypeError("If a list is passed, only product objects (or None values) may be included.")
-        elif not isinstance(prod_obj, list):
-            prod_obj = [prod_obj]
-
-        for po in prod_obj:
-            if po is not None:
-                if isinstance(po, Image):
-                    extra_key = po.storage_key
-                    en_key = "bound_{l}-{u}".format(l=float(po.energy_bounds[0].value),
-                                                    u=float(po.energy_bounds[1].value))
-                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D):
-                    extra_key = po.storage_key
-                elif type(po) == PSFGrid:
-                    # The first part of the key is the model used (by default its ELLBETA for example), and
-                    #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
-                    extra_key = po.model + "_" + str(po.num_bins)
-                else:
-                    extra_key = None
-
-                # All information about where to place it in our storage hierarchy can be pulled from the product
-                # object itself
-                obs_id = po.obs_id # JESS_TODO i think these maybe become dictionaries with tscope keys
-                inst = po.instrument
-                p_type = po.type
-                # JESS_TODO need to telescope attribute to product class
-                telescopes = po.telescope
-
-                if len(telescopes) != 1:
-                    raise NotImplementedError("Multi Telescope products not supported yet")
-
-                for tscope in telescopes:
-                    if tscope != 'xmm':
-                        raise NotImplementedError("Only XMM is supported")
-                    # Just redefining so the code is easier to read later
-                    obs_id = obs_id[tscope]
-                    inst = inst[tscope]
-                    # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
-                    #  together - merged products do get a 'combined' prefix on their product type key though
-                    if obs_id == "combined":
-                        p_type = "combined_" + p_type
-
-                    # 'Combined' will effectively be stored as another ObsID
-                    if "combined" not in self._products[tscope]:
-                        self._products[tscope]["combined"] = {}
-
-                    # The product gets the name of this source object added to it
-                    po.src_name = self.name
-
-                    # Double check that something is trying to add products from another source to the current one.
-                    if obs_id != "combined" and obs_id not in self._products[tscope]:
-                        raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
-                    elif inst != "combined" and inst not in self._products[tscope][obs_id]:
-                        raise NotAssociatedError("{i} is not associated with {t} observation {o}".format(i=inst,
-                                                                                            t=tscope, o=obs_id))
-
-                    if extra_key is not None and obs_id != "combined":
-                        # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
-                        if extra_key not in self._products[tscope][obs_id][inst]:
-                            self._products[tscope][obs_id][inst][extra_key] = {}
-                        self._products[tscope][obs_id][inst][extra_key][p_type] = po
-
-                    elif extra_key is None and obs_id != "combined":
-                        self._products[tscope][obs_id][inst][p_type] = po
-
-                    # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
-                    #  and ObsID = 'combined'
-                    elif extra_key is not None and obs_id == "combined":
-                        if extra_key not in self._products[tscope][obs_id]:
-                            self._products[tscope][obs_id][extra_key] = {}
-                        self._products[tscope][obs_id][extra_key][p_type] = po
-
-                    elif extra_key is None and obs_id == "combined":
-                        self._products[tscope][obs_id][p_type] = po
-
-                    # This is for an image being added, so we look for a matching exposure map. If it exists we can
-                    #  make a ratemap
-                    if p_type == "image":
-                        # No chance of an expmap being PSF corrected, so we just use the energy key to
-                        #  look for one that matches our new image
-                        # JESS_TODO check this liinnnneee
-                        exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False)[tscope] if en_key in prod]
-                        if len(exs) == 1:
-                            new_rt = RateMap(po, exs[0][-1])
-                            new_rt.src_name = self.name
-                            self._products[tscope][obs_id][inst][extra_key]["ratemap"] = new_rt
-
-                    # However, if its an exposure map that's been added, we have to look for matching image(s). There
-                    #  could be multiple, because there could be a normal image, and a PSF corrected image
-                    elif p_type == "expmap":
-                        # PSF corrected extra keys are built on top of energy keys, so if the en_key is within the extra
-                        #  key string it counts as a match
-                        ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False)[tscope]
-                            if en_key in prod[-2]]
-                        # If there is at least one match, we can go to work
-                        if len(ims) != 0:
-                            for im in ims:
-                                new_rt = RateMap(im[-1], po)
-                                new_rt.src_name = self.name
-                                self._products[tscope][obs_id][inst][im[-2]]["ratemap"] = new_rt
-
-                    # The same behaviours hold for combined_image and combined_expmap, but they get
-                    #  stored in slightly different places
-                    elif p_type == "combined_image":
-                        exs = [prod for prod in self.get_products("combined_expmap", just_obj=False)[tscope] if en_key in prod]
-                        if len(exs) == 1:
-                            new_rt = RateMap(po, exs[0][-1])
-                            new_rt.src_name = self.name
-                            # Remember obs_id for combined products is just 'combined'
-                            self._products[tscope][obs_id][extra_key]["combined_ratemap"] = new_rt
-
-                    elif p_type == "combined_expmap":
-                        ims = [prod for prod in self.get_products("combined_image", just_obj=False)[tscope] if en_key in prod[-2]]
-                        if len(ims) != 0:
-                            for im in ims:
-                                new_rt = RateMap(im[-1], po)
-                                new_rt.src_name = self.name
-                                self._products[tscope][obs_id][im[-2]]["combined_ratemap"] = new_rt
-
-                    if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
-                        po.save()
-
-                    # Here we make sure to store a record of the added product in the relevant inventory file
-                    if isinstance(po, BaseProduct) and po.obs_id[tscope] != 'combined' and update_inv:
-                        inven = pd.read_csv(OUTPUT + tscope + "/{}/inventory.csv".format(po.obs_id[tscope]), dtype=str)
-
-                        # Don't want to store a None value as a string for the info_key
-                        if extra_key is None:
-                            info_key = ''
-                        else:
-                            info_key = extra_key
-
-                        # I want only the name of the file as it is in the storage directory, I don't want an
-                        #  absolute path, so I remove the leading information about the absolute location in
-                        #  the .path string
-                        f_name = po.path.split(OUTPUT + tscope + "/{}/".format(po.obs_id[tscope]))[-1]
-
-                        # Images, exposure maps, and other such things are not source specific, so I don't want
-                        #  the inventory file to assign them a specific source
-                        if isinstance(po, Image):
-                            s_name = ''
-                        else:
-                            s_name = po.src_name
-
-                        # Creates new pandas series to be appended to the inventory dataframe
-                        new_line = pd.Series([f_name, po.obs_id[tscope], po.instrument[tscope], info_key, s_name, po.type],
-                                             ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
-                        # Concatenates the series with the inventory dataframe
-                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-
-                        # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
-                        #  if it did I think it would cause problems so better to be safe and add this.
-                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
-                        # Saves the updated inventory file
-                        inven.to_csv(OUTPUT + tscope + "/{}/inventory.csv".format(po.obs_id[tscope]), index=False)
-
-                    elif isinstance(po, BaseProduct) and po.obs_id[tscope] == 'combined' and update_inv:
-                        inven = pd.read_csv(OUTPUT + tscope + "/combined/inventory.csv", dtype=str)
-
-                        # Don't want to store a None value as a string for the info_key
-                        if extra_key is None:
-                            info_key = ''
-                        else:
-                            info_key = extra_key
-
-                        # We know that this particular product is a combination of multiple ObsIDs, and those ObsIDs
-                        #  are not stored explicitly within the product object. However we are currently within the
-                        #  source object that they were generated from, thus we do have that information available
-                        # Using the _instruments attribute also gives us access to inst information
-                        i_str = "/".join([i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-                        o_str = "/".join([o for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-                        # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
-                        #  them into strings
-
-                        f_name = po.path.split(OUTPUT + tscope + "/combined/")[-1]
-                        if isinstance(po, Image):
-                            s_name = ''
-                        else:
-                            s_name = po.src_name
-
-                        # Creates new pandas series to be appended to the inventory dataframe
-                        new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, po.type],
-                                             ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                        # Concatenates the series with the inventory dataframe
-                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
-                        inven.to_csv(OUTPUT + tscope + "/combined/inventory.csv", index=False)
-
-                    elif isinstance(po, BaseProfile1D) and po.obs_id[tscope] != 'combined' and update_inv:
-                        inven = pd.read_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), dtype=str)
-
-                        # Don't want to store a None value as a string for the info_key
-                        if extra_key is None:
-                            info_key = ''
-                        else:
-                            info_key = extra_key
-
-                        f_name = po.save_path.split(OUTPUT + tscope + "/profiles/{}/".format(self.name))[-1]
-                        i_str = po.instrument[tscope]
-                        o_str = po.obs_id[tscope]
-                        # Creates new pandas series to be appended to the inventory dataframe
-                        new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
-                                             ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                        # Concatenates the series with the inventory dataframe
-                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
-                        inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
-
-                    elif isinstance(po, BaseProfile1D) and po.obs_id[tscope] == 'combined' and update_inv:
-                        inven = pd.read_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), dtype=str)
-
-                        # Don't want to store a None value as a string for the info_key
-                        if extra_key is None:
-                            info_key = ''
-                        else:
-                            info_key = extra_key
-
-                        f_name = po.save_path.split(OUTPUT + tscope + "/profiles/{}/".format(self.name))[-1]
-                        i_str = "/".join([i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-                        o_str = "/".join([o for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-                        # Creates new pandas series to be appended to the inventory dataframe
-                        new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
-                                             ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                        # Concatenates the series with the inventory dataframe
-                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
-                        inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
 
     def _existing_xga_products(self, read_fits: bool):
         """
@@ -1531,78 +1283,6 @@ class BaseSource:
                         else:
                             self._supp_warn.append(warn_text)
 
-    def get_products(self, p_type: str, telescope: Union[str, List[str]] = None, obs_id: str = None, inst: str = None,
-                     extra_key: str = None, just_obj: bool = True) -> List[BaseProduct]:
-        """
-        This is the getter for the products data structure of Source objects. Passing a 'product type'
-        such as 'events' or 'images' will return every matching entry in the products data structure.
-
-        :param str p_type: Product type identifier. e.g. image or expmap.
-        :param str obs_id: Optionally, a specific obs_id to search can be supplied.
-        :param str inst: Optionally, a specific instrument to search can be supplied.
-        :param str extra_key: Optionally, an extra key (like an energy bound) can be supplied.
-        :param bool just_obj: A boolean flag that controls whether this method returns just the product objects,
-            or the other information that goes with it like ObsID and instrument.
-        :return: List of matching products.
-        :rtype: List[BaseProduct]
-        """
-
-        def unpack_list(to_unpack: list):
-            """
-            A recursive function to go through every layer of a nested list and flatten it all out. It
-            doesn't return anything because to make life easier the 'results' are appended to a variable
-            in the namespace above this one.
-
-            :param list to_unpack: The list that needs unpacking.
-            """
-            # Must iterate through the given list
-            for entry in to_unpack:
-                # If the current element is not a list then all is chill, this element is ready for appending
-                # to the final list
-                if not isinstance(entry, list):
-                    out.append(entry)
-                else:
-                    # If the current element IS a list, then obviously we still have more unpacking to do,
-                    # so we call this function recursively.
-                    unpack_list(entry)
-
-        # DAVID_QUESTION want to put this into another function, where is the best place to put this
-        if telescope is None:
-            telescope = self._usable_tscopes
-        elif isinstance(telescope, "str") and telescope in self._usable_tscopes:
-            # Converting the telescope to a list
-            telescope = [telescope]
-        elif not all(tscope in self._usable_tscopes for tscope in telescope):
-            # Checking that the inputted telescope is valid for this source
-            not_valid_tscopes = list(set(telescope) - set(self._usable_tscopes))
-            raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
-                    "have observations associated with this source". format(
-                        nvt=not_valid_tscopes, ut=self._usable_tscopes ))
-
-        matches = {}
-        for tscope in telescope:
-            if obs_id not in self._products[tscope] and obs_id is not None:
-                raise NotAssociatedError("{0} is not associated with {1} .".format(obs_id, self.name))
-            elif (obs_id is not None and obs_id in self._products[tscope]) and \
-                    (inst is not None and inst not in self._products[tscope][obs_id]):
-                raise NotAssociatedError("{0} is associated with {1}, but {2} is not associated with that "
-                                        "observation".format(obs_id, self.name, inst))
-            # Iterates through the dict search return, but each match is likely to be a very nested list,
-            # with the degree of nesting dependant on product type (as event lists live a level up from
-            # images for instance
-            for match in dict_search(p_type, self._products[tscope]):
-                out = []
-                unpack_list(match)
-                # Only adds to matches dict if this particular match is for the obs_id and instrument passed to this method
-                # Though all matches will be returned if no obs_id/inst is passed
-                if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                        and (extra_key in out or extra_key is None) and not just_obj:
-                    matches[tscope] = out
-                elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                        and (extra_key in out or extra_key is None) and just_obj:
-                    matches[tscope] = out[-1]
-        return matches
-
     def _load_regions(self, reg_paths: dict) -> Tuple[dict, dict]:
         """
         An internal method that reads and parses region files found for observations associated with this source.
@@ -1755,93 +1435,6 @@ class BaseSource:
 
         return reg_dict, match_dict
 
-    def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
-                     extra_info: np.ndarray, stack: bool = False):
-        """
-        Small function to update the numpy array that makes up the queue of products to be generated.
-
-        :param np.ndarray cmd_arr: Array containing SAS commands.
-        :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
-            by the cmd array. e.g. image or expmap.
-        :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
-        :param np.ndarray extra_info: Array of extra information dictionaries
-        :param stack: Should these commands be executed after a preceding line of commands,
-            or at the same time.
-        :return:
-        """
-        if self.queue is None:
-            # I could have done all of these in one array with 3 dimensions, but felt this was easier to read
-            # and with no real performance penalty
-            self.queue = cmd_arr
-            self.queue_type = p_type_arr
-            self.queue_path = p_path_arr
-            self.queue_extra_info = extra_info
-        elif stack:
-            self.queue = np.vstack((self.queue, cmd_arr))
-            self.queue_type = np.vstack((self.queue_type, p_type_arr))
-            self.queue_path = np.vstack((self.queue_path, p_path_arr))
-            self.queue_extra_info = np.vstack((self.queue_extra_info, extra_info))
-        else:
-            self.queue = np.append(self.queue, cmd_arr, axis=0)
-            self.queue_type = np.append(self.queue_type, p_type_arr, axis=0)
-            self.queue_path = np.append(self.queue_path, p_path_arr, axis=0)
-            self.queue_extra_info = np.append(self.queue_extra_info, extra_info, axis=0)
-
-    def get_queue(self) -> Tuple[List[str], List[str], List[List[str]], List[dict]]:
-        """
-        Calling this indicates that the queue is about to be processed, so this function combines SAS
-        commands along columns (command stacks), and returns N SAS commands to be run concurrently,
-        where N is the number of columns.
-
-        :return: List of strings, where the strings are bash commands to run SAS procedures, another
-            list of strings, where the strings are expected output types for the commands, a list of
-            lists of strings, where the strings are expected output paths for products of the SAS commands.
-        :rtype: Tuple[List[str], List[str], List[List[str]]]
-        """
-        if self.queue is None:
-            # This returns empty lists if the queue is undefined
-            processed_cmds = []
-            types = []
-            paths = []
-            extras = []
-        elif len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
-            processed_cmds = list(self.queue)
-            types = list(self.queue_type)
-            paths = [[str(path)] for path in self.queue_path]
-            extras = list(self.queue_extra_info)
-        else:
-            processed_cmds = [";".join(col) for col in self.queue.T]
-            types = list(self.queue_type[-1, :])
-            paths = [list(col.astype(str)) for col in self.queue_path.T]
-            extras = []
-            for col in self.queue_path.T:
-                # This nested dictionary comprehension combines a column of extra information
-                # dictionaries into one, for ease of access.
-                comb_extra = {k: v for ext_dict in col for k, v in ext_dict.items()}
-                extras.append(comb_extra)
-
-        # This is only likely to be called when processing is beginning, so this will wipe the queue.
-        self.queue = None
-        self.queue_type = None
-        self.queue_path = None
-        self.queue_extra_info = None
-        # The returned paths are lists of strings because we want to include every file in a stack to be able
-        # to check that exists
-        return processed_cmds, types, paths, extras
-
-    def get_att_file(self, obs_id: str) -> str:
-        """
-        Fetches the path to the attitude file for an XMM observation.
-
-        :param obs_id: The ObsID to fetch the attitude file for.
-        :return: The path to the attitude file.
-        :rtype: str
-        """
-        if obs_id not in self._products:
-            raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
-        else:
-            return self._att_files[obs_id]
-
     def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
         """
         A method that looks for matches not just based on position, but also on the type of source
@@ -1947,7 +1540,612 @@ class BaseSource:
                 anti_results_dict[obs] = []
 
         return results_dict, alt_match_dict, anti_results_dict
+
+    def _generate_interloper_mask(self, mask_image: Image) -> ndarray:
+        """
+        Internal method that makes interloper masks in the first place; I allow this because interloper
+        masks will never change, so can be safely generated and stored in an init of a source class.
+
+        :param Image mask_image: The image for which to create the interloper mask.
+        :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
+        :rtype: ndarray
+        """
+        masks = []
+        for r in self._interloper_regions:
+            if r is not None:
+                # The central coordinate of the current region
+                c = Quantity([r.center.ra.value, r.center.dec.value], 'deg')
+                try:
+                    # Checks if the central coordinate can be converted to pixels for the mask_image, if it fails then
+                    #  its likely off of the image, as a ValueError will be thrown if a pixel coordinate is less
+                    #  than zero, or greater than the size of the image in that axis
+                    cp = mask_image.coord_conv(c, 'pix')
+                    pr = r.to_pixel(mask_image.radec_wcs)
+
+                    # If the rotation angle is zero then the conversion to mask by the regions module will be upset,
+                    #  so I perturb the angle by 0.1 degrees
+                    if isinstance(pr, EllipsePixelRegion) and pr.angle.value == 0:
+                        pr.angle += Quantity(0.1, 'deg')
+                    masks.append(pr.to_mask().to_image(mask_image.shape))
+                except ValueError:
+                    pass
+
+        # masks = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
+        #          for reg in self._interloper_regions if reg is not None]
+        interlopers = sum([m for m in masks if m is not None])
+
+        mask = np.ones(mask_image.shape)
+        mask[interlopers != 0] = 0
+
+        return mask
+
+    @staticmethod
+    def _interloper_sas_string(reg: EllipseSkyRegion, im: Image, output_unit: Union[UnitBase, str]) -> str:
+        """
+        Converts ellipse sky regions into SAS region strings for use in SAS tasks.
+
+        :param EllipseSkyRegion reg: The interloper region to generate a SAS string for
+        :param Image im: The XGA image to use for coordinate conversion.
+        :param UnitBase/str output_unit: The output unit for this SAS region, either xmm_sky or xmm_det.
+        :return: The SAS string region for this interloper
+        :rtype: str
+        """
+
+        if output_unit == xmm_det:
+            c_str = "DETX,DETY"
+            raise NotImplementedError("This coordinate system is not yet supported, and isn't a priority. Please "
+                                      "submit an issue on https://github.com/DavidT3/XGA/issues if you particularly "
+                                      "want this.")
+        elif output_unit == xmm_sky:
+            c_str = "X,Y"
+        else:
+            raise NotImplementedError("Only detector and sky coordinates are currently "
+                                      "supported for generating SAS region strings.")
+
+        cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
+        sky_to_deg = sky_deg_scale(im, cen).value
+        conv_cen = im.coord_conv(cen, output_unit)
+        # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
+        #  from degrees to XMM sky coordinates using the factor we calculated in the main function
+        w = reg.width.to('deg').value / 2 / sky_to_deg
+        # We do the same for the height
+        h = reg.height.to('deg').value / 2 / sky_to_deg
+        if w == h:
+            shape_str = "(({t}) IN circle({cx},{cy},{r}))"
+            shape_str = shape_str.format(t=c_str, cx=conv_cen[0].value, cy=conv_cen[1].value, r=h)
+        else:
+            # The rotation angle from the region object is in degrees already
+            shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
+                                                                             cy=conv_cen[1].value, w=w, h=h,
+                                                                             rot=reg.angle.value)
+        return shape_str
+
+    def _get_phot_prod(self, prod_type: str, obs_id: str = None, inst: str = None, lo_en: Quantity = None,
+                       hi_en: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15) \
+            -> Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]:
+        """
+        An internal method which is the basis of the get_images, get_expmaps, and get_ratemaps methods.
+
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all images/expmaps/ratemaps matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all images/expmaps/ratemaps matching the other criteria will be returned.
+        :param Quantity lo_en: The lower energy limit of the images/expmaps/ratemaps you wish to
+            retrieve, the default is None (which will retrieve all images/expmaps/ratemaps regardless of
+            energy limit).
+        :param Quantity hi_en: The upper energy limit of the images/expmaps/ratemaps you wish to
+            retrieve, the default is None (which will retrieve all images/expmaps/ratemaps regardless of
+            energy limit).
+        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected images/ratemaps or not.
+        :param str psf_model: If the images/ratemaps you want are PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the images/ratemaps you want are PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the images/ratemaps you want are PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the images/ratemaps you want are PSF corrected, this is the number of iterations.
+        :return: An XGA Image/RateMap/ExpMap object (if there is an exact match), or a list of XGA
+            Image/RateMap/ExpMap objects (if there were multiple matching products).
+        :rtype: Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]
+        """
+        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
+        if all([lo_en is None, hi_en is None]):
+            # Sets a flag to tell the rest of the method whether we have energy lims or not
+            with_lims = False
+            energy_key = None
+        elif all([lo_en is not None, hi_en is not None]):
+            with_lims = True
+            # We have energy limits here so we assemble the key that describes the energy range
+            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        # If we are looking for a PSF corrected image/ratemap then we assemble the extra key with PSF details
+        if psf_corr and prod_type in ["image", "ratemap"]:
+            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
+
+        if not psf_corr and with_lims:
+            # Simplest case, just calling get_products and passing in our information
+            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key)
+        elif not psf_corr and not with_lims:
+            broad_matches = self.get_products(prod_type, obs_id, inst)
+            matched_prods = [p for p in broad_matches if not p.psf_corrected]
+        elif psf_corr and with_lims:
+            # Here we need to add the extra key to the energy key
+            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key + extra_key)
+        elif psf_corr and not with_lims:
+            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
+            broad_matches = self.get_products(prod_type, obs_id, inst, extra_key=None, just_obj=False)
+            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any {p}s matching your input.".format(p=prod_type))
+
+        return matched_prods
+
+    def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
+                       radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
+            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+        """
+        The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
+        searches for full and partial matches in this source's product storage structure.
+
+        :param str search_key: The exact search key which defined profile type, and whether it is combined or not.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
+            is None which means the method will use the default coordinate of this source.
+        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
+            used often as you likely won't know the radial values a priori.
+        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed hi_en must be too.
+        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
+            is None, and if this argument is passed lo_en must be too.
+        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
+            were multiple matching products).
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if all([lo_en is None, hi_en is None]):
+            energy_key = "_"
+        elif all([lo_en is not None, hi_en is not None]):
+            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
+        else:
+            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+
+        if central_coord is None:
+            central_coord = self.default_coord
+        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
+
+        if radii is not None:
+            radii = self.convert_radius(radii, 'deg')
+            rad_chunk = "r" + "_".join(radii.value.astype(str))
+            rad_info = True
+        else:
+            rad_info = False
+
+        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False)
+        matched_prods = []
+        for p in broad_prods:
+            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
+
+            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
+                matched_prods.append(p[-1])
+            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
+                matched_prods.append(p[-1])
+
+        return matched_prods
+
+    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D, List[BaseProduct],
+                                              List[BaseAggregateProduct], List[BaseProfile1D]],
+                        update_inv: bool = True):
+        """
+        Setter method for the products attribute of source objects. Cannot delete existing products,
+        but will overwrite existing products. Raises errors if the ObsID is not associated
+        with this source or the instrument is not associated with the ObsID. Lists of products can also be passed
+        and will be added to the source storage structure, these lists may also contain None values, as typically
+        XGA will return None if a profile fails to generate (for instance), in which case that entry will simply
+        be ignored.
+
+        :param BaseProduct/BaseAggregateProduct/BaseProfile1D/List[BaseProduct]/List[BaseProfile1D] prod_obj: The
+            new product object(s) to be added to the source object.
+        :param bool update_inv: This flag is to avoid unnecessary read-writes when this method is called by a method
+            (such as _existing_xga_products) which want to add products to the source storage structure, but don't
+            want the inventory file altered (as they know the product is already in there).
+        """
+        # Aggregate products are things like PSF grids and sets of annular spectra.
+        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D, list)) and prod_obj is not None:
+            raise TypeError("Only product objects can be assigned to sources.")
+        elif isinstance(prod_obj, list) and not all([isinstance(p, (BaseProduct, BaseAggregateProduct, BaseProfile1D))
+                                                     or p is None for p in prod_obj]):
+            raise TypeError("If a list is passed, only product objects (or None values) may be included.")
+        elif not isinstance(prod_obj, list):
+            prod_obj = [prod_obj]
+
+        for po in prod_obj:
+            if po is not None:
+                if isinstance(po, Image):
+                    extra_key = po.storage_key
+                    en_key = "bound_{l}-{u}".format(l=float(po.energy_bounds[0].value),
+                                                    u=float(po.energy_bounds[1].value))
+                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D):
+                    extra_key = po.storage_key
+                elif type(po) == PSFGrid:
+                    # The first part of the key is the model used (by default its ELLBETA for example), and
+                    #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
+                    extra_key = po.model + "_" + str(po.num_bins)
+                else:
+                    extra_key = None
+
+                # All information about where to place it in our storage hierarchy can be pulled from the product
+                # object itself
+                obs_id = po.obs_id # JESS_TODO i think these maybe become dictionaries with tscope keys
+                inst = po.instrument
+                p_type = po.type
+                # JESS_TODO need to telescope attribute to product class
+                telescopes = po.telescope
+
+                if len(telescopes) != 1:
+                    raise NotImplementedError("Multi Telescope products not supported yet")
+
+                for tscope in telescopes:
+                    if tscope != 'xmm':
+                        raise NotImplementedError("Only XMM is supported")
+                    # Just redefining so the code is easier to read later
+                    obs_id = obs_id[tscope]
+                    inst = inst[tscope]
+                    # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
+                    #  together - merged products do get a 'combined' prefix on their product type key though
+                    if obs_id == "combined":
+                        p_type = "combined_" + p_type
+
+                    # 'Combined' will effectively be stored as another ObsID
+                    if "combined" not in self._products[tscope]:
+                        self._products[tscope]["combined"] = {}
+
+                    # The product gets the name of this source object added to it
+                    po.src_name = self.name
+
+                    # Double check that something is trying to add products from another source to the current one.
+                    if obs_id != "combined" and obs_id not in self._products[tscope]:
+                        raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
+                    elif inst != "combined" and inst not in self._products[tscope][obs_id]:
+                        raise NotAssociatedError("{i} is not associated with {t} observation {o}".format(i=inst,
+                                                                                            t=tscope, o=obs_id))
+
+                    if extra_key is not None and obs_id != "combined":
+                        # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
+                        if extra_key not in self._products[tscope][obs_id][inst]:
+                            self._products[tscope][obs_id][inst][extra_key] = {}
+                        self._products[tscope][obs_id][inst][extra_key][p_type] = po
+
+                    elif extra_key is None and obs_id != "combined":
+                        self._products[tscope][obs_id][inst][p_type] = po
+
+                    # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
+                    #  and ObsID = 'combined'
+                    elif extra_key is not None and obs_id == "combined":
+                        if extra_key not in self._products[tscope][obs_id]:
+                            self._products[tscope][obs_id][extra_key] = {}
+                        self._products[tscope][obs_id][extra_key][p_type] = po
+
+                    elif extra_key is None and obs_id == "combined":
+                        self._products[tscope][obs_id][p_type] = po
+
+                    # This is for an image being added, so we look for a matching exposure map. If it exists we can
+                    #  make a ratemap
+                    if p_type == "image":
+                        # No chance of an expmap being PSF corrected, so we just use the energy key to
+                        #  look for one that matches our new image
+                        # JESS_TODO check this liinnnneee
+                        exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False)[tscope] if en_key in prod]
+                        if len(exs) == 1:
+                            new_rt = RateMap(po, exs[0][-1])
+                            new_rt.src_name = self.name
+                            self._products[tscope][obs_id][inst][extra_key]["ratemap"] = new_rt
+
+                    # However, if its an exposure map that's been added, we have to look for matching image(s). There
+                    #  could be multiple, because there could be a normal image, and a PSF corrected image
+                    elif p_type == "expmap":
+                        # PSF corrected extra keys are built on top of energy keys, so if the en_key is within the extra
+                        #  key string it counts as a match
+                        ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False)[tscope]
+                            if en_key in prod[-2]]
+                        # If there is at least one match, we can go to work
+                        if len(ims) != 0:
+                            for im in ims:
+                                new_rt = RateMap(im[-1], po)
+                                new_rt.src_name = self.name
+                                self._products[tscope][obs_id][inst][im[-2]]["ratemap"] = new_rt
+
+                    # The same behaviours hold for combined_image and combined_expmap, but they get
+                    #  stored in slightly different places
+                    elif p_type == "combined_image":
+                        exs = [prod for prod in self.get_products("combined_expmap", just_obj=False)[tscope] if en_key in prod]
+                        if len(exs) == 1:
+                            new_rt = RateMap(po, exs[0][-1])
+                            new_rt.src_name = self.name
+                            # Remember obs_id for combined products is just 'combined'
+                            self._products[tscope][obs_id][extra_key]["combined_ratemap"] = new_rt
+
+                    elif p_type == "combined_expmap":
+                        ims = [prod for prod in self.get_products("combined_image", just_obj=False)[tscope] if en_key in prod[-2]]
+                        if len(ims) != 0:
+                            for im in ims:
+                                new_rt = RateMap(im[-1], po)
+                                new_rt.src_name = self.name
+                                self._products[tscope][obs_id][im[-2]]["combined_ratemap"] = new_rt
+
+                    if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
+                        po.save()
+
+                    # Here we make sure to store a record of the added product in the relevant inventory file
+                    if isinstance(po, BaseProduct) and po.obs_id[tscope] != 'combined' and update_inv:
+                        inven = pd.read_csv(OUTPUT + tscope + "/{}/inventory.csv".format(po.obs_id[tscope]), dtype=str)
+
+                        # Don't want to store a None value as a string for the info_key
+                        if extra_key is None:
+                            info_key = ''
+                        else:
+                            info_key = extra_key
+
+                        # I want only the name of the file as it is in the storage directory, I don't want an
+                        #  absolute path, so I remove the leading information about the absolute location in
+                        #  the .path string
+                        f_name = po.path.split(OUTPUT + tscope + "/{}/".format(po.obs_id[tscope]))[-1]
+
+                        # Images, exposure maps, and other such things are not source specific, so I don't want
+                        #  the inventory file to assign them a specific source
+                        if isinstance(po, Image):
+                            s_name = ''
+                        else:
+                            s_name = po.src_name
+
+                        # Creates new pandas series to be appended to the inventory dataframe
+                        new_line = pd.Series([f_name, po.obs_id[tscope], po.instrument[tscope], info_key, s_name, po.type],
+                                             ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
+                        # Concatenates the series with the inventory dataframe
+                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+
+                        # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
+                        #  if it did I think it would cause problems so better to be safe and add this.
+                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                        # Saves the updated inventory file
+                        inven.to_csv(OUTPUT + tscope + "/{}/inventory.csv".format(po.obs_id[tscope]), index=False)
+
+                    elif isinstance(po, BaseProduct) and po.obs_id[tscope] == 'combined' and update_inv:
+                        inven = pd.read_csv(OUTPUT + tscope + "/combined/inventory.csv", dtype=str)
+
+                        # Don't want to store a None value as a string for the info_key
+                        if extra_key is None:
+                            info_key = ''
+                        else:
+                            info_key = extra_key
+
+                        # We know that this particular product is a combination of multiple ObsIDs, and those ObsIDs
+                        #  are not stored explicitly within the product object. However we are currently within the
+                        #  source object that they were generated from, thus we do have that information available
+                        # Using the _instruments attribute also gives us access to inst information
+                        i_str = "/".join([i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
+                        o_str = "/".join([o for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
+                        # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
+                        #  them into strings
+
+                        f_name = po.path.split(OUTPUT + tscope + "/combined/")[-1]
+                        if isinstance(po, Image):
+                            s_name = ''
+                        else:
+                            s_name = po.src_name
+
+                        # Creates new pandas series to be appended to the inventory dataframe
+                        new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, po.type],
+                                             ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+                        # Concatenates the series with the inventory dataframe
+                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                        inven.to_csv(OUTPUT + tscope + "/combined/inventory.csv", index=False)
+
+                    elif isinstance(po, BaseProfile1D) and po.obs_id[tscope] != 'combined' and update_inv:
+                        inven = pd.read_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), dtype=str)
+
+                        # Don't want to store a None value as a string for the info_key
+                        if extra_key is None:
+                            info_key = ''
+                        else:
+                            info_key = extra_key
+
+                        f_name = po.save_path.split(OUTPUT + tscope + "/profiles/{}/".format(self.name))[-1]
+                        i_str = po.instrument[tscope]
+                        o_str = po.obs_id[tscope]
+                        # Creates new pandas series to be appended to the inventory dataframe
+                        new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
+                                             ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+                        # Concatenates the series with the inventory dataframe
+                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                        inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
+
+                    elif isinstance(po, BaseProfile1D) and po.obs_id[tscope] == 'combined' and update_inv:
+                        inven = pd.read_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), dtype=str)
+
+                        # Don't want to store a None value as a string for the info_key
+                        if extra_key is None:
+                            info_key = ''
+                        else:
+                            info_key = extra_key
+
+                        f_name = po.save_path.split(OUTPUT + tscope + "/profiles/{}/".format(self.name))[-1]
+                        i_str = "/".join([i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
+                        o_str = "/".join([o for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
+                        # Creates new pandas series to be appended to the inventory dataframe
+                        new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
+                                             ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+                        # Concatenates the series with the inventory dataframe
+                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                        inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
     # This is used to name files and directories so this is not allowed to change.
+
+    def get_products(self, p_type: str, telescope: Union[str, List[str]] = None, obs_id: str = None, inst: str = None,
+                     extra_key: str = None, just_obj: bool = True) -> List[BaseProduct]:
+        """
+        This is the getter for the products data structure of Source objects. Passing a 'product type'
+        such as 'events' or 'images' will return every matching entry in the products data structure.
+
+        :param str p_type: Product type identifier. e.g. image or expmap.
+        :param str obs_id: Optionally, a specific obs_id to search can be supplied.
+        :param str inst: Optionally, a specific instrument to search can be supplied.
+        :param str extra_key: Optionally, an extra key (like an energy bound) can be supplied.
+        :param bool just_obj: A boolean flag that controls whether this method returns just the product objects,
+            or the other information that goes with it like ObsID and instrument.
+        :return: List of matching products.
+        :rtype: List[BaseProduct]
+        """
+
+        def unpack_list(to_unpack: list):
+            """
+            A recursive function to go through every layer of a nested list and flatten it all out. It
+            doesn't return anything because to make life easier the 'results' are appended to a variable
+            in the namespace above this one.
+
+            :param list to_unpack: The list that needs unpacking.
+            """
+            # Must iterate through the given list
+            for entry in to_unpack:
+                # If the current element is not a list then all is chill, this element is ready for appending
+                # to the final list
+                if not isinstance(entry, list):
+                    out.append(entry)
+                else:
+                    # If the current element IS a list, then obviously we still have more unpacking to do,
+                    # so we call this function recursively.
+                    unpack_list(entry)
+
+        # DAVID_QUESTION want to put this into another function, where is the best place to put this
+        if telescope is None:
+            telescope = self._usable_tscopes
+        elif isinstance(telescope, "str") and telescope in self._usable_tscopes:
+            # Converting the telescope to a list
+            telescope = [telescope]
+        elif not all(tscope in self._usable_tscopes for tscope in telescope):
+            # Checking that the inputted telescope is valid for this source
+            not_valid_tscopes = list(set(telescope) - set(self._usable_tscopes))
+            raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
+                    "have observations associated with this source". format(
+                        nvt=not_valid_tscopes, ut=self._usable_tscopes ))
+
+        matches = {}
+        for tscope in telescope:
+            if obs_id not in self._products[tscope] and obs_id is not None:
+                raise NotAssociatedError("{0} is not associated with {1} .".format(obs_id, self.name))
+            elif (obs_id is not None and obs_id in self._products[tscope]) and \
+                    (inst is not None and inst not in self._products[tscope][obs_id]):
+                raise NotAssociatedError("{0} is associated with {1}, but {2} is not associated with that "
+                                        "observation".format(obs_id, self.name, inst))
+            # Iterates through the dict search return, but each match is likely to be a very nested list,
+            # with the degree of nesting dependant on product type (as event lists live a level up from
+            # images for instance
+            for match in dict_search(p_type, self._products[tscope]):
+                out = []
+                unpack_list(match)
+                # Only adds to matches dict if this particular match is for the obs_id and instrument passed to this method
+                # Though all matches will be returned if no obs_id/inst is passed
+                if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
+                        and (extra_key in out or extra_key is None) and not just_obj:
+                    matches[tscope] = out
+                elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
+                        and (extra_key in out or extra_key is None) and just_obj:
+                    matches[tscope] = out[-1]
+        return matches
+
+    def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
+                     extra_info: np.ndarray, stack: bool = False):
+        """
+        Small function to update the numpy array that makes up the queue of products to be generated.
+
+        :param np.ndarray cmd_arr: Array containing SAS commands.
+        :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
+            by the cmd array. e.g. image or expmap.
+        :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
+        :param np.ndarray extra_info: Array of extra information dictionaries
+        :param stack: Should these commands be executed after a preceding line of commands,
+            or at the same time.
+        :return:
+        """
+        if self.queue is None:
+            # I could have done all of these in one array with 3 dimensions, but felt this was easier to read
+            # and with no real performance penalty
+            self.queue = cmd_arr
+            self.queue_type = p_type_arr
+            self.queue_path = p_path_arr
+            self.queue_extra_info = extra_info
+        elif stack:
+            self.queue = np.vstack((self.queue, cmd_arr))
+            self.queue_type = np.vstack((self.queue_type, p_type_arr))
+            self.queue_path = np.vstack((self.queue_path, p_path_arr))
+            self.queue_extra_info = np.vstack((self.queue_extra_info, extra_info))
+        else:
+            self.queue = np.append(self.queue, cmd_arr, axis=0)
+            self.queue_type = np.append(self.queue_type, p_type_arr, axis=0)
+            self.queue_path = np.append(self.queue_path, p_path_arr, axis=0)
+            self.queue_extra_info = np.append(self.queue_extra_info, extra_info, axis=0)
+
+    def get_queue(self) -> Tuple[List[str], List[str], List[List[str]], List[dict]]:
+        """
+        Calling this indicates that the queue is about to be processed, so this function combines SAS
+        commands along columns (command stacks), and returns N SAS commands to be run concurrently,
+        where N is the number of columns.
+
+        :return: List of strings, where the strings are bash commands to run SAS procedures, another
+            list of strings, where the strings are expected output types for the commands, a list of
+            lists of strings, where the strings are expected output paths for products of the SAS commands.
+        :rtype: Tuple[List[str], List[str], List[List[str]]]
+        """
+        if self.queue is None:
+            # This returns empty lists if the queue is undefined
+            processed_cmds = []
+            types = []
+            paths = []
+            extras = []
+        elif len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
+            processed_cmds = list(self.queue)
+            types = list(self.queue_type)
+            paths = [[str(path)] for path in self.queue_path]
+            extras = list(self.queue_extra_info)
+        else:
+            processed_cmds = [";".join(col) for col in self.queue.T]
+            types = list(self.queue_type[-1, :])
+            paths = [list(col.astype(str)) for col in self.queue_path.T]
+            extras = []
+            for col in self.queue_path.T:
+                # This nested dictionary comprehension combines a column of extra information
+                # dictionaries into one, for ease of access.
+                comb_extra = {k: v for ext_dict in col for k, v in ext_dict.items()}
+                extras.append(comb_extra)
+
+        # This is only likely to be called when processing is beginning, so this will wipe the queue.
+        self.queue = None
+        self.queue_type = None
+        self.queue_path = None
+        self.queue_extra_info = None
+        # The returned paths are lists of strings because we want to include every file in a stack to be able
+        # to check that exists
+        return processed_cmds, types, paths, extras
+
+    def get_att_file(self, obs_id: str) -> str:
+        """
+        Fetches the path to the attitude file for an XMM observation.
+
+        :param obs_id: The ObsID to fetch the attitude file for.
+        :return: The path to the attitude file.
+        :rtype: str
+        """
+        if obs_id not in self._products:
+            raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
+        else:
+            return self._att_files[obs_id]
 
     def source_back_regions(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
             -> Tuple[SkyRegion, SkyRegion]:
@@ -2115,44 +2313,6 @@ class BaseSource:
             back_mask = np.zeros(mask_image.shape)
 
         return mask, back_mask
-
-    def _generate_interloper_mask(self, mask_image: Image) -> ndarray:
-        """
-        Internal method that makes interloper masks in the first place; I allow this because interloper
-        masks will never change, so can be safely generated and stored in an init of a source class.
-
-        :param Image mask_image: The image for which to create the interloper mask.
-        :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
-        :rtype: ndarray
-        """
-        masks = []
-        for r in self._interloper_regions:
-            if r is not None:
-                # The central coordinate of the current region
-                c = Quantity([r.center.ra.value, r.center.dec.value], 'deg')
-                try:
-                    # Checks if the central coordinate can be converted to pixels for the mask_image, if it fails then
-                    #  its likely off of the image, as a ValueError will be thrown if a pixel coordinate is less
-                    #  than zero, or greater than the size of the image in that axis
-                    cp = mask_image.coord_conv(c, 'pix')
-                    pr = r.to_pixel(mask_image.radec_wcs)
-
-                    # If the rotation angle is zero then the conversion to mask by the regions module will be upset,
-                    #  so I perturb the angle by 0.1 degrees
-                    if isinstance(pr, EllipsePixelRegion) and pr.angle.value == 0:
-                        pr.angle += Quantity(0.1, 'deg')
-                    masks.append(pr.to_mask().to_image(mask_image.shape))
-                except ValueError:
-                    pass
-
-        # masks = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-        #          for reg in self._interloper_regions if reg is not None]
-        interlopers = sum([m for m in masks if m is not None])
-
-        mask = np.ones(mask_image.shape)
-        mask[interlopers != 0] = 0
-
-        return mask
 
     def get_interloper_mask(self, obs_id: str = None) -> ndarray:
         """
@@ -2470,47 +2630,6 @@ class BaseSource:
 
         return np.array(regions_to_search)[int_within]
 
-    @staticmethod
-    def _interloper_sas_string(reg: EllipseSkyRegion, im: Image, output_unit: Union[UnitBase, str]) -> str:
-        """
-        Converts ellipse sky regions into SAS region strings for use in SAS tasks.
-
-        :param EllipseSkyRegion reg: The interloper region to generate a SAS string for
-        :param Image im: The XGA image to use for coordinate conversion.
-        :param UnitBase/str output_unit: The output unit for this SAS region, either xmm_sky or xmm_det.
-        :return: The SAS string region for this interloper
-        :rtype: str
-        """
-
-        if output_unit == xmm_det:
-            c_str = "DETX,DETY"
-            raise NotImplementedError("This coordinate system is not yet supported, and isn't a priority. Please "
-                                      "submit an issue on https://github.com/DavidT3/XGA/issues if you particularly "
-                                      "want this.")
-        elif output_unit == xmm_sky:
-            c_str = "X,Y"
-        else:
-            raise NotImplementedError("Only detector and sky coordinates are currently "
-                                      "supported for generating SAS region strings.")
-
-        cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
-        sky_to_deg = sky_deg_scale(im, cen).value
-        conv_cen = im.coord_conv(cen, output_unit)
-        # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
-        #  from degrees to XMM sky coordinates using the factor we calculated in the main function
-        w = reg.width.to('deg').value / 2 / sky_to_deg
-        # We do the same for the height
-        h = reg.height.to('deg').value / 2 / sky_to_deg
-        if w == h:
-            shape_str = "(({t}) IN circle({cx},{cy},{r}))"
-            shape_str = shape_str.format(t=c_str, cx=conv_cen[0].value, cy=conv_cen[1].value, r=h)
-        else:
-            # The rotation angle from the region object is in degrees already
-            shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
-                                                                             cy=conv_cen[1].value, w=w, h=h,
-                                                                             rot=reg.angle.value)
-        return shape_str
-
     def get_annular_sas_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
                                output_unit: Union[UnitBase, str] = xmm_sky, rot_angle: Quantity = Quantity(0, 'deg'),
                                interloper_regions: np.ndarray = None, central_coord: Quantity = None) -> str:
@@ -2688,6 +2807,9 @@ class BaseSource:
         if spec_storage_key not in self._luminosities:
             self._luminosities[spec_storage_key] = {}
         self._luminosities[spec_storage_key][model] = lums
+    # And here I'm adding a bunch of get methods that should mean the user never has to use get_products, for
+    #  individual product types. It will also mean that they will never have to figure out extra keys themselves
+    #  and I can make lists of 1 product return just as the product without being a breaking change
 
     def get_results(self, outer_radius: Union[str, Quantity], model: str,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
@@ -2844,9 +2966,6 @@ class BaseSource:
             lum_value = self._luminosities[storage_key][model][en_key]
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
-    # And here I'm adding a bunch of get methods that should mean the user never has to use get_products, for
-    #  individual product types. It will also mean that they will never have to figure out extra keys themselves
-    #  and I can make lists of 1 product return just as the product without being a breaking change
 
     def convert_radius(self, radius: Quantity, out_unit: Union[Unit, str] = 'deg') -> Quantity:
         """
@@ -3066,6 +3185,8 @@ class BaseSource:
                         reject_dict[o].append(i)
 
         return reject_dict
+    # The combined photometric products don't really NEED their own get methods, but I figured I would just for
+    #  clarity's sake
 
     def get_spectra(self, outer_radius: Union[str, Quantity], telescope: Union[str, List[str]] = None, obs_id: str = None,
                     inst: str = None, inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
@@ -3255,72 +3376,6 @@ class BaseSource:
 
         if sum([len(matched_prods[tscope]) for tscope in matched_prods.keys()]) == 0:
             raise NoProductAvailableError("No matching AnnularSpectra can be found.")
-
-        return matched_prods
-    # The combined photometric products don't really NEED their own get methods, but I figured I would just for
-    #  clarity's sake
-
-    def _get_phot_prod(self, prod_type: str, obs_id: str = None, inst: str = None, lo_en: Quantity = None,
-                       hi_en: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
-                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15) \
-            -> Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]:
-        """
-        An internal method which is the basis of the get_images, get_expmaps, and get_ratemaps methods.
-
-        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
-            which means all images/expmaps/ratemaps matching the other criteria will be returned.
-        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
-            which means all images/expmaps/ratemaps matching the other criteria will be returned.
-        :param Quantity lo_en: The lower energy limit of the images/expmaps/ratemaps you wish to
-            retrieve, the default is None (which will retrieve all images/expmaps/ratemaps regardless of
-            energy limit).
-        :param Quantity hi_en: The upper energy limit of the images/expmaps/ratemaps you wish to
-            retrieve, the default is None (which will retrieve all images/expmaps/ratemaps regardless of
-            energy limit).
-        :param bool psf_corr: Sets whether you wish to retrieve a PSF corrected images/ratemaps or not.
-        :param str psf_model: If the images/ratemaps you want are PSF corrected, this is the PSF model used.
-        :param int psf_bins: If the images/ratemaps you want are PSF corrected, this is the number of PSFs per
-            side in the PSF grid.
-        :param str psf_algo: If the images/ratemaps you want are PSF corrected, this is the algorithm used.
-        :param int psf_iter: If the images/ratemaps you want are PSF corrected, this is the number of iterations.
-        :return: An XGA Image/RateMap/ExpMap object (if there is an exact match), or a list of XGA
-            Image/RateMap/ExpMap objects (if there were multiple matching products).
-        :rtype: Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]
-        """
-        # Checks to make sure that an allowed combination of lo_en and hi_en has been passed.
-        if all([lo_en is None, hi_en is None]):
-            # Sets a flag to tell the rest of the method whether we have energy lims or not
-            with_lims = False
-            energy_key = None
-        elif all([lo_en is not None, hi_en is not None]):
-            with_lims = True
-            # We have energy limits here so we assemble the key that describes the energy range
-            energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        # If we are looking for a PSF corrected image/ratemap then we assemble the extra key with PSF details
-        if psf_corr and prod_type in ["image", "ratemap"]:
-            extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
-
-        if not psf_corr and with_lims:
-            # Simplest case, just calling get_products and passing in our information
-            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key)
-        elif not psf_corr and not with_lims:
-            broad_matches = self.get_products(prod_type, obs_id, inst)
-            matched_prods = [p for p in broad_matches if not p.psf_corrected]
-        elif psf_corr and with_lims:
-            # Here we need to add the extra key to the energy key
-            matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key + extra_key)
-        elif psf_corr and not with_lims:
-            # Here we don't know the energy key, so we have to look for partial matches in the get_products return
-            broad_matches = self.get_products(prod_type, obs_id, inst, extra_key=None, just_obj=False)
-            matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
-
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any {p}s matching your input.".format(p=prod_type))
 
         return matched_prods
 
@@ -3552,60 +3607,6 @@ class BaseSource:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any combined ratemaps matching your input.")
-
-        return matched_prods
-
-    def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                       radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[BaseProfile1D, List[BaseProfile1D]]:
-        """
-        The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
-        searches for full and partial matches in this source's product storage structure.
-
-        :param str search_key: The exact search key which defined profile type, and whether it is combined or not.
-        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
-            which means all profiles matching the other criteria will be returned.
-        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
-            which means all profiles matching the other criteria will be returned.
-        :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
-            is None which means the method will use the default coordinate of this source.
-        :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
-            used often as you likely won't know the radial values a priori.
-        :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
-            is None, and if this argument is passed hi_en must be too.
-        :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
-            is None, and if this argument is passed lo_en must be too.
-        :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
-            were multiple matching products).
-        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
-        """
-        if all([lo_en is None, hi_en is None]):
-            energy_key = "_"
-        elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
-
-        if central_coord is None:
-            central_coord = self.default_coord
-        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
-
-        if radii is not None:
-            radii = self.convert_radius(radii, 'deg')
-            rad_chunk = "r" + "_".join(radii.value.astype(str))
-            rad_info = True
-        else:
-            rad_info = False
-
-        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False)
-        matched_prods = []
-        for p in broad_prods:
-            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
-
-            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
-                matched_prods.append(p[-1])
-            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
-                matched_prods.append(p[-1])
 
         return matched_prods
 
