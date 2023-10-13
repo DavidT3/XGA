@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 15:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 15:58. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2389,15 +2389,14 @@ class BaseSource:
 
         return matched_prods
 
-    def get_spectra(self, outer_radius: Union[str, Quantity], telescope: Union[str, List[str]] = None, obs_id: str = None,
-                    inst: str = None, inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                    min_counts: int = 5, min_sn: float = None,
-                    over_sample: float = None) -> Union[Spectrum, List[Spectrum]]:
+    def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                    min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
         """
         A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
-        Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum
-        in evselect_spectrum, and the spectra(um) will be provided to you. If no match is found then a
-        NoProductAvailableError will be raised.
+        Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum, and the
+        spectra(um) will be provided to you. If no match is found then a NoProductAvailableError will be raised.
 
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
@@ -2416,23 +2415,12 @@ class BaseSource:
             the minimum signal to noise.
         :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
             over sampling used?
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
         :return: An XGA Spectrum object (if there is an exact match), or a list of XGA Spectrum objects (if there
             were multiple matching products).
         :rtype: Union[Spectrum, List[Spectrum]]
         """
-        # DAVID_QUESTION want to put this into another function, where is the best place to put this
-        if telescope is None:
-            telescope = self._usable_tscopes
-        elif isinstance(telescope, "str") and telescope in self._usable_tscopes:
-            # Converting the telescope to a list
-            telescope = [telescope]
-        elif not all(tscope in self._usable_tscopes for tscope in telescope):
-            # Checking that the inputted telescope is valid for this source
-            not_valid_tscopes = list(set(telescope) - set(self._usable_tscopes))
-            raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
-                    "have observations associated with this source". format(
-                        nvt=not_valid_tscopes, ut=self._usable_tscopes ))
-
         if isinstance(inner_radius, Quantity):
             inn_rad_num = self.convert_radius(inner_radius, 'deg')
         elif isinstance(inner_radius, str):
@@ -2478,20 +2466,18 @@ class BaseSource:
 
         # Adds on the extra information about grouping to the storage key
         spec_storage_name += extra_name
-        matched_prods = {}
-        for tscope in telescope:
-            matched_prods[tscope] = self.get_products(
-                'spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name)[tscope]
-        # DAVID_QUESTION same as the get_annular_spectra question
-        #if len(matched_prods) == 1:
-            #matched_prods = matched_prods[0]
-        if sum([len(matched_prods[tscope]) for tscope in matched_prods.keys()]) == 0:
+        matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
+                                          telescope=telescope)
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any spectra matching your input.")
 
         return matched_prods
 
-    def get_annular_spectra(self, telescope: Union[str, List[str]] = None, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
-                            min_sn: float = None, over_sample: float = None, set_id: int = None) -> AnnularSpectra:
+    def get_annular_spectra(self, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
+                            min_sn: float = None, over_sample: float = None, set_id: int = None,
+                            telescope: str = None) -> AnnularSpectra:
         """
         Another useful method that wraps the get_products function, though this one gets you AnnularSpectra.
         Pass the radii used to generate the annuli, and the same settings you used to generate the spectrum
@@ -2511,23 +2497,11 @@ class BaseSource:
             over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set. Passing a value for this parameter
             will override any other information that you have given this method.
+        :param str telescope: Optionally, a specific telescope to search for annular spectra can be supplied. The
+            default is None, which means all annular spectra matching the other criteria will be returned.
         :return: An XGA AnnularSpectra object if there is an exact match.
         :rtype: AnnularSpectra
         """
-        # DAVID_QUESTION what do you do about the input possibly being in the wrong case
-        if telescope is None:
-            telescope = self._usable_tscopes
-        elif isinstance(telescope, "str") and telescope in self._usable_tscopes:
-            # Converting the telescope to a list
-            telescope = [telescope]
-        elif not all(tscope in self._usable_tscopes for tscope in telescope):
-            # Checking that the inputted telescope is valid for this source
-            not_valid_tscopes = list(set(telescope) - set(self._usable_tscopes))
-            # DAVID_QUESTION shall I make a not valid telescope error
-            raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
-                    "have observations associated with this source". format(
-                        nvt=not_valid_tscopes, ut=self._usable_tscopes ))
-
         if group_spec and min_counts is not None:
             extra_name = "_mincnt{}".format(min_counts)
         elif group_spec and min_sn is not None:
@@ -2547,8 +2521,8 @@ class BaseSource:
             ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
             spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
             spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                        dec=self.default_coord[1].value,
-                                                        ar=ann_rad_str, gr=group_spec)
+                                                         dec=self.default_coord[1].value,
+                                                         ar=ann_rad_str, gr=group_spec)
             spec_storage_name += extra_name
         else:
             # This is a worse case, we don't have radii, so we split the known parts of the key into a list
@@ -2560,22 +2534,21 @@ class BaseSource:
         # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
         #  properly constructed storage key
         if set_id is None and radii is not None:
-            matched_prods = self.get_products('combined_spectrum', extra_key=spec_storage_name)
+            matched_prods = self.get_products('combined_spectrum', extra_key=spec_storage_name, telescope=telescope)
         # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
         elif set_id is None and radii is None:
-            matched_prods = {}
-            for tscope in telescope:
-                matched_prods[tscope] = [p for p in self.get_products('combined_spectrum')[tscope]
-                            if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
+            matched_prods = [p for p in self.get_products('combined_spectrum', telescope=telescope)
+                             if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
         # However if they have passed a setID then this over-rides everything else
         else:
             # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
             #  whatever the user passed in
-            matched_prods = {}
-            for tscope in telescope:
-                matched_prods[tscope] = [p for p in self.get_products('combined_spectrum')[tscope] if p.set_ident == set_id]
+            matched_prods = [p for p in self.get_products('combined_spectrum', telescope=telescope)
+                             if p.set_ident == set_id]
 
-        if sum([len(matched_prods[tscope]) for tscope in matched_prods.keys()]) == 0:
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
             raise NoProductAvailableError("No matching AnnularSpectra can be found.")
 
         return matched_prods
