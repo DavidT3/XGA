@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 11:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 11:30. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -293,11 +293,12 @@ class BaseSource:
         # This method takes our vetted (as in we've checked that region files exist) set of region files,
         #  loads them in and starts actually getting the region objects where they need to be for this source
 
-        print(region_dict)
-        print('\n\n\n')
-
         # TODO I NEED TO REDO THIS ENTIRELY I THINK
         self._initial_regions, self._initial_region_matches = self._load_regions(region_dict)
+
+        print(self._initial_regions)
+        import sys
+        sys.exit()
         # --------------------------------------------------------------------------------------------------
 
         # ---------------------------------- Setting up general attributes ---------------------------------
@@ -1400,7 +1401,7 @@ class BaseSource:
                     raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
 
                 if reg_file is not None:
-                    ds9_regs = read_ds9(reg_paths[obs_id])
+                    ds9_regs = read_ds9(reg_file)
                     # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
                     #  where they were generated with different resolutions).
                     #  TODO see issue #908, figure out how to support different resolutions of image
