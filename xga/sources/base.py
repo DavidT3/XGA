@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 11:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 14:30. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -32,7 +32,7 @@ from ..sourcetools import separation_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.match import _dist_from_source
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS, \
-    DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test
+    DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -1988,10 +1988,10 @@ class BaseSource:
                         inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
     # This is used to name files and directories so this is not allowed to change.
 
-    def get_products(self, p_type: str, telescope: Union[str, List[str]] = None, obs_id: str = None, inst: str = None,
-                     extra_key: str = None, just_obj: bool = True) -> List[BaseProduct]:
+    def get_products(self, p_type: str, obs_id: str = None, inst: str = None,
+                     extra_key: str = None, just_obj: bool = True, telescope: str = None) -> List[BaseProduct]:
         """
-        This is the getter for the products data structure of Source objects. Passing a 'product type'
+        This is the getter for the products data structure of Source objects. Passing a product type
         such as 'events' or 'images' will return every matching entry in the products data structure.
 
         :param str p_type: Product type identifier. e.g. image or expmap.
@@ -2000,10 +2000,10 @@ class BaseSource:
         :param str extra_key: Optionally, an extra key (like an energy bound) can be supplied.
         :param bool just_obj: A boolean flag that controls whether this method returns just the product objects,
             or the other information that goes with it like ObsID and instrument.
+        :param str telescope: Optionally, a specific telescope to search can be supplied.
         :return: List of matching products.
         :rtype: List[BaseProduct]
         """
-
         def unpack_list(to_unpack: list):
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
@@ -2023,41 +2023,40 @@ class BaseSource:
                     # so we call this function recursively.
                     unpack_list(entry)
 
-        # DAVID_QUESTION want to put this into another function, where is the best place to put this
-        if telescope is None:
-            telescope = self._usable_tscopes
-        elif isinstance(telescope, "str") and telescope in self._usable_tscopes:
-            # Converting the telescope to a list
-            telescope = [telescope]
-        elif not all(tscope in self._usable_tscopes for tscope in telescope):
-            # Checking that the inputted telescope is valid for this source
-            not_valid_tscopes = list(set(telescope) - set(self._usable_tscopes))
-            raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
-                    "have observations associated with this source". format(
-                        nvt=not_valid_tscopes, ut=self._usable_tscopes ))
+        # We check to see if the telescope the user has passed (assuming it isn't just None) is actually relevant
+        #  to this source
+        if telescope is not None and telescope not in self.telescopes:
+            raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
+        # If the telescope IS associated and the ObsID has been supplied then we can check that it is valid
+        elif (telescope is not None and telescope in self.telescopes) and \
+                (obs_id is not None and obs_id not in self.obs_ids[telescope]):
+            raise NotAssociatedError("{o} is not associated with the {t} telescope for "
+                                     "{n}.".format(o=obs_id, n=self.name, t=telescope))
+        # Finally we can see if supplied instruments are valid, if telescope and ObsID are supplied
+        elif (telescope is not None and telescope in self.telescopes) and \
+                (obs_id is not None and obs_id not in self.obs_ids[telescope]) and \
+                (inst is not None and inst not in self.instruments[telescope][obs_id]):
+            raise NotAssociatedError("{t}-{o} is associated with {n}, but {i} is not associated with that "
+                                     "observation".format(t=telescope, o=obs_id, n=self.name, i=inst))
+        
+        # This dictionary is used to store the matching products that are located
+        matches = []
 
-        matches = {}
-        for tscope in telescope:
-            if obs_id not in self._products[tscope] and obs_id is not None:
-                raise NotAssociatedError("{0} is not associated with {1} .".format(obs_id, self.name))
-            elif (obs_id is not None and obs_id in self._products[tscope]) and \
-                    (inst is not None and inst not in self._products[tscope][obs_id]):
-                raise NotAssociatedError("{0} is associated with {1}, but {2} is not associated with that "
-                                        "observation".format(obs_id, self.name, inst))
-            # Iterates through the dict search return, but each match is likely to be a very nested list,
-            # with the degree of nesting dependant on product type (as event lists live a level up from
-            # images for instance
-            for match in dict_search(p_type, self._products[tscope]):
-                out = []
-                unpack_list(match)
-                # Only adds to matches dict if this particular match is for the obs_id and instrument passed to this method
-                # Though all matches will be returned if no obs_id/inst is passed
-                if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                        and (extra_key in out or extra_key is None) and not just_obj:
-                    matches[tscope] = out
-                elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                        and (extra_key in out or extra_key is None) and just_obj:
-                    matches[tscope] = out[-1]
+        # Iterates through the dict search return, but each match is likely to be a very nested list,
+        # with the degree of nesting dependent on product type (as event lists live a level up from
+        # images for instance
+        for match in dict_search(p_type, self._products):
+            out = []
+            unpack_list(match)
+            # Only adds to matches dict if this particular match is for the obs_id and instrument passed to this method
+            # Though all matches will be returned if no obs_id/inst is passed
+            if (telescope == out[0] or telescope is None) and (obs_id == out[1] or obs_id is None) and \
+                    (inst == out[2] or inst is None) and (extra_key in out or extra_key is None) and not just_obj:
+                matches.append(out)
+            elif (telescope == out[0] or telescope is None) and (obs_id == out[0] or obs_id is None) and \
+                    (inst == out[1] or inst is None) and (extra_key in out or extra_key is None) and just_obj:
+                matches.append(out[-1])
+
         return matches
 
     def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
@@ -3805,7 +3804,7 @@ class BaseSource:
 
     def info(self):
         """
-        Very simple function that just prints a summary of important information related to the source object..
+        Very simple function that just prints a summary of important information related to the source object.
         """
         print("\n-----------------------------------------------------")
         print("Source Name - {}".format(self._name))
@@ -3815,33 +3814,6 @@ class BaseSource:
         print("nH - {}".format(self.nH))
         if self._redshift is not None:
             print("Redshift - {}".format(round(self._redshift, 3)))
-        print("XMM ObsIDs - {}".format(self.__len__()))
-        print("PN Observations - {}".format(self.num_pn_obs))
-        print("MOS1 Observations - {}".format(self.num_mos1_obs))
-        print("MOS2 Observations - {}".format(self.num_mos2_obs))
-        # TODO resolve how to supply the separation information now that it isn't as simple as on vs off axis
-        # print("On-Axis - {}".format(len(self._onaxis)))
-        print("With regions - {}".format(len(self._initial_regions)))
-        print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
-        print("Obs with 1 detection - {}".format(sum([1 for o in self._initial_region_matches if
-                                                    self._initial_region_matches[o].sum() == 1])))
-        print("Obs with >1 matches - {}".format(sum([1 for o in self._initial_region_matches if
-                                                     self._initial_region_matches[o].sum() > 1])))
-        # If a combined exposure map exists, we'll use it to give the user an idea of the total exposure
-        try:
-            ex = self.get_combined_expmaps()
-            if isinstance(ex, list):
-                ex = ex[0]
-            print("Total exposure - {}".format(ex.get_exp(self.ra_dec).to('ks').round(2)))
-        except NoProductAvailableError:
-            pass
-        print("Images associated - {}".format(len(self.get_products("image"))))
-        print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
-        print("Combined Ratemaps associated - {}".format(len(self.get_products("combined_ratemap"))))
-        print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
-
-        if len(self._fit_results) != 0:
-            print("Fitted Models - {}".format(" | ".join(self.fitted_models)))
 
         if self._regions is not None and "custom" in self._radii:
             if self._redshift is not None:
@@ -3886,21 +3858,54 @@ class BaseSource:
         elif self._wl_mass is not None and self._wl_mass_err is None:
             print("Weak Lensing Mass - {0}".format(self._wl_mass))
 
-        if 'get_temperature' in dir(self):
+        for tel in self.telescopes:
+            pr_tel = PRETTY_TELESCOPE_NAMES[tel]
+            print('')
+            print('-- ' + pr_tel + ' --')
+            print("{t} ObsIDs - {n}".format(t=pr_tel, n=len(self.obs_ids[tel])))
+            # TODO Figure out what to do about this
+            # print("PN Observations - {}".format(self.num_pn_obs))
+            # print("MOS1 Observations - {}".format(self.num_mos1_obs))
+            # print("MOS2 Observations - {}".format(self.num_mos2_obs))
+            # TODO resolve how to supply the separation information now that it isn't as simple as on vs off axis
+            # print("On-Axis - {}".format(len(self._onaxis)))
+            print("With regions - {}".format(len(self._initial_regions)))
+            print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
+            print("Obs with 1 detection - {}".format(sum([1 for o in self._initial_region_matches if
+                                                          self._initial_region_matches[o].sum() == 1])))
+            print("Obs with >1 matches - {}".format(sum([1 for o in self._initial_region_matches if
+                                                         self._initial_region_matches[o].sum() > 1])))
+            # If a combined exposure map exists, we'll use it to give the user an idea of the total exposure
             try:
-                tx = self.get_temperature('r500', 'constant*tbabs*apec').value.round(2)
-                # Just average the uncertainty for this
-                print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean().round(2)))
-            except (ModelNotAssociatedError, NoProductAvailableError):
+                ex = self.get_combined_expmaps()
+                if isinstance(ex, list):
+                    ex = ex[0]
+                print("Total exposure - {}".format(ex.get_exp(self.ra_dec).to('ks').round(2)))
+            except NoProductAvailableError:
                 pass
+            print("Images associated - {}".format(len(self.get_products("image"))))
+            print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
+            print("Combined Ratemaps associated - {}".format(len(self.get_products("combined_ratemap"))))
+            print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
 
-            try:
-                lx = self.get_luminosities('r500', 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
-                                           hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
-                print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean().round(2)))
+            if len(self._fit_results) != 0:
+                print("Fitted Models - {}".format(" | ".join(self.fitted_models)))
 
-            except (ModelNotAssociatedError, NoProductAvailableError):
-                pass
+            if 'get_temperature' in dir(self):
+                try:
+                    tx = self.get_temperature('r500', 'constant*tbabs*apec').value.round(2)
+                    # Just average the uncertainty for this
+                    print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean().round(2)))
+                except (ModelNotAssociatedError, NoProductAvailableError):
+                    pass
+
+                try:
+                    lx = self.get_luminosities('r500', 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
+                                               hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
+                    print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean().round(2)))
+
+                except (ModelNotAssociatedError, NoProductAvailableError):
+                    pass
         print("-----------------------------------------------------\n")
 
     def __len__(self) -> int:
