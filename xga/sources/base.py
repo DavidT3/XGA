@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 22:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 22:31. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -283,16 +283,16 @@ class BaseSource:
             cur_pth = OUTPUT + tel + '/'
             # Iterate through the relevant ObsIDs, if they don't have a directory then make one
             for oi in self.obs_ids[tel]:
-                if not os.path.exists(cur_pth + tel + '/' + oi):
-                    os.makedirs(cur_pth + tel + '/' + oi)
+                if not os.path.exists(cur_pth + '/' + oi):
+                    os.makedirs(cur_pth + '/' + oi)
                 # We also make an inventory file for each ObsID inventory, if we can't find a pre-existing one
                 if not os.path.exists(cur_pth + '/{}/inventory.csv'.format(oi)):
                     with open(cur_pth + '/{}/inventory.csv'.format(oi), 'w') as inven:
                         inven.writelines(['file_name,obs_id,inst,info_key,src_name,type'])
 
             # Now we follow the same process but for the profiles, combined, regions, and XSPEC directories
-            if not os.path.exists(cur_pth + 'profiles/'):
-                os.makedirs(cur_pth + 'profiles/')
+            if not os.path.exists(cur_pth + 'profiles/{}'.format(self.name)):
+                os.makedirs(cur_pth + 'profiles/{}'.format(self.name))
             if not os.path.exists(cur_pth + "profiles/{}/inventory.csv".format(self.name)):
                 with open(cur_pth + "/profiles/{}/inventory.csv".format(self.name), 'w') as inven:
                     inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
