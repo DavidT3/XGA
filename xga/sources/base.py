@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 16:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 16:50. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1824,9 +1824,9 @@ class BaseSource:
                                               List[BaseAggregateProduct], List[BaseProfile1D]],
                         update_inv: bool = True):
         """
-        Setter method for the products attribute of source objects. Cannot delete existing products,
-        but will overwrite existing products. Raises errors if the ObsID is not associated
-        with this source or the instrument is not associated with the ObsID. Lists of products can also be passed
+        Setter method for the products attribute of source objects. Cannot delete existing products, but will
+        overwrite existing products. Raises errors if the telescope or ObsID is not associated with this source
+        or the instrument is not associated with the ObsID. Lists of products can also be passed
         and will be added to the source storage structure, these lists may also contain None values, as typically
         XGA will return None if a profile fails to generate (for instance), in which case that entry will simply
         be ignored.
@@ -1863,211 +1863,456 @@ class BaseSource:
 
                 # All information about where to place it in our storage hierarchy can be pulled from the product
                 # object itself
-                obs_id = po.obs_id # JESS_TODO i think these maybe become dictionaries with tscope keys
+                obs_id = po.obs_id
                 inst = po.instrument
+                tel = po.telescope
                 p_type = po.type
-                # JESS_TODO need to telescope attribute to product class
-                telescopes = po.telescope
 
-                if len(telescopes) != 1:
-                    raise NotImplementedError("Multi Telescope products not supported yet")
+                # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
+                #  together - merged products do get a 'combined' prefix on their product type key though
+                if obs_id == "combined":
+                    p_type = "combined_" + p_type
 
-                for tscope in telescopes:
-                    if tscope != 'xmm':
-                        raise NotImplementedError("Only XMM is supported")
-                    # Just redefining so the code is easier to read later
-                    obs_id = obs_id[tscope]
-                    inst = inst[tscope]
-                    # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
-                    #  together - merged products do get a 'combined' prefix on their product type key though
-                    if obs_id == "combined":
-                        p_type = "combined_" + p_type
+                # 'Combined' will effectively be stored as another ObsID
+                if "combined" not in self._products[tel]:
+                    self._products[tel]["combined"] = {}
 
-                    # 'Combined' will effectively be stored as another ObsID
-                    if "combined" not in self._products[tscope]:
-                        self._products[tscope]["combined"] = {}
+                # The product gets the name of this source object added to it
+                po.src_name = self.name
 
-                    # The product gets the name of this source object added to it
-                    po.src_name = self.name
+                # Double check that something is trying to add products from another source to the current one.
+                if obs_id != "combined" and obs_id not in self._products[tel]:
+                    raise NotAssociatedError("{t}-{o} is not associated with this X-ray "
+                                             "source.".format(t=tel, o=obs_id))
+                elif inst != "combined" and inst not in self._products[tel][obs_id]:
+                    raise NotAssociatedError("{i} is not associated with {t} observation "
+                                             "{o}".format(i=inst, o=obs_id, t=PRETTY_TELESCOPE_NAMES[tel]))
 
-                    # Double check that something is trying to add products from another source to the current one.
-                    if obs_id != "combined" and obs_id not in self._products[tscope]:
-                        raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
-                    elif inst != "combined" and inst not in self._products[tscope][obs_id]:
-                        raise NotAssociatedError("{i} is not associated with {t} observation {o}".format(i=inst,
-                                                                                            t=tscope, o=obs_id))
+                if extra_key is not None and obs_id != "combined":
+                    # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
+                    if extra_key not in self._products[tel][obs_id][inst]:
+                        self._products[tel][obs_id][inst][extra_key] = {}
+                    self._products[tel][obs_id][inst][extra_key][p_type] = po
 
-                    if extra_key is not None and obs_id != "combined":
-                        # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
-                        if extra_key not in self._products[tscope][obs_id][inst]:
-                            self._products[tscope][obs_id][inst][extra_key] = {}
-                        self._products[tscope][obs_id][inst][extra_key][p_type] = po
+                elif extra_key is None and obs_id != "combined":
+                    self._products[tel][obs_id][inst][p_type] = po
 
-                    elif extra_key is None and obs_id != "combined":
-                        self._products[tscope][obs_id][inst][p_type] = po
+                # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
+                #  and ObsID = 'combined'
+                elif extra_key is not None and obs_id == "combined":
+                    if extra_key not in self._products[tel][obs_id]:
+                        self._products[tel][obs_id][extra_key] = {}
+                    self._products[tel][obs_id][extra_key][p_type] = po
 
-                    # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
-                    #  and ObsID = 'combined'
-                    elif extra_key is not None and obs_id == "combined":
-                        if extra_key not in self._products[tscope][obs_id]:
-                            self._products[tscope][obs_id][extra_key] = {}
-                        self._products[tscope][obs_id][extra_key][p_type] = po
+                elif extra_key is None and obs_id == "combined":
+                    self._products[tel][obs_id][p_type] = po
 
-                    elif extra_key is None and obs_id == "combined":
-                        self._products[tscope][obs_id][p_type] = po
+                # This is for an image being added, so we look for a matching exposure map. If it exists we can
+                #  make a ratemap
+                if p_type == "image":
+                    # No chance of an expmap being PSF corrected, so we just use the energy key to
+                    #  look for one that matches our new image
+                    exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False, telescope=tel)
+                           if en_key in prod]
+                    if len(exs) == 1:
+                        new_rt = RateMap(po, exs[0][-1])
+                        new_rt.src_name = self.name
+                        self._products[tel][obs_id][inst][extra_key]["ratemap"] = new_rt
 
-                    # This is for an image being added, so we look for a matching exposure map. If it exists we can
-                    #  make a ratemap
-                    if p_type == "image":
-                        # No chance of an expmap being PSF corrected, so we just use the energy key to
-                        #  look for one that matches our new image
-                        # JESS_TODO check this liinnnneee
-                        exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False)[tscope] if en_key in prod]
-                        if len(exs) == 1:
-                            new_rt = RateMap(po, exs[0][-1])
+                # However, if it's an exposure map that's been added, we have to look for matching image(s). There
+                #  could be multiple, because there could be a normal image, and a PSF corrected image
+                elif p_type == "expmap":
+                    # PSF corrected extra keys are built on top of energy keys, so if the en_key is within the extra
+                    #  key string it counts as a match
+                    ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False, telescope=tel)
+                           if en_key in prod[-2]]
+                    # If there is at least one match, we can go to work
+                    if len(ims) != 0:
+                        for im in ims:
+                            new_rt = RateMap(im[-1], po)
                             new_rt.src_name = self.name
-                            self._products[tscope][obs_id][inst][extra_key]["ratemap"] = new_rt
+                            self._products[tel][obs_id][inst][im[-2]]["ratemap"] = new_rt
 
-                    # However, if its an exposure map that's been added, we have to look for matching image(s). There
-                    #  could be multiple, because there could be a normal image, and a PSF corrected image
-                    elif p_type == "expmap":
-                        # PSF corrected extra keys are built on top of energy keys, so if the en_key is within the extra
-                        #  key string it counts as a match
-                        ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False)[tscope]
-                            if en_key in prod[-2]]
-                        # If there is at least one match, we can go to work
-                        if len(ims) != 0:
-                            for im in ims:
-                                new_rt = RateMap(im[-1], po)
-                                new_rt.src_name = self.name
-                                self._products[tscope][obs_id][inst][im[-2]]["ratemap"] = new_rt
+                # The same behaviours hold for combined_image and combined_expmap, but they get
+                #  stored in slightly different places
+                elif p_type == "combined_image":
+                    exs = [prod for prod in self.get_products("combined_expmap", just_obj=False, telescope=tel)
+                           if en_key in prod]
+                    if len(exs) == 1:
+                        new_rt = RateMap(po, exs[0][-1])
+                        new_rt.src_name = self.name
+                        # Remember obs_id for combined products is just 'combined'
+                        self._products[tel][obs_id][extra_key]["combined_ratemap"] = new_rt
 
-                    # The same behaviours hold for combined_image and combined_expmap, but they get
-                    #  stored in slightly different places
-                    elif p_type == "combined_image":
-                        exs = [prod for prod in self.get_products("combined_expmap", just_obj=False)[tscope] if en_key in prod]
-                        if len(exs) == 1:
-                            new_rt = RateMap(po, exs[0][-1])
+                elif p_type == "combined_expmap":
+                    ims = [prod for prod in self.get_products("combined_image", just_obj=False, telescope=tel)
+                           if en_key in prod[-2]]
+                    if len(ims) != 0:
+                        for im in ims:
+                            new_rt = RateMap(im[-1], po)
                             new_rt.src_name = self.name
-                            # Remember obs_id for combined products is just 'combined'
-                            self._products[tscope][obs_id][extra_key]["combined_ratemap"] = new_rt
+                            self._products[tel][obs_id][im[-2]]["combined_ratemap"] = new_rt
 
-                    elif p_type == "combined_expmap":
-                        ims = [prod for prod in self.get_products("combined_image", just_obj=False)[tscope] if en_key in prod[-2]]
-                        if len(ims) != 0:
-                            for im in ims:
-                                new_rt = RateMap(im[-1], po)
-                                new_rt.src_name = self.name
-                                self._products[tscope][obs_id][im[-2]]["combined_ratemap"] = new_rt
+                if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
+                    po.save()
+                # Here we make sure to store a record of the added product in the relevant inventory file
+                if isinstance(po, BaseProduct) and po.obs_id != 'combined' and update_inv:
+                    inven = pd.read_csv(OUTPUT + "{t}/{o}/inventory.csv".format(t=tel, o=obs_id), dtype=str)
 
-                    if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
-                        po.save()
+                    # Don't want to store a None value as a string for the info_key
+                    if extra_key is None:
+                        info_key = ''
+                    else:
+                        info_key = extra_key
 
-                    # Here we make sure to store a record of the added product in the relevant inventory file
-                    if isinstance(po, BaseProduct) and po.obs_id[tscope] != 'combined' and update_inv:
-                        inven = pd.read_csv(OUTPUT + tscope + "/{}/inventory.csv".format(po.obs_id[tscope]), dtype=str)
+                    # I want only the name of the file as it is in the storage directory, I don't want an
+                    #  absolute path, so I remove the leading information about the absolute location in
+                    #  the .path string
+                    f_name = po.path.split(OUTPUT + "{}/".format(obs_id))[-1]
 
-                        # Don't want to store a None value as a string for the info_key
-                        if extra_key is None:
-                            info_key = ''
-                        else:
-                            info_key = extra_key
+                    # Images, exposure maps, and other such things are not source specific, so I don't want
+                    #  the inventory file to assign them a specific source
+                    if isinstance(po, Image):
+                        s_name = ''
+                    else:
+                        s_name = po.src_name
 
-                        # I want only the name of the file as it is in the storage directory, I don't want an
-                        #  absolute path, so I remove the leading information about the absolute location in
-                        #  the .path string
-                        f_name = po.path.split(OUTPUT + tscope + "/{}/".format(po.obs_id[tscope]))[-1]
+                    # Creates new pandas series to be appended to the inventory dataframe
+                    new_line = pd.Series([f_name, obs_id, inst, info_key, s_name, po.type],
+                                         ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
 
-                        # Images, exposure maps, and other such things are not source specific, so I don't want
-                        #  the inventory file to assign them a specific source
-                        if isinstance(po, Image):
-                            s_name = ''
-                        else:
-                            s_name = po.src_name
+                    # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
+                    #  if it did I think it would cause problems so better to be safe and add this.
+                    inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                    # Saves the updated inventory file
+                    inven.to_csv(OUTPUT + "{t}/{o}/inventory.csv".format(t=tel, o=obs_id), index=False)
 
-                        # Creates new pandas series to be appended to the inventory dataframe
-                        new_line = pd.Series([f_name, po.obs_id[tscope], po.instrument[tscope], info_key, s_name, po.type],
-                                             ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
-                        # Concatenates the series with the inventory dataframe
-                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+                elif isinstance(po, BaseProduct) and obs_id == 'combined' and update_inv:
+                    inven = pd.read_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), dtype=str)
 
-                        # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
-                        #  if it did I think it would cause problems so better to be safe and add this.
-                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
-                        # Saves the updated inventory file
-                        inven.to_csv(OUTPUT + tscope + "/{}/inventory.csv".format(po.obs_id[tscope]), index=False)
+                    # Don't want to store a None value as a string for the info_key
+                    if extra_key is None:
+                        info_key = ''
+                    else:
+                        info_key = extra_key
 
-                    elif isinstance(po, BaseProduct) and po.obs_id[tscope] == 'combined' and update_inv:
-                        inven = pd.read_csv(OUTPUT + tscope + "/combined/inventory.csv", dtype=str)
+                    # TODO AT LEAST SOME COMBINED PRODUCTS NOW DO HAVE THIS INFORMATION STORED IN THEM, IT WOULD
+                    #  PROBABLY BE A GOOD IDEA TO UPDATE HOW THIS WORKS AT SOME POINT
+                    # We know that this particular product is a combination of multiple ObsIDs, and those ObsIDs
+                    #  are not stored explicitly within the product object. However we are currently within the
+                    #  source object that they were generated from, thus we do have that information available
+                    # Using the _instruments attribute also gives us access to inst information
+                    i_str = "/".join([i for o in self.instruments[tel] for i in self.instruments[tel][o]])
+                    o_str = "/".join([o for o in self.instruments[tel] for i in self.instruments[tel][o]])
+                    # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
+                    #  them into strings
 
-                        # Don't want to store a None value as a string for the info_key
-                        if extra_key is None:
-                            info_key = ''
-                        else:
-                            info_key = extra_key
+                    f_name = po.path.split(OUTPUT + "{t}/combined/".format(t=tel))[-1]
+                    if isinstance(po, Image):
+                        s_name = ''
+                    else:
+                        s_name = po.src_name
 
-                        # We know that this particular product is a combination of multiple ObsIDs, and those ObsIDs
-                        #  are not stored explicitly within the product object. However we are currently within the
-                        #  source object that they were generated from, thus we do have that information available
-                        # Using the _instruments attribute also gives us access to inst information
-                        i_str = "/".join([i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-                        o_str = "/".join([o for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-                        # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
-                        #  them into strings
+                    # Creates new pandas series to be appended to the inventory dataframe
+                    new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, po.type],
+                                         ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+                    inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                    inven.to_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), index=False)
 
-                        f_name = po.path.split(OUTPUT + tscope + "/combined/")[-1]
-                        if isinstance(po, Image):
-                            s_name = ''
-                        else:
-                            s_name = po.src_name
+                elif isinstance(po, BaseProfile1D) and obs_id != 'combined' and update_inv:
+                    inven = pd.read_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(n=self.name, t=tel),
+                                        dtype=str)
 
-                        # Creates new pandas series to be appended to the inventory dataframe
-                        new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, po.type],
-                                             ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                        # Concatenates the series with the inventory dataframe
-                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
-                        inven.to_csv(OUTPUT + tscope + "/combined/inventory.csv", index=False)
+                    # Don't want to store a None value as a string for the info_key
+                    if extra_key is None:
+                        info_key = ''
+                    else:
+                        info_key = extra_key
 
-                    elif isinstance(po, BaseProfile1D) and po.obs_id[tscope] != 'combined' and update_inv:
-                        inven = pd.read_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), dtype=str)
+                    f_name = po.save_path.split(OUTPUT + "{t}/profiles/{n}/".format(t=tel, n=self.name))[-1]
+                    i_str = po.instrument
+                    o_str = po.obs_id
+                    # Creates new pandas series to be appended to the inventory dataframe
+                    new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
+                                         ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+                    inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                    inven.to_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name), index=False)
 
-                        # Don't want to store a None value as a string for the info_key
-                        if extra_key is None:
-                            info_key = ''
-                        else:
-                            info_key = extra_key
+                elif isinstance(po, BaseProfile1D) and obs_id == 'combined' and update_inv:
+                    inven = pd.read_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name),
+                                        dtype=str)
 
-                        f_name = po.save_path.split(OUTPUT + tscope + "/profiles/{}/".format(self.name))[-1]
-                        i_str = po.instrument[tscope]
-                        o_str = po.obs_id[tscope]
-                        # Creates new pandas series to be appended to the inventory dataframe
-                        new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
-                                             ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                        # Concatenates the series with the inventory dataframe
-                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
-                        inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
+                    # Don't want to store a None value as a string for the info_key
+                    if extra_key is None:
+                        info_key = ''
+                    else:
+                        info_key = extra_key
 
-                    elif isinstance(po, BaseProfile1D) and po.obs_id[tscope] == 'combined' and update_inv:
-                        inven = pd.read_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), dtype=str)
+                    f_name = po.save_path.split(OUTPUT + "{t}/profiles/{n}/".format(t=tel, n=self.name))[-1]
+                    i_str = "/".join([i for o in self.instruments[tel] for i in self.instruments[tel][o]])
+                    o_str = "/".join([o for o in self.instruments[tel] for i in self.instruments[tel][o]])
+                    # Creates new pandas series to be appended to the inventory dataframe
+                    new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
+                                         ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+                    inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                    inven.to_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name), index=False)
 
-                        # Don't want to store a None value as a string for the info_key
-                        if extra_key is None:
-                            info_key = ''
-                        else:
-                            info_key = extra_key
-
-                        f_name = po.save_path.split(OUTPUT + tscope + "/profiles/{}/".format(self.name))[-1]
-                        i_str = "/".join([i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-                        o_str = "/".join([o for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-                        # Creates new pandas series to be appended to the inventory dataframe
-                        new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
-                                             ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                        # Concatenates the series with the inventory dataframe
-                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
-                        inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
+    # def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D, List[BaseProduct],
+    #                                           List[BaseAggregateProduct], List[BaseProfile1D]],
+    #                     update_inv: bool = True):
+    #     """
+    #     Setter method for the products attribute of source objects. Cannot delete existing products, but will
+    #     overwrite existing products. Raises errors if the telescope or ObsID is not associated with this source
+    #     or the instrument is not associated with the ObsID. Lists of products can also be passed
+    #     and will be added to the source storage structure, these lists may also contain None values, as typically
+    #     XGA will return None if a profile fails to generate (for instance), in which case that entry will simply
+    #     be ignored.
+    #
+    #     :param BaseProduct/BaseAggregateProduct/BaseProfile1D/List[BaseProduct]/List[BaseProfile1D] prod_obj: The
+    #         new product object(s) to be added to the source object.
+    #     :param bool update_inv: This flag is to avoid unnecessary read-writes when this method is called by a method
+    #         (such as _existing_xga_products) which want to add products to the source storage structure, but don't
+    #         want the inventory file altered (as they know the product is already in there).
+    #     """
+    #     # Aggregate products are things like PSF grids and sets of annular spectra.
+    #     if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D, list)) and prod_obj is not None:
+    #         raise TypeError("Only product objects can be assigned to sources.")
+    #     elif isinstance(prod_obj, list) and not all([isinstance(p, (BaseProduct, BaseAggregateProduct, BaseProfile1D))
+    #                                                  or p is None for p in prod_obj]):
+    #         raise TypeError("If a list is passed, only product objects (or None values) may be included.")
+    #     elif not isinstance(prod_obj, list):
+    #         prod_obj = [prod_obj]
+    #
+    #     for po in prod_obj:
+    #         if po is not None:
+    #             if isinstance(po, Image):
+    #                 extra_key = po.storage_key
+    #                 en_key = "bound_{l}-{u}".format(l=float(po.energy_bounds[0].value),
+    #                                                 u=float(po.energy_bounds[1].value))
+    #             elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D):
+    #                 extra_key = po.storage_key
+    #             elif type(po) == PSFGrid:
+    #                 # The first part of the key is the model used (by default its ELLBETA for example), and
+    #                 #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
+    #                 extra_key = po.model + "_" + str(po.num_bins)
+    #             else:
+    #                 extra_key = None
+    #
+    #             # All information about where to place it in our storage hierarchy can be pulled from the product
+    #             # object itself
+    #             obs_id = po.obs_id # JESS_TODO i think these maybe become dictionaries with tscope keys
+    #             inst = po.instrument
+    #             p_type = po.type
+    #             # JESS_TODO need to telescope attribute to product class
+    #             telescopes = po.telescope
+    #
+    #             if len(telescopes) != 1:
+    #                 raise NotImplementedError("Multi Telescope products not supported yet")
+    #
+    #             for tscope in telescopes:
+    #                 if tscope != 'xmm':
+    #                     raise NotImplementedError("Only XMM is supported")
+    #                 # Just redefining so the code is easier to read later
+    #                 obs_id = obs_id[tscope]
+    #                 inst = inst[tscope]
+    #                 # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
+    #                 #  together - merged products do get a 'combined' prefix on their product type key though
+    #                 if obs_id == "combined":
+    #                     p_type = "combined_" + p_type
+    #
+    #                 # 'Combined' will effectively be stored as another ObsID
+    #                 if "combined" not in self._products[tscope]:
+    #                     self._products[tscope]["combined"] = {}
+    #
+    #                 # The product gets the name of this source object added to it
+    #                 po.src_name = self.name
+    #
+    #                 # Double check that something is trying to add products from another source to the current one.
+    #                 if obs_id != "combined" and obs_id not in self._products[tscope]:
+    #                     raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
+    #                 elif inst != "combined" and inst not in self._products[tscope][obs_id]:
+    #                     raise NotAssociatedError("{i} is not associated with {t} observation {o}".format(i=inst,
+    #                                                                                         t=tscope, o=obs_id))
+    #
+    #                 if extra_key is not None and obs_id != "combined":
+    #                     # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
+    #                     if extra_key not in self._products[tscope][obs_id][inst]:
+    #                         self._products[tscope][obs_id][inst][extra_key] = {}
+    #                     self._products[tscope][obs_id][inst][extra_key][p_type] = po
+    #
+    #                 elif extra_key is None and obs_id != "combined":
+    #                     self._products[tscope][obs_id][inst][p_type] = po
+    #
+    #                 # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
+    #                 #  and ObsID = 'combined'
+    #                 elif extra_key is not None and obs_id == "combined":
+    #                     if extra_key not in self._products[tscope][obs_id]:
+    #                         self._products[tscope][obs_id][extra_key] = {}
+    #                     self._products[tscope][obs_id][extra_key][p_type] = po
+    #
+    #                 elif extra_key is None and obs_id == "combined":
+    #                     self._products[tscope][obs_id][p_type] = po
+    #
+    #                 # This is for an image being added, so we look for a matching exposure map. If it exists we can
+    #                 #  make a ratemap
+    #                 if p_type == "image":
+    #                     # No chance of an expmap being PSF corrected, so we just use the energy key to
+    #                     #  look for one that matches our new image
+    #                     # JESS_TODO check this liinnnneee
+    #                     exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False)[tscope] if en_key in prod]
+    #                     if len(exs) == 1:
+    #                         new_rt = RateMap(po, exs[0][-1])
+    #                         new_rt.src_name = self.name
+    #                         self._products[tscope][obs_id][inst][extra_key]["ratemap"] = new_rt
+    #
+    #                 # However, if its an exposure map that's been added, we have to look for matching image(s). There
+    #                 #  could be multiple, because there could be a normal image, and a PSF corrected image
+    #                 elif p_type == "expmap":
+    #                     # PSF corrected extra keys are built on top of energy keys, so if the en_key is within the extra
+    #                     #  key string it counts as a match
+    #                     ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False)[tscope]
+    #                         if en_key in prod[-2]]
+    #                     # If there is at least one match, we can go to work
+    #                     if len(ims) != 0:
+    #                         for im in ims:
+    #                             new_rt = RateMap(im[-1], po)
+    #                             new_rt.src_name = self.name
+    #                             self._products[tscope][obs_id][inst][im[-2]]["ratemap"] = new_rt
+    #
+    #                 # The same behaviours hold for combined_image and combined_expmap, but they get
+    #                 #  stored in slightly different places
+    #                 elif p_type == "combined_image":
+    #                     exs = [prod for prod in self.get_products("combined_expmap", just_obj=False)[tscope] if en_key in prod]
+    #                     if len(exs) == 1:
+    #                         new_rt = RateMap(po, exs[0][-1])
+    #                         new_rt.src_name = self.name
+    #                         # Remember obs_id for combined products is just 'combined'
+    #                         self._products[tscope][obs_id][extra_key]["combined_ratemap"] = new_rt
+    #
+    #                 elif p_type == "combined_expmap":
+    #                     ims = [prod for prod in self.get_products("combined_image", just_obj=False)[tscope] if en_key in prod[-2]]
+    #                     if len(ims) != 0:
+    #                         for im in ims:
+    #                             new_rt = RateMap(im[-1], po)
+    #                             new_rt.src_name = self.name
+    #                             self._products[tscope][obs_id][im[-2]]["combined_ratemap"] = new_rt
+    #
+    #                 if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
+    #                     po.save()
+    #
+    #                 # Here we make sure to store a record of the added product in the relevant inventory file
+    #                 if isinstance(po, BaseProduct) and po.obs_id[tscope] != 'combined' and update_inv:
+    #                     inven = pd.read_csv(OUTPUT + tscope + "/{}/inventory.csv".format(po.obs_id[tscope]), dtype=str)
+    #
+    #                     # Don't want to store a None value as a string for the info_key
+    #                     if extra_key is None:
+    #                         info_key = ''
+    #                     else:
+    #                         info_key = extra_key
+    #
+    #                     # I want only the name of the file as it is in the storage directory, I don't want an
+    #                     #  absolute path, so I remove the leading information about the absolute location in
+    #                     #  the .path string
+    #                     f_name = po.path.split(OUTPUT + tscope + "/{}/".format(po.obs_id[tscope]))[-1]
+    #
+    #                     # Images, exposure maps, and other such things are not source specific, so I don't want
+    #                     #  the inventory file to assign them a specific source
+    #                     if isinstance(po, Image):
+    #                         s_name = ''
+    #                     else:
+    #                         s_name = po.src_name
+    #
+    #                     # Creates new pandas series to be appended to the inventory dataframe
+    #                     new_line = pd.Series([f_name, po.obs_id[tscope], po.instrument[tscope], info_key, s_name, po.type],
+    #                                          ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
+    #                     # Concatenates the series with the inventory dataframe
+    #                     inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+    #
+    #                     # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
+    #                     #  if it did I think it would cause problems so better to be safe and add this.
+    #                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
+    #                     # Saves the updated inventory file
+    #                     inven.to_csv(OUTPUT + tscope + "/{}/inventory.csv".format(po.obs_id[tscope]), index=False)
+    #
+    #                 elif isinstance(po, BaseProduct) and po.obs_id[tscope] == 'combined' and update_inv:
+    #                     inven = pd.read_csv(OUTPUT + tscope + "/combined/inventory.csv", dtype=str)
+    #
+    #                     # Don't want to store a None value as a string for the info_key
+    #                     if extra_key is None:
+    #                         info_key = ''
+    #                     else:
+    #                         info_key = extra_key
+    #
+    #                     # We know that this particular product is a combination of multiple ObsIDs, and those ObsIDs
+    #                     #  are not stored explicitly within the product object. However we are currently within the
+    #                     #  source object that they were generated from, thus we do have that information available
+    #                     # Using the _instruments attribute also gives us access to inst information
+    #                     i_str = "/".join([i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
+    #                     o_str = "/".join([o for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
+    #                     # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
+    #                     #  them into strings
+    #
+    #                     f_name = po.path.split(OUTPUT + tscope + "/combined/")[-1]
+    #                     if isinstance(po, Image):
+    #                         s_name = ''
+    #                     else:
+    #                         s_name = po.src_name
+    #
+    #                     # Creates new pandas series to be appended to the inventory dataframe
+    #                     new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, po.type],
+    #                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+    #                     # Concatenates the series with the inventory dataframe
+    #                     inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+    #                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
+    #                     inven.to_csv(OUTPUT + tscope + "/combined/inventory.csv", index=False)
+    #
+    #                 elif isinstance(po, BaseProfile1D) and po.obs_id[tscope] != 'combined' and update_inv:
+    #                     inven = pd.read_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), dtype=str)
+    #
+    #                     # Don't want to store a None value as a string for the info_key
+    #                     if extra_key is None:
+    #                         info_key = ''
+    #                     else:
+    #                         info_key = extra_key
+    #
+    #                     f_name = po.save_path.split(OUTPUT + tscope + "/profiles/{}/".format(self.name))[-1]
+    #                     i_str = po.instrument[tscope]
+    #                     o_str = po.obs_id[tscope]
+    #                     # Creates new pandas series to be appended to the inventory dataframe
+    #                     new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
+    #                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+    #                     # Concatenates the series with the inventory dataframe
+    #                     inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+    #                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
+    #                     inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
+    #
+    #                 elif isinstance(po, BaseProfile1D) and po.obs_id[tscope] == 'combined' and update_inv:
+    #                     inven = pd.read_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), dtype=str)
+    #
+    #                     # Don't want to store a None value as a string for the info_key
+    #                     if extra_key is None:
+    #                         info_key = ''
+    #                     else:
+    #                         info_key = extra_key
+    #
+    #                     f_name = po.save_path.split(OUTPUT + tscope + "/profiles/{}/".format(self.name))[-1]
+    #                     i_str = "/".join([i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
+    #                     o_str = "/".join([o for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
+    #                     # Creates new pandas series to be appended to the inventory dataframe
+    #                     new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
+    #                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+    #                     # Concatenates the series with the inventory dataframe
+    #                     inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+    #                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
+    #                     inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None,
                      extra_key: str = None, just_obj: bool = True, telescope: str = None) -> List[BaseProduct]:
