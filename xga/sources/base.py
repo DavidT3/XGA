@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 11:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 11:42. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -292,14 +292,11 @@ class BaseSource:
         # ---------------------------------- Loading initial region lists ----------------------------------
         # This method takes our vetted (as in we've checked that region files exist) set of region files,
         #  loads them in and starts actually getting the region objects where they need to be for this source
-
-        # TODO I NEED TO REDO THIS ENTIRELY I THINK
         self._initial_regions, self._initial_region_matches = self._load_regions(region_dict)
+        # --------------------------------------------------------------------------------------------------
 
-        print(self._initial_regions)
         import sys
         sys.exit()
-        # --------------------------------------------------------------------------------------------------
 
         # ---------------------------------- Setting up general attributes ---------------------------------
         # The nh_lookup function returns average and weighted average values, so just take the first
@@ -394,8 +391,7 @@ class BaseSource:
         self._load_fits = load_fits
         self._load_products = load_products
 
-    # TODO I WANT ALL OF THE PROPERTIES, METHODS, AND PROTECTED METHODS IN GROUPS AND IN A DEFINED ORDER, AND I WANT
-    #  THAT FOR EVERY CLASS IN THIS DAMN MODULE
+    # Firstly, we have all the properties
     @property
     def ra_dec(self) -> Quantity:
         """
@@ -429,6 +425,269 @@ class BaseSource:
             new_coord = new_coord.to("deg")
 
         self._default_coord = new_coord
+
+    @property
+    def instruments(self) -> Dict:
+        """
+        A property of a source that details which instruments have valid data for which observations of
+        which telescopes.
+
+        :return: A dictionary where the top level keys are telescopes, the lower level keys are ObsIDs, and
+            their values are lists of valid instruments.
+        :rtype: Dict
+        """
+        return self._obs
+
+    @property
+    def obs_ids(self) -> Dict:
+        """
+        Property getter for ObsIDs associated with this source that are confirmed to have events files. This
+        provides the ObsIDs and the telescopes that they are associated with.
+
+        :return: A dictionary where the keys are telescope names and the values are lists of ObsIDs
+        :rtype: Dict
+        """
+        return {t: list(self._obs[t].keys()) for t in self._obs}
+
+    @property
+    def telescopes(self) -> List[str]:
+        """
+        Property getter for telescopes that are associated with this source.
+
+        :return: A list of telescope names with valid data related to this source.
+        :rtype: List[str]
+        """
+        return list(self._obs.keys())
+
+    @property
+    def blacklisted(self) -> Dict:
+        """
+        A property getter that returns the dictionary of telescope ObsIDs and their instruments which have been
+        blacklisted, and thus not considered for use in any analysis of this source.
+
+        :return: The dictionary of blacklisted data, top level keys are .
+        :rtype: Dict
+        """
+        return self._blacklisted_obs
+
+    @property
+    def detected(self) -> dict:
+        """
+        A property getter to return if a match of the correct type has been found.
+
+        :return: The detected boolean attribute.
+        :rtype: bool
+        """
+        if self._detected is None:
+            raise ValueError("detected is currently None, BaseSource objects don't have the type "
+                             "context needed to define if the source is detected or not.")
+        else:
+            return self._detected
+
+    @property
+    def matched_regions(self) -> dict:
+        """
+        Property getter for the matched regions associated with this particular source.
+
+        :return: A dictionary of matching regions, or None if such a match has not been performed.
+        :rtype: dict
+        """
+        return self._regions
+
+    @property
+    def nH(self) -> Quantity:
+        """
+        Property getter for neutral hydrogen column attribute.
+
+        :return: Neutral hydrogen column surface density.
+        :rtype: Quantity
+        """
+        return self._nH
+
+    @property
+    def redshift(self) -> float:
+        """
+        Property getter for the redshift of this source object.
+
+        :return: Redshift value
+        :rtype: float
+        """
+        return self._redshift
+
+    @property
+    def obs_separations(self) -> dict:
+        """
+        A property getter that returns a dictionary with the Haversine separations between the user-defined
+        source coordinate and the pointing coordinate of each observation, for each telescope.
+
+        :return: A dictionary where the top-level keys are telescope names, the lower-level keys are ObsIDs and
+            the values are astropy quantities that represent the separation between the user-defined coordinate
+            and the pointing coordinate of the observation.
+        :rtype: dict
+        """
+        return self._obs_sep
+
+    @property
+    def cosmo(self) -> Cosmology:
+        """
+        This method returns whatever cosmology object is associated with this source object.
+
+        :return: An astropy cosmology object specified for this source on initialization.
+        :rtype: Cosmology
+        """
+        return self._cosmo
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the source, either given at initialisation or generated from the user-supplied coordinates.
+
+        :return: The name of the source.
+        :rtype: str
+        """
+        return self._name
+
+    @property
+    def num_pn_obs(self) -> int:
+        """
+        Getter method that gives the number of PN observations.
+
+        :return: Integer number of PN observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'pn' in self._products[o]])
+
+    @property
+    def num_mos1_obs(self) -> int:
+        """
+        Getter method that gives the number of MOS1 observations.
+
+        :return: Integer number of MOS1 observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'mos1' in self._products[o]])
+
+    @property
+    def num_mos2_obs(self) -> int:
+        """
+        Getter method that gives the number of MOS2 observations.
+
+        :return: Integer number of MOS2 observations associated with this source
+        :rtype: int
+        """
+        return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
+
+    @property
+    def disassociated(self) -> bool:
+        """
+        Property that describes whether this source has had ObsIDs disassociated from it.
+
+        :return: A boolean flag, True means that ObsIDs/instruments have been removed, False means they haven't.
+        :rtype: bool
+        """
+        return self._disassociated
+
+    @property
+    def disassociated_obs(self) -> dict:
+        """
+        Property that details exactly what data has been disassociated from this source, if any.
+
+        :return: Dictionary describing which instruments of which ObsIDs have been disassociated from this source.
+        :rtype: dict
+        """
+        return self._disassociated_obs
+
+    @property
+    def luminosity_distance(self) -> Quantity:
+        """
+        Tells the user the luminosity distance to the source if a redshift was supplied, if not returns None.
+
+        :return: The luminosity distance to the source, calculated using the cosmology associated with this source.
+        :rtype: Quantity
+        """
+        return self._lum_dist
+
+    @property
+    def angular_diameter_distance(self) -> Quantity:
+        """
+        Tells the user the angular diameter distance to the source if a redshift was supplied, if not returns None.
+
+        :return: The angular diameter distance to the source, calculated using the cosmology
+            associated with this source.
+        :rtype: Quantity
+        """
+        return self._ang_diam_dist
+
+    @property
+    def fitted_models(self) -> List[str]:
+        """
+        This property cycles through all the available fit results, and finds the unique names of XSPEC models
+        that have been fitted to this source.
+
+        :return: A list of model names.
+        :rtype: List[str]
+        """
+        models = []
+        for s_key in self._fit_results:
+            models += list(self._fit_results[s_key].keys())
+
+        return models
+
+    @property
+    def peak_lo_en(self) -> Quantity:
+        """
+        This property returns the lower energy bound of the image used for peak finding.
+
+        :return: A quantity containing the lower energy limit used for peak finding.
+        :rtype: Quantity
+        """
+        return self._peak_lo_en
+
+    @property
+    def peak_hi_en(self) -> Quantity:
+        """
+        This property returns the upper energy bound of the image used for peak finding.
+
+        :return: A quantity containing the upper energy limit used for peak finding.
+        :rtype: Quantity
+        """
+        return self._peak_hi_en
+
+    @property
+    def use_peak(self) -> bool:
+        """
+        This property shows whether a particular XGA source object has been setup to use peak coordinates
+        or not. The property is either True, False, or None (if its a BaseSource).
+
+        :return: If the source is set to use peaks, True, otherwise False.
+        :rtype: bool
+        """
+        return self._use_peak
+
+    @property
+    def background_radius_factors(self) -> ndarray:
+        """
+        The factors by which to multiply outer radius by to get inner and outer radii for background regions.
+
+        :return: An array of the two factors.
+        :rtype: ndarray
+        """
+        return np.array([self._back_inn_factor, self._back_out_factor])
+
+    @property
+    def suppressed_warnings(self) -> List[str]:
+        """
+        A property getter (with no setter) for the warnings that have been suppressed from display to the user as
+        the source was declared as a member of a sample.
+
+        :return: The list of suppressed warnings for this source.
+        :rtype: List[str]
+        """
+        if not self._samp_member:
+            raise NotSampleMemberError("The source for {n} is not a member of a sample, and as such warnings have "
+                                       "not been suppressed.".format(n=self.name))
+        else:
+            return self._supp_warn
 
     def _initial_products(self, init_obs: dict) -> Tuple[dict, dict, dict]:
         """
@@ -609,14 +868,14 @@ class BaseSource:
                 obs_id = po.obs_id # JESS_TODO i think these maybe become dictionaries with tscope keys
                 inst = po.instrument
                 p_type = po.type
-                # JESS_TODO need to telescope attribute to product class 
+                # JESS_TODO need to telescope attribute to product class
                 telescopes = po.telescope
 
                 if len(telescopes) != 1:
                     raise NotImplementedError("Multi Telescope products not supported yet")
 
                 for tscope in telescopes:
-                    if tscope != 'xmm': 
+                    if tscope != 'xmm':
                         raise NotImplementedError("Only XMM is supported")
                     # Just redefining so the code is easier to read later
                     obs_id = obs_id[tscope]
@@ -637,7 +896,7 @@ class BaseSource:
                     if obs_id != "combined" and obs_id not in self._products[tscope]:
                         raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
                     elif inst != "combined" and inst not in self._products[tscope][obs_id]:
-                        raise NotAssociatedError("{i} is not associated with {t} observation {o}".format(i=inst, 
+                        raise NotAssociatedError("{i} is not associated with {t} observation {o}".format(i=inst,
                                                                                             t=tscope, o=obs_id))
 
                     if extra_key is not None and obs_id != "combined":
@@ -1306,7 +1565,7 @@ class BaseSource:
                     # If the current element IS a list, then obviously we still have more unpacking to do,
                     # so we call this function recursively.
                     unpack_list(entry)
-        
+
         # DAVID_QUESTION want to put this into another function, where is the best place to put this
         if telescope is None:
             telescope = self._usable_tscopes
@@ -1583,50 +1842,6 @@ class BaseSource:
         else:
             return self._att_files[obs_id]
 
-    @property
-    def instruments(self) -> Dict:
-        """
-        A property of a source that details which instruments have valid data for which observations of
-        which telescopes.
-
-        :return: A dictionary where the top level keys are telescopes, the lower level keys are ObsIDs, and
-            their values are lists of valid instruments.
-        :rtype: Dict
-        """
-        return self._obs
-
-    @property
-    def obs_ids(self) -> Dict:
-        """
-        Property getter for ObsIDs associated with this source that are confirmed to have events files. This
-        provides the ObsIDs and the telescopes that they are associated with.
-
-        :return: A dictionary where the keys are telescope names and the values are lists of ObsIDs
-        :rtype: Dict
-        """
-        return {t: list(self._obs[t].keys()) for t in self._obs}
-
-    @property
-    def telescopes(self) -> List[str]:
-        """
-        Property getter for telescopes that are associated with this source.
-
-        :return: A list of telescope names with valid data related to this source.
-        :rtype: List[str]
-        """
-        return list(self._obs.keys())
-
-    @property
-    def blacklisted(self) -> Dict:
-        """
-        A property getter that returns the dictionary of telescope ObsIDs and their instruments which have been
-        blacklisted, and thus not considered for use in any analysis of this source.
-
-        :return: The dictionary of blacklisted data, top level keys are .
-        :rtype: Dict
-        """
-        return self._blacklisted_obs
-
     def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
         """
         A method that looks for matches not just based on position, but also on the type of source
@@ -1732,30 +1947,7 @@ class BaseSource:
                 anti_results_dict[obs] = []
 
         return results_dict, alt_match_dict, anti_results_dict
-
-    @property
-    def detected(self) -> dict:
-        """
-        A property getter to return if a match of the correct type has been found.
-
-        :return: The detected boolean attribute.
-        :rtype: bool
-        """
-        if self._detected is None:
-            raise ValueError("detected is currently None, BaseSource objects don't have the type "
-                             "context needed to define if the source is detected or not.")
-        else:
-            return self._detected
-
-    @property
-    def matched_regions(self) -> dict:
-        """
-        Property getter for the matched regions associated with this particular source.
-
-        :return: A dictionary of matching regions, or None if such a match has not been performed.
-        :rtype: dict
-        """
-        return self._regions
+    # This is used to name files and directories so this is not allowed to change.
 
     def source_back_regions(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
             -> Tuple[SkyRegion, SkyRegion]:
@@ -2429,60 +2621,6 @@ class BaseSource:
 
         return final_src
 
-    @property
-    def nH(self) -> Quantity:
-        """
-        Property getter for neutral hydrogen column attribute.
-
-        :return: Neutral hydrogen column surface density.
-        :rtype: Quantity
-        """
-        return self._nH
-
-    @property
-    def redshift(self) -> float:
-        """
-        Property getter for the redshift of this source object.
-
-        :return: Redshift value
-        :rtype: float
-        """
-        return self._redshift
-
-    @property
-    def obs_separations(self) -> dict:
-        """
-        A property getter that returns a dictionary with the Haversine separations between the user-defined
-        source coordinate and the pointing coordinate of each observation, for each telescope.
-
-        :return: A dictionary where the top-level keys are telescope names, the lower-level keys are ObsIDs and
-            the values are astropy quantities that represent the separation between the user-defined coordinate
-            and the pointing coordinate of the observation.
-        :rtype: dict
-        """
-        return self._obs_sep
-
-    @property
-    def cosmo(self) -> Cosmology:
-        """
-        This method returns whatever cosmology object is associated with this source object.
-
-        :return: An astropy cosmology object specified for this source on initialization.
-        :rtype: Cosmology
-        """
-        return self._cosmo
-
-    # This is used to name files and directories so this is not allowed to change.
-    @property
-    def name(self) -> str:
-        """
-        The name of the source, either given at initialisation or generated from the user-supplied coordinates.
-
-        :return: The name of the source.
-        :rtype: str
-        """
-        return self._name
-
     def add_fit_data(self, model: str, tab_line, lums: dict, spec_storage_key: str):
         """
         A method that stores fit results and global information about a the set of spectra in a source object.
@@ -2706,6 +2844,9 @@ class BaseSource:
             lum_value = self._luminosities[storage_key][model][en_key]
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
+    # And here I'm adding a bunch of get methods that should mean the user never has to use get_products, for
+    #  individual product types. It will also mean that they will never have to figure out extra keys themselves
+    #  and I can make lists of 1 product return just as the product without being a breaking change
 
     def convert_radius(self, radius: Quantity, out_unit: Union[Unit, str] = 'deg') -> Quantity:
         """
@@ -2759,56 +2900,6 @@ class BaseSource:
         out_rad = self.convert_radius(self._radii[rad_name], out_unit)
 
         return out_rad
-
-    @property
-    def num_pn_obs(self) -> int:
-        """
-        Getter method that gives the number of PN observations.
-
-        :return: Integer number of PN observations associated with this source
-        :rtype: int
-        """
-        return len([o for o in self.obs_ids if 'pn' in self._products[o]])
-
-    @property
-    def num_mos1_obs(self) -> int:
-        """
-        Getter method that gives the number of MOS1 observations.
-
-        :return: Integer number of MOS1 observations associated with this source
-        :rtype: int
-        """
-        return len([o for o in self.obs_ids if 'mos1' in self._products[o]])
-
-    @property
-    def num_mos2_obs(self) -> int:
-        """
-        Getter method that gives the number of MOS2 observations.
-
-        :return: Integer number of MOS2 observations associated with this source
-        :rtype: int
-        """
-        return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
-
-    @property
-    def disassociated(self) -> bool:
-        """
-        Property that describes whether this source has had ObsIDs disassociated from it.
-
-        :return: A boolean flag, True means that ObsIDs/instruments have been removed, False means they haven't.
-        :rtype: bool
-        """
-        return self._disassociated
-
-    @property
-    def disassociated_obs(self) -> dict:
-        """
-        Property that details exactly what data has been disassociated from this source, if any.
-
-        :return: Dictionary describing which instruments of which ObsIDs have been disassociated from this source.
-        :rtype: dict
-        """
-        return self._disassociated_obs
 
     def disassociate_obs(self, to_remove: Union[dict, str, list]):
         """
@@ -2918,37 +3009,6 @@ class BaseSource:
         if self._load_products:
             self._existing_xga_products(self._load_fits)
 
-    @property
-    def luminosity_distance(self) -> Quantity:
-        """
-        Tells the user the luminosity distance to the source if a redshift was supplied, if not returns None.
-
-        :return: The luminosity distance to the source, calculated using the cosmology associated with this source.
-        :rtype: Quantity
-        """
-        return self._lum_dist
-
-    @property
-    def angular_diameter_distance(self) -> Quantity:
-        """
-        Tells the user the angular diameter distance to the source if a redshift was supplied, if not returns None.
-
-        :return: The angular diameter distance to the source, calculated using the cosmology
-            associated with this source.
-        :rtype: Quantity
-        """
-        return self._ang_diam_dist
-
-    @property
-    def background_radius_factors(self) -> ndarray:
-        """
-        The factors by which to multiply outer radius by to get inner and outer radii for background regions.
-
-        :return: An array of the two factors.
-        :rtype: ndarray
-        """
-        return np.array([self._back_inn_factor, self._back_out_factor])
-
     def obs_check(self, reg_type: str, threshold_fraction: float = 0.5) -> Dict:
         """
         This method uses exposure maps and region masks to determine which ObsID/instrument combinations
@@ -3007,10 +3067,7 @@ class BaseSource:
 
         return reject_dict
 
-    # And here I'm adding a bunch of get methods that should mean the user never has to use get_products, for
-    #  individual product types. It will also mean that they will never have to figure out extra keys themselves
-    #  and I can make lists of 1 product return just as the product without being a breaking change
-    def get_spectra(self, outer_radius: Union[str, Quantity], telescope: Union[str, List[str]] = None, obs_id: str = None, 
+    def get_spectra(self, outer_radius: Union[str, Quantity], telescope: Union[str, List[str]] = None, obs_id: str = None,
                     inst: str = None, inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                     min_counts: int = 5, min_sn: float = None,
                     over_sample: float = None) -> Union[Spectrum, List[Spectrum]]:
@@ -3053,7 +3110,7 @@ class BaseSource:
             raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
                     "have observations associated with this source". format(
                         nvt=not_valid_tscopes, ut=self._usable_tscopes ))
-                
+
         if isinstance(inner_radius, Quantity):
             inn_rad_num = self.convert_radius(inner_radius, 'deg')
         elif isinstance(inner_radius, str):
@@ -3148,7 +3205,7 @@ class BaseSource:
             raise NotImplementedError("Cannot understand {nvt} as a valid telescope, {ut} "
                     "have observations associated with this source". format(
                         nvt=not_valid_tscopes, ut=self._usable_tscopes ))
-        
+
         if group_spec and min_counts is not None:
             extra_name = "_mincnt{}".format(min_counts)
         elif group_spec and min_sn is not None:
@@ -3200,6 +3257,8 @@ class BaseSource:
             raise NoProductAvailableError("No matching AnnularSpectra can be found.")
 
         return matched_prods
+    # The combined photometric products don't really NEED their own get methods, but I figured I would just for
+    #  clarity's sake
 
     def _get_phot_prod(self, prod_type: str, obs_id: str = None, inst: str = None, lo_en: Quantity = None,
                        hi_en: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
@@ -3343,8 +3402,6 @@ class BaseSource:
         return self._get_phot_prod("ratemap", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                                    psf_iter)
 
-    # The combined photometric products don't really NEED their own get methods, but I figured I would just for
-    #  clarity's sake
     def get_combined_images(self, lo_en: Quantity = None, hi_en: Quantity = None, psf_corr: bool = False,
                             psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                             psf_iter: int = 15) -> Union[Image, List[Image]]:
@@ -3640,21 +3697,6 @@ class BaseSource:
 
         return matched_prods
 
-    @property
-    def fitted_models(self) -> List[str]:
-        """
-        This property cycles through all the available fit results, and finds the unique names of XSPEC models
-        that have been fitted to this source.
-
-        :return: A list of model names.
-        :rtype: List[str]
-        """
-        models = []
-        for s_key in self._fit_results:
-            models += list(self._fit_results[s_key].keys())
-
-        return models
-
     def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
                     allow_negative: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -3759,52 +3801,6 @@ class BaseSource:
 
         # Return the converted separation
         return conv_sep
-
-    @property
-    def peak_lo_en(self) -> Quantity:
-        """
-        This property returns the lower energy bound of the image used for peak finding.
-
-        :return: A quantity containing the lower energy limit used for peak finding.
-        :rtype: Quantity
-        """
-        return self._peak_lo_en
-
-    @property
-    def peak_hi_en(self) -> Quantity:
-        """
-        This property returns the upper energy bound of the image used for peak finding.
-
-        :return: A quantity containing the upper energy limit used for peak finding.
-        :rtype: Quantity
-        """
-        return self._peak_hi_en
-
-    @property
-    def use_peak(self) -> bool:
-        """
-        This property shows whether a particular XGA source object has been setup to use peak coordinates
-        or not. The property is either True, False, or None (if its a BaseSource).
-
-        :return: If the source is set to use peaks, True, otherwise False.
-        :rtype: bool
-        """
-        return self._use_peak
-
-    @property
-    def suppressed_warnings(self) -> List[str]:
-        """
-        A property getter (with no setter) for the warnings that have been suppressed from display to the user as
-        the source was declared as a member of a sample.
-
-        :return: The list of suppressed warnings for this source.
-        :rtype: List[str]
-        """
-        if not self._samp_member:
-            raise NotSampleMemberError("The source for {n} is not a member of a sample, and as such warnings have "
-                                       "not been suppressed.".format(n=self.name))
-        else:
-            return self._supp_warn
 
     def info(self):
         """
