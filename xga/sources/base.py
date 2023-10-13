@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 15:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 15:34. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -289,12 +289,18 @@ class BaseSource:
                     reggo.write("global color=white\n")
         # --------------------------------------------------------------------------------------------------
 
+        # 'pn',  telescope='xmm'
+        print(self.get_products('image', '0725290147', telescope='xmm', just_obj=False))
+        print('yo')
+        stop
+
         # ---------------------------------- Loading initial region lists ----------------------------------
         # This method takes our vetted (as in we've checked that region files exist) set of region files,
         #  loads them in and starts actually getting the region objects where they need to be for this source
         self._initial_regions, self._initial_region_matches = self._load_regions(region_dict)
         # --------------------------------------------------------------------------------------------------
 
+        print('all the waaaay')
         import sys
         sys.exit()
 
@@ -1669,7 +1675,7 @@ class BaseSource:
             # Simplest case, just calling get_products and passing in our information
             matched_prods = self.get_products(prod_type, obs_id, inst, extra_key=energy_key, telescope=telescope)
         elif not psf_corr and not with_lims:
-            broad_matches = self.get_products(prod_type, obs_id, inst)
+            broad_matches = self.get_products(prod_type, obs_id, inst, telescope=telescope)
             matched_prods = [p for p in broad_matches if not p.psf_corrected]
         elif psf_corr and with_lims:
             # Here we need to add the extra key to the energy key
@@ -2133,8 +2139,8 @@ class BaseSource:
             if (telescope == out[0] or telescope is None) and (obs_id == out[1] or obs_id is None) and \
                     (inst == out[2] or inst is None) and (extra_key in out or extra_key is None) and not just_obj:
                 matches.append(out)
-            elif (telescope == out[0] or telescope is None) and (obs_id == out[0] or obs_id is None) and \
-                    (inst == out[1] or inst is None) and (extra_key in out or extra_key is None) and just_obj:
+            elif (telescope == out[0] or telescope is None) and (obs_id == out[1] or obs_id is None) and \
+                    (inst == out[2] or inst is None) and (extra_key in out or extra_key is None) and just_obj:
                 matches.append(out[-1])
 
         return matches
