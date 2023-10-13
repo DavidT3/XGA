@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 14:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 14:40. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1689,7 +1689,7 @@ class BaseSource:
         return matched_prods
 
     def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                       radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
+                       radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None, telescope: str = None) \
             -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
@@ -1708,6 +1708,8 @@ class BaseSource:
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
@@ -1730,7 +1732,7 @@ class BaseSource:
         else:
             rad_info = False
 
-        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False)
+        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False, telescope=telescope)
         matched_prods = []
         for p in broad_prods:
             rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
