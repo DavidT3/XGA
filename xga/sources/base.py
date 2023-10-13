@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 14:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 15:07. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2144,7 +2144,7 @@ class BaseSource:
     #  and I can make lists of 1 product return just as the product without being a breaking change
     def get_images(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
                    psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                   psf_iter: int = 15) -> Union[Image, List[Image]]:
+                   psf_iter: int = 15, telescope: str = None) -> Union[Image, List[Image]]:
         """
         A method to retrieve XGA Image objects. This supports the retrieval of both PSF corrected and non-PSF
         corrected images, as well as setting the energy limits of the specific image you would like. A
@@ -2164,15 +2164,17 @@ class BaseSource:
             side in the PSF grid.
         :param str psf_algo: If the image you want is PSF corrected, this is the algorithm used.
         :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all images matching the other criteria will be returned.
         :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
             were multiple matching products).
         :rtype: Union[Image, List[Image]]
         """
         return self._get_phot_prod("image", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
-                                   psf_iter)
+                                   psf_iter, telescope)
 
-    def get_expmaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[ExpMap, List[ExpMap]]:
+    def get_expmaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                    telescope: str = None) -> Union[ExpMap, List[ExpMap]]:
         """
         A method to retrieve XGA ExpMap objects. This supports setting the energy limits of the specific
         exposure maps you would like. A NoProductAvailableError error will be raised if no matches are found.
@@ -2185,15 +2187,17 @@ class BaseSource:
             is None (which will retrieve all images regardless of energy limit).
         :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
             is None (which will retrieve all images regardless of energy limit).
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all exposure maps matching the other criteria will be returned.
         :return: An XGA ExpMap object (if there is an exact match), or a list of XGA ExpMap objects (if there
             were multiple matching products).
         :rtype: Union[ExpMap, List[ExpMap]]
         """
-        return self._get_phot_prod("expmap", obs_id, inst, lo_en, hi_en, False)
+        return self._get_phot_prod("expmap", obs_id, inst, lo_en, hi_en, False, telescope=telescope)
 
     def get_ratemaps(self, obs_id: str = None, inst: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
                      psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                     psf_iter: int = 15) -> Union[RateMap, List[RateMap]]:
+                     psf_iter: int = 15, telescope: str = None) -> Union[RateMap, List[RateMap]]:
         """
         A method to retrieve XGA RateMap objects. This supports the retrieval of both PSF corrected and non-PSF
         corrected ratemaps, as well as setting the energy limits of the specific ratemap you would like. A
@@ -2213,12 +2217,14 @@ class BaseSource:
             side in the PSF grid.
         :param str psf_algo: If the ratemap you want is PSF corrected, this is the algorithm used.
         :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all ratemaps matching the other criteria will be returned.
         :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
             were multiple matching products).
         :rtype: Union[RateMap, List[RateMap]]
         """
         return self._get_phot_prod("ratemap", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
-                                   psf_iter)
+                                   psf_iter, telescope)
 
     def get_combined_images(self, lo_en: Quantity = None, hi_en: Quantity = None, psf_corr: bool = False,
                             psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
