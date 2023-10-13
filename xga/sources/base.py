@@ -1,10 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 23:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 10:41. Copyright (c) The Contributors
 
 import os
 import pickle
 from copy import deepcopy
-from shutil import move
+from shutil import move, copyfile
 from typing import Tuple, List, Dict, Union
 from warnings import warn, simplefilter
 
@@ -37,44 +37,6 @@ from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, O
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
 simplefilter('ignore', wcs.FITSFixedWarning)
-
-
-"""
-# TODO THIS STUFF SHOULD ALL MOVE TO THE BASESOURCE INIT - IT MAKES MORE SENSE TO BE THERE SO THE DIRECTORIES DON'T
-#  GET CREATED WHEN SOMEBODY JUST WANTS TO USE THE PRODUCTS
-# Checking if the user was using the xmm only version of xga previously
-# Do this by looking for the 'profile' directory in the xga_save_path directory
-# JESS_TODO this would only work if they hadn't changed their xga_save_path
-profiles = [direct == "profiles" for direct in os.listdir(OUTPUT)]
-if sum(profiles) != 0:
-    # if there is a directory called combined, then they have used an old version of xga
-    new_directory = os.path.join(OUTPUT, "xmm")
-    for direct in os.listdir(OUTPUT):
-        # rearranging their xga_save_path directory to the updated multi-telescope format
-        old_path = os.path.join(OUTPUT, direct)
-        new_path = os.path.join(new_directory, direct)
-        shutil.move(old_path, new_path)
-# Created for those sources will be saved
-for telescope in setup_telescopes:
-    # Telescope specific path where products are stored in xga output directory
-    OUTPUT_TEL = os.path.join(OUTPUT, telescope)
-    if not os.path.exists(OUTPUT_TEL):
-        os.makedirs(OUTPUT_TEL)
-    # Make a storage directory where specific source name directories will then be created, there profile objects
-    if not os.path.exists(OUTPUT_TEL + "/profiles"):
-        os.makedirs(OUTPUT_TEL + "/profiles")
-
-    # Also making a storage directory specifically for products which are combinations of different ObsIDs
-    #  and instruments
-    if not os.path.exists(OUTPUT_TEL + "/combined"):
-        os.makedirs(OUTPUT_TEL + "/combined")
-
-    # And create an inventory file for that directory
-    if not os.path.exists(OUTPUT_TEL + "/combined/inventory.csv"):
-        with open(OUTPUT_TEL + "/combined/inventory.csv", 'w') as inven:
-            inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
-
-"""
 
 
 class BaseSource:
@@ -327,24 +289,21 @@ class BaseSource:
                     reggo.write("global color=white\n")
         # --------------------------------------------------------------------------------------------------
 
-        # nhlookup returns average and weighted average values, so just take the first
+        # ---------------------------------- Loading initial region lists ----------------------------------
+        # This method takes our vetted (as in we've checked that region files exist) set of region files,
+        #  loads them in and starts actually getting the region objects where they need to be for this source
+
+        print(region_dict)
+        print('\n\n\n')
+
+        # TODO I NEED TO REDO THIS ENTIRELY I THINK
+        self._initial_regions, self._initial_region_matches = self._load_regions(region_dict)
+        # --------------------------------------------------------------------------------------------------
+
+        # ---------------------------------- Setting up general attributes ---------------------------------
+        # The nh_lookup function returns average and weighted average values, so just take the first
         self._nH = nh_lookup(self.ra_dec)[0]
         self._redshift = redshift
-        # This method uses the instruments attribute to check and see whether a particular ObsID-Instrument
-        #  combination is allowed for this source. As that attribute was constructed using the blacklist information
-        #  we can be sure that every ObsID-Instrument combination loaded in here is allowed to be here. The only
-        #  other way for them to change is through using the dissociate observation capability
-        self._products, region_dict, self._att_files = self._initial_products()
-
-        # The self._products is a dictionary containing all the telescopes with at least one observation associated with them
-        # Storing these in a list as an attribute for code readability later 
-        self._usable_tscopes = list(self._products.keys())
-
-        for tscope in self._products.keys():
-            # Want to update the ObsIDs associated with this source after seeing if all files are present
-            self._obs[tscope] = list(self._products[tscope].keys())
-            self._instruments[tscope] = {o: instruments[tscope][o] for o in self._obs[tscope] 
-                                         if len(instruments[tscope][o]) > 0}
         self._cosmo = cosmology
         if redshift is not None:
             self._lum_dist = self._cosmo.luminosity_distance(self._redshift)
@@ -352,7 +311,6 @@ class BaseSource:
         else:
             self._lum_dist = None
             self._ang_diam_dist = None
-        self._initial_regions, self._initial_region_matches = self._load_regions(region_dict)
 
         # This is a queue for products to be generated for this source, will be a numpy array in practise.
         # Items in the same row will all be generated in parallel, whereas items in the same column will
@@ -420,12 +378,14 @@ class BaseSource:
         #  they don't include enough of the object we care about).
         self._disassociated = False
         self._disassociated_obs = {}
+        # ---------------------------------------------------------------------------------------------------
 
         # If there is an existing XGA output directory, then it makes sense to search for products that XGA
         #  may have already generated and load them in - saves us wasting time making them again.
         # The user does have control over whether this happens or not though.
         # This goes at the end of init to make sure everything necessary has been declared
         if os.path.exists(OUTPUT) and load_products:
+            # TODO THIS ALSO NEEDS COMPLETELY REDOING
             self._existing_xga_products(load_fits)
 
         # Now going to save load_fits in an attribute, just because if the observation is cleaned we need to
@@ -433,6 +393,8 @@ class BaseSource:
         self._load_fits = load_fits
         self._load_products = load_products
 
+    # TODO I WANT ALL OF THE PROPERTIES, METHODS, AND PROTECTED METHODS IN GROUPS AND IN A DEFINED ORDER, AND I WANT
+    #  THAT FOR EVERY CLASS IN THIS DAMN MODULE
     @property
     def ra_dec(self) -> Quantity:
         """
@@ -1383,52 +1345,94 @@ class BaseSource:
 
     def _load_regions(self, reg_paths) -> Tuple[dict, dict]:
         """
-        An internal method that reads and parses region files found for observations
-        associated with this source. Also computes simple matches to find regions likely
-        to be related to the source.
+        An internal method that reads and parses region files found for observations associated with this source.
+        Also computes simple matches to find regions likely to be related to the source.
 
         :return: Two dictionaries, the first contains the regions for each of the ObsIDs and the second contains
             the regions that have been very simply matched to the source. These should be ordered from closest to
             furthest from the passed source coordinates.
         :rtype: Tuple[dict, dict]
         """
-        # As mentioned above, we make a local copy of the region file if the original file path exists
-        #  and if a local copy DOESN'T already exist
-        # reg_copy_path = OUTPUT + tel + "/{o}/{o}_xga_copy.reg".format(o=obs_id)
-        # if os.path.exists(reg_file) and not os.path.exists(reg_copy_path):
-        #     # A local copy of the region file is made and used
-        #     copyfile(reg_file, reg_copy_path)
-        #     # Regions dictionary updated with path to local region file, if it exists
-        #     reg_dict[tel][obs_id] = reg_copy_path
+
+        # Read in the custom region file that every XGA has associated with it. Sources within will be added to the
+        #  source list for every ObsID?
+        #     custom_regs = read_ds9(OUTPUT + tscope + "/regions/{0}/{0}_custom.reg".format(self.name))
+        #     for reg in custom_regs:
+        #         if not isinstance(reg, SkyRegion):
+        #             raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
         #
-        # # In the case where there is already a local copy of the region file
-        # elif os.path.exists(reg_copy_path):
-        #     reg_dict[tel][obs_id] = reg_copy_path
-        # else:
-        #     reg_dict[tel][obs_id] = None
+        #     # As we only allow one set of regions per observation, we shall assume that we can use the
+        #     # WCS transform from ANY of the images to convert pixels to degrees
+        #     for obs_id in reg_paths[tscope]:
+        #         if reg_paths[tscope][obs_id] is not None:
+        #             ds9_regs = read_ds9(reg_paths[tscope][obs_id])
+        #             # Apparently can happen that there are no regions in a region file, so if that is the case
+        #             #  then I just set the ds9_regs to [None] because I know the rest of the code can deal with that.
+        #             #  It can't deal with an empty list
+        #             if len(ds9_regs) == 0:
+        #                 ds9_regs = [None]
+        #         else:
+        #             ds9_regs = [None]
+        # reg_dict = {}
+        # match_dict = {}
+        # As we only allow one set of regions per observation, we shall assume that we can use the
+        # WCS transform from ANY of the images to convert pixels to degrees
 
-        # TODO DON'T TRUST THIS AT ALL FOR GOD'S SAKE
-        reg_dict = {}
-        match_dict = {}
+        reg_dict = {tel: {} for tel in reg_paths}
+        match_dict = {tel: {} for tel in reg_paths}
 
-        for tscope in reg_paths:
-            if tscope != "xmm":
-                raise NotImplementedError("Only XMM is supported")
+        # The input reg_dict is a dictionary of telescopes, which each have an entry of a dictionary of ObsIDs, and
+        #  the values for those ObsID keys is a path to a region file for that ObsID
+        for tel in reg_paths:
+            # Iterate through the ObsIDs for the current telescope
+            for obs_id in reg_paths[tel]:
+                # Read out the original region file path from the dictionary
+                reg_file = reg_paths[tel][obs_id]
+                # We make a local copy of the region file if the original file path exists and if a local copy
+                #  DOESN'T already exist
+                reg_copy_path = OUTPUT + tel + "/{o}/{o}_xga_copy.reg".format(o=obs_id)
+                # If the reg_file entry in the dictionary for this telescope-ObsID is not None, then we don't need
+                #  to check that it exists because that already happened in the initial_products method.
+                if reg_file is not None and not os.path.exists(reg_copy_path):
+                    # A local copy of the region file is made and used in place of the original - this is because
+                    #  parts of XGA can modify it
+                    copyfile(reg_file, reg_copy_path)
+                    # Regions dictionary updated with path to local region file, if it exists
+                    reg_dict[tel][obs_id] = reg_copy_path
+                    reg_file = reg_copy_path
+                # In the case where there is already a local copy of the region file
+                elif reg_file is not None and os.path.exists(reg_copy_path):
+                    reg_dict[tel][obs_id] = reg_copy_path
+                    reg_file = reg_copy_path
 
-            reg_dict[tscope] = {}
-            match_dict[tscope] = {}
-            # Read in the custom region file that every XGA has associated with it. Sources within will be added to the
-            #  source list for every ObsID?
-            custom_regs = read_ds9(OUTPUT + tscope + "/regions/{0}/{0}_custom.reg".format(self.name))
-            for reg in custom_regs:
-                if not isinstance(reg, SkyRegion):
+                # Read in the custom region file associated with this source - they are currently on a telescope
+                #  level due to the different observational characteristics that might be present for different
+                #  telescopes (e.g. different angular resolutions)
+                custom_regs = read_ds9(OUTPUT + "{t}/regions/{n}/{n}_custom.reg".format(t=tel, n=self.name))
+                if not all([isinstance(reg, SkyRegion) for reg in custom_regs]):
+                    # What the error says really - we only want custom sources defined in ra-dec coords, not telescope
+                    #  specific coordinates
                     raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
 
-            # As we only allow one set of regions per observation, we shall assume that we can use the
-            # WCS transform from ANY of the images to convert pixels to degrees
-            for obs_id in reg_paths[tscope]:
-                if reg_paths[tscope][obs_id] is not None:
-                    ds9_regs = read_ds9(reg_paths[tscope][obs_id])
+                import sys
+                sys.exit()
+
+                if reg_file is not None:
+                    ds9_regs = read_ds9(reg_paths[obs_id])
+                    # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
+                    #  where they were generated with different resolutions).
+                    #  TODO see issue #908, figure out how to support different resolutions of image
+                    try:
+                        ims = self.get_images(obs_id)
+                    except NoProductAvailableError:
+                        raise NoProductAvailableError("There is no image available for observation {o}, associated "
+                                                      "with {n}. An image is currently required to check for sky "
+                                                      "coordinates being present within a sky region - though hopefully "
+                                                      "no-one will ever see this because I'll have fixed "
+                                                      "it!".format(o=obs_id, n=self.name))
+                        w = None
+                    else:
+                        w = ims[0].radec_wcs
                     # Apparently can happen that there are no regions in a region file, so if that is the case
                     #  then I just set the ds9_regs to [None] because I know the rest of the code can deal with that.
                     #  It can't deal with an empty list
@@ -1436,126 +1440,97 @@ class BaseSource:
                         ds9_regs = [None]
                 else:
                     ds9_regs = [None]
-        reg_dict = {}
-        match_dict = {}
-        # As we only allow one set of regions per observation, we shall assume that we can use the
-        # WCS transform from ANY of the images to convert pixels to degrees
 
-        for obs_id in reg_paths:
-            if reg_paths[obs_id] is not None:
-                ds9_regs = read_ds9(reg_paths[obs_id])
-                # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
-                #  where they were generated with different resolutions).
-                #  TODO see issue #908, figure out how to support different resolutions of image
-                try:
-                    ims = self.get_images(obs_id)
-                except NoProductAvailableError:
-                    raise NoProductAvailableError("There is no image available for observation {o}, associated "
-                                                  "with {n}. An image is currently required to check for sky "
-                                                  "coordinates being present within a sky region - though hopefully "
-                                                  "no-one will ever see this because I'll have fixed "
-                                                  "it!".format(o=obs_id, n=self.name))
-                    w = None
-                else:
-                    w = ims[0].radec_wcs
-                # Apparently can happen that there are no regions in a region file, so if that is the case
-                #  then I just set the ds9_regs to [None] because I know the rest of the code can deal with that.
-                #  It can't deal with an empty list
-                if len(ds9_regs) == 0:
-                    ds9_regs = [None]
-            else:
-                ds9_regs = [None]
-
-            if isinstance(ds9_regs[0], PixelRegion):
-                # If regions exist in pixel coordinates, we need an image WCS to convert them to RA-DEC, so we need
-                #  one of the images supplied in the config file, not anything that XGA generates.
-                #  But as this method is only run once, before XGA generated products are loaded in, it
-                #  should be fine
-                if w is None:
-                    raise NoProductAvailableError("There is no image available for observation {o}, associated "
-                                                  "with {n}. An image is currently required to translate pixel regions "
-                                                  "to RA-DEC.".format(o=obs_id, n=self.name))
-
-                sky_regs = [reg.to_sky(w) for reg in ds9_regs]
-                reg_dict[obs_id] = np.array(sky_regs)
-            elif isinstance(ds9_regs[0], SkyRegion):
-                reg_dict[obs_id] = np.array(ds9_regs)
-            else:
-                # So there is an entry in this for EVERY ObsID
-                reg_dict[obs_id] = np.array([None])
                 if isinstance(ds9_regs[0], PixelRegion):
                     # If regions exist in pixel coordinates, we need an image WCS to convert them to RA-DEC, so we need
                     #  one of the images supplied in the config file, not anything that XGA generates.
                     #  But as this method is only run once, before XGA generated products are loaded in, it
                     #  should be fine
-                    inst = [k for k in self._products[tscope][obs_id] if k in XMM_INST[tscope]][0]
-                    # DAVID_QUESTION why do you need the "-" in the eventlist?
-                    en = [k for k in self._products[tscope][obs_id][inst] if "-" in k][0]
-                    # Making an assumption here, that if there are regions there will be images
-                    # Getting the radec_wcs property from the Image object
-                    # you are here
-                    im = [i for i in self.get_products("image", obs_id, inst, just_obj=False)[tscope] if en in i]
-
-                    if len(im) != 1:
+                    if w is None:
                         raise NoProductAvailableError("There is no image available for observation {o}, associated "
-                                                    "with {n}. An image is require to translate pixel regions "
-                                                    "to RA-DEC.".format(o=obs_id, n=self.name))
-                    w = im[0][-1].radec_wcs
+                                                      "with {n}. An image is currently required to translate pixel regions "
+                                                      "to RA-DEC.".format(o=obs_id, n=self.name))
+
                     sky_regs = [reg.to_sky(w) for reg in ds9_regs]
-                    reg_dict[tscope][obs_id] = np.array(sky_regs)
+                    reg_dict[obs_id] = np.array(sky_regs)
                 elif isinstance(ds9_regs[0], SkyRegion):
-                    reg_dict[tscope][obs_id] = np.array(ds9_regs)
+                    reg_dict[obs_id] = np.array(ds9_regs)
                 else:
                     # So there is an entry in this for EVERY ObsID
-                    reg_dict[tscope][obs_id] = np.array([None])
+                    reg_dict[obs_id] = np.array([None])
+                    if isinstance(ds9_regs[0], PixelRegion):
+                        # If regions exist in pixel coordinates, we need an image WCS to convert them to RA-DEC, so we need
+                        #  one of the images supplied in the config file, not anything that XGA generates.
+                        #  But as this method is only run once, before XGA generated products are loaded in, it
+                        #  should be fine
+                        inst = [k for k in self._products[tscope][obs_id] if k in XMM_INST[tscope]][0]
+                        # DAVID_QUESTION why do you need the "-" in the eventlist?
+                        en = [k for k in self._products[tscope][obs_id][inst] if "-" in k][0]
+                        # Making an assumption here, that if there are regions there will be images
+                        # Getting the radec_wcs property from the Image object
+                        # you are here
+                        im = [i for i in self.get_products("image", obs_id, inst, just_obj=False)[tscope] if en in i]
 
-                # Here we add the custom sources to the source list, we know they are sky regions as we have
-                #  already enforced it. If there was no region list for a particular ObsID (detected by the first
-                #  entry in the reg dict being None) and there IS a custom region, we just replace the None with the
-                #  custom region
-                if reg_dict[tscope][obs_id][0] is not None:
-                    reg_dict[tscope][obs_id] = np.append(reg_dict[tscope][obs_id], custom_regs)
-                elif reg_dict[tscope][obs_id][0] is None and len(custom_regs) != 0:
-                    reg_dict[tscope][obs_id] = custom_regs
-                else:
-                    reg_dict[tscope][obs_id] = np.array([None])
+                        if len(im) != 1:
+                            raise NoProductAvailableError("There is no image available for observation {o}, associated "
+                                                        "with {n}. An image is require to translate pixel regions "
+                                                        "to RA-DEC.".format(o=obs_id, n=self.name))
+                        w = im[0][-1].radec_wcs
+                        sky_regs = [reg.to_sky(w) for reg in ds9_regs]
+                        reg_dict[tscope][obs_id] = np.array(sky_regs)
+                    elif isinstance(ds9_regs[0], SkyRegion):
+                        reg_dict[tscope][obs_id] = np.array(ds9_regs)
+                    else:
+                        # So there is an entry in this for EVERY ObsID
+                        reg_dict[tscope][obs_id] = np.array([None])
 
-                # I'm going to ensure that all regions are elliptical, I don't want to hunt through every place in XGA
-                #  where I made that assumption
-                for reg_ind, reg in enumerate(reg_dict[tscope][obs_id]):
-                    if isinstance(reg, CircleSkyRegion):
-                        # Multiply radii by two because the ellipse based sources want HEIGHT and WIDTH, not RADIUS
-                        # Give small angle (though won't make a difference as circular) to avoid problems with angle=0
-                        #  that I've noticed previously
-                        new_reg = EllipseSkyRegion(reg.center, reg.radius*2, reg.radius*2, Quantity(3, 'deg'))
-                        new_reg.visual['color'] = reg.visual['color']
-                        reg_dict[tscope][obs_id][reg_ind] = new_reg
+                    # Here we add the custom sources to the source list, we know they are sky regions as we have
+                    #  already enforced it. If there was no region list for a particular ObsID (detected by the first
+                    #  entry in the reg dict being None) and there IS a custom region, we just replace the None with the
+                    #  custom region
+                    if reg_dict[tscope][obs_id][0] is not None:
+                        reg_dict[tscope][obs_id] = np.append(reg_dict[tscope][obs_id], custom_regs)
+                    elif reg_dict[tscope][obs_id][0] is None and len(custom_regs) != 0:
+                        reg_dict[tscope][obs_id] = custom_regs
+                    else:
+                        reg_dict[tscope][obs_id] = np.array([None])
 
-                # Hopefully this bodge doesn't have any unforeseen consequences
-                if reg_dict[tscope][obs_id][0] is not None and len(reg_dict[tscope][obs_id]) > 1:
-                    # Quickly calculating distance between source and center of regions, then sorting
-                    # and getting indices. Thus I only match to the closest 5 regions.
-                    diff_sort = np.array([_dist_from_source(*self._ra_dec, r)
-                                          for r in reg_dict[tscope][obs_id]]).argsort()
-                    # Unfortunately due to a limitation of the regions module I think you need images
-                    #  to do this contains match...
-                    within = np.array([reg.contains(SkyCoord(*self._ra_dec, unit='deg'), w)
-                                    for reg in reg_dict[tscope][obs_id][diff_sort[0:5]]])
+                    # I'm going to ensure that all regions are elliptical, I don't want to hunt through every place in XGA
+                    #  where I made that assumption
+                    for reg_ind, reg in enumerate(reg_dict[tscope][obs_id]):
+                        if isinstance(reg, CircleSkyRegion):
+                            # Multiply radii by two because the ellipse based sources want HEIGHT and WIDTH, not RADIUS
+                            # Give small angle (though won't make a difference as circular) to avoid problems with angle=0
+                            #  that I've noticed previously
+                            new_reg = EllipseSkyRegion(reg.center, reg.radius*2, reg.radius*2, Quantity(3, 'deg'))
+                            new_reg.visual['color'] = reg.visual['color']
+                            reg_dict[tscope][obs_id][reg_ind] = new_reg
 
-                    # Make sure to re-order the region list to match the sorted within array
-                    reg_dict[tscope][obs_id] = reg_dict[tscope][obs_id][diff_sort]
+                    # Hopefully this bodge doesn't have any unforeseen consequences
+                    if reg_dict[tscope][obs_id][0] is not None and len(reg_dict[tscope][obs_id]) > 1:
+                        # Quickly calculating distance between source and center of regions, then sorting
+                        # and getting indices. Thus I only match to the closest 5 regions.
+                        diff_sort = np.array([_dist_from_source(*self._ra_dec, r)
+                                              for r in reg_dict[tscope][obs_id]]).argsort()
+                        # Unfortunately due to a limitation of the regions module I think you need images
+                        #  to do this contains match...
+                        within = np.array([reg.contains(SkyCoord(*self._ra_dec, unit='deg'), w)
+                                        for reg in reg_dict[tscope][obs_id][diff_sort[0:5]]])
 
-                    # Expands it so it can be used as a mask on the whole set of regions for this observation
-                    within = np.pad(within, [0, len(diff_sort) - len(within)])
-                    match_dict[tscope][obs_id] = within
-                # In the case of only one region being in the list, we simplify the above expression
-                elif reg_dict[tscope][obs_id][0] is not None and len(reg_dict[tscope][obs_id]) == 1:
-                    if reg_dict[tscope][obs_id][0].contains(SkyCoord(*self._ra_dec, unit='deg'), w):
-                        match_dict[tscope][obs_id] = np.array([True])
+                        # Make sure to re-order the region list to match the sorted within array
+                        reg_dict[tscope][obs_id] = reg_dict[tscope][obs_id][diff_sort]
+
+                        # Expands it so it can be used as a mask on the whole set of regions for this observation
+                        within = np.pad(within, [0, len(diff_sort) - len(within)])
+                        match_dict[tscope][obs_id] = within
+                    # In the case of only one region being in the list, we simplify the above expression
+                    elif reg_dict[tscope][obs_id][0] is not None and len(reg_dict[tscope][obs_id]) == 1:
+                        if reg_dict[tscope][obs_id][0].contains(SkyCoord(*self._ra_dec, unit='deg'), w):
+                            match_dict[tscope][obs_id] = np.array([True])
+                        else:
+                            match_dict[tscope][obs_id] = np.array([False])
                     else:
                         match_dict[tscope][obs_id] = np.array([False])
-                else:
-                    match_dict[tscope][obs_id] = np.array([False])
 
         return reg_dict, match_dict
 
