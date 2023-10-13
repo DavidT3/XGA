@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/09/2023, 16:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 13:22. Copyright (c) The Contributors
 
 
 class HeasoftError(Exception):
@@ -170,7 +170,7 @@ class NoMatchFoundError(Exception):
 class NotAssociatedError(Exception):
     def __init__(self, *args):
         """
-        Error raised when a given ObsID is not associated with a source object.
+        Error raised when a given telescope or ObsID is not associated with a source object.
 
         :param expression:
         :param message:
