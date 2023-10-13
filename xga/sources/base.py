@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 15:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 16:05. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2554,8 +2554,8 @@ class BaseSource:
         return matched_prods
 
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                     radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                     radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                     telescope: str = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         This is the generic get method for XGA profile objects stored in this source. You still must remember
         the profile type value to use it, but once entered it will return a list of all matching profiles (or a
@@ -2574,25 +2574,23 @@ class BaseSource:
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
         if "profile" in profile_type:
-            warn("The profile_type you passed contains the word 'profile', which is appended onto "
-                          "a profile type by XGA, you need to try this again without profile on the end, unless"
-                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
-
-        search_key = profile_type + "_profile"
-        if all([obs_id is None, inst is None]):
-            search_key = "combined_" + search_key
+            warn("The profile_type you passed contains the word 'profile', which is appended onto a profile type "
+                 "by XGA, you need to try this again without profile on the end, unless you gave a generic "
+                 "profile a type with 'profile' in.", stacklevel=2)
 
         search_key = profile_type + "_profile"
         if search_key not in ALLOWED_PRODUCTS:
-            warn("{} seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
+            warn("{} seems to be a custom profile, not an XGA default type. If this is not true then you have "
+                 "passed an invalid profile type.".format(search_key), stacklevel=2)
 
-        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en)
+        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en, telescope)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
@@ -2601,7 +2599,7 @@ class BaseSource:
         return matched_prods
 
     def get_combined_profiles(self, profile_type: str, central_coord: Quantity = None, radii: Quantity = None,
-                              lo_en: Quantity = None, hi_en: Quantity = None) \
+                              lo_en: Quantity = None, hi_en: Quantity = None, telescope: str = None) \
             -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The generic get method for XGA profiles made using all available data which are stored in this source.
@@ -2617,22 +2615,24 @@ class BaseSource:
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
+        :param str telescope: Optionally, a specific telescope to search for combined profiles can be supplied. The
+            default is None, which means all combined profiles matching the other criteria will be returned.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
         if "profile" in profile_type:
-            warn("The profile_type you passed contains the word 'profile', which is appended onto "
-                          "a profile type by XGA, you need to try this again without profile on the end, unless"
-                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
+            warn("The profile_type you passed contains the word 'profile', which is appended onto a profile type "
+                 "by XGA, you need to try this again without profile on the end, unless you gave a generic profile "
+                 "a type with 'profile' in.", stacklevel=2)
 
         search_key = "combined_" + profile_type + "_profile"
 
         if search_key not in ALLOWED_PRODUCTS:
-            warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.", stacklevel=2)
+            warn("That profile type seems to be a custom profile, not an XGA default type. If this is not true "
+                 "then you have passed an invalid profile type.", stacklevel=2)
 
-        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en, hi_en)
+        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en, hi_en, telescope)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
