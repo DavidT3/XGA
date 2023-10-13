@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 13:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 14:05. Copyright (c) The Contributors
 
 import json
 import os
@@ -393,7 +393,7 @@ XMM_INST = ALLOWED_INST['xmm']
 #  telescope names
 TELESCOPES = list(ALLOWED_INST.keys())
 # This dictionary won't be used much, but it's just so we have access to some properly formatted telescope names
-PRETTY_TELESCOPE_NAMES = {'xmm': 'XMM-Newton', 'erosita': 'eROSITA'}
+PRETTY_TELESCOPE_NAMES = {'xmm': 'XMM', 'erosita': 'eROSITA'}
 # This dictionary is an important one, it will be set during the course of the setup process in this file, and
 #  defines whether a particular telescope that XGA supports seems to have the files necessary to be used by sources
 #  and samples. The default is False, and if we find otherwise during this process then that will be changed
