@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 21:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 22:39. Copyright (c) The Contributors
 
 
 import os
@@ -1747,7 +1747,15 @@ class AnnularSpectra(BaseAggregateProduct):
         The init method for the AnnularSpectrum class, performs checks and organises the spectra which
         have been passed in, for easy retrieval.
         """
-        super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined")
+        if len(set([s.telescope for s in spectra])) != 1:
+            raise NotImplementedError("AnnularSpectra comprised of spectra from multiple telescopes are not "
+                                      "supported yet.")
+        else:
+            # Given the check above, we know that all the spectra are from the same telescope, so we just take
+            #  the telescope name from the first one
+            telescope = spectra[0].telescope
+
+        super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined", telescope=telescope)
 
         # There shouldn't be any way this can happen, but it doesn't hurt to check that all of the spectra
         #  have the same set ID
