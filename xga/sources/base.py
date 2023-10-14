@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 16:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 21:10. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -295,10 +295,6 @@ class BaseSource:
         self._initial_regions, self._initial_region_matches = self._load_regions(region_dict)
         # --------------------------------------------------------------------------------------------------
 
-        print('all the waaaay')
-        import sys
-        sys.exit()
-
         # ---------------------------------- Setting up general attributes ---------------------------------
         # The nh_lookup function returns average and weighted average values, so just take the first
         self._nH = nh_lookup(self.ra_dec)[0]
@@ -386,6 +382,9 @@ class BaseSource:
         if os.path.exists(OUTPUT) and load_products:
             # TODO THIS ALSO NEEDS COMPLETELY REDOING
             self._existing_xga_products(load_fits)
+
+        import sys
+        sys.exit()
 
         # Now going to save load_fits in an attribute, just because if the observation is cleaned we need to
         #  run _existing_xga_products again, same for load_products
@@ -833,14 +832,15 @@ class BaseSource:
         :param bool read_fits: Boolean flag that controls whether past fits are read back in or not.
         """
 
-        def parse_image_like(file_path: str, exact_type: str, merged: bool = False) -> BaseProduct:
+        def parse_image_like(file_path: str, exact_type: str, telescope: str, merged: bool = False) -> BaseProduct:
             """
             Very simple little function that takes the path to an XGA generated image-like product (so either an
             image or an exposure map), parses the file path and makes an XGA object of the correct type by using
             the exact_type variable.
 
-            :param str file_path: Absolute path to an XGA-generated XMM data product.
+            :param str file_path: Absolute path to an XGA-generated data product.
             :param str exact_type: Either 'image' or 'expmap', the type of product that the file_path leads to.
+            :param str telescope: The telescope that this product is from.
             :param bool merged: Whether this is a merged file or not.
             :return: An XGA product object.
             :rtype: BaseProduct
@@ -866,9 +866,9 @@ class BaseSource:
             # Different types of Product objects, the empty strings are because I don't have the stdout, stderr,
             #  or original commands for these objects.
             if exact_type == "image" and "psfcorr" not in file_path:
-                final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
+                final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
             elif exact_type == "image" and "psfcorr" in file_path:
-                final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
+                final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
                 final_obj.psf_corrected = True
                 final_obj.psf_bins = int([entry for entry in im_info if "bin" in entry][0].split('bin')[0])
                 final_obj.psf_iterations = int([entry for entry in im_info if "iter" in
@@ -876,24 +876,29 @@ class BaseSource:
                 final_obj.psf_model = [entry for entry in im_info if "mod" in entry][0].split("mod")[0]
                 final_obj.psf_algorithm = [entry for entry in im_info if "algo" in entry][0].split("algo")[0]
             elif exact_type == "expmap":
-                final_obj = ExpMap(file_path, obs_id, ins, "", "", "", lo_en, hi_en)
+                final_obj = ExpMap(file_path, obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
             else:
                 raise TypeError("Only image and expmap are allowed.")
 
             return final_obj
-
+        # Just figure out where we are in the filesystem, we'll make sure to return to this location after all
+        #  the changing directory we're about to do
         og_dir = os.getcwd()
-        # DAVID_QUESTION do u know what's faster/ the difference between doing .keys() and nothing
-        for tscope in self._obs.keys():
-            if tscope != "xmm":
-                raise NotImplementedError("Only XMM is supported")
+
+        # We iterate through the associated telescopes - the XGA generated products are stored in telescope/ObsID
+        #  subdirectories
+        for tel in self.telescopes:
+            # Read out the allowed instruments for this particular telescopes - this method won't work like this
+            #  eventually, but at the moment I'm just converting what is already here
+            all_inst = ALLOWED_INST[tel]
+
             # This is used for spectra that should be part of an AnnularSpectra object
             ann_spec_constituents = {}
             # This is to store whether all components could be loaded in successfully
             ann_spec_usable = {}
-            for obs in self._obs[tscope]:
-                if os.path.exists(OUTPUT + tscope + '/' + obs):
-                    os.chdir(OUTPUT + tscope + '/' + obs)
+            for obs in self.obs_ids[tel]:
+                if os.path.exists(OUTPUT + "{t}/{o}".format(t=tel, o=obs)):
+                    os.chdir(OUTPUT + "{t}/{o}".format(t=tel, o=obs))
                     cur_d = os.getcwd() + '/'
                     # Loads in the inventory file for this ObsID
                     inven = pd.read_csv("inventory.csv", dtype=str)
@@ -903,20 +908,20 @@ class BaseSource:
                     # Instruments is a dictionary with ObsIDs on the top level and then valid instruments on
                     #  the lower level. As such we can be sure here we're only reading in instruments we decided
                     #  are valid
-                    for i in self.instruments[tscope][obs]:
+                    for i in self.instruments[tel][obs]:
                         # Fetches lines of the inventory which match the current ObsID and instrument
                         rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
                         for r_ind, r in rel_ims.iterrows():
-                            # JESS_TODO need to change the update_products function
-                            self.update_products(parse_image_like(cur_d+r['file_name'], r['type']), update_inv=False)
+                            self.update_products(parse_image_like(cur_d+r['file_name'], r['type'], tel),
+                                                 update_inv=False)
 
-                    # For spectra we search for products that have the name of this object in, as they are for
+                    # For spectra, we search for products that have the name of this object in, as they are for
                     #  specific parts of the observation.
                     # Have to replace any + characters with x, as that's what we did in evselect_spectrum due to SAS
                     #  having some issues with the + character in file names
                     named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
-                            self._name.replace("+", "x") in f and obs in f
-                            and any(inst in f for inst in XMM_INST[tscope])]
+                             self._name.replace("+", "x") in f and obs in f
+                             and any([ai in f for ai in all_inst])]
                     specs = [f for f in named if "spec" in f.split('/')[-1] and "back" not in f.split('/')[-1]]
 
                     for sp in specs:
@@ -981,7 +986,8 @@ class BaseSource:
                         # As RMFs can be generated for source and background spectra separately, or one for both,
                         #  we need to check for matching RMFs to the spectrum we found
                         if len(rmf) == 0:
-                            rmf = [f for f in named if "rmf" in f and "back" not in f and inst in f and "universal" in f]
+                            rmf = [f for f in named if "rmf" in f and "back" not in f and inst in f
+                                   and "universal" in f]
 
                         # Exact same checks for the background spectrum
                         back = [f for f in named if "backspec" in f and inst in f
@@ -995,11 +1001,12 @@ class BaseSource:
 
                         # If exactly one match has been found for all of the products, we define an XGA spectrum and
                         #  add it the source object.
-                        if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 and len(back_rmf) == 1:
+                        if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 \
+                                and len(back_rmf) == 1:
                             # Defining our XGA spectrum instance
                             obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
-                                        grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf[0],
-                                        back_arf[0])
+                                           grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf[0],
+                                           back_arf[0], telescope=tel)
 
                             if "ident" in sp.split('/')[-1]:
                                 set_id = int(sp.split('ident')[-1].split('_')[0])
@@ -1021,7 +1028,8 @@ class BaseSource:
                         elif len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 0:
                             # Defining our XGA spectrum instance
                             obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
-                                        grouped, min_counts, min_sn, over_sample, "", "", "", region)
+                                           grouped, min_counts, min_sn, over_sample, "", "", "", region,
+                                           telescope=tel)
 
                             if "ident" in sp.split('/')[-1]:
                                 set_id = int(sp.split('ident')[-1].split('_')[0])
@@ -1067,7 +1075,8 @@ class BaseSource:
                     warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
                                 "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf)
                     if not self._samp_member:
-                        # If these errors have been raised then I think that the pickle file has been broken (see issue #935)
+                        # If these errors have been raised then I think that the pickle file has been
+                        #  broken (see issue #935)
                         warn(warn_text, stacklevel=2)
                     else:
                         self._supp_warn.append(warn_text)
@@ -1085,12 +1094,12 @@ class BaseSource:
                         self.update_products(ann_spec_obj, update_inv=False)
 
             # Here we load in any combined images and exposure maps that may have been generated
-            os.chdir(OUTPUT + tscope + '/combined')
+            os.chdir(OUTPUT + 'combined')
             cur_d = os.getcwd() + '/'
             # This creates a set of observation-instrument strings that describe the current combinations associated
             #  with this source, for testing against to make sure we're loading in combined images/expmaps that
             #  do belong with this source
-            src_oi_set = set([o+i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
+            src_oi_set = set([o+i for o in self._instruments for i in self._instruments[o]])
 
             # Loads in the inventory file for this ObsID
             inven = pd.read_csv("inventory.csv", dtype=str)
@@ -1106,18 +1115,19 @@ class BaseSource:
                 #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they match
                 #  exactly and the product can be loaded
                 if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                    self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], merged=True),
+                    self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], tel, merged=True),
                                          update_inv=False)
 
             os.chdir(og_dir)
 
             # Now loading in previous fits
-            if os.path.exists(OUTPUT + tscope + "/XSPEC/" + self.name) and read_fits:
+            if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits:
                 ann_obs_order = {}
                 ann_results = {}
                 ann_lums = {}
-                prev_fits = [OUTPUT + tscope + "/XSPEC/" + self.name + "/" + f
-                            for f in os.listdir(OUTPUT + tscope + "/XSPEC/" + self.name) if ".xcm" not in f and ".fits" in f]
+                prev_fits = [OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name + "/" + f
+                             for f in os.listdir(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name)
+                             if ".xcm" not in f and ".fits" in f]
                 for fit in prev_fits:
                     fit_name = fit.split("/")[-1]
                     fit_info = fit_name.split("_")
@@ -1162,20 +1172,18 @@ class BaseSource:
                                 # This adds ra back on, and removes any ident information if it is there
                                 sp_key = 'ra' + sp_key
                                 # Finds the appropriate matching spectrum object for the current table line
-                                spec[tscope] = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
+                                spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
                             else:
                                 sp_key = 'ra' + sp_key.split('_ident')[0]
-                                ann_spec = self.get_annular_spectra(set_id=set_id)[tscope]
-                                spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])[tscope]
+                                ann_spec = self.get_annular_spectra(set_id=set_id)
+                                spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
                                 obs_order.append([sp_info[0], sp_info[1]])
 
                             # Adds information from this fit to the spectrum object.
-                            # JESS_TODO and this function
                             spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
 
                             # The add_fit_data method formats the luminosities nicely, so we grab them back out
                             #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
-                            # JESS_TODO and this one
                             processed_lums = spec.get_luminosities(model)
                             if spec.instrument not in inst_lums:
                                 inst_lums[spec.instrument] = processed_lums
@@ -1183,18 +1191,16 @@ class BaseSource:
                         # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
                         #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
                         #  consistent
-                        if tscope == 'xmm':
-                            if "pn" in inst_lums:
-                                chosen_lums = inst_lums["pn"]
-                                # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
-                            elif "mos2" in inst_lums:
-                                chosen_lums = inst_lums["mos2"]
-                            elif "mos1" in inst_lums:
-                                chosen_lums = inst_lums["mos1"]
-                            else:
-                                chosen_lums = None
+                        # TODO This will cause issues with non-XMM stuff
+                        if "pn" in inst_lums:
+                            chosen_lums = inst_lums["pn"]
+                            # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                        elif "mos2" in inst_lums:
+                            chosen_lums = inst_lums["mos2"]
+                        elif "mos1" in inst_lums:
+                            chosen_lums = inst_lums["mos1"]
                         else:
-                            raise NotImplementedError("Only XMM is Supported")
+                            chosen_lums = None
 
                         if set_id is not None:
                             ann_results[set_id][model][spec.annulus_ident] = global_results
@@ -1243,8 +1249,9 @@ class BaseSource:
             os.chdir(og_dir)
 
             # And finally loading in any conversion factors that have been calculated using XGA's fakeit interface
-            if os.path.exists(OUTPUT + tscope + "/XSPEC/" + self.name) and read_fits:
-                conv_factors = [OUTPUT + tscope + "/XSPEC/" + self.name + "/" + f for f in os.listdir(OUTPUT + tscope + "/XSPEC/" + self.name)
+            if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits:
+                conv_factors = [OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name + "/" + f
+                                for f in os.listdir(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name)
                                 if ".xcm" not in f and "conv_factors" in f]
                 for conv_path in conv_factors:
                     res_table = pd.read_csv(conv_path, dtype={"lo_en": str, "hi_en": str})
@@ -1261,11 +1268,12 @@ class BaseSource:
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
                     # Getting the spectra for each column, then assigning rates and luminosities.
                     # Due to the danger of a fit using a piece of data (an ObsID-instrument combo) that isn't currently
-                    #  associated with the source, we first fetch the spectra, then in a second loop we assign the factors
+                    #  associated with the source, we first fetch the spectra, then in a second loop we assign the
+                    #  factors
                     rel_spec = []
                     try:
                         for comb in combos:
-                            spec[tscope] = self.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
+                            spec = self.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
                             rel_spec.append(spec)
 
                         for comb_ind, comb in enumerate(combos):
@@ -2064,255 +2072,6 @@ class BaseSource:
                     inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name), index=False)
-
-    # def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D, List[BaseProduct],
-    #                                           List[BaseAggregateProduct], List[BaseProfile1D]],
-    #                     update_inv: bool = True):
-    #     """
-    #     Setter method for the products attribute of source objects. Cannot delete existing products, but will
-    #     overwrite existing products. Raises errors if the telescope or ObsID is not associated with this source
-    #     or the instrument is not associated with the ObsID. Lists of products can also be passed
-    #     and will be added to the source storage structure, these lists may also contain None values, as typically
-    #     XGA will return None if a profile fails to generate (for instance), in which case that entry will simply
-    #     be ignored.
-    #
-    #     :param BaseProduct/BaseAggregateProduct/BaseProfile1D/List[BaseProduct]/List[BaseProfile1D] prod_obj: The
-    #         new product object(s) to be added to the source object.
-    #     :param bool update_inv: This flag is to avoid unnecessary read-writes when this method is called by a method
-    #         (such as _existing_xga_products) which want to add products to the source storage structure, but don't
-    #         want the inventory file altered (as they know the product is already in there).
-    #     """
-    #     # Aggregate products are things like PSF grids and sets of annular spectra.
-    #     if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D, list)) and prod_obj is not None:
-    #         raise TypeError("Only product objects can be assigned to sources.")
-    #     elif isinstance(prod_obj, list) and not all([isinstance(p, (BaseProduct, BaseAggregateProduct, BaseProfile1D))
-    #                                                  or p is None for p in prod_obj]):
-    #         raise TypeError("If a list is passed, only product objects (or None values) may be included.")
-    #     elif not isinstance(prod_obj, list):
-    #         prod_obj = [prod_obj]
-    #
-    #     for po in prod_obj:
-    #         if po is not None:
-    #             if isinstance(po, Image):
-    #                 extra_key = po.storage_key
-    #                 en_key = "bound_{l}-{u}".format(l=float(po.energy_bounds[0].value),
-    #                                                 u=float(po.energy_bounds[1].value))
-    #             elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D):
-    #                 extra_key = po.storage_key
-    #             elif type(po) == PSFGrid:
-    #                 # The first part of the key is the model used (by default its ELLBETA for example), and
-    #                 #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
-    #                 extra_key = po.model + "_" + str(po.num_bins)
-    #             else:
-    #                 extra_key = None
-    #
-    #             # All information about where to place it in our storage hierarchy can be pulled from the product
-    #             # object itself
-    #             obs_id = po.obs_id # JESS_TODO i think these maybe become dictionaries with tscope keys
-    #             inst = po.instrument
-    #             p_type = po.type
-    #             # JESS_TODO need to telescope attribute to product class
-    #             telescopes = po.telescope
-    #
-    #             if len(telescopes) != 1:
-    #                 raise NotImplementedError("Multi Telescope products not supported yet")
-    #
-    #             for tscope in telescopes:
-    #                 if tscope != 'xmm':
-    #                     raise NotImplementedError("Only XMM is supported")
-    #                 # Just redefining so the code is easier to read later
-    #                 obs_id = obs_id[tscope]
-    #                 inst = inst[tscope]
-    #                 # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
-    #                 #  together - merged products do get a 'combined' prefix on their product type key though
-    #                 if obs_id == "combined":
-    #                     p_type = "combined_" + p_type
-    #
-    #                 # 'Combined' will effectively be stored as another ObsID
-    #                 if "combined" not in self._products[tscope]:
-    #                     self._products[tscope]["combined"] = {}
-    #
-    #                 # The product gets the name of this source object added to it
-    #                 po.src_name = self.name
-    #
-    #                 # Double check that something is trying to add products from another source to the current one.
-    #                 if obs_id != "combined" and obs_id not in self._products[tscope]:
-    #                     raise NotAssociatedError("{o} is not associated with this X-ray source.".format(o=obs_id))
-    #                 elif inst != "combined" and inst not in self._products[tscope][obs_id]:
-    #                     raise NotAssociatedError("{i} is not associated with {t} observation {o}".format(i=inst,
-    #                                                                                         t=tscope, o=obs_id))
-    #
-    #                 if extra_key is not None and obs_id != "combined":
-    #                     # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
-    #                     if extra_key not in self._products[tscope][obs_id][inst]:
-    #                         self._products[tscope][obs_id][inst][extra_key] = {}
-    #                     self._products[tscope][obs_id][inst][extra_key][p_type] = po
-    #
-    #                 elif extra_key is None and obs_id != "combined":
-    #                     self._products[tscope][obs_id][inst][p_type] = po
-    #
-    #                 # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
-    #                 #  and ObsID = 'combined'
-    #                 elif extra_key is not None and obs_id == "combined":
-    #                     if extra_key not in self._products[tscope][obs_id]:
-    #                         self._products[tscope][obs_id][extra_key] = {}
-    #                     self._products[tscope][obs_id][extra_key][p_type] = po
-    #
-    #                 elif extra_key is None and obs_id == "combined":
-    #                     self._products[tscope][obs_id][p_type] = po
-    #
-    #                 # This is for an image being added, so we look for a matching exposure map. If it exists we can
-    #                 #  make a ratemap
-    #                 if p_type == "image":
-    #                     # No chance of an expmap being PSF corrected, so we just use the energy key to
-    #                     #  look for one that matches our new image
-    #                     # JESS_TODO check this liinnnneee
-    #                     exs = [prod for prod in self.get_products("expmap", obs_id, inst, just_obj=False)[tscope] if en_key in prod]
-    #                     if len(exs) == 1:
-    #                         new_rt = RateMap(po, exs[0][-1])
-    #                         new_rt.src_name = self.name
-    #                         self._products[tscope][obs_id][inst][extra_key]["ratemap"] = new_rt
-    #
-    #                 # However, if its an exposure map that's been added, we have to look for matching image(s). There
-    #                 #  could be multiple, because there could be a normal image, and a PSF corrected image
-    #                 elif p_type == "expmap":
-    #                     # PSF corrected extra keys are built on top of energy keys, so if the en_key is within the extra
-    #                     #  key string it counts as a match
-    #                     ims = [prod for prod in self.get_products("image", obs_id, inst, just_obj=False)[tscope]
-    #                         if en_key in prod[-2]]
-    #                     # If there is at least one match, we can go to work
-    #                     if len(ims) != 0:
-    #                         for im in ims:
-    #                             new_rt = RateMap(im[-1], po)
-    #                             new_rt.src_name = self.name
-    #                             self._products[tscope][obs_id][inst][im[-2]]["ratemap"] = new_rt
-    #
-    #                 # The same behaviours hold for combined_image and combined_expmap, but they get
-    #                 #  stored in slightly different places
-    #                 elif p_type == "combined_image":
-    #                     exs = [prod for prod in self.get_products("combined_expmap", just_obj=False)[tscope] if en_key in prod]
-    #                     if len(exs) == 1:
-    #                         new_rt = RateMap(po, exs[0][-1])
-    #                         new_rt.src_name = self.name
-    #                         # Remember obs_id for combined products is just 'combined'
-    #                         self._products[tscope][obs_id][extra_key]["combined_ratemap"] = new_rt
-    #
-    #                 elif p_type == "combined_expmap":
-    #                     ims = [prod for prod in self.get_products("combined_image", just_obj=False)[tscope] if en_key in prod[-2]]
-    #                     if len(ims) != 0:
-    #                         for im in ims:
-    #                             new_rt = RateMap(im[-1], po)
-    #                             new_rt.src_name = self.name
-    #                             self._products[tscope][obs_id][im[-2]]["combined_ratemap"] = new_rt
-    #
-    #                 if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
-    #                     po.save()
-    #
-    #                 # Here we make sure to store a record of the added product in the relevant inventory file
-    #                 if isinstance(po, BaseProduct) and po.obs_id[tscope] != 'combined' and update_inv:
-    #                     inven = pd.read_csv(OUTPUT + tscope + "/{}/inventory.csv".format(po.obs_id[tscope]), dtype=str)
-    #
-    #                     # Don't want to store a None value as a string for the info_key
-    #                     if extra_key is None:
-    #                         info_key = ''
-    #                     else:
-    #                         info_key = extra_key
-    #
-    #                     # I want only the name of the file as it is in the storage directory, I don't want an
-    #                     #  absolute path, so I remove the leading information about the absolute location in
-    #                     #  the .path string
-    #                     f_name = po.path.split(OUTPUT + tscope + "/{}/".format(po.obs_id[tscope]))[-1]
-    #
-    #                     # Images, exposure maps, and other such things are not source specific, so I don't want
-    #                     #  the inventory file to assign them a specific source
-    #                     if isinstance(po, Image):
-    #                         s_name = ''
-    #                     else:
-    #                         s_name = po.src_name
-    #
-    #                     # Creates new pandas series to be appended to the inventory dataframe
-    #                     new_line = pd.Series([f_name, po.obs_id[tscope], po.instrument[tscope], info_key, s_name, po.type],
-    #                                          ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
-    #                     # Concatenates the series with the inventory dataframe
-    #                     inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-    #
-    #                     # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
-    #                     #  if it did I think it would cause problems so better to be safe and add this.
-    #                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
-    #                     # Saves the updated inventory file
-    #                     inven.to_csv(OUTPUT + tscope + "/{}/inventory.csv".format(po.obs_id[tscope]), index=False)
-    #
-    #                 elif isinstance(po, BaseProduct) and po.obs_id[tscope] == 'combined' and update_inv:
-    #                     inven = pd.read_csv(OUTPUT + tscope + "/combined/inventory.csv", dtype=str)
-    #
-    #                     # Don't want to store a None value as a string for the info_key
-    #                     if extra_key is None:
-    #                         info_key = ''
-    #                     else:
-    #                         info_key = extra_key
-    #
-    #                     # We know that this particular product is a combination of multiple ObsIDs, and those ObsIDs
-    #                     #  are not stored explicitly within the product object. However we are currently within the
-    #                     #  source object that they were generated from, thus we do have that information available
-    #                     # Using the _instruments attribute also gives us access to inst information
-    #                     i_str = "/".join([i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-    #                     o_str = "/".join([o for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-    #                     # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
-    #                     #  them into strings
-    #
-    #                     f_name = po.path.split(OUTPUT + tscope + "/combined/")[-1]
-    #                     if isinstance(po, Image):
-    #                         s_name = ''
-    #                     else:
-    #                         s_name = po.src_name
-    #
-    #                     # Creates new pandas series to be appended to the inventory dataframe
-    #                     new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, po.type],
-    #                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-    #                     # Concatenates the series with the inventory dataframe
-    #                     inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-    #                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
-    #                     inven.to_csv(OUTPUT + tscope + "/combined/inventory.csv", index=False)
-    #
-    #                 elif isinstance(po, BaseProfile1D) and po.obs_id[tscope] != 'combined' and update_inv:
-    #                     inven = pd.read_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), dtype=str)
-    #
-    #                     # Don't want to store a None value as a string for the info_key
-    #                     if extra_key is None:
-    #                         info_key = ''
-    #                     else:
-    #                         info_key = extra_key
-    #
-    #                     f_name = po.save_path.split(OUTPUT + tscope + "/profiles/{}/".format(self.name))[-1]
-    #                     i_str = po.instrument[tscope]
-    #                     o_str = po.obs_id[tscope]
-    #                     # Creates new pandas series to be appended to the inventory dataframe
-    #                     new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
-    #                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-    #                     # Concatenates the series with the inventory dataframe
-    #                     inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-    #                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
-    #                     inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
-    #
-    #                 elif isinstance(po, BaseProfile1D) and po.obs_id[tscope] == 'combined' and update_inv:
-    #                     inven = pd.read_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), dtype=str)
-    #
-    #                     # Don't want to store a None value as a string for the info_key
-    #                     if extra_key is None:
-    #                         info_key = ''
-    #                     else:
-    #                         info_key = extra_key
-    #
-    #                     f_name = po.save_path.split(OUTPUT + tscope + "/profiles/{}/".format(self.name))[-1]
-    #                     i_str = "/".join([i for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-    #                     o_str = "/".join([o for o in self._instruments[tscope] for i in self._instruments[tscope][o]])
-    #                     # Creates new pandas series to be appended to the inventory dataframe
-    #                     new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
-    #                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-    #                     # Concatenates the series with the inventory dataframe
-    #                     inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-    #                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
-    #                     inven.to_csv(OUTPUT + tscope + "/profiles/{}/inventory.csv".format(self.name), index=False)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None,
                      extra_key: str = None, just_obj: bool = True, telescope: str = None) -> List[BaseProduct]:
