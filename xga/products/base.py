@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 15:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 22:33. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -362,8 +362,9 @@ class BaseAggregateProduct:
     :param str prod_type: The product type of the individual elements.
     :param str obs_id: The ObsID related to the product.
     :param str instrument: The instrument related to the product.
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
-    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str):
+    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str = None):
         """
         The init method for the BaseAggregateProduct class
         """
@@ -371,6 +372,7 @@ class BaseAggregateProduct:
         self._all_usable = True
         self._obs_id = obs_id
         self._inst = instrument
+        self._tele = telescope
         self._prod_type = prod_type
         self._src_name = None
 
@@ -411,7 +413,7 @@ class BaseAggregateProduct:
         Property getter for the ObsID of this image. Admittedly this information is implicit in the location
         this object is stored in a source object, but I think it worth storing directly as a property as well.
 
-        :return: The XMM ObsID of this image.
+        :return: The ObsID of this image.
         :rtype: str
         """
         return self._obs_id
@@ -423,10 +425,20 @@ class BaseAggregateProduct:
         in the location this object is stored in a source object, but I think it worth storing
         directly as a property as well.
 
-        :return: The XMM instrument used to take this image.
+        :return: The instrument used to take this image.
         :rtype: str
         """
         return self._inst
+
+    @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this product was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
 
     @property
     def type(self) -> str:
