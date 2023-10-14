@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 21:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 22:35. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3316,14 +3316,15 @@ class PSFGrid(BaseAggregateProduct):
     :param str stdout_str: The stdout from calling the terminal command.
     :param str stderr_str: The stderr from calling the terminal command.
     :param str gen_cmd: The commands used to generate the products.
+    :param str telescope: The telescope that this PSFGrid is derived for. Default is None.
     """
     def __init__(self, file_paths: list, bins: int, psf_model: str, x_bounds: np.ndarray, y_bounds: np.ndarray,
-                 obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
+                 obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str, telescope: str = None):
         """
         The init of the PSFGrid class - a subclass of BaseAggregateProduct that wraps a set of PSFs that have been
         generated at different points on the detector.
         """
-        super().__init__(file_paths, 'psf', obs_id, instrument)
+        super().__init__(file_paths, 'psf', obs_id, instrument, telescope=telescope)
         self._psf_model = psf_model
         # Set none here because if I want positions of PSFs and there has been an error during generation, the user
         #  will only see the FileNotFoundError not the SAS error
