@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 21:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 23:12. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -382,9 +382,6 @@ class BaseSource:
         if os.path.exists(OUTPUT) and load_products:
             # TODO THIS ALSO NEEDS COMPLETELY REDOING
             self._existing_xga_products(load_fits)
-
-        import sys
-        sys.exit()
 
         # Now going to save load_fits in an attribute, just because if the observation is cleaned we need to
         #  run _existing_xga_products again, same for load_products
