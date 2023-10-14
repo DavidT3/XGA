@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 23:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 23:14. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1058,7 +1058,7 @@ class BaseSource:
             os.chdir(og_dir)
 
             # Here we will load in existing xga profile objects
-            os.chdir(OUTPUT + "profiles/{}".format(self.name))
+            os.chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name))
             saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
             for pf in saved_profs:
                 try:
