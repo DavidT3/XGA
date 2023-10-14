@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 22:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 22:53. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -573,11 +573,12 @@ class BaseProfile1D:
         plotting if the user tells the view method that they wish for the plot to use normalised x-axis data.
     :param Quantity y_norm: An astropy quantity to use to normalise the y-axis values, this is only used when
         plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
+    :param str telescope: The telescope that this profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
-                 y_norm: Quantity = Quantity(1, '')):
+                 y_norm: Quantity = Quantity(1, ''), telescope: str = None):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -684,6 +685,7 @@ class BaseProfile1D:
         self._src_name = source_name
         self._obs_id = obs_id
         self._inst = inst
+        self._tele = telescope
 
         # Going to have this convenient attribute for profile classes, I could just use the type() command
         #  when I wanted to know but this is easier.
@@ -2214,6 +2216,16 @@ class BaseProfile1D:
         :rtype: str
         """
         return self._inst
+
+    @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this profile was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
 
     @property
     def energy_bounds(self) -> Union[Tuple[Quantity, Quantity], Tuple[None, None]]:
