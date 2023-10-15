@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 23:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/10/2023, 18:58. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1061,6 +1061,7 @@ class BaseSource:
             os.chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name))
             saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
             for pf in saved_profs:
+                # TODO CATCH THE ATTRIBUTE ERRORS WHICH COME FROM LOADING OLD STYLE PROFILES WITHOUT TELESCOPE INFO
                 try:
                     with open(pf, 'rb') as reado:
                         temp_prof = pickle.load(reado)
@@ -1068,7 +1069,7 @@ class BaseSource:
                             self.update_products(temp_prof, update_inv=False)
                         except NotAssociatedError:
                             pass
-                except (EOFError, pickle.UnpicklingError):
+                except (EOFError, pickle.UnpicklingError, AttributeError):
                     warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
                                 "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf)
                     if not self._samp_member:
@@ -1091,7 +1092,7 @@ class BaseSource:
                         self.update_products(ann_spec_obj, update_inv=False)
 
             # Here we load in any combined images and exposure maps that may have been generated
-            os.chdir(OUTPUT + 'combined')
+            os.chdir(OUTPUT + '{t}/combined'.format(t=tel))
             cur_d = os.getcwd() + '/'
             # This creates a set of observation-instrument strings that describe the current combinations associated
             #  with this source, for testing against to make sure we're loading in combined images/expmaps that
