@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:55. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2991,17 +2991,19 @@ class BaseSource:
             custom_mask = custom_mask*interloper_mask
         return custom_mask
 
-    def get_snr(self, outer_radius: Union[Quantity, str], central_coord: Quantity = None, lo_en: Quantity = None,
-                hi_en: Quantity = None, obs_id: str = None, inst: str = None, psf_corr: bool = False,
-                psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-                allow_negative: bool = False,  exp_corr: bool = True) -> float:
+    def get_snr(self, outer_radius: Union[Quantity, str], telescope: str, central_coord: Quantity = None,
+                lo_en: Quantity = None, hi_en: Quantity = None, obs_id: str = None, inst: str = None,
+                psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                psf_iter: int = 15, allow_negative: bool = False, exp_corr: bool = True) -> float:
         """
-        This takes a region type and central coordinate and calculates the signal to noise ratio.
+        This takes a region type and central coordinate and calculates the signal-to-noise ratio.
         The background region is constructed using the back_inn_rad_factor and back_out_rad_factor
         values, the defaults of which are 1.05*radius and 1.5*radius respectively.
 
         :param Quantity/str outer_radius: The radius that SNR should be calculated within, this can either be a
             named radius such as r500, or an astropy Quantity.
+        :param str telescope: The telescope which, when combined with the ObsID, we wish to calculate the
+            signal-to-noise for.
         :param Quantity central_coord: The central coordinate of the region.
         :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the SNR. Default is None,
             in which case the lower energy bound for peak finding will be used (default is 0.5keV).
@@ -3018,11 +3020,11 @@ class BaseSource:
         :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
         :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
-            zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+            zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
         :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
-        :return: The signal to noise ratio.
+        :return: The signal-to-noise ratio.
         :rtype: float
         """
         # Checking if the user passed any energy limits of their own
@@ -3034,11 +3036,13 @@ class BaseSource:
         # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
         if all([obs_id is None, inst is None]):
             # Here the user hasn't set ObsID or instrument, so we use the combined data
-            rt = self.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+            rt = self.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
+                                            telescope=telescope)
 
         elif all([obs_id is not None, inst is not None]):
             # Both ObsID and instrument have been set by the user
-            rt = self.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+            rt = self.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
+                                   telescope=telescope)
         else:
             raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
                              " pass both obs_id and inst.".format(s=self.name))
@@ -3046,12 +3050,12 @@ class BaseSource:
         if isinstance(outer_radius, str):
             # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
             #  method understands that means it should return the mask for the combined data
-            src_mask, bck_mask = self.get_mask(outer_radius, 'xmm', obs_id, central_coord)
+            src_mask, bck_mask = self.get_mask(outer_radius, telescope, obs_id, central_coord)
         else:
             # Here we have the case where the user has passed a custom outer radius, so we need to generate a
             #  custom mask for it
-            src_mask = self.get_custom_mask(outer_radius, 'xmm', obs_id=obs_id, central_coord=central_coord)
-            bck_mask = self.get_custom_mask(outer_radius * self._back_out_factor, 'xmm',
+            src_mask = self.get_custom_mask(outer_radius, telescope, obs_id=obs_id, central_coord=central_coord)
+            bck_mask = self.get_custom_mask(outer_radius * self._back_out_factor, telescope,
                                             outer_radius * self._back_inn_factor, obs_id=obs_id,
                                             central_coord=central_coord)
 
@@ -3059,8 +3063,6 @@ class BaseSource:
         sn = rt.signal_to_noise(src_mask, bck_mask, exp_corr, allow_negative)
 
         return sn
-    # The combined photometric products don't really NEED their own get methods, but I figured I would just for
-    #  clarity's sake
 
     def get_counts(self, outer_radius: Union[Quantity, str], central_coord: Quantity = None, lo_en: Quantity = None,
                    hi_en: Quantity = None, obs_id: str = None, inst: str = None, psf_corr: bool = False,
@@ -3784,8 +3786,8 @@ class BaseSource:
             for inst in self.instruments[obs_id]:
                 # Use our handy get_snr method to calculate the SNRs we want, then add that and the
                 #  ObsID-inst combo into their respective lists
-                snrs.append(self.get_snr(outer_radius, self.default_coord, lo_en, hi_en, obs_id, inst,
-                                         allow_negative))
+                snrs.append(
+                    self.get_snr(outer_radius, 'xmm', self.default_coord, lo_en, hi_en, obs_id, inst, allow_negative))
                 obs_inst.append([obs_id, inst])
 
         # Make our storage lists into arrays, easier to work with that way
@@ -3883,20 +3885,20 @@ class BaseSource:
                 region_radius = self._custom_region_radius.to("deg")
             print("Custom Region Radius - {}".format(region_radius.round(2)))
             if len(self.get_products('combined_image')) != 0:
-                print("Custom Region SNR - {}".format(self.get_snr("custom", self._default_coord).round(2)))
+                print("Custom Region SNR - {}".format(self.get_snr("custom", 'xmm', self._default_coord).round(2)))
 
         if self._r200 is not None:
             print("R200 - {}".format(self._r200.round(2)))
             if len(self.get_products('combined_image')) != 0:
-                print("R200 SNR - {}".format(self.get_snr("r200", self._default_coord).round(2)))
+                print("R200 SNR - {}".format(self.get_snr("r200", 'xmm', self._default_coord).round(2)))
         if self._r500 is not None:
             print("R500 - {}".format(self._r500.round(2)))
             if len(self.get_products('combined_image')) != 0:
-                print("R500 SNR - {}".format(self.get_snr("r500", self._default_coord).round(2)))
+                print("R500 SNR - {}".format(self.get_snr("r500", 'xmm', self._default_coord).round(2)))
         if self._r2500 is not None:
             print("R2500 - {}".format(self._r2500.round(2)))
             if len(self.get_products('combined_image')) != 0:
-                print("R2500 SNR - {}".format(self.get_snr("r2500", self._default_coord).round(2)))
+                print("R2500 SNR - {}".format(self.get_snr("r2500", 'xmm', self._default_coord).round(2)))
 
         # There's probably a neater way of doing the observables - maybe a formatting function?
         if self._richness is not None and self._richness_err is not None \

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:55. Copyright (c) The Contributors
 
 from typing import List
 
@@ -256,7 +256,7 @@ class ClusterSample(BaseSample):
         snrs = []
         for s in self:
             try:
-                snrs.append(s.get_snr("r200"))
+                snrs.append(s.get_snr("r200", 'xmm'))
             except ValueError:
                 snrs.append(None)
         return np.array(snrs)
@@ -272,7 +272,7 @@ class ClusterSample(BaseSample):
         snrs = []
         for s in self:
             try:
-                snrs.append(s.get_snr("r500"))
+                snrs.append(s.get_snr("r500", 'xmm'))
             except ValueError:
                 snrs.append(None)
         return np.array(snrs)
@@ -288,7 +288,7 @@ class ClusterSample(BaseSample):
         snrs = []
         for s in self:
             try:
-                snrs.append(s.get_snr("r2500"))
+                snrs.append(s.get_snr("r2500", 'xmm'))
             except ValueError:
                 snrs.append(None)
         return np.array(snrs)
