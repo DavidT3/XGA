@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 12:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 12:34. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2701,17 +2701,19 @@ class BaseSource:
         else:
             return self._att_files[telescope][obs_id]
 
-    def source_back_regions(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
-            -> Tuple[SkyRegion, SkyRegion]:
+    def source_back_regions(self, reg_type: str, telescope: str, obs_id: str = None,
+                            central_coord: Quantity = None) -> Tuple[SkyRegion, SkyRegion]:
         """
         A method to retrieve source region and background region objects for a given source type with a
         given central coordinate.
 
         :param str reg_type: The type of region which we wish to get from the source.
+        :param str telescope: The telescope that the region is associated with - this needs to be supplied to
+            retrieve an image to convert source regions between pixel and sky coordinates.
         :param str obs_id: The ObsID that the region is associated with (if appropriate).
         :param Quantity central_coord: The central coordinate of the region.
         :return: The method returns both the source region and the associated background region.
-        :rtype:
+        :rtype: Tuple[SkyRegion, SkyRegion]
         """
         # Doing an initial check so I can throw a warning if the user wants a region-list region AND has supplied
         #  custom central coordinates
@@ -2737,14 +2739,18 @@ class BaseSource:
         if type(self) == BaseSource:
             raise TypeError("BaseSource class does not have the necessary information "
                             "to select a source region.")
-        elif obs_id is not None and obs_id not in self.obs_ids:
-            raise NotAssociatedError("The ObsID {o} is not associated with {s}.".format(o=obs_id, s=self.name))
+        elif telescope not in self.telescopes:
+            raise NotAssociatedError("The telescope {t} is not associated with {s}.".format(t=telescope, s=self.name))
+        elif obs_id is not None and obs_id not in self.obs_ids[telescope]:
+            raise NotAssociatedError("The ObsID {t}-{o} is not associated with {s}.".format(t=telescope, o=obs_id,
+                                                                                            s=self.name))
         elif reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
         elif reg_type == "region" and obs_id is None:
-            raise ValueError("ObsID cannot be None when getting region file regions.")
+            raise ValueError("ObsID and telescope cannot be None when getting region file regions.")
         elif reg_type == "region" and obs_id is not None:
-            src_reg = self._regions[obs_id]
+            # TODO Do I even still use this attribute?
+            src_reg = self._regions[telescope][obs_id]
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
             raise ValueError("There is no {r} associated with {s}".format(r=reg_type, s=self.name))
         elif reg_type != "region" and reg_type in self._radii:
@@ -2760,7 +2766,8 @@ class BaseSource:
 
         # Here is where we initialise the background regions, first in pixel coords, then converting to ra-dec.
         # TODO Verify that just using the first image is okay
-        im = self.get_products("image")[0]
+        # TODO ALSO DOING THIS WITH MULTI TELESCOPES MAKES ME NERVOUS
+        im = self.get_products("image", telescope=telescope)[0]
         src_pix_reg = src_reg.to_pixel(im.radec_wcs)
         # TODO Try and remember why I had to convert to pixel regions to make it work
         if isinstance(src_reg, EllipseSkyRegion):
@@ -2844,7 +2851,7 @@ class BaseSource:
 
         # Don't need to do a bunch of checks, because the method I call to make the
         #  mask does all the checks anyway
-        src_reg, bck_reg = self.source_back_regions(reg_type, obs_id, central_coord)
+        src_reg, bck_reg = self.source_back_regions(reg_type, 'xmm', obs_id, central_coord)
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:

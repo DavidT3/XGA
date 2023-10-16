@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 15:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 12:34. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -181,7 +181,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
-            if outer_radius == "region" and source.source_back_regions("region", obs_id)[0] is None:
+            if outer_radius == "region" and source.source_back_regions("region", 'xmm', obs_id)[0] is None:
                 continue
 
             # Because the region will be different for each ObsID, I have to call the setup function here
@@ -189,7 +189,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 interim_source, inner_radii, outer_radii = region_setup([source], outer_radius, inner_radius,
                                                                         disable_progress, obs_id)
                 # Need the reg for central coordinates
-                reg = source.source_back_regions('region', obs_id)[0]
+                reg = source.source_back_regions('region', 'xmm', obs_id)[0]
                 reg_cen_coords = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
                 # Pass the largest outer radius here, so we'll look for interlopers in a circle with the radius
                 #  being the largest axis of the ellipse
