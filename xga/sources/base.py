@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 17:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 18:08. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3846,59 +3846,69 @@ class BaseSource:
 
     def obs_check(self, reg_type: str, threshold_fraction: float = 0.5) -> Dict:
         """
-        This method uses exposure maps and region masks to determine which ObsID/instrument combinations
+        This method uses exposure maps and region masks to determine which telescope/ObsID/instrument combinations
         are not contributing to the analysis. It calculates the area intersection of the mask and exposure
-        maps, and if (for a given ObsID-Instrument) the ratio of that area to the full area of the region
-        calculated is less than the threshold fraction, that ObsID-instrument will be included in the returned
-        rejection dictionary.
+        maps, and if (for a given Telescope-ObsID-Instrument) the ratio of that area to the full area of the region
+        calculated is less than the threshold fraction, that telescope-ObsID-instrument will be included in the
+        returned rejection dictionary.
 
         :param str reg_type: The region type for which to calculate the area intersection.
         :param float threshold_fraction: Intersection area/ full region area ratios below this value will mean an
             ObsID-Instrument is rejected.
-        :return: A dictionary of ObsID keys on the top level, then instruments a level down, that
-            should be rejected according to the criteria supplied to this method.
+        :return: A dictionary of telescope keys on the top level, then ObsID keys a level down, with a list of
+            instruments as the values, that should be rejected according to the criteria supplied to this method.
         :rtype: Dict
         """
-        # Again don't particularly want to do this local import, but its just easier
-        from xga.sas import eexpmap
+        area = {t: {o: {} for o in self.obs_ids[t]} for t in self.obs_ids}
+        full_area = {t: {} for t in self.obs_ids}
 
-        # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
-        #  first, then checking where the source lies on the exposure map
-        eexpmap(self, self._peak_lo_en, self._peak_hi_en)
+        reject_dict = {}
 
-        extra_key = "bound_{l}-{u}".format(l=self._peak_lo_en.to("keV").value, u=self._peak_hi_en.to("keV").value)
+        # TODO This will need a redo once the functions to generate exposure maps are implemented for other telescopes
+        # TODO Also just double check I've implemented this right
+        for tel in self.telescopes:
+            if tel != 'xmm':
+                warn("The features required for observation checking are not implemented for non-XMM telescopes "
+                     "right now - though they are a priority.", stacklevel=2)
+                continue
+            else:
+                # Again don't particularly want to do this local import, but its just easier
+                from xga.sas import eexpmap
 
-        area = {o: {} for o in self.obs_ids}
-        full_area = {o: {} for o in self.obs_ids}
-        for o in self.obs_ids:
-            # Exposure maps of the peak finding energy range for this ObsID
-            exp_maps = self.get_products("expmap", o, extra_key=extra_key)
-            m = self.get_source_mask(reg_type, 'xmm', o, central_coord=self._default_coord)[0]
-            full_area[o] = m.sum()
+                # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
+                #  first, then checking where the source lies on the exposure map
+                eexpmap(self, self._peak_lo_en, self._peak_hi_en)
 
-            for ex in exp_maps:
-                # Grabs exposure map data, then alters it so anything that isn't zero is a one
-                ex_data = ex.data.copy()
-                ex_data[ex_data > 0] = 1
-                # We do this because it then becomes very easy to calculate the intersection area of the mask
-                #  with the XMM chips. Just mask the modified expmap, then sum.
-                area[o][ex.instrument] = (ex_data * m).sum()
+                for o in self.obs_ids:
+                    # Exposure maps of the peak finding energy range for this ObsID
+                    exp_maps = self.get_expmaps(o, lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
+                    m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord)[0]
+                    full_area[tel][o] = m.sum()
 
-        if max(list(full_area.values())) == 0:
-            # Everything has to be rejected in this case
-            reject_dict = deepcopy(self._instruments)
-        else:
-            reject_dict = {}
-            for o in area:
-                for i in area[o]:
-                    if full_area[o] != 0:
-                        frac = (area[o][i] / full_area[o])
-                    else:
-                        frac = 0
-                    if frac <= threshold_fraction and o not in reject_dict:
-                        reject_dict[o] = [i]
-                    elif frac <= threshold_fraction and o in reject_dict:
-                        reject_dict[o].append(i)
+                    for ex in exp_maps:
+                        # Grabs exposure map data, then alters it so anything that isn't zero is a one
+                        ex_data = ex.data.copy()
+                        ex_data[ex_data > 0] = 1
+                        # We do this because it then becomes very easy to calculate the intersection area of the mask
+                        #  with the XMM chips. Just mask the modified expmap, then sum.
+                        area[tel][o][ex.instrument] = (ex_data * m).sum()
+
+                if max(list(full_area[tel].values())) == 0:
+                    # Everything has to be rejected in this case
+                    reject_dict = deepcopy(self.instruments[tel])
+                else:
+                    for o in area[tel]:
+                        for i in area[tel][o]:
+                            if full_area[tel][o] != 0:
+                                frac = (area[tel][o][i] / full_area[tel][o])
+                            else:
+                                frac = 0
+                            if frac <= threshold_fraction and tel not in reject_dict:
+                                reject_dict[tel] = {o: [i]}
+                            elif frac <= threshold_fraction and o not in reject_dict[tel]:
+                                reject_dict[tel][o] = [i]
+                            elif frac <= threshold_fraction and o in reject_dict[tel]:
+                                reject_dict[tel][o].append(i)
 
         return reject_dict
 
