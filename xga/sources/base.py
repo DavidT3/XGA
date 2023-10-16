@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 17:07. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -215,7 +215,10 @@ class BaseSource:
         #  removed through the 'disassociation' mechanism
         # NOTE that this attribute has changed considerably since the pre-multi mission version of XGA, as the
         #  instruments attribute has been consolidated into it - plus there is an extra level for telescope names
-        self._obs = {t: {o: [i for i in self._products[t][o]] for o in self._products[t]} for t in self._products}
+        self._obs = {t: {o: obs[t][o] if COMBINED_INSTS[t] else [i for i in self._products[t][o]
+                                                                 if len(self._products[t][o][i]) != 0]
+                         for o in self._products[t]} for t in self._products}
+        
         # Set the blacklisted observation attribute with our dictionary - if all has gone well then this will be a
         #  dictionary of empty dictionaries
         self._blacklisted_obs = blacklisted_obs
@@ -3622,32 +3625,112 @@ class BaseSource:
         be used in any analyses, and would typically be removed because it is of poor quality, or doesn't contribute
         enough to justify its presence.
 
+        These are examples of the different formats that 'to_remove' can take:
+
+        {'telescope1': {'obsid1': ['inst1', 'inst2', 'inst3'], 'obsid2': ['inst2', 'inst3']},
+         'telescope2': {'obsidN': ['inst1', 'inst2', 'inst3'], 'obsidM': ['inst2', 'inst3']}}
+
+        OR
+
+        {'telescope1': ['obsid1', 'obsid2']}
+
+        OR
+
+        {'telescope1': 'obsid1'}
+
+        OR
+
+        ['telescope1', 'telescope2']
+
+        OR
+
+        'telescope1'
+
         :param dict/str/list to_remove: Either a dictionary of observations to remove, (in the style of
-            the source.instruments dictionary with the top level keys being ObsIDs, and the lower levels
-            being instrument names), a string containing an ObsID, or a list of ObsIDs.
+            the source.instruments dictionary with the top level keys being telescopes, the mid-level keys being
+            ObsIDs, and the lower levels being instrument names), or a similar dictionary with telescope names as
+            keys and values of a list/single ObsID, or a single/list of telescope name(s) to remove all data
+            related to that telescope.
         """
-        # Users can pass just an ObsID string, but we then need to convert it to the form
+
+        # Users can pass just a telescope string, but we then need to convert it to the form
         #  that the rest of the function requires
         if isinstance(to_remove, str):
             to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
-        # Here is where they have just passed a list of ObsIDs, and we need to fill in the blanks with the instruments
-        #  currently loaded for those ObsIDs
+        # Here is where they have just passed a list of telescopes, and we need to fill in the blanks with
+        #  the ObsIDs instruments currently loaded for those ObsIDs
         elif isinstance(to_remove, list):
-            to_remove = {o: deepcopy(self.instruments[o]) for o in to_remove}
-        # Here deals with when someone might have passed a dictionary where there is a single instrument, and
+            to_remove = {t: deepcopy(self.instruments[t]) for t in to_remove}
+
+        elif isinstance(to_remove, dict):
+            final_to_remove = {}
+            for tel, val in to_remove.items():
+                if tel not in self.telescopes:
+                    warn('{t} is not a telescope associated with {n} and is being skipped.'.format(t=tel, n=self.name),
+                         stacklevel=2)
+                    continue
+
+                final_to_remove[tel] = {}
+
+                if isinstance(val, str):
+                    final_to_remove[tel][val] = deepcopy(self.instruments[tel][val])
+
+                elif isinstance(val, list):
+                    for v_oi in val:
+                        if v_oi not in self.obs_ids[tel]:
+                            warn("{o} is not an ObsID associated with {t} for {n}, and is being "
+                                 "skipped.".format(o=v_oi, t=tel, n=self.name), stacklevel=2)
+                            continue
+
+                        final_to_remove[tel][v_oi] = deepcopy(self.instruments[tel][v_oi])
+
+                elif isinstance(val, dict):
+                    for v_oi, insts in val.items():
+                        if v_oi not in self.obs_ids[tel]:
+                            warn("{o} is not an ObsID associated with {t} for {n}, and is being "
+                                 "skipped.".format(o=v_oi, t=tel, n=self.name), stacklevel=2)
+
+                        if isinstance(insts, str):
+                            if insts.lower() not in self.instruments[tel][v_oi]:
+                                warn("{i} is not an instrument associated with {t}-{o} for {n}, and is being "
+                                     "skipped.".format(i=insts.lower(), t=tel, o=v_oi, n=self.name))
+                                continue
+
+                            final_to_remove[tel][v_oi] = [insts.lower()]
+
+                        elif isinstance(insts, list):
+                            final_inst_list = []
+                            for inst in insts:
+                                if inst.lower() not in self.instruments[tel][v_oi]:
+                                    warn("{i} is not an instrument associated with {t}-{o} for {n}, and is being "
+                                         "skipped.".format(i=inst.lower(), t=tel, o=v_oi, n=self.name))
+                                    continue
+
+                                final_inst_list.append(inst.lower())
+
+                            if len(final_inst_list) != 0:
+                                final_to_remove[tel][v_oi] = final_inst_list
+
+            to_remove = deepcopy(final_to_remove)
+
+        # Deals with when someone might have passed a dictionary where there is a single instrument, and
         #  they haven't put it in a list; e.g. {'0201903501': 'pn'}. This detects instances like that and then
         #  puts the individual instrument in a list as is expected by the rest of the function
-        elif isinstance(to_remove, dict) and not all([isinstance(v, list) for v in to_remove.values()]):
-            new_to_remove = {}
-            for o in to_remove:
-                if not isinstance(to_remove[o], list):
-                    new_to_remove[o] = [deepcopy(to_remove[o])]
-                else:
-                    new_to_remove[o] = deepcopy(to_remove[o])
+        # elif isinstance(to_remove, dict) and not all([isinstance(v, list) for v in to_remove.values()]):
+        #     new_to_remove = {}
+        #     for o in to_remove:
+        #         if not isinstance(to_remove[o], list):
+        #             new_to_remove[o] = [deepcopy(to_remove[o])]
+        #         else:
+        #             new_to_remove[o] = deepcopy(to_remove[o])
+        #
+        #     # I use deepcopy again because there have been issues with this function still pointing to old memory
+        #     #  addresses, so I'm quite paranoid in this bit of code
+        #     to_remove = deepcopy(new_to_remove)
 
-            # I use deepcopy again because there have been issues with this function still pointing to old memory
-            #  addresses, so I'm quite paranoid in this bit of code
-            to_remove = deepcopy(new_to_remove)
+        print(to_remove)
+        import sys
+        sys.exit()
 
         # We also check to make sure that the data we're being asked to remove actually is associated with the
         #  source. We shall be forgiving if it isn't, and just issue a warning to let the user know that they are
