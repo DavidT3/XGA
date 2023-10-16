@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 12:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:07. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -345,7 +345,7 @@ class BaseSource:
         self._regions = None
         self._other_regions = None
         self._alt_match_regions = None
-        self._interloper_regions = []
+        self._interloper_regions = {}
         self._interloper_masks = {}
 
         # Set up an attribute where a default central coordinate will live
@@ -2788,20 +2788,22 @@ class BaseSource:
 
         return src_reg, bck_reg
 
-    def within_region(self, region: SkyRegion) -> List[SkyRegion]:
+    def within_region(self, region: SkyRegion, telescope: str) -> List[SkyRegion]:
         """
-        This method finds interloper sources that lie within the user supplied region.
+        This method finds contaminating sources (detected by the specified telescope) that lie within the user
+        supplied region.
 
         :param SkyRegion region: The region in which we wish to search for interloper sources (for instance
             a source region or background region).
+        :param str telescope: The telescope whose regions we should search.
         :return: A list of regions that lie within the user supplied region.
         :rtype: List[SkyRegion]
         """
-        im = self.get_products("image")[0]
+        im = self.get_products("image", telescope=telescope)[0]
 
         crossover = np.array([region.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
-                              for r in self._interloper_regions])
-        reg_within = np.array(self._interloper_regions)[crossover]
+                              for r in self._interloper_regions[telescope]])
+        reg_within = np.array(self._interloper_regions[telescope])[crossover]
 
         return reg_within
 
