@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:13. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -356,12 +356,12 @@ class BaseSource:
         self._back_out_factor = 1.5
 
         # Initialisation of fit result attributes
-        self._fit_results = {}
-        self._test_stat = {}
-        self._dof = {}
-        self._total_count_rate = {}
-        self._total_exp = {}
-        self._luminosities = {}
+        self._fit_results = {tel: {} for tel in self.telescopes}
+        self._test_stat = {tel: {} for tel in self.telescopes}
+        self._dof = {tel: {} for tel in self.telescopes}
+        self._total_count_rate = {tel: {} for tel in self.telescopes}
+        self._total_exp = {tel: {} for tel in self.telescopes}
+        self._luminosities = {tel: {} for tel in self.telescopes}
 
         # Initialisation of attributes related to Extended and GalaxyCluster sources
         self._peaks = None
@@ -1241,7 +1241,7 @@ class BaseSource:
                             ann_obs_order[set_id][model][spec.annulus_ident] = obs_order
                         else:
                             # Push global fit results, luminosities etc. into the corresponding source object.
-                            self.add_fit_data(model, global_results, chosen_lums, sp_key)
+                            self.add_fit_data(model, global_results, chosen_lums, sp_key, 'xmm')
                     except (OSError, NoProductAvailableError, IndexError, NotAssociatedError):
                         chosen_lums = {}
                         warn_text = "{src} fit {f} could not be loaded in as there are no matching spectra " \
@@ -3237,7 +3237,8 @@ class BaseSource:
             to cut out of it.
         :rtype: str
         """
-
+        # TODO Again this doesn't really belong in the BaseSource class - it is SAS specific so should be moved, but
+        #  not right now!
         if central_coord is None:
             central_coord = self._default_coord
 
@@ -3266,7 +3267,7 @@ class BaseSource:
                                       "supported for generating SAS region strings.")
 
         # We need a matching image to perform the coordinate conversion we require
-        rel_im = self.get_products("image", obs_id, inst)[0]
+        rel_im = self.get_products("image", obs_id, inst, telescope='xmm')[0]
         # We can set our own offset value when we call this function, but I don't think I need to
         sky_to_deg = sky_deg_scale(rel_im, central_coord).value
 
@@ -3322,9 +3323,9 @@ class BaseSource:
 
         return final_src
 
-    def add_fit_data(self, model: str, tab_line, lums: dict, spec_storage_key: str):
+    def add_fit_data(self, model: str, tab_line, lums: dict, spec_storage_key: str, telescope: str):
         """
-        A method that stores fit results and global information about a the set of spectra in a source object.
+        A method that stores fit results and global information about a set of spectra in a source object.
         Any variable parameters in the fit are stored in an internal dictionary structure, as are any luminosities
         calculated. Other parameters of interest are store in other internal attributes. This probably shouldn't
         ever be used by the user, just other parts of XGA, hence why I've asked for a spec_storage_key to be passed
@@ -3336,21 +3337,25 @@ class BaseSource:
         :param str spec_storage_key: The storage key of any spectrum that was used in this particular fit. The
             ObsID and instrument used don't matter, as the storage key will be the same and is based off of the
             settings when the spectra were generated.
+        :param str telescope: The telescope for which the spectra that have been fit were generated.
         """
         # Just headers that will always be present in tab_line that are not fit parameters
         not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
                    'NUM_UNLINKED_THAWED_VARS', 'FIT_STATISTIC', 'TEST_STATISTIC', 'DOF']
 
+        if telescope not in self.telescopes:
+            raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
+
         # Various global values of interest
-        self._total_exp[spec_storage_key] = float(tab_line["TOTAL_EXPOSURE"])
-        if spec_storage_key not in self._total_count_rate:
-            self._total_count_rate[spec_storage_key] = {}
-            self._test_stat[spec_storage_key] = {}
-            self._dof[spec_storage_key] = {}
-        self._total_count_rate[spec_storage_key][model] = [float(tab_line["TOTAL_COUNT_RATE"]),
-                                                           float(tab_line["TOTAL_COUNT_RATE_ERR"])]
-        self._test_stat[spec_storage_key][model] = float(tab_line["TEST_STATISTIC"])
-        self._dof[spec_storage_key][model] = float(tab_line["DOF"])
+        self._total_exp[telescope][spec_storage_key] = float(tab_line["TOTAL_EXPOSURE"])
+        if spec_storage_key not in self._total_count_rate[telescope]:
+            self._total_count_rate[telescope][spec_storage_key] = {}
+            self._test_stat[telescope][spec_storage_key] = {}
+            self._dof[telescope][spec_storage_key] = {}
+        self._total_count_rate[telescope][spec_storage_key][model] = [float(tab_line["TOTAL_COUNT_RATE"]),
+                                                                      float(tab_line["TOTAL_COUNT_RATE_ERR"])]
+        self._test_stat[telescope][spec_storage_key][model] = float(tab_line["TEST_STATISTIC"])
+        self._dof[telescope][spec_storage_key][model] = float(tab_line["DOF"])
 
         # The parameters available will obviously be dynamic, so have to find out what they are and then
         #  then for each result find the +- errors
@@ -3381,14 +3386,14 @@ class BaseSource:
             mod_res[par_name][ident][pos] = float(tab_line[par])
 
         # Storing the fit results
-        if spec_storage_key not in self._fit_results:
-            self._fit_results[spec_storage_key] = {}
-        self._fit_results[spec_storage_key][model] = mod_res
+        if spec_storage_key not in self._fit_results[telescope]:
+            self._fit_results[telescope][spec_storage_key] = {}
+        self._fit_results[telescope][spec_storage_key][model] = mod_res
 
         # And now storing the luminosity results
-        if spec_storage_key not in self._luminosities:
-            self._luminosities[spec_storage_key] = {}
-        self._luminosities[spec_storage_key][model] = lums
+        if spec_storage_key not in self._luminosities[telescope]:
+            self._luminosities[telescope][spec_storage_key] = {}
+        self._luminosities[telescope][spec_storage_key][model] = lums
 
     def get_results(self, outer_radius: Union[str, Quantity], model: str,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
