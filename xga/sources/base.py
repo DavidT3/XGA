@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:39. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3395,7 +3395,7 @@ class BaseSource:
             self._luminosities[telescope][spec_storage_key] = {}
         self._luminosities[telescope][spec_storage_key][model] = lums
 
-    def get_results(self, outer_radius: Union[str, Quantity], model: str,
+    def get_results(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
                     group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None):
         """
@@ -3409,6 +3409,7 @@ class BaseSource:
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
             region files), then any inner radius will be ignored.
+        :param str telescope: The telescope for which to retrieve spectral fit results.
         :param str model: The name of the fitted model that you're requesting the results
             from (e.g. constant*tbabs*apec).
         :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
@@ -3419,14 +3420,16 @@ class BaseSource:
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The requested result value, and uncertainties.
         """
+        # TODO the refactoring got a bit dicey - take a look around and make sure I didn't destroy anything
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
-        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample,
+                                 telescope=telescope)
         # I just take the first spectrum in the list because the storage key will be the same for all of them
         if isinstance(specs, list):
             storage_key = specs[0].storage_key
@@ -3434,21 +3437,24 @@ class BaseSource:
             storage_key = specs.storage_key
 
         # Bunch of checks to make sure the requested results actually exist
-        if len(self._fit_results) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
-        elif storage_key not in self._fit_results:
-            raise ModelNotAssociatedError("Those spectra have no associated XSPEC fit to {s}".format(s=self.name))
-        elif model not in self._fit_results[storage_key]:
-            av_mods = ", ".join(self._fit_results[storage_key].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to those spectra of {s}; available "
-                                          "models are {a}".format(m=model, s=self.name, a=av_mods))
-        elif par is not None and par not in self._fit_results[storage_key][model]:
-            av_pars = ", ".join(self._fit_results[storage_key][model].keys())
-            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to {s}, "
-                                              "the options are {a}".format(p=par, m=model, s=self.name, a=av_pars))
+        if len(self._fit_results[telescope]) == 0:
+            raise ModelNotAssociatedError("There are no {t} XSPEC fits associated with {s}".format(t=telescope,
+                                                                                                   s=self.name))
+        elif storage_key not in self._fit_results[telescope]:
+            raise ModelNotAssociatedError("Those {t} spectra have no associated XSPEC fit to {s}".format(t=telescope,
+                                                                                                         s=self.name))
+        elif model not in self._fit_results[telescope][storage_key]:
+            av_mods = ", ".join(self._fit_results[telescope][storage_key].keys())
+            raise ModelNotAssociatedError("{m} has not been fitted to those {t} spectra of {s}; available "
+                                          "models are {a}".format(m=model, s=self.name, a=av_mods, t=telescope))
+        elif par is not None and par not in self._fit_results[telescope][storage_key][model]:
+            av_pars = ", ".join(self._fit_results[telescope][storage_key][model].keys())
+            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to those {t} spectra of "
+                                              "{s}, the options are {a}".format(p=par, m=model, s=self.name, a=av_pars,
+                                                                                t=telescope))
 
         # Read out into variable for readabilities sake
-        fit_data = self._fit_results[storage_key][model]
+        fit_data = self._fit_results[telescope][storage_key][model]
         proc_data = {}  # Where the output will ive
         for p_key in fit_data:
             # Used to shape the numpy array the data is transferred into

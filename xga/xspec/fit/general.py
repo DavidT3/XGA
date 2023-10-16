@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/06/2023, 14:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:39. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -164,8 +164,8 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
         # If the fit has already been performed we do not wish to perform it again
         try:
-            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'kT', group_spec, min_counts,
-                                     min_sn, over_sample)
+            res = source.get_results(out_rad_vals[src_ind], 'xmm', model, inn_rad_vals[src_ind], 'kT', group_spec,
+                                     min_counts, min_sn, over_sample)
         except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
@@ -319,8 +319,8 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
 
         # If the fit has already been performed we do not wish to perform it again
         try:
-            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'kT', group_spec, min_counts,
-                                     min_sn, over_sample)
+            res = source.get_results(out_rad_vals[src_ind], 'xmm', model, inn_rad_vals[src_ind], 'kT', group_spec,
+                                     min_counts, min_sn, over_sample)
         except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
@@ -475,8 +475,8 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
 
         # If the fit has already been performed we do not wish to perform it again
         try:
-            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'kT', group_spec, min_counts,
-                                     min_sn, over_sample)
+            res = source.get_results(out_rad_vals[src_ind], 'xmm', model, inn_rad_vals[src_ind], 'kT', group_spec,
+                                     min_counts, min_sn, over_sample)
         except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
@@ -619,8 +619,8 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
         # If the fit has already been performed we do not wish to perform it again
         try:
-            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], None, group_spec, min_counts,
-                                     min_sn, over_sample)
+            res = source.get_results(out_rad_vals[src_ind], 'xmm', model, inn_rad_vals[src_ind], None, group_spec,
+                                     min_counts, min_sn, over_sample)
         except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
@@ -766,8 +766,8 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
         # If the fit has already been performed we do not wish to perform it again
         try:
-            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], None, group_spec, min_counts,
-                                     min_sn, over_sample)
+            res = source.get_results(out_rad_vals[src_ind], 'xmm', model, inn_rad_vals[src_ind], None, group_spec,
+                                     min_counts, min_sn, over_sample)
         except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
