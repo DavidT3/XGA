@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/10/2023, 22:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 09:59. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -543,6 +543,21 @@ class BaseSource:
         :rtype: str
         """
         return self._name
+
+    @property
+    def num_inst_obs(self) -> dict:
+        """
+        A property that returns a dictionary of the total number of each instrument for each telescope associated
+        with the source. Top level keys are telescope names, lower level keys are instrument names for the telescope,
+        and values are an integer count of the total number of observations for that instrument.
+
+        :return: A dictionary of the total number of each instrument for each telescope associated with the source.
+            Top level keys are telescope names, lower level keys are instrument names for the telescope, and values
+            are an integer count of the total number of observations for that instrument.
+        :rtype: dict
+        """
+        return {tel: {i: len([i in self.instruments[tel][o] for o in self.instruments[tel]])
+                      for i in ALLOWED_INST[tel]} for tel in self.instruments}
 
     @property
     def num_pn_obs(self) -> int:
