@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 09:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 10:44. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -178,18 +178,37 @@ class BaseSource:
 
         # Perform a check to make sure that there are some observations left after the usable (from CENSUS) and
         #  blacklist checks have been performed
-        if sum([len(t_obs) for t_obs in obs.values()]) == 0:
+        cur_obs_nums = {tel: len(obs[tel]) for tel in obs}
+        if sum(cur_obs_nums.values()) == 0:
             raise NoValidObservationsError("All {t} observations identified for {s} are either unusable or "
                                            "blacklisted.".format(s=self.name, t=', '.join(telescope)))
+        # In this case one of the telescopes has no observations that are relevant, so we must remove the key
+        #  in 'obs' that refers to it
+        elif 0 in cur_obs_nums.values():
+            new_obs = {tel: obs[tel] for tel, num in cur_obs_nums.items() if num != 0}
+            # obs = new_obs
 
         # Now we run the method which takes those initially identified observations and goes looking for their
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
         self._products, region_dict, self._att_files = self._initial_products(obs)
 
-        # Now we do ANOTHER check just like the one above, as it is possible that all those files cannot be found
-        if sum([len(t_obs) for t_obs in self._products.values()]) == 0:
+        # Now we do ANOTHER check just like the one above, but on the products attribute, as it is possible that
+        #  all those files cannot be found
+        cur_obs_nums = {tel: len(self._products[tel]) for tel in self._products}
+        if sum(cur_obs_nums.values()) == 0:
             raise NoValidObservationsError("None of the {t} observations identified for this {s} have valid event "
                                            "lists associated with them.".format(s=self.name, t='/'.join(telescope)))
+        elif 0 in cur_obs_nums.values():
+            # Cut out any mention of a telescope with no loaded files
+            new_obs = {tel: obs[tel] for tel, num in cur_obs_nums.items() if num != 0}
+            new_prods = {tel: self._products[tel] for tel, num in cur_obs_nums.items() if num != 0}
+            new_regs = {tel: region_dict[tel] for tel, num in cur_obs_nums.items() if num != 0}
+            new_atts = {tel: self._att_files[tel] for tel, num in cur_obs_nums.items() if num != 0}
+            # Then assign the new cut down dictionaries to their original names
+            obs = new_obs
+            self._products = new_prods
+            self._att_files = new_atts
+            region_dict = new_regs
 
         # We now have the final set of initial observations, so we'll store them in an attribute - note that they
         #  may change later as other source classes have different cleaning steps, but any observations will be
