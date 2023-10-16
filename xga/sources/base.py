@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 10:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 11:22. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -186,7 +186,7 @@ class BaseSource:
         #  in 'obs' that refers to it
         elif 0 in cur_obs_nums.values():
             new_obs = {tel: obs[tel] for tel, num in cur_obs_nums.items() if num != 0}
-            # obs = new_obs
+            obs = new_obs
 
         # Now we run the method which takes those initially identified observations and goes looking for their
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
@@ -578,35 +578,35 @@ class BaseSource:
         return {tel: {i: len([i in self.instruments[tel][o] for o in self.instruments[tel]])
                       for i in ALLOWED_INST[tel]} for tel in self.instruments}
 
-    @property
-    def num_pn_obs(self) -> int:
-        """
-        Getter method that gives the number of PN observations.
-
-        :return: Integer number of PN observations associated with this source
-        :rtype: int
-        """
-        return len([o for o in self.obs_ids if 'pn' in self._products[o]])
-
-    @property
-    def num_mos1_obs(self) -> int:
-        """
-        Getter method that gives the number of MOS1 observations.
-
-        :return: Integer number of MOS1 observations associated with this source
-        :rtype: int
-        """
-        return len([o for o in self.obs_ids if 'mos1' in self._products[o]])
-
-    @property
-    def num_mos2_obs(self) -> int:
-        """
-        Getter method that gives the number of MOS2 observations.
-
-        :return: Integer number of MOS2 observations associated with this source
-        :rtype: int
-        """
-        return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
+    # @property
+    # def num_pn_obs(self) -> int:
+    #     """
+    #     Getter method that gives the number of PN observations.
+    #
+    #     :return: Integer number of PN observations associated with this source
+    #     :rtype: int
+    #     """
+    #     return len([o for o in self.obs_ids if 'pn' in self._products[o]])
+    #
+    # @property
+    # def num_mos1_obs(self) -> int:
+    #     """
+    #     Getter method that gives the number of MOS1 observations.
+    #
+    #     :return: Integer number of MOS1 observations associated with this source
+    #     :rtype: int
+    #     """
+    #     return len([o for o in self.obs_ids if 'mos1' in self._products[o]])
+    #
+    # @property
+    # def num_mos2_obs(self) -> int:
+    #     """
+    #     Getter method that gives the number of MOS2 observations.
+    #
+    #     :return: Integer number of MOS2 observations associated with this source
+    #     :rtype: int
+    #     """
+    #     return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
 
     @property
     def disassociated(self) -> bool:
@@ -3894,32 +3894,23 @@ class BaseSource:
             pr_tel = PRETTY_TELESCOPE_NAMES[tel]
             print('')
             print('-- ' + pr_tel + ' --')
-            print("{t} ObsIDs - {n}".format(t=pr_tel, n=len(self.obs_ids[tel])))
-            # TODO Figure out what to do about this
-            # print("PN Observations - {}".format(self.num_pn_obs))
-            # print("MOS1 Observations - {}".format(self.num_mos1_obs))
-            # print("MOS2 Observations - {}".format(self.num_mos2_obs))
+            print("ObsIDs - {n}".format(n=len(self.obs_ids[tel])))
+            for inst in ALLOWED_INST[tel]:
+                print("{i} Observations - {n}".format(i=inst.upper(), n=self.num_inst_obs[tel][inst]))
             # TODO resolve how to supply the separation information now that it isn't as simple as on vs off axis
-            # print("On-Axis - {}".format(len(self._onaxis)))
-            print("With regions - {}".format(len(self._initial_regions)))
-            print("Total regions - {}".format(sum([len(self._initial_regions[o]) for o in self._initial_regions])))
-            print("Obs with 1 detection - {}".format(sum([1 for o in self._initial_region_matches if
-                                                          self._initial_region_matches[o].sum() == 1])))
-            print("Obs with >1 matches - {}".format(sum([1 for o in self._initial_region_matches if
-                                                         self._initial_region_matches[o].sum() > 1])))
+            print("With initial detection - {}".format(sum([1 for o in self._initial_region_matches[tel]
+                                                            if self._initial_region_matches[tel][o].sum() == 1])))
             # If a combined exposure map exists, we'll use it to give the user an idea of the total exposure
             try:
-                ex = self.get_combined_expmaps()
+                ex = self.get_combined_expmaps(telescope=tel)
                 if isinstance(ex, list):
                     ex = ex[0]
                 print("Total exposure - {}".format(ex.get_exp(self.ra_dec).to('ks').round(2)))
             except NoProductAvailableError:
                 pass
-            print("Images associated - {}".format(len(self.get_products("image"))))
-            print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
-            print("Combined Ratemaps associated - {}".format(len(self.get_products("combined_ratemap"))))
-            print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
+            print("Spectra associated - {}".format(len(self.get_products("spectrum", telescope=tel))))
 
+            # TODO None of this will work right now for the multi-mission setup
             if len(self._fit_results) != 0:
                 print("Fitted Models - {}".format(" | ".join(self.fitted_models)))
 
