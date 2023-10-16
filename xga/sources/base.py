@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 17:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 17:49. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3656,48 +3656,84 @@ class BaseSource:
         # Users can pass just a telescope string, but we then need to convert it to the form
         #  that the rest of the function requires
         if isinstance(to_remove, str):
-            to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
+            # I check that this is a valid telescope - and here I just throw an error if not because it isn't like
+            #  there are anymore to check that might be okay
+            if to_remove in self.telescopes:
+                to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
+            else:
+                raise NotAssociatedError("{t} is not a telescope associated with {n}.".format(t=to_remove, n=self.name))
         # Here is where they have just passed a list of telescopes, and we need to fill in the blanks with
         #  the ObsIDs instruments currently loaded for those ObsIDs
         elif isinstance(to_remove, list):
-            to_remove = {t: deepcopy(self.instruments[t]) for t in to_remove}
 
+            to_remove = {}
+            for tel in to_remove:
+                if tel in self.telescopes:
+                    to_remove[tel] = deepcopy(self.instruments[tel])
+                else:
+                    warn('{t} is not a telescope associated with {n} and is being skipped.'.format(t=tel, n=self.name),
+                         stacklevel=2)
+        # In this instance the value is a dictionary, and I have created a disgusting nested set of if statements
+        #  and for loops to ensure that the user hasn't passed anything daft
         elif isinstance(to_remove, dict):
+            # I will be constructing the to remove dictionary as I go along
             final_to_remove = {}
+            # Iterating through the top level keys (telescopes) and values (could be string ObsIDs, lists of string,
+            #  ObsIDs, or dictionaries with ObsIDs as keys and single string instruments or lists of strings as values
             for tel, val in to_remove.items():
+                # I've tried to be quite forgiving and just issue warnings rather than errors if something incorrect
+                #  has been passed - in this case the current top level key isn't actually a valid telescope for this
+                #  source
                 if tel not in self.telescopes:
                     warn('{t} is not a telescope associated with {n} and is being skipped.'.format(t=tel, n=self.name),
                          stacklevel=2)
                     continue
-
+                # If we get here we set up the to_remove dictionary that will be constructed
                 final_to_remove[tel] = {}
 
+                # If the current value is a string then we infer that it's just an ObsID, so we check it is valid
+                #  and add the instruments that are associated with it to our final_to_remove dict
                 if isinstance(val, str):
+                    if val not in self.obs_ids[tel]:
+                        warn("{o} is not an ObsID associated with {t} for {n}, and is being "
+                             "skipped.".format(o=val, t=tel, n=self.name), stacklevel=2)
+                        continue
                     final_to_remove[tel][val] = deepcopy(self.instruments[tel][val])
 
+                # This should only be a list of ObsIDs at this level, so we assume it is and check them against the
+                #  loaded ObsIDs, giving a warning if they are not valid
                 elif isinstance(val, list):
                     for v_oi in val:
                         if v_oi not in self.obs_ids[tel]:
                             warn("{o} is not an ObsID associated with {t} for {n}, and is being "
                                  "skipped.".format(o=v_oi, t=tel, n=self.name), stacklevel=2)
                             continue
-
+                        # At this point we add all the instruments associated with the current ObsID to the removal
+                        #  dictionary
                         final_to_remove[tel][v_oi] = deepcopy(self.instruments[tel][v_oi])
 
+                # If we note that the value is a dictionary, the only thing it should be is a dictionary with ObsIDs
+                #  as keys and single instruments, or a list of instruments, as a value
                 elif isinstance(val, dict):
+                    # So we iterate through the dictionary
                     for v_oi, insts in val.items():
+                        # Check that the key is an ObsID, skipping if not
                         if v_oi not in self.obs_ids[tel]:
                             warn("{o} is not an ObsID associated with {t} for {n}, and is being "
                                  "skipped.".format(o=v_oi, t=tel, n=self.name), stacklevel=2)
 
+                        # Then if the value is a string it should be a single instrument, we check it is valid for
+                        #  the current ObsID
                         if isinstance(insts, str):
                             if insts.lower() not in self.instruments[tel][v_oi]:
                                 warn("{i} is not an instrument associated with {t}-{o} for {n}, and is being "
                                      "skipped.".format(i=insts.lower(), t=tel, o=v_oi, n=self.name))
                                 continue
-
+                            # If it is then it is added to the removal dictionary
                             final_to_remove[tel][v_oi] = [insts.lower()]
 
+                        # This should only be a list of instruments, so we check them and add them to the removal
+                        #  dictionary if they are valid
                         elif isinstance(insts, list):
                             final_inst_list = []
                             for inst in insts:
@@ -3705,47 +3741,13 @@ class BaseSource:
                                     warn("{i} is not an instrument associated with {t}-{o} for {n}, and is being "
                                          "skipped.".format(i=inst.lower(), t=tel, o=v_oi, n=self.name))
                                     continue
-
                                 final_inst_list.append(inst.lower())
-
+                            # Check to make sure our list of instruments actually has something in it
                             if len(final_inst_list) != 0:
                                 final_to_remove[tel][v_oi] = final_inst_list
 
+            # We finally actually set the to_remove variable
             to_remove = deepcopy(final_to_remove)
-
-        # Deals with when someone might have passed a dictionary where there is a single instrument, and
-        #  they haven't put it in a list; e.g. {'0201903501': 'pn'}. This detects instances like that and then
-        #  puts the individual instrument in a list as is expected by the rest of the function
-        # elif isinstance(to_remove, dict) and not all([isinstance(v, list) for v in to_remove.values()]):
-        #     new_to_remove = {}
-        #     for o in to_remove:
-        #         if not isinstance(to_remove[o], list):
-        #             new_to_remove[o] = [deepcopy(to_remove[o])]
-        #         else:
-        #             new_to_remove[o] = deepcopy(to_remove[o])
-        #
-        #     # I use deepcopy again because there have been issues with this function still pointing to old memory
-        #     #  addresses, so I'm quite paranoid in this bit of code
-        #     to_remove = deepcopy(new_to_remove)
-
-        print(to_remove)
-        import sys
-        sys.exit()
-
-        # We also check to make sure that the data we're being asked to remove actually is associated with the
-        #  source. We shall be forgiving if it isn't, and just issue a warning to let the user know that they are
-        #  assuming data was here that actually isn't present
-        # Iterating through the keys (ObsIDs) in to_remove
-        for o in to_remove:
-            if o not in self.obs_ids:
-                warn("{o} data cannot be removed from {s} as they are not associated with "
-                              "it.".format(o=o, s=self.name), stacklevel=2)
-            # Check to see whether any of the instruments for o are not actually associated with the source
-            elif any([i not in self.instruments[o] for i in to_remove[o]]):
-                bad_list = [i for i in to_remove[o] if i not in self.instruments[o]]
-                bad_str = "/".join(bad_list)
-                warn("{o}-{ib} data cannot be removed from {s} as they are not associated "
-                              "with it.".format(o=o, ib=bad_str, s=self.name), stacklevel=2)
 
         # Sets the attribute that tells us whether any data has been removed
         if not self._disassociated:
@@ -3757,48 +3759,83 @@ class BaseSource:
             self._disassociated_obs = to_remove
         # Otherwise we have to add the data to the existing dictionary structure
         else:
-            for o in to_remove:
-                if o not in self._disassociated_obs:
-                    self._disassociated_obs[o] = to_remove[o]
+            for tel in to_remove:
+                # In this case we can just set the entry for that telescope to the current contents of to_remove for
+                #  the current telescope
+                if tel not in self._disassociated_obs:
+                    self._disassociated_obs[tel] = to_remove[tel]
+                # Otherwise we have to be a little more careful as you can't just add dictionaries together
                 else:
-                    self._disassociated_obs[o] += to_remove[o]
+                    # Cycling through the ObsIDs for the current telescope
+                    for o in to_remove[tel]:
+                        # If this ObsID isn't in the disassociated dictionary yet, we can just set that entry to
+                        #  the to_remove entry
+                        if o not in self._disassociated_obs[tel]:
+                            self._disassociated_obs[tel] = to_remove[tel][o]
+                        # However if there is an entry for this ObsID we need to add the lists together
+                        else:
+                            self._disassociated_obs[tel] += to_remove[tel][o]
 
-        # If we're un-associating certain observations, odds on the combined products are no longer valid
-        if "combined" in self._products:
-            del self._products["combined"]
-            if "combined" in self._interloper_masks:
-                del self._interloper_masks["combined"]
-            self._fit_results = {}
-            self._test_stat = {}
-            self._dof = {}
-            self._total_count_rate = {}
-            self._total_exp = {}
-            self._luminosities = {}
+        for tel in to_remove:
+            # If we're disassociating certain observations, odds on the combined products are no longer valid
+            if "combined" in self._products[tel]:
+                del self._products[tel]["combined"]
+                if "combined" in self._interloper_masks[tel]:
+                    del self._interloper_masks[tel]["combined"]
+                self._fit_results[tel] = {}
+                self._test_stat[tel] = {}
+                self._dof[tel] = {}
+                self._total_count_rate[tel] = {}
+                self._total_exp[tel] = {}
+                self._luminosities[tel] = {}
 
-        for o in to_remove:
-            for i in to_remove[o]:
-                del self._products[o][i]
-                del self._instruments[o][self._instruments[o].index(i)]
+            for o in to_remove[tel]:
+                for i in to_remove[tel][o]:
+                    # Because of irritating missions like eROSITA where the event lists are distributed pre-combined
+                    #  I have this flag which identifies those missions, we can't necessarily delete
+                    #  instrument-specific products, though they MIGHT be there
+                    if not COMBINED_INSTS[tel] or i in self._products[tel][o]:
+                        del self._products[tel][o][i]
+                        del self._obs[tel][o][self._obs[tel][o].index(i)]
 
-            if len(self._instruments[o]) == 0:
-                del self._products[o]
-                del self._detected[o]
-                del self._initial_regions[o]
-                del self._initial_region_matches[o]
-                del self._regions[o]
-                del self._other_regions[o]
-                del self._alt_match_regions[o]
-                # These are made on demand, so need to check if its actually present first
-                if o in self._interloper_masks:
-                    del self._interloper_masks[o]
-                if self._peaks is not None:
-                    del self._peaks[o]
+                if len(self._obs[tel][o]) == 0:
+                    del self._products[tel][o]
+                    del self._detected[tel][o]
+                    del self._initial_regions[tel][o]
+                    del self._initial_region_matches[tel][o]
+                    del self._regions[tel][o]
+                    del self._other_regions[tel][o]
+                    del self._alt_match_regions[tel][o]
+                    # These are made on demand, so need to check if its actually present first
+                    if o in self._interloper_masks[tel]:
+                        del self._interloper_masks[tel][o]
+                    if self._peaks is not None and tel in self._peaks:
+                        del self._peaks[tel][o]
 
-                del self._obs[self._obs.index(o)]
-                # TODO This should now refer to the _obs_sep attribute
-                # if o in self._onaxis:
-                #     del self._onaxis[self._onaxis.index(o)]
-                del self._instruments[o]
+                    del self._obs[tel][self._obs[tel].index(o)]
+                    if o in self._obs_sep[tel]:
+                        del self._obs_sep[tel][self._obs_sep[tel].index(o)]
+
+                if len(self._obs[tel]) == 0:
+                    del self._products[tel]
+                    del self._detected[tel]
+                    del self._initial_regions[tel]
+                    del self._initial_region_matches[tel]
+                    del self._regions[tel]
+                    del self._other_regions[tel]
+                    del self._alt_match_regions[tel]
+                    # These are made on demand, so need to check if its actually present first
+                    if tel in self._interloper_masks:
+                        del self._interloper_masks[tel]
+                    if self._peaks is not None and tel in self._peaks:
+                        del self._peaks[tel]
+
+                    del self._obs[tel]
+                    if tel in self._obs_sep:
+                        del self._obs_sep[tel]
+
+                    warn("All {t} observations have been disassociated from {n}.".format(t=tel, n=self.name),
+                         stacklevel=2)
 
         if len(self._obs) == 0:
             raise NoValidObservationsError("No observations remain associated with {} after cleaning".format(self.name))
