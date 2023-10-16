@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 11:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 12:06. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1586,15 +1586,16 @@ class BaseSource:
 
     def _generate_interloper_mask(self, mask_image: Image) -> ndarray:
         """
-        Internal method that makes interloper masks in the first place; I allow this because interloper
-        masks will never change, so can be safely generated and stored in an init of a source class.
+        An internal method to create masks for the removal of contaminating sources - the passed image is used both
+        to provide dimension/WCS information, but also to identify the telescope used for the image. Regions are
+        kept separate across telescopes
 
         :param Image mask_image: The image for which to create the interloper mask.
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
         """
         masks = []
-        for r in self._interloper_regions:
+        for r in self._interloper_regions[mask_image.telescope]:
             if r is not None:
                 # The central coordinate of the current region
                 c = Quantity([r.center.ra.value, r.center.dec.value], 'deg')
@@ -1634,6 +1635,8 @@ class BaseSource:
         :rtype: str
         """
 
+        # TODO METHODS LIKE THIS DO NOT BELONG IN THE SOURCE CLASS - THEY SHOULD ACT ON THE SOURCE CLASS, PARTICULARLY
+        #  NOW THAT WE'RE GOING TO SUPPORTING DIFFERENT TELESCOPES
         if output_unit == xmm_det:
             c_str = "DETX,DETY"
             raise NotImplementedError("This coordinate system is not yet supported, and isn't a priority. Please "
@@ -1802,6 +1805,7 @@ class BaseSource:
             or at the same time.
         :return:
         """
+        # TODO frankly I don't know if there is any point to this anymore, but I won't remove it for now
         if self.queue is None:
             # I could have done all of these in one array with 3 dimensions, but felt this was easier to read
             # and with no real performance penalty
@@ -1831,6 +1835,7 @@ class BaseSource:
             lists of strings, where the strings are expected output paths for products of the SAS commands.
         :rtype: Tuple[List[str], List[str], List[List[str]]]
         """
+        # TODO frankly I don't know if there is any point to this anymore, but I won't remove it for now
         if self.queue is None:
             # This returns empty lists if the queue is undefined
             processed_cmds = []
@@ -2679,16 +2684,20 @@ class BaseSource:
 
         return matched_prods
 
-    def get_att_file(self, obs_id: str) -> str:
+    def get_att_file(self, obs_id: str, telescope: str) -> str:
         """
-        Fetches the path to the attitude file for an XMM observation.
+        Fetches the path to the attitude file for an observation associated with this source.
 
-        :param obs_id: The ObsID to fetch the attitude file for.
+        :param str obs_id: The ObsID to fetch the attitude file for.
+        :param str telescope: The telescope to fetch the attitude file for.
         :return: The path to the attitude file.
         :rtype: str
         """
-        if obs_id not in self._products:
-            raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
+        if telescope not in self.telescopes:
+            raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
+
+        elif obs_id not in self.obs_ids[telescope]:
+            raise NotAssociatedError("{t}-{o} is not associated with {s}".format(t=telescope, o=obs_id, s=self.name))
         else:
             return self._att_files[obs_id]
 
