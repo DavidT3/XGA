@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:28. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2837,12 +2837,13 @@ class BaseSource:
 
         return ret_reg
 
-    def get_source_mask(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
-            -> Tuple[np.ndarray, np.ndarray]:
+    def get_source_mask(self, reg_type: str, telescope: str, obs_id: str = None,
+                        central_coord: Quantity = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         Method to retrieve source and background masks for the given region type.
 
         :param str reg_type: The type of region for which to retrieve the mask.
+        :param str telescope: The telescope for which to retrieve the mask.
         :param str obs_id: The ObsID that the mask is associated with (if appropriate).
         :param Quantity central_coord: The central coordinate of the region.
         :return: The source and background masks for the requested ObsID (or the combined image if no ObsID).
@@ -2856,18 +2857,18 @@ class BaseSource:
 
         # Don't need to do a bunch of checks, because the method I call to make the
         #  mask does all the checks anyway
-        src_reg, bck_reg = self.source_back_regions(reg_type, 'xmm', obs_id, central_coord)
+        src_reg, bck_reg = self.source_back_regions(reg_type, telescope, obs_id, central_coord)
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:
-            comb_images = self.get_products("combined_image")
+            comb_images = self.get_products("combined_image", telescope=telescope)
             if len(comb_images) != 0:
                 mask_image = comb_images[0]
             else:
                 raise NoProductAvailableError("There are no combined products available to generate a mask for.")
         else:
             # Just grab the first instrument that comes out the get method, the masks should be the same.
-            mask_image = self.get_products("image", obs_id)[0]
+            mask_image = self.get_products("image", obs_id, telescope=telescope)[0]
 
         mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
         back_mask = bck_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
@@ -2923,7 +2924,7 @@ class BaseSource:
         :rtype: Tuple[np.ndarray, np.ndarray]
         """
         # Grabs the source masks without interlopers removed
-        src_mask, bck_mask = self.get_source_mask(reg_type, obs_id, central_coord)
+        src_mask, bck_mask = self.get_source_mask(reg_type, 'xmm', obs_id, central_coord)
         # Grabs the interloper mask
         interloper_mask = self.get_interloper_mask(obs_id)
 
@@ -3722,7 +3723,7 @@ class BaseSource:
         for o in self.obs_ids:
             # Exposure maps of the peak finding energy range for this ObsID
             exp_maps = self.get_products("expmap", o, extra_key=extra_key)
-            m = self.get_source_mask(reg_type, o, central_coord=self._default_coord)[0]
+            m = self.get_source_mask(reg_type, 'xmm', o, central_coord=self._default_coord)[0]
             full_area[o] = m.sum()
 
             for ex in exp_maps:
