@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/04/2023, 10:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:35. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -914,7 +914,7 @@ class GalaxyCluster(ExtendedSource):
                         if en_key + "_" in rt[-2]]
 
         # Fetch the mask that will remove all interloper sources from the combined ratemap
-        int_mask = self.get_interloper_mask()
+        int_mask = self.get_interloper_mask('xmm')
 
         if central_coord is None:
             central_coord = self.default_coord

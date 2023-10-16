@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/08/2023, 15:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:35. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -52,11 +52,11 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     if all([obs_id is None, inst is None]):
         # Here the user hasn't set ObsID or instrument, so we use the combined data
         rt = source.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-        interloper_mask = source.get_interloper_mask()
+        interloper_mask = source.get_interloper_mask('xmm')
     elif all([obs_id is not None, inst is not None]):
         # Both ObsID and instrument have been set by the user
         rt = source.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-        interloper_mask = source.get_interloper_mask(obs_id)
+        interloper_mask = source.get_interloper_mask('xmm', obs_id)
 
     # Just making sure our relevant distances are in the same units, so that we can convert to pixels
     outer_rad = source.convert_radius(outer_rad, 'deg')

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:35. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2881,11 +2881,12 @@ class BaseSource:
 
         return mask, back_mask
 
-    def get_interloper_mask(self, obs_id: str = None) -> ndarray:
+    def get_interloper_mask(self, telescope: str, obs_id: str = None) -> ndarray:
         """
         Returns a mask for a given ObsID (or combined data if no ObsID given) that will remove any sources
         that have not been identified as the source of interest.
 
+        :param str telescope: The telescope for which to retrieve the mask.
         :param str obs_id: The ObsID that the mask is associated with (if appropriate).
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
@@ -2898,17 +2899,17 @@ class BaseSource:
             raise NotAssociatedError("{o} is not associated with {s}; only {a} are "
                                      "available".format(o=obs_id, s=self.name, a=", ".join(self.obs_ids)))
         elif obs_id is not None and obs_id != "combined":
-            mask = self._interloper_masks[obs_id]
+            mask = self._interloper_masks[telescope][obs_id]
         elif obs_id is None or obs_id == "combined" and "combined" not in self._interloper_masks:
-            comb_ims = self.get_products("combined_image")
+            comb_ims = self.get_products("combined_image", telescope=telescope)
             if len(comb_ims) == 0:
                 raise NoProductAvailableError("There are no combined images available for which to fetch"
                                               " interloper masks.")
             im = comb_ims[0]
             mask = self._generate_interloper_mask(im)
-            self._interloper_masks["combined"] = mask
-        elif obs_id is None or obs_id == "combined" and "combined" in self._interloper_masks:
-            mask = self._interloper_masks["combined"]
+            self._interloper_masks[telescope]["combined"] = mask
+        elif obs_id is None or obs_id == "combined" and "combined" in self._interloper_masks[telescope]:
+            mask = self._interloper_masks[telescope]["combined"]
 
         return mask
 
@@ -2926,7 +2927,7 @@ class BaseSource:
         # Grabs the source masks without interlopers removed
         src_mask, bck_mask = self.get_source_mask(reg_type, 'xmm', obs_id, central_coord)
         # Grabs the interloper mask
-        interloper_mask = self.get_interloper_mask(obs_id)
+        interloper_mask = self.get_interloper_mask('xmm', obs_id)
 
         # Multiplies the uncorrected source and background masks with the interloper masks to correct
         #  for interloper sources
@@ -2983,7 +2984,7 @@ class BaseSource:
 
         # And applying an interloper mask if the user wants that.
         if remove_interlopers:
-            interloper_mask = self.get_interloper_mask(obs_id)
+            interloper_mask = self.get_interloper_mask('xmm', obs_id)
             custom_mask = custom_mask*interloper_mask
         return custom_mask
 
