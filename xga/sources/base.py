@@ -2699,7 +2699,7 @@ class BaseSource:
         elif obs_id not in self.obs_ids[telescope]:
             raise NotAssociatedError("{t}-{o} is not associated with {s}".format(t=telescope, o=obs_id, s=self.name))
         else:
-            return self._att_files[obs_id]
+            return self._att_files[telescope][obs_id]
 
     def source_back_regions(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) \
             -> Tuple[SkyRegion, SkyRegion]:
