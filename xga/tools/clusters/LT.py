@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:51. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -362,7 +362,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
                 # Cycle through every available luminosity, this will return all luminosities in all energy bands
                 #  requested by the user with lum_en
-                for lum_name, lum in rel_src.get_luminosities(rel_rad, group_spec=group_spec,
+                for lum_name, lum in rel_src.get_luminosities(rel_rad, 'xmm', group_spec=group_spec,
                                                               min_counts=min_counts, min_sn=min_sn,
                                                               over_sample=over_sample).items():
                     # The luminosity and its uncertainties gets added to the values list
@@ -398,8 +398,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     cols += ['Tx' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                     # The same process again for core-excised luminosities
-                    lce_res = rel_src.get_luminosities(rel_rad, inner_radius=0.15*rel_rad, group_spec=group_spec,
-                                                       min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+                    lce_res = rel_src.get_luminosities(rel_rad, 'xmm', inner_radius=0.15 * rel_rad,
+                                                       group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                                       over_sample=over_sample)
                     for lum_name, lum in lce_res.items():
                         vals += list(lum.value)
                         cols += ['Lx' + o_dens[1:] + 'ce' + lum_name.split('bound')[-1] + p_fix

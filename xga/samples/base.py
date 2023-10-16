@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:51. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -296,8 +296,8 @@ class BaseSample:
         for src_ind, src in enumerate(self._sources.values()):
             try:
                 # Fetch the luminosity from a given source using the dedicated method
-                lx_val = src.get_luminosities(out_rads[src_ind], model, inn_rads[src_ind], lo_en, hi_en, group_spec,
-                                              min_counts, min_sn, over_sample)
+                lx_val = src.get_luminosities(out_rads[src_ind], 'xmm', model, inn_rads[src_ind], lo_en, hi_en,
+                                              group_spec, min_counts, min_sn, over_sample)
                 frac_err = lx_val[1:] / lx_val[0]
                 # We check that no error is larger than the measured value, if quality checks are on
                 if quality_checks and len(frac_err[frac_err >= 1]) != 0:

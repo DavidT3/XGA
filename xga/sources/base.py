@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:51. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3480,7 +3480,7 @@ class BaseSource:
         else:
             return proc_data[par]
 
-    def get_luminosities(self, outer_radius: Union[str, Quantity], model: str,
+    def get_luminosities(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
                          hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                          over_sample: float = None):
@@ -3494,6 +3494,7 @@ class BaseSource:
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
             region files), then any inner radius will be ignored.
+        :param str telescope: The telescope for which to retrieve spectral fit results.
         :param str model: The name of the fitted model that you're requesting the luminosities
             from (e.g. constant*tbabs*apec).
         :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
@@ -3505,14 +3506,15 @@ class BaseSource:
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The requested luminosity value, and uncertainties.
         """
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
-        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample,
+                                 telescope=telescope)
         # I just take the first spectrum in the list because the storage key will be the same for all of them
         if isinstance(specs, list):
             storage_key = specs[0].storage_key
@@ -3529,31 +3531,35 @@ class BaseSource:
             en_key = None
 
         # Checks that the requested region, model and energy band actually exist
-        if len(self._luminosities) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
-        elif storage_key not in self._luminosities:
-            raise ModelNotAssociatedError("These spectra have no associated XSPEC fit to {s}.".format(s=self.name))
-        elif model not in self._luminosities[storage_key]:
+        if len(self._luminosities[telescope]) == 0:
+            raise ModelNotAssociatedError("There are no {t} XSPEC fits associated with {s}".format(s=self.name,
+                                                                                                   t=telescope))
+        elif storage_key not in self._luminosities[telescope]:
+            raise ModelNotAssociatedError("These {t} spectra have no associated XSPEC fit to {s}.".format(t=telescope,
+                                                                                                          s=self.name))
+        elif model not in self._luminosities[telescope][storage_key]:
             av_mods = ", ".join(self._luminosities[storage_key].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to these spectra of {s}; "
-                                          "available models are {a}".format(m=model, s=self.name, a=av_mods))
-        elif en_key is not None and en_key not in self._luminosities[storage_key][model]:
-            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[storage_key][model].keys()])
-            raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
-                                              "energy bands are {b}".format(l=lo_en.to("keV").value,
-                                                                            u=hi_en.to("keV").value,
-                                                                            m=model, b=av_bands))
+            raise ModelNotAssociatedError("{m} has not been fitted to these {t} spectra of {s}; "
+                                          "available models are {a}".format(m=model, s=self.name, a=av_mods,
+                                                                            t=telescope))
+        elif en_key is not None and en_key not in self._luminosities[telescope][storage_key][model]:
+            av_bands = ", ".join([en.split("_")[-1] + "keV"
+                                  for en in self._luminosities[telescope][storage_key][model].keys()])
+            raise ParameterNotAssociatedError("{l}-{u}keV was not a luminosity energy band for the fit to those {t} "
+                                              "spectra with {m}; available energy bands are "
+                                              "{b}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value,
+                                                           m=model, b=av_bands, t=telescope))
 
         # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
         if en_key is None:
             parsed_lums = {}
-            for lum_key in self._luminosities[storage_key][model]:
-                lum_value = self._luminosities[storage_key][model][lum_key]
+            for lum_key in self._luminosities[telescope][storage_key][model]:
+                lum_value = self._luminosities[telescope][storage_key][model][lum_key]
                 parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
                 parsed_lums[lum_key] = parsed_lum
             return parsed_lums
         else:
-            lum_value = self._luminosities[storage_key][model][en_key]
+            lum_value = self._luminosities[telescope][storage_key][model][en_key]
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
@@ -3970,7 +3976,7 @@ class BaseSource:
                     pass
 
                 try:
-                    lx = self.get_luminosities('r500', 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
+                    lx = self.get_luminosities('r500', 'xmm', 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
                                                hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
                     print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean().round(2)))
 
