@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:19. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2807,13 +2807,14 @@ class BaseSource:
 
         return reg_within
 
-    def get_interloper_regions(self, flattened: bool = False) -> Union[List, Dict]:
+    def get_interloper_regions(self, telescope: str, flattened: bool = False) -> Union[List, Dict]:
         """
         This get method provides a way to access the regions that have been designated as interlopers (i.e.
         not the source region that a particular Source has been designated to investigate) for all observations.
         They can either be retrieved in a dictionary with ObsIDs as the keys, or a flattened single list with no
         ObsID context.
 
+        :param str telescope: The telescope for which we wish to retrieve regions.
         :param bool flattened: If true then the regions are returned as a single list of region objects. Otherwise
             they are returned as a dictionary with ObsIDs as keys. Default is False.
         :return: Either a list of region objects, or a dictionary with ObsIDs as keys.
@@ -2822,15 +2823,17 @@ class BaseSource:
         if type(self) == BaseSource:
             raise TypeError("BaseSource objects don't have enough information to know which sources "
                             "are interlopers.")
+        elif telescope not in self.telescopes:
+            raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
 
         # If flattened then a list is returned rather than the original dictionary with
         if not flattened:
-            ret_reg = self._other_regions
+            ret_reg = self._other_regions[telescope]
         else:
             # Iterate through the ObsIDs in the dictionary and add the resulting lists together
             ret_reg = []
-            for o in self._other_regions:
-                ret_reg += self._other_regions[o]
+            for o in self._other_regions[telescope]:
+                ret_reg += self._other_regions[telescope][o]
 
         return ret_reg
 
