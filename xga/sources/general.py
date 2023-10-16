@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:40. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -208,7 +208,7 @@ class ExtendedSource(BaseSource):
         # Allow 20 iterations by default before we kill this - alternatively loop will exit when centre converges
         #  to within 15kpc (or 0.15arcmin).
         while count < num_iter:
-            aperture_mask = self.get_mask("search", rt.obs_id, central_coords)[0]
+            aperture_mask = self.get_mask("search", 'xmm', rt.obs_id, central_coords)[0]
 
             # Find the peak using the experimental clustering_peak method
             if method == "hierarchical":
@@ -634,7 +634,7 @@ class PointSource(BaseSource):
         :rtype: Tuple[Quantity, bool]
         """
         central_coords = SkyCoord(*self.ra_dec.to("deg"))
-        aperture_mask = self.get_mask("search", rt.obs_id, central_coords)[0]
+        aperture_mask = self.get_mask("search", 'xmm', rt.obs_id, central_coords)[0]
         peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
 
         return peak, near_edge

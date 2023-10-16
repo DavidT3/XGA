@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:40. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2913,21 +2913,22 @@ class BaseSource:
 
         return mask
 
-    def get_mask(self, reg_type: str, obs_id: str = None, central_coord: Quantity = None) -> \
-            Tuple[np.ndarray, np.ndarray]:
+    def get_mask(self, reg_type: str, telescope: str, obs_id: str = None,
+                 central_coord: Quantity = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         Method to retrieve source and background masks for the given region type, WITH INTERLOPERS REMOVED.
 
         :param str reg_type: The type of region for which to retrieve the interloper corrected mask.
+        :param str telescope: The telescope for which to retrieve the mask.
         :param str obs_id: The ObsID that the mask is associated with (if appropriate).
         :param Quantity central_coord: The central coordinate of the region.
         :return: The source and background masks for the requested ObsID (or the combined image if no ObsID).
         :rtype: Tuple[np.ndarray, np.ndarray]
         """
         # Grabs the source masks without interlopers removed
-        src_mask, bck_mask = self.get_source_mask(reg_type, 'xmm', obs_id, central_coord)
+        src_mask, bck_mask = self.get_source_mask(reg_type, telescope, obs_id, central_coord)
         # Grabs the interloper mask
-        interloper_mask = self.get_interloper_mask('xmm', obs_id)
+        interloper_mask = self.get_interloper_mask(telescope, obs_id)
 
         # Multiplies the uncorrected source and background masks with the interloper masks to correct
         #  for interloper sources
@@ -3043,7 +3044,7 @@ class BaseSource:
         if isinstance(outer_radius, str):
             # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
             #  method understands that means it should return the mask for the combined data
-            src_mask, bck_mask = self.get_mask(outer_radius, obs_id, central_coord)
+            src_mask, bck_mask = self.get_mask(outer_radius, 'xmm', obs_id, central_coord)
         else:
             # Here we have the case where the user has passed a custom outer radius, so we need to generate a
             #  custom mask for it
@@ -3107,7 +3108,7 @@ class BaseSource:
         if isinstance(outer_radius, str):
             # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
             #  method understands that means it should return the mask for the combined data
-            src_mask, bck_mask = self.get_mask(outer_radius, obs_id, central_coord)
+            src_mask, bck_mask = self.get_mask(outer_radius, 'xmm', obs_id, central_coord)
         else:
             # Here we have the case where the user has passed a custom outer radius, so we need to generate a
             #  custom mask for it
