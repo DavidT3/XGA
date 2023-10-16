@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:44. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2937,12 +2937,14 @@ class BaseSource:
 
         return total_src_mask, total_bck_mask
 
-    def get_custom_mask(self, outer_rad: Quantity, inner_rad: Quantity = Quantity(0, 'arcsec'), obs_id: str = None,
-                        central_coord: Quantity = None, remove_interlopers: bool = True) -> np.ndarray:
+    def get_custom_mask(self, outer_rad: Quantity, telescope: str, inner_rad: Quantity = Quantity(0, 'arcsec'),
+                        obs_id: str = None, central_coord: Quantity = None,
+                        remove_interlopers: bool = True) -> np.ndarray:
         """
         A simple, but powerful method, to generate mask a mask within a custom radius for a given ObsID.
 
         :param Quantity outer_rad: The outer radius of the mask.
+        :param str telescope: The telescope for which to retrieve the mask.
         :param Quantity inner_rad: The inner radius of the mask, the default is zero arcseconds.
         :param str obs_id: The ObsID for which to generate the mask, default is None which will return a mask
             generated from a combined image.
@@ -2958,13 +2960,13 @@ class BaseSource:
 
         if obs_id is None:
             # Doesn't matter which combined ratemap, just need the size and coord conversion powers
-            rt = self.get_combined_ratemaps()
+            rt = self.get_combined_ratemaps(telescope=telescope)
         else:
             # Again so long as the image matches the ObsID passed in by the user I don't care what instrument
             #  its from
-            rt = self.get_ratemaps(obs_id=obs_id)
+            rt = self.get_ratemaps(obs_id=obs_id, telescope=telescope)
 
-        # If its not an instance of RateMap that means a list of RateMaps has been returned, and as I only want
+        # If it's not an instance of RateMap that means a list of RateMaps has been returned, and as I only want
         #  the WCS information and the shape of the image I don't care which one we use
         if not isinstance(rt, RateMap):
             rt = rt[0]
@@ -2985,7 +2987,7 @@ class BaseSource:
 
         # And applying an interloper mask if the user wants that.
         if remove_interlopers:
-            interloper_mask = self.get_interloper_mask('xmm', obs_id)
+            interloper_mask = self.get_interloper_mask(telescope, obs_id)
             custom_mask = custom_mask*interloper_mask
         return custom_mask
 
@@ -3048,9 +3050,10 @@ class BaseSource:
         else:
             # Here we have the case where the user has passed a custom outer radius, so we need to generate a
             #  custom mask for it
-            src_mask = self.get_custom_mask(outer_radius, obs_id=obs_id, central_coord=central_coord)
-            bck_mask = self.get_custom_mask(outer_radius*self._back_out_factor, outer_radius*self._back_inn_factor,
-                                            obs_id=obs_id, central_coord=central_coord)
+            src_mask = self.get_custom_mask(outer_radius, 'xmm', obs_id=obs_id, central_coord=central_coord)
+            bck_mask = self.get_custom_mask(outer_radius * self._back_out_factor, 'xmm',
+                                            outer_radius * self._back_inn_factor, obs_id=obs_id,
+                                            central_coord=central_coord)
 
         # We use the ratemap's built in signal to noise calculation method
         sn = rt.signal_to_noise(src_mask, bck_mask, exp_corr, allow_negative)
@@ -3112,9 +3115,10 @@ class BaseSource:
         else:
             # Here we have the case where the user has passed a custom outer radius, so we need to generate a
             #  custom mask for it
-            src_mask = self.get_custom_mask(outer_radius, obs_id=obs_id, central_coord=central_coord)
-            bck_mask = self.get_custom_mask(outer_radius*self._back_out_factor, outer_radius*self._back_inn_factor,
-                                            obs_id=obs_id, central_coord=central_coord)
+            src_mask = self.get_custom_mask(outer_radius, 'xmm', obs_id=obs_id, central_coord=central_coord)
+            bck_mask = self.get_custom_mask(outer_radius * self._back_out_factor, 'xmm',
+                                            outer_radius * self._back_inn_factor, obs_id=obs_id,
+                                            central_coord=central_coord)
 
         # We use the ratemap's built in background subtracted counts calculation method
         cnts = rt.background_subtracted_counts(src_mask, bck_mask)
