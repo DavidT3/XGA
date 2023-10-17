@@ -1,7 +1,9 @@
 # This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 # Last modified by Jessica Pilling (jp735@sussex.ac.uk) Wed Oct 11 2023, 13:51. Copyright (c) The Contributors
 
+import os
 from typing import Union, List
+from random import randint
 
 from astropy.units import Quantity
 
@@ -42,6 +44,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     if outer_radius != 'region':
         from_region = False
+        #TODO the region setup for erosita --> might be the same for both telescopes?
         sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress, '')
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
@@ -57,18 +60,17 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         min_sn = float(min_sn)
 
     #TODO corresponding to issue #1058, need to adding in rebinning functions. relate to min_counts and min_sn parameters in SAS version
-
     #TODO check with David about oversampling and group spectra, and the one_rmf parameter (think for erosita you want an RMF for each obsid-inst combo)
 
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
     ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                ' srcreg="mask {em}" backreg=NONE exttype=MAP extmap="{em}" insts="{i}" tstep={ts} xgrid={xg}' \
-                ' psftype=NONE'
+                ' srcreg="{reg}" backreg=NONE insts="{i}" tstep={ts} xgrid={xg}' \
+                ' prefix="{i}_{}" psftype=NONE'
     
     # For extended sources, it is best to make a background spectra with a separate command
     bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                        ' srcreg="{breg}" backreg=NONE insts="{i}"' \
+                        ' srcreg="{breg}" backreg=NONE insts="{i}" prefix="bckgr_"' \
                         ' tstep={ts} xgrid={xg} psftype=NONE'
 
     #TODO check the point source command in esass with some EDR obs
@@ -76,9 +78,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                       ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts} xgrid={xg}' \
                       ' psftype="2D_PSF"'
     
-    # To deal with the object scanning across the telescopes, you need a detection map of the source
-    #TODO how to make a detection/extent map
-    ext_map_cmd = ""
+    rename_cmd = 'mv *{type}* {}'
+    
+    # To correct for vignetting properly, you need a detection map of the source
+    #TODO how to make a detection/extent map then add into extended srctool cmd
 
     stack = False # This tells the esass_call routine that this command won't be part of a stack
     execute = True # This should be executed immediately
@@ -101,6 +104,137 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         cmds = []
         final_paths = []
         extra_info = []
+
+        if outer_radius != 'region':
+            # Finding interloper regions within the radii we have specified has been put here because it all works in
+            #  degrees and as such only needs to be run once for all the different observations.
+            #DAVID_QUESTION assuming this wouldn't need to be changed for multitelescope
+            interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind],
+                                                             source.default_coord)
+            # This finds any regions which
+            back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
+                                                         outer_radii[s_ind] * source.background_radius_factors[1],
+                                                         source.default_coord)
+            src_inn_rad_str = inner_radii[s_ind].value
+            src_out_rad_str = outer_radii[s_ind].value
+            # The key under which these spectra will be stored
+            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}"
+            spec_storage_name = spec_storage_name.format(ra=source.default_coord[0].value,
+                                                         dec=source.default_coord[1].value,
+                                                         ri=src_inn_rad_str, ro=src_out_rad_str)
+        else:
+            spec_storage_name = "region"
+
+        # Check which event lists are associated with each individual source
+         # ASSUMPTION3 output of products is now a dictionary with telescope keys
+        for pack in source.get_products("events", just_obj=False)['erosita']:
+            obs_id = pack[0]
+            inst = pack[1]
+
+            # ASSUMPTION4 new output directory structure
+            if not os.path.exists(OUTPUT + 'erosita' + obs_id):
+                os.mkdir(OUTPUT + 'erosita' + obs_id)
+
+            # Got to check if this spectrum already exists
+            # ASSUMPTION5 source.get_products has a telescope parameter
+            exists = source.get_products("spectrum", "erosita", obs_id, inst, extra_key=spec_storage_name)
+            if len(exists) == 1 and exists[0].usable and not force_gen:
+                continue
+
+            # If there is no match to a region, the source region returned by this method will be None,
+            #  and if the user wants to generate spectra from region files, we have to ignore that observations
+            # ASSUMPTION6 source.source_back_regions will have a telescope parameter
+            if outer_radius == "region" and source.source_back_regions("erosita", "region", obs_id)[0] is None:
+                continue
+
+            # Because the region will be different for each ObsID, I have to call the setup function here
+            if outer_radius == 'region':
+                interim_source, inner_radii, outer_radii = region_setup([source], outer_radius, inner_radius,
+                                                                        disable_progress, obs_id)
+                # Need the reg for central coordinates
+                #DAVID_QUESTION assuming this wouldn't need to be changed for multitelescope
+                reg = source.source_back_regions('region', obs_id)[0]
+                reg_cen_coords = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
+                # Pass the largest outer radius here, so we'll look for interlopers in a circle with the radius
+                #  being the largest axis of the ellipse
+                interloper_regions = source.regions_within_radii(inner_radii[0][0], max(outer_radii[0]), reg_cen_coords)
+                back_inter_reg = source.regions_within_radii(max(outer_radii[0]) * source.background_radius_factors[0],
+                                                             max(outer_radii[0]) * source.background_radius_factors[1],
+                                                             reg_cen_coords)
+                #TODO get_annular_esass_region
+                reg = source.get_annular_sas_region(inner_radii[0], outer_radii[0], obs_id, inst,
+                                                    interloper_regions=interloper_regions, central_coord=reg_cen_coords,
+                                                    rot_angle=reg.angle)
+                #TODO get_annular_esass_region
+                b_reg = source.get_annular_sas_region(outer_radii[0] * source.background_radius_factors[0],
+                                                      outer_radii[0] * source.background_radius_factors[1], obs_id,
+                                                      inst, interloper_regions=back_inter_reg,
+                                                      central_coord=source.default_coord)
+                # Explicitly read out the current inner radius and outer radius, useful for some bits later
+                src_inn_rad_str = 'and'.join(inner_radii[0].value.astype(str))
+                src_out_rad_str = 'and'.join(outer_radii[0].value.astype(str)) + "_region"
+                # Also explicitly read out into variables the actual radii values
+                inn_rad_degrees = inner_radii[0]
+                out_rad_degrees = outer_radii[0]
+
+            else:
+                # This constructs the sas strings for any radius that isn't 'region'
+                #TODO get_annular_esass_region
+                reg = source.get_annular_sas_region(inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
+                                                    interloper_regions=interloper_regions,
+                                                    central_coord=source.default_coord)
+                #TODO get_annular_esass_region
+                b_reg = source.get_annular_sas_region(outer_radii[s_ind] * source.background_radius_factors[0],
+                                                      outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
+                                                      inst, interloper_regions=back_inter_reg,
+                                                      central_coord=source.default_coord)
+                inn_rad_degrees = inner_radii[s_ind]
+                out_rad_degrees = outer_radii[s_ind]
+            
+            # Getting the source name
+            source_name = source.name
+            
+            # Just grabs the event list object
+            evt_list = pack[-1]
+            # Sets up the file names of the output files, adding a random number so that the
+            #  function for generating annular spectra doesn't clash and try to use the same folder
+            # ASSUMPTION4 new output directory structure
+            dest_dir = OUTPUT + "erosita" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
+
+            spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_spec.fits"
+            spec = spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+            b_spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.fits"
+            b_spec = b_spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                   dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+            
+            # These file names are for the debug images of the source and background images, they will not be loaded
+            #  in as a XGA products, but exist purely to check by eye if necessary
+            dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_debug." \
+                  "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+            b_dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_back_debug." \
+                    "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                  dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+
+            #TODO occupy these variables 
+            coord_str = None
+            src_reg_str = None
+            tstep = None
+            xgrid = None
+            insts = None
+            bsrc_reg_str = None
+
+            # Fills out the srctool command to make the main and background spectra
+            s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
+                                               i=insts, ts=tstep,xg=xgrid)
+            #TODO might want different tstep and xgrid to the source to save processing time
+            sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
+                                               i=insts, ts=tstep,xg=xgrid)
+
+            
+
+
         
 
 
