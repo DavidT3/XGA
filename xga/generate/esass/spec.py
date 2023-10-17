@@ -65,20 +65,22 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
     ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                ' srcreg="{reg}" backreg=NONE insts="{i}" tstep={ts} xgrid={xg}' \
-                ' prefix="{i}_{}" psftype=NONE'
-    
+                ' srcreg="{reg}" backreg={breg} insts="{i}" tstep={ts} xgrid={xg}' \
+                ' psftype=NONE'
+
+    #TODO add in separate background command
     # For extended sources, it is best to make a background spectra with a separate command
-    bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                        ' srcreg="{breg}" backreg=NONE insts="{i}" prefix="bckgr_"' \
-                        ' tstep={ts} xgrid={xg} psftype=NONE'
+    #bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
+                       # ' srcreg="{breg}" backreg=NONE insts="{i}" prefix="bckgr_"' \
+                       # ' tstep={ts} xgrid={xg} psftype=NONE'
 
     #TODO check the point source command in esass with some EDR obs
     pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF" insts="{i}"' \
                       ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts} xgrid={xg}' \
                       ' psftype="2D_PSF"'
     
-    rename_cmd = 'mv *{type}* {}'
+    #You can't control the whole name of the output of srctool, so this renames it to the XGA format
+    rename_cmd = 'mv srctoolout_{inst}??_{type}* {nn}'
     
     # To correct for vignetting properly, you need a detection map of the source
     #TODO how to make a detection/extent map then add into extended srctool cmd
@@ -129,6 +131,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
          # ASSUMPTION3 output of products is now a dictionary with telescope keys
         for pack in source.get_products("events", just_obj=False)['erosita']:
             obs_id = pack[0]
+            #ASSUMPTION7 this will be a string of the TMs that are relevant
             inst = pack[1]
 
             # ASSUMPTION4 new output directory structure
@@ -201,12 +204,40 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # ASSUMPTION4 new output directory structure
             dest_dir = OUTPUT + "erosita" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
 
-            spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_spec.fits"
-            spec = spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+            # Cannot control the naming of spectra from srctool, so need to store
+            # the XGA formatting of the spectra, so that they can be renamed 
+            spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_spec.fits"
+            rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf"
+            arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf"
+            b_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.fits"
+
+            # Need to have different names for each different instrument so we stored them in a dictonary
+            spec = {}
+            rmf = {}
+            arf = {}
+            b_spec = {}
+
+            # Getting the TM numbers from the list
+            inst_list = list(inst)
+            for idv_inst in inst_list:
+                # populating the dictonary with the final names of the spectra depending on the instrument
+                spec[inst] = spec_str.format(o=obs_id, i=idv_inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-            b_spec = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.fits"
-            b_spec = b_spec.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                   dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                rmf[inst] = rmf_str.format(o=obs_id, i=idv_inst, n=source_name, ra=source.default_coord[0].value,
+                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                arf[inst] = arf_str.format(o=obs_id, i=idv_inst, n=source_name, ra=source.default_coord[0].value,
+                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                b_spec[inst] = b_spec_str.format(o=obs_id, i=idv_inst, n=source_name, ra=source.default_coord[0].value,
+                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+            # There will also be a final spectra/rmf/arf/b_spec for the merged instruments
+            spec['0'] = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+            rmf['0'] = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+            arf['0'] = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+            b_spec['0'] = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
             
             # These file names are for the debug images of the source and background images, they will not be loaded
             #  in as a XGA products, but exist purely to check by eye if necessary
@@ -227,10 +258,36 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Fills out the srctool command to make the main and background spectra
             s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
-                                               i=insts, ts=tstep,xg=xgrid)
+                                               breg=bsrc_reg_str, i=insts, ts=tstep, xg=xgrid)
             #TODO might want different tstep and xgrid to the source to save processing time
-            sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
-                                               i=insts, ts=tstep,xg=xgrid)
+            #sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
+                                              # i=insts, ts=tstep,xg=xgrid)
+            
+            # Populating the rename command for all the srctool outputs, ie: SourceSpec, RMF, ARF, BackgrSpec
+            # Messy I know, just wanted to have a draft done before i make the code more efficient
+            spec_rename_strs = []
+            for inst_key in spec:
+                rename_str = rename_cmd.format(inst=inst_key, type="SourceSpec", nn=spec[inst_key])
+                spec_rename_strs.append(rename_str)
+            
+            arf_rename_strs = []
+            for inst_key in arf:
+                rename_str = rename_cmd.format(inst=inst_key, type="ARF", nn=arf[inst_key])
+                arf_rename_strs.append(rename_str)
+            
+            rmf_rename_strs = []
+            for inst_key in rmf:
+                rename_str = rename_cmd.format(inst=inst_key, type="RMF", nn=rmf[inst_key])
+                rmf_rename_strs.append(rename_str)
+            
+            b_spec_rename_strs = []
+            for inst_key in b_spec:
+                rename_str = rename_cmd.format(inst=inst_key, type="BackgrSpec", nn=b_spec[inst_key])
+                b_spec_rename_strs.append(rename_str)
+
+            cmd_str = ";".join([])
+            
+            
 
             
 
