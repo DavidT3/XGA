@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 18:01. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -51,13 +51,24 @@ class ExtendedSource(BaseSource):
     :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
         to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
         is False. User should only set to True to remove warnings.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        is None in which case standard search distances for different telescopes are used. The user may pass a
+        single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+        telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+        specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO,  load_products: bool = True, load_fits: bool = False,
-                 peak_find_method: str = "hierarchical", in_sample: bool = False):
+                 peak_find_method: str = "hierarchical", in_sample: bool = False,
+                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None):
         """
         The init for the general extended source XGA class, takes information on the position (and optionally
         redshift) of source of interest, matches to extended regions, and optionally performs peak finding.
@@ -84,9 +95,20 @@ class ExtendedSource(BaseSource):
         :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
             to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
             is False. User should only set to True to remove warnings.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
         """
         # Calling the BaseSource init method
-        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample)
+        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample, telescope,
+                         search_distance)
 
         self._custom_region_radius = None
         # Setting up the custom region radius attributes
@@ -115,10 +137,12 @@ class ExtendedSource(BaseSource):
         # Make sure the peak energy boundaries are in keV
         self._peak_lo_en = peak_lo_en.to('keV')
         self._peak_hi_en = peak_hi_en.to('keV')
-        self._peaks = {o: {} for o in self.obs_ids}
-        self._peaks.update({"combined": None})
-        self._peaks_near_edge = {o: {} for o in self.obs_ids}
-        self._peaks_near_edge.update({"combined": None})
+        self._peaks = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
+        self._peaks_near_edge = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
+        for tel in self.telescopes:
+            self._peaks[tel]['combined'] = None
+            self._peaks_near_edge[tel]['combined'] = None
+
         self._chosen_peak_cluster = None
         self._other_peak_clusters = None
         self._snr = {}
@@ -127,20 +151,22 @@ class ExtendedSource(BaseSource):
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("ext")
 
         # Making a combined list of interloper regions
-        self._interloper_regions = []
-        for o in self._other_regions:
-            self._interloper_regions += self._other_regions[o]
+        self._interloper_regions = {tel: [] for tel in self.telescopes}
+        for tel in self._other_regions:
+            self._interloper_regions[tel] = [r for o in self._other_regions[tel] for r in self._other_regions[tel][o]]
 
         # Run through any alternative matches and raise warnings
-        for o in self._alt_match_regions:
-            if len(self._alt_match_regions[o]) > 0:
-                warn_text = "There are {0} alternative matches for observation {1}, associated with " \
-                            "source {2}".format(len(self._alt_match_regions[o]), o, self.name)
-                if not self._samp_member:
-                    warn(warn_text, stacklevel=2)
-                else:
-                    self._supp_warn.append(warn_text)
+        for tel in self._alt_match_regions:
+            for o in self._alt_match_regions[tel]:
+                if len(self._alt_match_regions[tel][o]) > 0:
+                    warn_text = "There are {a} alternative matches for observation {t}-{o}, associated with " \
+                                "source {n}".format(a=len(self._alt_match_regions[tel][o]), t=tel, o=o, n=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
 
+        # TODO Got here
         self._interloper_masks = {}
         for obs_id in self.obs_ids:
             # Generating and storing these because they should only
