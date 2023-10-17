@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 14:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 17:40. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -66,6 +66,11 @@ class BaseSource:
         default is None, in which case all available telescopes will be used. The user can pass a single name
         (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
         telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
@@ -1527,11 +1532,11 @@ class BaseSource:
                     if len(self._initial_regions[tel][obs]) == 1 and not self._initial_region_matches[tel][obs][0]:
                         init_region_matches = np.array([])
                     elif len(self._initial_regions[tel][obs]) == 1 and self._initial_region_matches[tel][obs][0]:
-                        init_region_matches = self._initial_regions[obs]
+                        init_region_matches = self._initial_regions[tel][obs]
                     elif len(self._initial_regions[tel][obs][self._initial_region_matches[tel][obs]]) == 0:
                         init_region_matches = np.array([])
                     else:
-                        init_region_matches = self._initial_regions[obs][self._initial_region_matches[obs]]
+                        init_region_matches = self._initial_regions[tel][obs][self._initial_region_matches[tel][obs]]
 
                     # If there are no matches then the returned result is just None.
                     if len(init_region_matches) == 0:
@@ -1577,7 +1582,7 @@ class BaseSource:
 
                     # These are all the sources that aren't a match, and so should be removed from any analysis
                     not_source_reg = [reg for reg in self._initial_regions[tel][obs] if reg != results_dict[tel][obs]
-                                      and reg not in alt_match_reg[tel][obs]]
+                                      and reg not in alt_match_reg]
                     anti_results_dict[tel][obs] = not_source_reg
 
                 else:
