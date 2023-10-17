@@ -254,16 +254,16 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                   dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
 
             #TODO occupy these variables 
-            coord_str = "{ra} {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
+            #TODO convert to icrs system, as per the srctool website
+            coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
             src_reg_str = None
             tstep = None
             xgrid = None
-            insts = None
             bsrc_reg_str = None
 
             # Fills out the srctool command to make the main and background spectra
             s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
-                                               breg=bsrc_reg_str, i=insts, ts=tstep, xg=xgrid)
+                                               breg=bsrc_reg_str, i=inst, ts=tstep, xg=xgrid)
             #TODO might want different tstep and xgrid to the source to save processing time
             #sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                               # i=insts, ts=tstep,xg=xgrid)
