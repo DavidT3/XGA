@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 17:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 17:44. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1577,7 +1577,7 @@ class BaseSource:
                                                      "for extended sources.".format(o=obs, n=self.name, t=tel))
 
                     # Alt match is used for when there is a secondary match to a point source
-                    alt_match_reg = [entry for entry in init_region_matches if entry != results_dict[obs]]
+                    alt_match_reg = [entry for entry in init_region_matches if entry != results_dict[tel][obs]]
                     alt_match_dict[tel][obs] = alt_match_reg
 
                     # These are all the sources that aren't a match, and so should be removed from any analysis
