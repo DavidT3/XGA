@@ -5,6 +5,7 @@ import os
 from typing import Union, List
 from random import randint
 
+import numpy as np
 from astropy.units import Quantity
 
 from .._common import region_setup
@@ -12,6 +13,7 @@ from .._common import region_setup
 from .. import OUTPUT, NUM_CORES
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 from ...samples.base import BaseSample
+from ...exceptions import eROSITAImplentationError
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
@@ -49,7 +51,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
-    
+
+    #TODO corresponding to issue #1058, need to adding in rebinning functions. relate to min_counts and min_sn parameters in SAS version
+    #TODO check with David about oversampling and group spectra, and the one_rmf parameter (think for erosita you want an RMF for each obsid-inst combo)
+    '''
     # Just make sure these values are the expect data type, this matters when the information is
     #  added to the storage strings and file names
     if over_sample is not None:
@@ -58,9 +63,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         min_counts = int(min_counts)
     if min_sn is not None:
         min_sn = float(min_sn)
-
-    #TODO corresponding to issue #1058, need to adding in rebinning functions. relate to min_counts and min_sn parameters in SAS version
-    #TODO check with David about oversampling and group spectra, and the one_rmf parameter (think for erosita you want an RMF for each obsid-inst combo)
+    '''
 
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
@@ -103,6 +106,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         else:
             ex_src = "no"
             dt = 'flat'
+            raise eROSITAImplentationError("Spectral Generation has not yet been implemented for point sources.")
+
         cmds = []
         final_paths = []
         extra_info = []
@@ -249,7 +254,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                   dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
 
             #TODO occupy these variables 
-            coord_str = None
+            coord_str = "{ra} {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
             src_reg_str = None
             tstep = None
             xgrid = None
@@ -296,7 +301,33 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             cmds.append(cmd_str)  # Adds the full command to the set
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
-            
+
+            # ASSUMPTION4 new output directory structure
+            # DAVID_QUESTION does having all the idv inst spectra in the final path make sense
+            # ASSUMPTION8 The rmf, arf, b_spec paths are now lists instead of strings
+            for key in spec:
+                final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec[key]))
+            extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
+                               "rmf_path": [os.path.join(OUTPUT, "erosita", obs_id, rmf[key]) for key in rmf],
+                               "arf_path": [os.path.join(OUTPUT, "erosita", obs_id, arf[key]) for key in arf],
+                               "b_spec_path": [os.path.join(OUTPUT, "erosita", obs_id, b_spec[key]) for key in b_spec],
+                               "b_rmf_path": '',
+                               "b_arf_path": '',
+                               "obs_id": obs_id, "instrument": inst, 
+                               "central_coord": source.default_coord,
+                               "from_region": from_region})
+
+        sources_cmds.append(np.array(cmds))
+        sources_paths.append(np.array(final_paths))
+        # This contains any other information that will be needed to instantiate the class
+        #  once the eSASS cmd has run
+        sources_extras.append(np.array(extra_info))
+        #DAVID_QUESTION confused as to where the source_types is used
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
+
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
+
+
 
 
             
