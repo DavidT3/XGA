@@ -1,6 +1,25 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 09/03/2023, 23:34. Copyright (c) The Contributors
 
+class eROSITAImplentationError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised for when the user tries to use XGA for functions that have not been
+        fully implemented for eROSITA yet.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eROSITAImplementationError has been raised'
 
 class HeasoftError(Exception):
     def __init__(self, *args):
@@ -652,4 +671,3 @@ class NotSampleMemberError(Exception):
             return '{}'.format(self.message)
         else:
             return 'NotSampleMemberError has been raised'
-

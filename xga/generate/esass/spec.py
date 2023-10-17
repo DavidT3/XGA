@@ -115,7 +115,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         if outer_radius != 'region':
             # Finding interloper regions within the radii we have specified has been put here because it all works in
             #  degrees and as such only needs to be run once for all the different observations.
-            #DAVID_QUESTION assuming this wouldn't need to be changed for multitelescope
             interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind],
                                                              source.default_coord)
             # This finds any regions which
@@ -133,18 +132,23 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             spec_storage_name = "region"
 
         # Check which event lists are associated with each individual source
-         # ASSUMPTION3 output of products is now a dictionary with telescope keys
-        for pack in source.get_products("events", just_obj=False)['erosita']:
-            obs_id = pack[0]
-            #ASSUMPTION7 this will be a string of the TMs that are relevant
-            inst = pack[1]
+         # ASSUMPTION3 output of products is now a dictionary with telescope keys #TODO remove assumption3
+        for pack in source.get_products("events", telescope='erosita', just_obj=False):
+            #TODO change this index in phot.py
+            obs_id = pack[1]
+            #ASSUMPTION7 this will be a string of the TMs that are relevant #TODO see below
+            inst = pack[2]
+            #TODO indent here - produce one spect product per instrument
+            inst = source.instruments['erosita'][obs_id]
+
 
             # ASSUMPTION4 new output directory structure
-            if not os.path.exists(OUTPUT + 'erosita' + obs_id):
+            #TODO add slash everywhere!!!!!
+            if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
                 os.mkdir(OUTPUT + 'erosita' + obs_id)
 
             # Got to check if this spectrum already exists
-            # ASSUMPTION5 source.get_products has a telescope parameter
+            # ASSUMPTION5 source.get_products has a telescope parameter #TODO will break, telescope argument at the end 
             exists = source.get_products("spectrum", "erosita", obs_id, inst, extra_key=spec_storage_name)
             if len(exists) == 1 and exists[0].usable and not force_gen:
                 continue
@@ -152,6 +156,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
             # ASSUMPTION6 source.source_back_regions will have a telescope parameter
+            #TODO i outer_radius == "region" throw an error, dont worry about chunks that have that statement
             if outer_radius == "region" and source.source_back_regions("erosita", "region", obs_id)[0] is None:
                 continue
 
@@ -187,7 +192,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             else:
                 # This constructs the sas strings for any radius that isn't 'region'
-                #TODO get_annular_esass_region
+                #TODO get_annular_esass_region - dont put it in BaseSource
                 reg = source.get_annular_sas_region(inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
                                                     interloper_regions=interloper_regions,
                                                     central_coord=source.default_coord)
@@ -207,10 +212,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Sets up the file names of the output files, adding a random number so that the
             #  function for generating annular spectra doesn't clash and try to use the same folder
             # ASSUMPTION4 new output directory structure
-            dest_dir = OUTPUT + "erosita" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
+            dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
 
             # Cannot control the naming of spectra from srctool, so need to store
             # the XGA formatting of the spectra, so that they can be renamed 
+            #TODO put issue, renaming spectra 
             spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_spec.fits"
             rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf"
             arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf"
@@ -256,9 +262,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #TODO occupy these variables 
             #TODO convert to icrs system, as per the srctool website
             coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
-            src_reg_str = None
-            tstep = None
-            xgrid = None
+            src_reg_str = None # dealt with in get_annular_esass_region
+            #TODO put in values that dont take too long
+            #TODO allow user to chose tstep and xgrid
+            tstep = None # put it as 0.5 for now
+            xgrid = None # leave as default for now
             bsrc_reg_str = None
 
             # Fills out the srctool command to make the main and background spectra
