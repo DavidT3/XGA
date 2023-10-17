@@ -285,7 +285,20 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 rename_str = rename_cmd.format(inst=inst_key, type="BackgrSpec", nn=b_spec[inst_key])
                 b_spec_rename_strs.append(rename_str)
 
-            cmd_str = ";".join([])
+            joined_spec_strs = ";".join(spec_rename_strs)
+            joined_rmf_strs = ";".join(rmf_rename_strs)
+            joined_arf_strs = ";".join(arf_rename_strs)
+            joined_b_spec_str =  ";".join(b_spec_rename_strs)
+
+            cmd_str = ";".join([s_cmd_str, joined_spec_strs, joined_rmf_strs, joined_arf_strs, joined_b_spec_str])
+            # Adds clean up commands to move all generated files and remove temporary directory
+            cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+            cmds.append(cmd_str)  # Adds the full command to the set
+            # Makes sure the whole path to the temporary directory is created
+            os.makedirs(dest_dir)
+            
+
+
             
             
 
