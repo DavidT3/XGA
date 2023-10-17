@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 14:51. Copyright (c) The Contributors
 
 from typing import Tuple, Dict
 
@@ -160,7 +160,7 @@ class Star(PointSource):
             # Then we use the handy function I wrote ages ago to find if any of those regions lie within
             #  match_radius of the ra_dec of the source. This will return regions that have ANY PART of
             #  themselves within our search radius.
-            within = self.regions_within_radii(Quantity(0, 'arcsec'), self._match_radius, self.ra_dec, recheck)
+            within = self.regions_within_radii(Quantity(0, 'arcsec'), self._match_radius, 'xmm', self.ra_dec, recheck)
 
             # Make a copy of the current ObsID's non matched regions
             reg_copy = np.array(v).copy()

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 18:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 14:51. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3067,7 +3067,7 @@ class BaseSource:
 
         return sn
 
-    def get_counts(self, outer_radius: Union[Quantity, str], telescope, central_coord: Quantity = None,
+    def get_counts(self, outer_radius: Union[Quantity, str], telescope: str, central_coord: Quantity = None,
                    lo_en: Quantity = None, hi_en: Quantity = None, obs_id: str = None, inst: str = None,
                    psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                    psf_iter: int = 15) -> Quantity:
@@ -3135,7 +3135,8 @@ class BaseSource:
 
         return cnts
 
-    def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity, deg_central_coord: Quantity,
+    def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity, telescope: str,
+                             deg_central_coord: Quantity,
                              regions_to_search: Union[np.ndarray, list] = None) -> np.ndarray:
         """
         This function finds and returns any interloper regions (by default) that have any part of their boundary
@@ -3144,6 +3145,7 @@ class BaseSource:
 
         :param Quantity inner_radius: The inner radius of the area to search for interlopers in.
         :param Quantity outer_radius: The outer radius of the area to search for interlopers in.
+        :param str telescope: The telescope for which we wish to retrieve regions within the specified radii.
         :param Quantity deg_central_coord: The central coordinate (IN DEGREES) of the area to search for
             interlopers in.
         :param np.ndarray/list regions_to_search: An optional parameter that allows the user to pass a specific
@@ -3188,9 +3190,12 @@ class BaseSource:
         if deg_central_coord.unit != deg:
             raise UnitConversionError("The central coordinate must be in degrees for this function.")
 
+        if telescope not in self.telescopes:
+            raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
+
         # If no custom regions array was passed, we use the internal array of interloper regions
         if regions_to_search is None:
-            regions_to_search = self._interloper_regions.copy()
+            regions_to_search = self._interloper_regions[telescope].copy()
 
         inner_radius = self.convert_radius(inner_radius, 'deg')
         outer_radius = self.convert_radius(outer_radius, 'deg')
@@ -3283,9 +3288,10 @@ class BaseSource:
         #  so that within_radii can just be called once externally for a set of ObsID-instrument combinations,
         #  like in evselect_spectrum for instance.
         if interloper_regions is None and inner_radius.isscalar:
-            interloper_regions = self.regions_within_radii(inner_radius, outer_radius, deg_central_coord)
+            interloper_regions = self.regions_within_radii(inner_radius, outer_radius, 'xmm', deg_central_coord)
         elif interloper_regions is None and not inner_radius.isscalar:
-            interloper_regions = self.regions_within_radii(min(inner_radius), max(outer_radius), deg_central_coord)
+            interloper_regions = self.regions_within_radii(min(inner_radius), max(outer_radius), 'xmm',
+                                                           deg_central_coord)
 
         # So now we convert our interloper regions into their SAS equivalents
         sas_interloper = [self._interloper_sas_string(i, rel_im, output_unit) for i in interloper_regions]

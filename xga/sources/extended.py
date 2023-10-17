@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 14:51. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -293,14 +293,16 @@ class GalaxyCluster(ExtendedSource):
                     rad = Quantity(src_reg_obj.width.to('deg').value/2, 'deg')
                     # And use my handy method to find which regions intersect with a circle with the semimajor length
                     #  as radius, centred on the centre of the current chosen region
-                    within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
+                    within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, 'xmm', centre,
+                                                             new_anti_results[obs])
                     # Make sure to only select extended (green) sources
                     within_width = [reg for reg in within_width if reg.visual['color'] == 'green']
 
                     # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
                     #  then it would intersect with the ellipse of the current chosen region.
                     rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
-                    within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
+                    within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, 'xmm', centre,
+                                                              new_anti_results[obs])
                     within_height = [reg for reg in within_height if reg.visual['color'] == 'green']
 
                     # This finds which regions are present in both lists and makes sure if they are in both

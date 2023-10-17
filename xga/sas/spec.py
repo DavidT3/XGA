@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 12:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 14:51. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -147,12 +147,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         if outer_radius != 'region':
             # Finding interloper regions within the radii we have specified has been put here because it all works in
             #  degrees and as such only needs to be run once for all the different observations.
-            interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind],
+            interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind], 'xmm',
                                                              source.default_coord)
             # This finds any regions which
             back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
                                                          outer_radii[s_ind] * source.background_radius_factors[1],
-                                                         source.default_coord)
+                                                         'xmm', source.default_coord)
             src_inn_rad_str = inner_radii[s_ind].value
             src_out_rad_str = outer_radii[s_ind].value
             # The key under which these spectra will be stored
@@ -193,10 +193,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 reg_cen_coords = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
                 # Pass the largest outer radius here, so we'll look for interlopers in a circle with the radius
                 #  being the largest axis of the ellipse
-                interloper_regions = source.regions_within_radii(inner_radii[0][0], max(outer_radii[0]), reg_cen_coords)
+                interloper_regions = source.regions_within_radii(inner_radii[0][0], max(outer_radii[0]), 'xmm',
+                                                                 reg_cen_coords)
                 back_inter_reg = source.regions_within_radii(max(outer_radii[0]) * source.background_radius_factors[0],
                                                              max(outer_radii[0]) * source.background_radius_factors[1],
-                                                             reg_cen_coords)
+                                                             'xmm', reg_cen_coords)
 
                 reg = source.get_annular_sas_region(inner_radii[0], outer_radii[0], obs_id, inst,
                                                     interloper_regions=interloper_regions, central_coord=reg_cen_coords,
