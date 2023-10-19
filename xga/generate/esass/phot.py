@@ -82,7 +82,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             # ASSUMPTION5 source.get_products has a telescope parameter
-            exists = [match for match in source.get_products("image", 'erosita', obs_id, inst, just_obj=False)
+            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='erosita')
                       if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
@@ -194,13 +194,13 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             # ASSUMPTION5 source.get_products has a telescope parameter
-            exists = [match for match in source.get_products("expmap", "erosita", obs_id, inst, just_obj=False)
+            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False, telescope='erosita')
                       if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
             # Generating an exposure map requires a reference image.
             # ASSUMPTION5 source.get_products has a telescope parameter
-            ref_im = [match for match in source.get_products("image","erosita", obs_id, inst, just_obj=False)
+            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='erosita')
                       if en_id in match][0][-1]
             # Set up the paths and names of files
             evt_list = pack[-1]

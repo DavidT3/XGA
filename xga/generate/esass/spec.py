@@ -131,8 +131,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
             # Got to check if this spectrum already exists
-            # ASSUMPTION5 source.get_products has a telescope parameter #TODO will break, telescope argument at the end 
-            exists = source.get_products("spectrum", "erosita", obs_id, inst, extra_key=spec_storage_name)
+            # ASSUMPTION5 source.get_products has a telescope parameter
+            exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name, telescope="erosita")
             if len(exists) == 1 and exists[0].usable and not force_gen:
                 continue
 
