@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 18:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/10/2023, 15:10. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -143,8 +143,8 @@ class ExtendedSource(BaseSource):
             self._peaks[tel]['combined'] = None
             self._peaks_near_edge[tel]['combined'] = None
 
-        self._chosen_peak_cluster = None
-        self._other_peak_clusters = None
+        self._chosen_peak_cluster = {}
+        self._other_peak_clusters = {}
         self._snr = {}
 
         # This uses the added context of the type of source to find (or not find) matches in region files
@@ -166,21 +166,23 @@ class ExtendedSource(BaseSource):
                     else:
                         self._supp_warn.append(warn_text)
 
-        # TODO Got here
-        self._interloper_masks = {}
-        for obs_id in self.obs_ids:
-            # Generating and storing these because they should only
-            cur_im = self.get_products("image", obs_id)[0]
-            self._interloper_masks[obs_id] = self._generate_interloper_mask(cur_im)
+        self._interloper_masks = {tel: {} for tel in self.telescopes}
+        for tel in self.telescopes:
+            for obs_id in self.obs_ids[tel]:
+                # Generating and storing these because they should only
+                cur_im = self.get_products("image", obs_id, telescope=tel)[0]
+                self._interloper_masks[tel][obs_id] = self._generate_interloper_mask(cur_im)
 
         # Constructs the detected dictionary, detailing whether the source has been detected IN REGION FILES
         #  in each observation.
-        self._detected = {o: self._regions[o] is not None for o in self._regions}
+        self._detected = {tel: {o: self._regions[tel][o] is not None for o in self._regions[tel]}
+                          for tel in self.telescopes}
 
+        # Just creating a flat list of detection for all ObsIDs of all telescopes
+        flat_det = [~self._detected[tel][o] for tel in self._detected for o in self._detected[tel]]
         # If in some of the observations the source has not been detected, a warning will be raised
-        if True in self._detected.values() and False in self._detected.values():
-            warn_text = "{n} has not been detected in all region files, so generating and fitting products" \
-                        " with the 'region' reg_type will not use all available data".format(n=self.name)
+        if True in flat_det and False in flat_det:
+            warn_text = "{n} has not been detected in all region files.".format(n=self.name)
             if not self._samp_member:
                 warn(warn_text, stacklevel=2)
             else:
@@ -188,17 +190,16 @@ class ExtendedSource(BaseSource):
 
         # If the source wasn't detected in ALL of the observations, then we have to rely on a custom region,
         #  and if no custom region options are passed by the user then an error is raised.
-        elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is not None:
+        elif all(flat_det) and self._custom_region_radius is not None:
             warn_text = "{n} has not been detected in ANY region files, so generating and fitting products" \
                         " with the 'region' reg_type will not work".format(n=self.name)
             if not self._samp_member:
                 warn(warn_text, stacklevel=2)
             else:
                 self._supp_warn.append(warn_text)
-        elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is None \
-                and "GalaxyCluster" not in repr(self):
+        elif all(flat_det) and self._custom_region_radius is None and "GalaxyCluster" not in repr(self):
             raise NoRegionsError("{n} has not been detected in ANY region files, and no custom region or "
-                                 " overdensity radius has been passed. No analysis is possible.".format(n=self.name))
+                                 "overdensity radius has been passed. No analysis is possible.".format(n=self.name))
 
         # Call to a method that goes through all the observations and finds the X-ray peak. Also at the same
         #  time finds the X-ray peak of the combined ratemap (an essential piece of information).
@@ -223,6 +224,7 @@ class ExtendedSource(BaseSource):
             of the points within the chosen point cluster, and a list of all point clusters that were not chosen.
         :rtype: Tuple[Quantity, bool, bool, ndarray, List]
         """
+        # TODO should this be devolved to the RateMap/Image class?
         all_meth = ["hierarchical", "simple"]
         if method not in all_meth:
             raise ValueError("{0} is not a recognised, use one of the following methods: "
@@ -234,7 +236,7 @@ class ExtendedSource(BaseSource):
         # Allow 20 iterations by default before we kill this - alternatively loop will exit when centre converges
         #  to within 15kpc (or 0.15arcmin).
         while count < num_iter:
-            aperture_mask = self.get_mask("search", 'xmm', rt.obs_id, central_coords)[0]
+            aperture_mask = self.get_mask("search", rt.telescope, rt.obs_id, central_coords)[0]
 
             # Find the peak using the experimental clustering_peak method
             if method == "hierarchical":
@@ -277,49 +279,60 @@ class ExtendedSource(BaseSource):
 
     def _all_peaks(self, method: str):
         """
-        An internal method that finds the X-ray peaks for all of the available observations and instruments,
-        as well as the combined ratemap. Peak positions for individual ratemap products are allowed to not
-        converge, and will just write None to the peak dictionary, but if the peak of the combined ratemap fails
-        to converge an error will be thrown. The combined ratemap peak will also be stored by itself in an
+        An internal method that finds the X-ray peaks for all the available telescopes, observations, and
+        instruments, as well as the combined ratemap. Peak positions for individual ratemap products are allowed
+        to not converge, and will just write None to the peak dictionary, but if the peak of the combined ratemap
+        fails to converge an error will be thrown. The combined ratemap peak will also be stored by itself in an
         attribute, to allow a property getter easy access.
 
         :param str method: The method to be used for peak finding.
         """
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt]
 
-        if len(comb_rt) != 0:
-            comb_rt = comb_rt[0]
-        else:
-            # I didn't want to import this here, but otherwise circular imports become a problem
-            from xga.sas import emosaic
-            emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-            emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-            comb_rt = [rt[-1] for rt in self.get_products("combined_ratemap", just_obj=False) if en_key in rt][0]
+        for tel in self.telescopes:
+            try:
+                comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
+            except NoProductAvailableError:
+                # TODO Make this more elegant
+                if tel == 'xmm':
+                    # I didn't want to import this here, but otherwise circular imports become a problem
+                    from xga.sas import emosaic
+                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
+                else:
+                    warn("Generating the combined images required for this is not supported for {t} currently.",
+                         stacklevel=2)
+                    comb_rt = None
 
-        if self._use_peak:
-            coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(comb_rt, method=method)
-            # Updating nH for new coord, probably won't make a difference most of the time
-            self._nH = nh_lookup(coord)[0]
-        else:
-            # If we don't care about peak finding then this is the one to go for
-            coord = self.ra_dec
-            near_edge = comb_rt.near_edge(coord)
-            converged = True
-            cluster_coords = np.ndarray([])
-            other_coords = []
+            # TODO return this to not checking if comb_rt is None once other telescopes fully supported
+            if self._use_peak and comb_rt is not None:
+                coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(comb_rt, method=method)
+                # Updating nH for new coord, probably won't make a difference most of the time
+                self._nH = nh_lookup(coord)[0]
+            else:
+                # If we don't care about peak finding then this is the one to go for
+                coord = self.ra_dec
+                converged = True
+                cluster_coords = np.ndarray([])
+                other_coords = []
+                if comb_rt is not None:
+                    near_edge = comb_rt.near_edge(coord)
+                else:
+                    # TODO remove this once full other telescope support is implemented
+                    near_edge = False
 
-        # Unfortunately if the peak convergence fails for the combined ratemap I have to raise an error
-        if converged:
-            self._peaks["combined"] = coord
-            self._peaks_near_edge["combined"] = near_edge
-            # I'm only going to save the point cluster positions for the combined ratemap
-            self._chosen_peak_cluster = cluster_coords
-            self._other_peak_clusters = other_coords
-        else:
-            raise PeakConvergenceFailedError("Peak finding on the combined ratemap failed to converge within "
-                                             "15kpc for {n} in the {l}-{u} energy "
-                                             "band.".format(n=self.name, l=self._peak_lo_en, u=self._peak_hi_en))
+            # Unfortunately if the peak convergence fails for the combined ratemap I have to raise an error
+            if converged:
+                self._peaks[tel]["combined"] = coord
+                self._peaks_near_edge[tel]["combined"] = near_edge
+                # I'm only going to save the point cluster positions for the combined ratemap
+                self._chosen_peak_cluster[tel] = cluster_coords
+                self._other_peak_clusters[tel] = other_coords
+            else:
+                raise PeakConvergenceFailedError("Peak finding on the combined {t} ratemap failed to converge within "
+                                                 "15kpc for {n} in the {l}-{u} energy "
+                                                 "band.".format(n=self.name, l=self._peak_lo_en, u=self._peak_hi_en,
+                                                                t=tel))
 
         # for obs in self.obs_ids:
         #     for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
