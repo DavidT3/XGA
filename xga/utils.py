@@ -389,7 +389,7 @@ else:
 
     xmm_sky = def_unit("xmm_sky")
     xmm_det = def_unit("xmm_det")
-    erosita_det = def_unit("erosia_det")
+    erosita_sky = def_unit("erosita_sky")
     
     # These are largely defined so that I can use them for when I'm normalising profile plots, that way
     #  the view method can just write the units nicely the way it normally does
@@ -401,7 +401,7 @@ else:
     try:
         Quantity(1, 'r200')
     except ValueError:
-        add_enabled_units([r200, r500, r2500, xmm_det, xmm_det])
+        add_enabled_units([r200, r500, r2500, xmm_det, xmm_det, erosita_sky])
 
     # Here we check to see whether SAS is installed (along with all the necessary paths)
     SAS_VERSION = None

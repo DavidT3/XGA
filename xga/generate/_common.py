@@ -4,7 +4,7 @@ from typing import Tuple, Union
 import numpy as np
 from astropy.units import Quantity, UnitBase
 
-from ..utils import erosita_det
+from ..utils import erosita_sky
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 
 #ASSUMPTION7 that the telescope agnostic region_setup will go here
@@ -79,13 +79,13 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     return prod, src
 
 def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
-                               output_unit: Union[UnitBase, str] = erosita_det, rot_angle: Quantity = Quantity(0, 'deg'),
+                               output_unit: Union[UnitBase, str] = erosita_sky, rot_angle: Quantity = Quantity(0, 'deg'),
                                interloper_regions: np.ndarray = None, central_coord: Quantity = None) -> str:
     """
     A method to generate an eSASS region string for an arbitrary circular or elliptical annular region, with
     interloper sources removed.
     """
-
+    # DAVID_QUESTION what system is this in? Need to convert to ICRS for srctool
     if central_coord is None:
         central_coord = self._default_coord
 
@@ -100,9 +100,22 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
         raise ValueError("An eSASS elliptical region for {s} cannot have inner radii larger than or equal to its "
                             "outer radii".format(s=self.name))
     
-    if output_unit != erosita_det:
+    if output_unit != erosita_sky:
         raise NotImplementedError("Only detector coordinates are currently supported "
                                   " for generating eSASS region strings.")
+            
+    # And just to make sure the central coordinates are in degrees
+    deg_central_coord = rel_im.coord_conv(central_coord, deg)
+    
+    # If the user doesn't pass any regions, then we have to find them ourselves. I decided to allow this
+    #  so that within_radii can just be called once externally for a set of ObsID-instrument combinations,
+    #  like in evselect_spectrum for instance.
+    if interloper_regions is None and inner_radius.isscalar:
+        interloper_regions = self.regions_within_radii(inner_radius, outer_radius, deg_central_coord)
+    elif interloper_regions is None and not inner_radius.isscalar:
+        interloper_regions = self.regions_within_radii(min(inner_radius), max(outer_radius), deg_central_coord)
+    
+
 
 
     
