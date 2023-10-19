@@ -106,7 +106,7 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
             
     # And just to make sure the central coordinates are in degrees
     # TODO do a conversion instead of raising an error
-    if central_coord.unit != deg:
+    if central_coord[0].unit != deg and central_coord[1].unit != deg:
         raise ValueError("Need to convert central coordinates into degrees.")
     
     # If the user doesn't pass any regions, then we have to find them ourselves. I decided to allow this
@@ -122,15 +122,19 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
     #TODO I have assumed that the eSASS versions of the regions are in the correct format
 
     if inner_radius.isscalar and inner_radius.value !=0:
-        # this means make a circular annulus
-        pass
+        esass_source_area = "annulus {cx} {cy} {ri}d {ro}d"
+        esass_source_area = esass_source_area.format(cx=central_coord[0].value,
+                                                     cy=central_coord[1].value,
+                                                     ri=inner_radius.value, ro=outer_radius.value)
 
     elif inner_radius.isscalar and inner_radius.value == 0:
-        # Make a circle
-        pass
+        esass_source_area = "fk5; circle {cx} {cy} {r}d"
+        esass_source_area = esass_source_area.format(cx=central_coord[0].value,
+                                                    cy=central_coord[1].value, r=outer_radius.value)
+        
     elif not inner_radius.isscalar and inner_radius[0].value != 0:
         # Make an elliptical annulus
-        pass
+        pass    
     elif not inner_radius.isscalar and inner_radius[0].value == 0:
         # Make an ellipse
         pass
