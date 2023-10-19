@@ -99,6 +99,10 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
     elif not inner_radius.isscalar and (inner_radius[0] >= outer_radius[0] or inner_radius[1] >= outer_radius[1]):
         raise ValueError("An eSASS elliptical region for {s} cannot have inner radii larger than or equal to its "
                             "outer radii".format(s=self.name))
+    
+    if output_unit != erosita_det:
+        raise NotImplementedError("Only detector coordinates are currently supported "
+                                  " for generating eSASS region strings.")
 
 
     
