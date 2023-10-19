@@ -52,19 +52,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
 
-    #TODO corresponding to issue #1058, need to adding in rebinning functions. relate to min_counts and min_sn parameters in SAS version
-    #TODO check with David about oversampling and group spectra, and the one_rmf parameter (think for erosita you want an RMF for each obsid-inst combo)
-    '''
-    # Just make sure these values are the expect data type, this matters when the information is
-    #  added to the storage strings and file names
-    if over_sample is not None:
-        over_sample = int(over_sample)
-    if min_counts is not None:
-        min_counts = int(min_counts)
-    if min_sn is not None:
-        min_sn = float(min_sn)
-    '''
-
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
     ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
