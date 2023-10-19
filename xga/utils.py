@@ -389,6 +389,8 @@ else:
 
     xmm_sky = def_unit("xmm_sky")
     xmm_det = def_unit("xmm_det")
+    erosita_det = def_unit("erosia_det")
+    
     # These are largely defined so that I can use them for when I'm normalising profile plots, that way
     #  the view method can just write the units nicely the way it normally does
     r200 = def_unit('r200', format={'latex': r"\mathrm{R_{200}}"})

@@ -1,9 +1,13 @@
 from subprocess import Popen, PIPE
-from typing import Tuple
+from typing import Tuple, Union
 
+import numpy as np
+from astropy.units import Quantity, UnitBase
+
+from ..utils import erosita_det
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 
-#TODO need to see if the current version of region_setup needs editing for eROSITA implementation
+#ASSUMPTION7 that the telescope agnostic region_setup will go here
 def region_setup():
     pass
 
@@ -73,3 +77,32 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod.set_ident = extra_info["set_ident"]
 
     return prod, src
+
+def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
+                               output_unit: Union[UnitBase, str] = erosita_det, rot_angle: Quantity = Quantity(0, 'deg'),
+                               interloper_regions: np.ndarray = None, central_coord: Quantity = None) -> str:
+    """
+    A method to generate an eSASS region string for an arbitrary circular or elliptical annular region, with
+    interloper sources removed.
+    """
+
+    if central_coord is None:
+        central_coord = self._default_coord
+
+    inner_radius = self.convert_radius(inner_radius, 'deg')
+    outer_radius = self.convert_radius(outer_radius, 'deg')
+
+    # Then we can check to make sure that the outer radius is larger than the inner radius
+    if inner_radius.isscalar and inner_radius >= outer_radius:
+        raise ValueError("An eSASS circular region for {s} cannot have an inner_radius larger than or equal to its "
+                            "outer_radius".format(s=self.name))
+    elif not inner_radius.isscalar and (inner_radius[0] >= outer_radius[0] or inner_radius[1] >= outer_radius[1]):
+        raise ValueError("An eSASS elliptical region for {s} cannot have inner radii larger than or equal to its "
+                            "outer radii".format(s=self.name))
+
+
+    
+
+
+
+    pass
