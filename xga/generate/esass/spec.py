@@ -125,7 +125,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         for pack in source.get_products("events", telescope='erosita', just_obj=False):
             obs_id = pack[1]
             inst = pack[2]
-            #DAVID_QUESTION, there will be all insts listed, just all with the same obs_id?
+            #DAVID_QUESTION, just checking there will be all insts listed, just all with the same obs_id? ie this for loop will result in spectra made for every instrument
             
             # ASSUMPTION4 new output directory structure
             if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
@@ -140,39 +140,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
             # ASSUMPTION6 source.source_back_regions will have a telescope parameter
-            #TODO i outer_radius == "region" throw an error, dont worry about chunks that have that statement
             if outer_radius == "region" and source.source_back_regions("erosita", "region", obs_id)[0] is None:
-                continue
+                raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' argument.")
 
             # Because the region will be different for each ObsID, I have to call the setup function here
             if outer_radius == 'region':
-                interim_source, inner_radii, outer_radii = region_setup([source], outer_radius, inner_radius,
-                                                                        disable_progress, obs_id)
-                # Need the reg for central coordinates
-                #DAVID_QUESTION assuming this wouldn't need to be changed for multitelescope
-                reg = source.source_back_regions('region', obs_id)[0]
-                reg_cen_coords = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
-                # Pass the largest outer radius here, so we'll look for interlopers in a circle with the radius
-                #  being the largest axis of the ellipse
-                interloper_regions = source.regions_within_radii(inner_radii[0][0], max(outer_radii[0]), reg_cen_coords)
-                back_inter_reg = source.regions_within_radii(max(outer_radii[0]) * source.background_radius_factors[0],
-                                                             max(outer_radii[0]) * source.background_radius_factors[1],
-                                                             reg_cen_coords)
-                #TODO get_annular_esass_region
-                reg = source.get_annular_sas_region(inner_radii[0], outer_radii[0], obs_id, inst,
-                                                    interloper_regions=interloper_regions, central_coord=reg_cen_coords,
-                                                    rot_angle=reg.angle)
-                #TODO get_annular_esass_region
-                b_reg = source.get_annular_sas_region(outer_radii[0] * source.background_radius_factors[0],
-                                                      outer_radii[0] * source.background_radius_factors[1], obs_id,
-                                                      inst, interloper_regions=back_inter_reg,
-                                                      central_coord=source.default_coord)
-                # Explicitly read out the current inner radius and outer radius, useful for some bits later
-                src_inn_rad_str = 'and'.join(inner_radii[0].value.astype(str))
-                src_out_rad_str = 'and'.join(outer_radii[0].value.astype(str)) + "_region"
-                # Also explicitly read out into variables the actual radii values
-                inn_rad_degrees = inner_radii[0]
-                out_rad_degrees = outer_radii[0]
+                raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' argument.")
 
             else:
                 # This constructs the sas strings for any radius that isn't 'region'
@@ -229,7 +202,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #TODO convert to icrs system, as per the srctool website
             coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
             src_reg_str = None # dealt with in get_annular_esass_region
-            #TODO put in values that dont take too long
             #TODO allow user to chose tstep and xgrid
             tstep = 0.5 # put it as 0.5 for now
             bsrc_reg_str = None
@@ -257,8 +229,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             os.makedirs(dest_dir)
 
             # ASSUMPTION4 new output directory structure
-            for key in spec:
-                final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec))
+            final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec))
             extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
                                "rmf_path": os.path.join(OUTPUT, "erosita", obs_id, rmf),
                                "arf_path": os.path.join(OUTPUT, "erosita", obs_id, arf),
