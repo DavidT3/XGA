@@ -248,7 +248,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             src_reg_str = None # dealt with in get_annular_esass_region
             #TODO put in values that dont take too long
             #TODO allow user to chose tstep and xgrid
-            tstep = None # put it as 0.5 for now
+            tstep = 0.5 # put it as 0.5 for now
             xgrid = None # leave as default for now
             bsrc_reg_str = None
 
