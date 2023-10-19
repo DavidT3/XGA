@@ -293,8 +293,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             os.makedirs(dest_dir)
 
             # ASSUMPTION4 new output directory structure
-            # DAVID_QUESTION does having all the idv inst spectra in the final path make sense
-            # ASSUMPTION8 The rmf, arf, b_spec paths are now lists instead of strings
             for key in spec:
                 final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec[key]))
             extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
@@ -312,7 +310,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         # This contains any other information that will be needed to instantiate the class
         #  once the eSASS cmd has run
         sources_extras.append(np.array(extra_info))
-        #DAVID_QUESTION confused as to where the source_types is used
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
