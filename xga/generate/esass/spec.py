@@ -119,7 +119,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             spec_storage_name = "region"
 
         # Check which event lists are associated with each individual source
-         # ASSUMPTION3 output of products is now a dictionary with telescope keys #TODO remove assumption3
         for pack in source.get_products("events", telescope='erosita', just_obj=False):
             #TODO change this index in phot.py
             obs_id = pack[1]

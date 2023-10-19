@@ -73,8 +73,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        # ASSUMPTION3 output of products is now a dictionary with telescope keys
-        for pack in source.get_products("events", just_obj=False)['erosita']:
+        for pack in source.get_products("events", telescope='erosita', just_obj=False):
             obs_id = pack[0]
             inst = pack[1]
             # ASSUMPTION4 new output directory structure
@@ -186,8 +185,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        # ASSUMPTION3 output of products is now a dictionary with telescope keys
-        for pack in source.get_products("events", just_obj=False)['erosita']:
+        for pack in source.get_products("events",  telescope='erosita', just_obj=False):
             obs_id = pack[0]
             inst = pack[1]
             # ASSUMPTION4 new output directory structure
