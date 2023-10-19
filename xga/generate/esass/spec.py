@@ -55,7 +55,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
     ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                ' srcreg="{reg}" backreg={breg} insts="{i}" tstep={ts} xgrid={xg}' \
+                ' srcreg="{reg}" backreg={breg} insts="{i}" tstep={ts}' \
                 ' psftype=NONE'
 
     #TODO add in separate background command
@@ -66,7 +66,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     #TODO check the point source command in esass with some EDR obs
     pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF" insts="{i}"' \
-                      ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts} xgrid={xg}' \
+                      ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts}' \
                       ' psftype="2D_PSF"'
     
     #You can't control the whole name of the output of srctool, so this renames it to the XGA format
@@ -249,12 +249,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #TODO put in values that dont take too long
             #TODO allow user to chose tstep and xgrid
             tstep = 0.5 # put it as 0.5 for now
-            xgrid = None # leave as default for now
             bsrc_reg_str = None
 
             # Fills out the srctool command to make the main and background spectra
             s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
-                                               breg=bsrc_reg_str, i=inst, ts=tstep, xg=xgrid)
+                                               breg=bsrc_reg_str, i=inst, ts=tstep)
             #TODO might want different tstep and xgrid to the source to save processing time
             #sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                               # i=insts, ts=tstep,xg=xgrid)
