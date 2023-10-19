@@ -77,8 +77,8 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             obs_id = pack[1]
             inst = pack[2]
             # ASSUMPTION4 new output directory structure
-            if not os.path.exists(OUTPUT + 'erosita' + obs_id):
-                os.mkdir(OUTPUT + 'erosita' + obs_id)
+            if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
+                os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             # ASSUMPTION5 source.get_products has a telescope parameter
@@ -189,8 +189,8 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
             obs_id = pack[1]
             inst = pack[2]
             # ASSUMPTION4 new output directory structure
-            if not os.path.exists(OUTPUT + 'erosita' + obs_id):
-                os.mkdir(OUTPUT + 'erosita' + obs_id)
+            if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
+                os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             # ASSUMPTION5 source.get_products has a telescope parameter

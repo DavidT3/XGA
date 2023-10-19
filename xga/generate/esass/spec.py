@@ -120,18 +120,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
         # Check which event lists are associated with each individual source
         for pack in source.get_products("events", telescope='erosita', just_obj=False):
-            #TODO change this index in phot.py
             obs_id = pack[1]
-            #ASSUMPTION7 this will be a string of the TMs that are relevant #TODO see below
             inst = pack[2]
             #TODO indent here - produce one spect product per instrument
             inst = source.instruments['erosita'][obs_id]
 
 
             # ASSUMPTION4 new output directory structure
-            #TODO add slash everywhere!!!!!
             if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
-                os.mkdir(OUTPUT + 'erosita' + obs_id)
+                os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
             # Got to check if this spectrum already exists
             # ASSUMPTION5 source.get_products has a telescope parameter #TODO will break, telescope argument at the end 
