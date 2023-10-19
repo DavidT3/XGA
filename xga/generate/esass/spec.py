@@ -70,8 +70,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                       ' psftype="2D_PSF"'
     
     #You can't control the whole name of the output of srctool, so this renames it to the XGA format
-    rename_cmd = 'mv srctoolout_{inst}??_{type}* {nn}'
-    
+    rename_cmd = 'mv srctoolout_{inst_no}??_{type}* {nn}'
+
+    # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
+    remove_merged_cmd = 'rm *srctoolout_0*'
+
     # To correct for vignetting properly, you need a detection map of the source
     #TODO how to make a detection/extent map then add into extended srctool cmd
 
@@ -122,10 +125,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         for pack in source.get_products("events", telescope='erosita', just_obj=False):
             obs_id = pack[1]
             inst = pack[2]
-            #TODO indent here - produce one spect product per instrument
-            inst = source.instruments['erosita'][obs_id]
-
-
+            #DAVID_QUESTION, there will be all insts listed, just all with the same obs_id?
+            
             # ASSUMPTION4 new output directory structure
             if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
                 os.mkdir(OUTPUT + 'erosita/' + obs_id)
@@ -205,33 +206,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf"
             b_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.fits"
 
-            # Need to have different names for each different instrument so we stored them in a dictonary
-            spec = {}
-            rmf = {}
-            arf = {}
-            b_spec = {}
-
-            # Getting the TM numbers from the list
-            inst_list = list(inst)
-            for idv_inst in inst_list:
-                # populating the dictonary with the final names of the spectra depending on the instrument
-                spec[inst] = spec_str.format(o=obs_id, i=idv_inst, n=source_name, ra=source.default_coord[0].value,
+            # Making the strings of the XGA formatted names that we will rename the outputs of srctool to
+            spec = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-                rmf[inst] = rmf_str.format(o=obs_id, i=idv_inst, n=source_name, ra=source.default_coord[0].value,
+            rmf = rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-                arf[inst] = arf_str.format(o=obs_id, i=idv_inst, n=source_name, ra=source.default_coord[0].value,
+            arf = arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-                b_spec[inst] = b_spec_str.format(o=obs_id, i=idv_inst, n=source_name, ra=source.default_coord[0].value,
+            b_spec = b_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-            # There will also be a final spectra/rmf/arf/b_spec for the merged instruments
-            spec['0'] = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-            rmf['0'] = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-            arf['0'] = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-            b_spec['0'] = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
             
             # These file names are for the debug images of the source and background images, they will not be loaded
             #  in as a XGA products, but exist purely to check by eye if necessary
@@ -257,35 +240,16 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #TODO might want different tstep and xgrid to the source to save processing time
             #sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                               # i=insts, ts=tstep,xg=xgrid)
-            
-            # Populating the rename command for all the srctool outputs, ie: SourceSpec, RMF, ARF, BackgrSpec
-            # Messy I know, just wanted to have a draft done before i make the code more efficient
-            spec_rename_strs = []
-            for inst_key in spec:
-                rename_str = rename_cmd.format(inst=inst_key, type="SourceSpec", nn=spec[inst_key])
-                spec_rename_strs.append(rename_str)
-            
-            arf_rename_strs = []
-            for inst_key in arf:
-                rename_str = rename_cmd.format(inst=inst_key, type="ARF", nn=arf[inst_key])
-                arf_rename_strs.append(rename_str)
-            
-            rmf_rename_strs = []
-            for inst_key in rmf:
-                rename_str = rename_cmd.format(inst=inst_key, type="RMF", nn=rmf[inst_key])
-                rmf_rename_strs.append(rename_str)
-            
-            b_spec_rename_strs = []
-            for inst_key in b_spec:
-                rename_str = rename_cmd.format(inst=inst_key, type="BackgrSpec", nn=b_spec[inst_key])
-                b_spec_rename_strs.append(rename_str)
 
-            joined_spec_strs = ";".join(spec_rename_strs)
-            joined_rmf_strs = ";".join(rmf_rename_strs)
-            joined_arf_strs = ";".join(arf_rename_strs)
-            joined_b_spec_str =  ";".join(b_spec_rename_strs)
+            # Occupying the rename command for all the outputs of srctool
+            rename_spec = rename_cmd.format(inst_no=inst, type='SourceSpec', nn=spec)
+            rename_rmf = rename_cmd.format(inst_no=inst, type='RMF', nn=rmf)
+            rename_arf = rename_cmd.format(inst_no=inst, type='ARF', nn=arf)
+            rename_b_spec = rename_cmd.format(inst_no=inst, type='BackgrSpec', nn=b_spec)
 
-            cmd_str = ";".join([s_cmd_str, joined_spec_strs, joined_rmf_strs, joined_arf_strs, joined_b_spec_str])
+            cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, rename_b_spec])
+            # Removing the 'merged spectra' output of srctool - which is identical to the instrument one
+            cmd_str += remove_merged_cmd
             # Adds clean up commands to move all generated files and remove temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
             cmds.append(cmd_str)  # Adds the full command to the set
@@ -294,11 +258,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # ASSUMPTION4 new output directory structure
             for key in spec:
-                final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec[key]))
+                final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec))
             extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
-                               "rmf_path": [os.path.join(OUTPUT, "erosita", obs_id, rmf[key]) for key in rmf],
-                               "arf_path": [os.path.join(OUTPUT, "erosita", obs_id, arf[key]) for key in arf],
-                               "b_spec_path": [os.path.join(OUTPUT, "erosita", obs_id, b_spec[key]) for key in b_spec],
+                               "rmf_path": os.path.join(OUTPUT, "erosita", obs_id, rmf),
+                               "arf_path": os.path.join(OUTPUT, "erosita", obs_id, arf),
+                               "b_spec_path": os.path.join(OUTPUT, "erosita", obs_id, b_spec),
                                "b_rmf_path": '',
                                "b_arf_path": '',
                                "obs_id": obs_id, "instrument": inst, 
