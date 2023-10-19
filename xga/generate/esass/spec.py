@@ -8,6 +8,7 @@ from random import randint
 import numpy as np
 from astropy.units import Quantity
 
+#ASSUMPTION7 that the telescope agnostic region_setup will go here
 from .._common import region_setup
 
 from .. import OUTPUT, NUM_CORES
@@ -77,6 +78,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # To correct for vignetting properly, you need a detection map of the source
     #TODO how to make a detection/extent map then add into extended srctool cmd
 
+
     stack = False # This tells the esass_call routine that this command won't be part of a stack
     execute = True # This should be executed immediately
 
@@ -104,12 +106,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         if outer_radius != 'region':
             # Finding interloper regions within the radii we have specified has been put here because it all works in
             #  degrees and as such only needs to be run once for all the different observations.
+            #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
             interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind],
-                                                             source.default_coord)
+                                                             source.default_coord, telescope="erosita")
             # This finds any regions which
+            #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
             back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
                                                          outer_radii[s_ind] * source.background_radius_factors[1],
-                                                         source.default_coord)
+                                                         source.default_coord, telescope="erosita")
             src_inn_rad_str = inner_radii[s_ind].value
             src_out_rad_str = outer_radii[s_ind].value
             # The key under which these spectra will be stored
