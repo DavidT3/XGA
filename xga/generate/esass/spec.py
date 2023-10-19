@@ -46,8 +46,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     if outer_radius != 'region':
         from_region = False
-        #TODO the region setup for erosita --> might be the same for both telescopes?
-        sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress, '')
+        sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress, 'erosita')
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
