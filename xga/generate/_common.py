@@ -118,9 +118,22 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
     #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
     elif interloper_regions is None and not inner_radius.isscalar:
         interloper_regions = self.regions_within_radii(min(inner_radius), max(outer_radius), central_coord, telescope="erosita")
-    
 
+    #TODO I have assumed that the eSASS versions of the regions are in the correct format
 
+    if inner_radius.isscalar and inner_radius.value !=0:
+        # this means make a circular annulus
+        pass
+
+    elif inner_radius.isscalar and inner_radius.value == 0:
+        # Make a circle
+        pass
+    elif not inner_radius.isscalar and inner_radius[0].value != 0:
+        # Make an elliptical annulus
+        pass
+    elif not inner_radius.isscalar and inner_radius[0].value == 0:
+        # Make an ellipse
+        pass
 
     
 
