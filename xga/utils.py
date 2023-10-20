@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 10:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/10/2023, 11:49. Copyright (c) The Contributors
 
 import json
 import os
@@ -466,6 +466,8 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required/erosita_obs/data/",
                  "clean_erosita_evts": "/this/is/required/{obs_id}/{obs_id}.fits",
                  "lo_en": ['0.50', '2.00'],
                  "hi_en": ['2.00', '10.00'],
+                 "erosita_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV_img.fits",
+                 "erosita_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV_expmap.fits",
                  "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
 
 # We set up this dictionary for later, it makes programmatically grabbing the section dictionaries easier.
