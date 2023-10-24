@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/10/2023, 09:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/10/2023, 22:51. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -755,8 +755,16 @@ class BaseSource:
                 dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = ["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file"] + \
+            not_these = ["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "region_file"] + \
                         [k for k in rel_sec if 'evts' in k]
+
+            # Define the energy limits as astropy quantities, these have originally been retrieved from the
+            #  configuration file
+            lo = Quantity(float(en_lims[0]), 'keV')
+            hi = Quantity(float(en_lims[1]), 'keV')
+
+            # Depending on whether the current telescope provides combined data by default, or on an instrument by
+            #  instrument basis, we have to check for the image/expmap entries in the config file differently.
             if not COMBINED_INSTS[tel]:
                 # Formats the generic paths given in the config file for this particular obs and energy range
                 files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
@@ -771,11 +779,10 @@ class BaseSource:
             # you should use it for analysis using the .usable attribute
             # This looks up the class which corresponds to the key (which is the product ID in this case
             #  e.g. image), then instantiates an object of that class
-            lo = Quantity(float(en_lims[0]), 'keV')
-            hi = Quantity(float(en_lims[1]), 'keV')
             prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
                                             gen_cmd="", lo_en=lo, hi_en=hi, telescope=tel)
                          for key, file in files.items() if os.path.exists(file)}
+
             # If both an image and an exposure map are present for this energy band, a RateMap object is generated
             if "image" in prod_objs and "expmap" in prod_objs:
                 prod_objs["ratemap"] = RateMap(prod_objs["image"], prod_objs["expmap"])
@@ -1411,7 +1418,11 @@ class BaseSource:
                         w = None
                     # In this case the try statement worked, and so we can extract the WCS from the image
                     else:
-                        w = ims[0].radec_wcs
+                        # It is possible that either a single image or a list of images have been returned
+                        if isinstance(ims, list):
+                            w = ims[0].radec_wcs
+                        else:
+                            w = ims.radec_wcs
 
                 # In the case where there is no region file available to us, or the region file has no entries, then
                 #  I just set the ds9_regs to [None] because I know the rest of the code can deal with that. It can't
