@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:40. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -220,6 +220,21 @@ class ExtendedSource(BaseSource):
         # TODO THIS IS CURRENTLY A HUGE BODGE, AND WILL NEED TO BE ALTERED
         return self._peaks["combined"]["xmm"]
 
+    # I'm allowing this a setter, as some users may want to update the peak from outside (as is
+    @peak.setter
+    def peak(self, new_peak: Quantity):
+        """
+        Allows the user to update the peak value used during analyses manually.
+
+        :param Quantity new_peak: A new RA-DEC peak coordinate, in degrees.
+        """
+        if not new_peak.unit.is_equivalent("deg"):
+            raise UnitConversionError("The new peak value must be in RA and DEC coordinates")
+        elif len(new_peak) != 2:
+            raise ValueError("Please pass an astropy Quantity, in units of degrees, with two entries - "
+                             "one for RA and one for DEC.")
+        self._peaks["combined"] = new_peak.to("deg")
+
     @property
     def custom_radius(self) -> Quantity:
         """
@@ -385,10 +400,10 @@ class ExtendedSource(BaseSource):
 
         return peak, near_edge, converged, chosen_coords, other_coords
 
-    # I'm allowing this a setter, as some users may want to update the peak from outside (as is
+    # TODO These get methods should be in BaseSource I think - maybe
     def get_peaks(self, telescope: str, obs_id: str = None, inst: str = None) -> Quantity:
         """
-        A get method to return the peak of the X-ray emission of this GalaxyCluster.
+        A get method to return the peak of the X-ray emission of this ExtendedSource.
 
         :param str telescope: The telescope which originated the observation from which the desired peak was measured.
         :param str obs_id: The ObsID to return the X-ray peak coordinates for.
@@ -414,13 +429,12 @@ class ExtendedSource(BaseSource):
             chosen = self._peaks[telescope][obs_id][inst]
 
         return chosen
-    #  done in the ClusterSample init).
 
     def get_1d_brightness_profile(self, outer_rad: Union[Quantity, str], obs_id: str = 'combined',
                                   inst: str = 'combined', central_coord: Quantity = None, radii: Quantity = None,
                                   lo_en: Quantity = None, hi_en: Quantity = None, pix_step: int = 1,
                                   min_snr: Union[float, int] = 0.0, psf_corr: bool = False, psf_model: str = "ELLBETA",
-                                  psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15):
+                                  psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, telescope: str = None):
         """
         A specific get method for 1D brightness profiles. Should provide a relatively simple way of retrieving
         specific brightness profiles from XGA's storage system. Please note that there is not a separate get method
@@ -444,9 +458,13 @@ class ExtendedSource(BaseSource):
         :param int psf_bins: If PSF corrected, the number of bins per side.
         :param str psf_algo: If PSF corrected, the algorithm used.
         :param int psf_iter: If PSF corrected, the number of algorithm iterations.
-        :return:
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :return: An XGA brightness profile object (if there is an exact match), or a list of XGA profile
+            objects (if there were multiple matching products).
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
-        # Makes sure its in our standard unit
+        # Makes sure it's in our standard unit
         if isinstance(outer_rad, str):
             outer_rad = self.get_radius(outer_rad, 'deg')
         elif isinstance(outer_rad, Quantity):
@@ -455,9 +473,11 @@ class ExtendedSource(BaseSource):
             raise ValueError("Outer radius may only be a string or an astropy quantity")
 
         if obs_id == "combined" or inst == "combined":
-            interim_prods = self.get_combined_profiles("brightness", central_coord, radii, lo_en, hi_en)
+            interim_prods = self.get_combined_profiles("brightness", central_coord, radii, lo_en, hi_en,
+                                                       telescope=telescope)
         else:
-            interim_prods = self.get_profiles("brightness", obs_id, inst, central_coord, radii, lo_en, hi_en)
+            interim_prods = self.get_profiles("brightness", obs_id, inst, central_coord, radii, lo_en, hi_en,
+                                              telescope=telescope)
 
         # The methods I used to get this far will already have gotten upset if there are no matches, so I don't need
         #  to check they exist, but I do need to check if I have a list or a single object
@@ -480,20 +500,6 @@ class ExtendedSource(BaseSource):
             raise NoProductAvailableError("Cannot find any brightness profiles matching your input.")
 
         return matched_prods
-
-    @peak.setter
-    def peak(self, new_peak: Quantity):
-        """
-        Allows the user to update the peak value used during analyses manually.
-
-        :param Quantity new_peak: A new RA-DEC peak coordinate, in degrees.
-        """
-        if not new_peak.unit.is_equivalent("deg"):
-            raise UnitConversionError("The new peak value must be in RA and DEC coordinates")
-        elif len(new_peak) != 2:
-            raise ValueError("Please pass an astropy Quantity, in units of degrees, with two entries - "
-                             "one for RA and one for DEC.")
-        self._peaks["combined"] = new_peak.to("deg")
 
 
 class PointSource(BaseSource):
