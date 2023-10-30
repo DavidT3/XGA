@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:49. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -287,7 +287,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             evt_list = pack[-1]
             # Sets up the file names of the output files, adding a random number so that the
             #  function for generating annular spectra doesn't clash and try to use the same folder
-            dest_dir = OUTPUT + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
+            dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
 
             # Sets up something very similar to the extra name variable above, but for the file names
             #  Stores some information about grouping in the file names
