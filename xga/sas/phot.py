@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:20. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -69,8 +69,9 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
             obs_id = pack[1]
             inst = pack[2]
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            # TODO Is this actually necessary? I should trust that these have been setup by the source object
+            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
+                os.mkdir(OUTPUT + 'xmm/' + obs_id)
 
             # TODO Switch this get methods to the dedicated image map one
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
@@ -165,8 +166,9 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
             obs_id = pack[1]
             inst = pack[2]
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            # TODO Is this actually necessary? I should trust that these have been setup by the source object
+            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
+                os.mkdir(OUTPUT + "xmm/" + obs_id)
 
             # TODO Switch these get methods to the dedicated image/exposure map ones
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
@@ -300,8 +302,8 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
             if obs_id not in obs_ids_set:
                 obs_ids_set.append(obs_id)
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
+                os.mkdir(OUTPUT + "xmm/" + obs_id)
 
         # The files produced by this function will now be stored in the combined directory.
         final_dest_dir = OUTPUT + "xmm/combined/"
