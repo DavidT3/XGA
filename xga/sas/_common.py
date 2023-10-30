@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:03. Copyright (c) The Contributors
 import os.path
 import warnings
 from typing import Union, Tuple, List
@@ -186,7 +186,7 @@ def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 
         raise ValueError("You somehow have an illegal value for the instrument name...")
 
     det_map = "{o}_{i}_bin{bs}_detmap.fits".format(o=detmap_evts.obs_id, i=detmap_evts.instrument, bs=bin_size)
-    det_map_path = os.path.join(OUTPUT, obs_id, det_map)
+    det_map_path = os.path.join(OUTPUT, obs_id, 'xmm', det_map)
 
     # If the detmap that we've decided we need already exists, then we don't need to generate it again
     if os.path.exists(det_map_path):
