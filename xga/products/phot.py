@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 22:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 14:22. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -26,7 +26,7 @@ from scipy.signal import fftconvolve
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
 from ..sourcetools import ang_to_rad
-from ..utils import xmm_sky, xmm_det
+from ..utils import xmm_sky, xmm_det, ALLOWED_INST
 
 EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
 plt.rcParams['keymap.save'] = ''
@@ -122,9 +122,25 @@ class Image(BaseProduct):
             self._smoothed_info = None
             self._smoothed_method = None
 
+        # TODO I am not yet dealing with multi-telescope images, because I don't quite know how we're going
+        #  to tackle that yet
         # I want combined images to be aware of the ObsIDs and Instruments that have gone into them
         if obs_id == 'combined' or instrument == 'combined':
-            if "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
+            # If the user has supplied the obs_inst_combs information, then we'll use that and won't go looking
+            #  in any file headers
+            if obs_inst_combs is not None:
+                # We check to make sure that each entry in obs_inst_combs is a two element list
+                if any([len(e) != 2 for e in obs_inst_combs]):
+                    raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
+                # And if it passes that we check that the instrument values are one of the allowed list
+                elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):
+                    raise ValueError("The allowed instruments for {t} are: "
+                                     "{al}".format(t=telescope, al=", ".join(ALLOWED_INST[telescope].values())))
+
+                self._comb_oi_pairs = obs_inst_combs
+
+            # In the case that the telescope is XMM, we can probably read the information we need from the header
+            elif telescope == 'xmm' and "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
                 # We search for the instrument names of the various components
                 ind_inst_hdrs = [h for h in self.header if 'EMSCI' in h]
                 # Then use the length of the list to find out how many components there are
@@ -142,21 +158,9 @@ class Image(BaseProduct):
                 # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
                 self._comb_oi_pairs = oi_pairs
 
-            # In the case of the combined image not being made by emosaic, we need to take the info from
-            #  the obs_inst_combs parameter
-            elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is not None:
-                # We check to make sure that each entry in obs_inst_combs is a two element list
-                if any([len(e) != 2 for e in obs_inst_combs]):
-                    raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
-                # And if it passes that we check that the instrument values are one of the allowed list
-                elif any([e[1] not in EMOSAIC_INST.values() for e in obs_inst_combs]):
-                    raise ValueError("Instruments are currently only allowed to be 'pn', 'mos1', or 'mos2'.")
-
-                self._comb_oi_pairs = obs_inst_combs
-
-            # And if the user hasn't passed the obs_inst_combs list then we kick off
-            elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is None:
-                raise ValueError("If a combined image has not been made with emosaic, you have to "
+            # And if the user hasn't passed the obs_inst_combs AND we can't pull it from the header than we kick off
+            else:
+                raise ValueError("If an XMM combined image has not been made with emosaic, you have to "
                                  " pass ObsID and Instrument combinations using obs_inst_combs")
 
         else:
