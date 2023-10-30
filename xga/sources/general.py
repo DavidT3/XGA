@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/10/2023, 15:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:16. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -207,75 +207,42 @@ class ExtendedSource(BaseSource):
         if self._use_peak:
             self._default_coord = self.peak
 
-    def find_peak(self, rt: RateMap, method: str = "hierarchical", num_iter: int = 20, peak_unit: UnitBase = deg) \
-            -> Tuple[Quantity, bool, bool, ndarray, List]:
+    # Property SPECIFICALLY FOR THE COMBINED PEAK - as this is the peak we should be using mostly.
+    @property
+    def peak(self) -> Quantity:
         """
-        A method that will find the X-ray peak for the RateMap that has been passed in. It takes
-        the user supplied coordinates from source initialisation as a starting point, finds the peak within a 500kpc
-        radius, re-centres the region, and iterates until the peak converges to within 15kpc, or until 20
-        20 iterations has been reached.
+        A property getter for the combined X-ray peak coordinates. Most analysis will be centered
+        on these coordinates.
 
-        :param RateMap rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
-        :param str method: Which peak finding method to use. Currently either hierarchical or simple can be chosen.
-        :param int num_iter: How many iterations should be allowed before the peak is declared as not converged.
-        :param UnitBase peak_unit: The unit the peak coordinate is returned in.
-        :return: The peak coordinate, a boolean flag as to whether the returned coordinates are near
-            a chip gap/edge, and a boolean flag as to whether the peak converged. It also returns the coordinates
-            of the points within the chosen point cluster, and a list of all point clusters that were not chosen.
-        :rtype: Tuple[Quantity, bool, bool, ndarray, List]
+        :return: The X-ray peak coordinates for the combined ratemap.
+        :rtype: Quantity
         """
-        # TODO should this be devolved to the RateMap/Image class?
-        all_meth = ["hierarchical", "simple"]
-        if method not in all_meth:
-            raise ValueError("{0} is not a recognised, use one of the following methods: "
-                             "{1}".format(method, ", ".join(all_meth)))
-        central_coords = SkyCoord(*self.ra_dec.to("deg"))
+        # TODO THIS IS CURRENTLY A HUGE BODGE, AND WILL NEED TO BE ALTERED
+        return self._peaks["combined"]["xmm"]
 
-        # Iteration counter just to kill it if it doesn't converge
-        count = 0
-        # Allow 20 iterations by default before we kill this - alternatively loop will exit when centre converges
-        #  to within 15kpc (or 0.15arcmin).
-        while count < num_iter:
-            aperture_mask = self.get_mask("search", rt.telescope, rt.obs_id, central_coords)[0]
+    @property
+    def custom_radius(self) -> Quantity:
+        """
+        A getter for the custom region that can be defined on initialisation.
 
-            # Find the peak using the experimental clustering_peak method
-            if method == "hierarchical":
-                try:
-                    peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, peak_unit)
-                except ValueError:
-                    raise PeakConvergenceFailedError("The hierarchical clustering peak finder does not "
-                                                     "have enough points to work with.")
-            elif method == "simple":
-                peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
-                chosen_coords = []
-                other_coords = []
+        :return: The radius (in kpc) of the user defined custom region.
+        :rtype: Quantity
+        """
+        return self._custom_region_radius
 
-            peak_deg = rt.coord_conv(peak, deg)
-            # Calculate the distance between new peak and old central coordinates
-            separation = Quantity(np.sqrt(abs(peak_deg[0].value - central_coords.ra.value) ** 2 +
-                                          abs(peak_deg[1].value - central_coords.dec.value) ** 2), deg)
+    @property
+    def point_clusters(self) -> Tuple[ndarray, List[ndarray]]:
+        """
+        This allows you to retrieve the point cluster positions from the hierarchical clustering
+        peak finding method run on the combined ratemap. This includes both the chosen cluster and
+        all others that were found.
 
-            central_coords = SkyCoord(*peak_deg.copy())
-            if self._redshift is not None:
-                separation = ang_to_rad(separation, self._redshift, self._cosmo)
-
-            if count != 0 and self._redshift is not None and separation <= Quantity(15, "kpc"):
-                break
-            elif count != 0 and self._redshift is None and separation <= Quantity(0.15, 'arcmin'):
-                break
-
-            count += 1
-
-        if count == num_iter:
-            converged = False
-            # To do the least amount of damage, if the peak doesn't converge then we just return the
-            #  user supplied coordinates
-            peak = self.ra_dec
-            near_edge = rt.near_edge(peak)
-        else:
-            converged = True
-
-        return peak, near_edge, converged, chosen_coords, other_coords
+        :return: A numpy array of the positions of points of the chosen cluster (not galaxy cluster,
+            a cluster of points). A list of numpy arrays with the same information for all the other clusters
+            that were found
+        :rtype: Tuple[ndarray, List[ndarray]]
+        """
+        return self._chosen_peak_cluster, self._other_peak_clusters
 
     def _all_peaks(self, method: str):
         """
@@ -348,6 +315,77 @@ class ExtendedSource(BaseSource):
         #             self._peaks[obs][rt.instrument] = self.ra_dec
         #             self._peaks_near_edge[obs][rt.instrument] = rt.near_edge(self.ra_dec)
 
+    def find_peak(self, rt: RateMap, method: str = "hierarchical", num_iter: int = 20, peak_unit: UnitBase = deg) \
+            -> Tuple[Quantity, bool, bool, ndarray, List]:
+        """
+        A method that will find the X-ray peak for the RateMap that has been passed in. It takes
+        the user supplied coordinates from source initialisation as a starting point, finds the peak within a 500kpc
+        radius, re-centres the region, and iterates until the peak converges to within 15kpc, or until 20
+        20 iterations has been reached.
+
+        :param RateMap rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
+        :param str method: Which peak finding method to use. Currently either hierarchical or simple can be chosen.
+        :param int num_iter: How many iterations should be allowed before the peak is declared as not converged.
+        :param UnitBase peak_unit: The unit the peak coordinate is returned in.
+        :return: The peak coordinate, a boolean flag as to whether the returned coordinates are near
+            a chip gap/edge, and a boolean flag as to whether the peak converged. It also returns the coordinates
+            of the points within the chosen point cluster, and a list of all point clusters that were not chosen.
+        :rtype: Tuple[Quantity, bool, bool, ndarray, List]
+        """
+        # TODO should this be devolved to the RateMap/Image class? - OR incorporated as an image tool?
+        all_meth = ["hierarchical", "simple"]
+        if method not in all_meth:
+            raise ValueError("{0} is not a recognised, use one of the following methods: "
+                             "{1}".format(method, ", ".join(all_meth)))
+        central_coords = SkyCoord(*self.ra_dec.to("deg"))
+
+        # Iteration counter just to kill it if it doesn't converge
+        count = 0
+        # Allow 20 iterations by default before we kill this - alternatively loop will exit when centre converges
+        #  to within 15kpc (or 0.15arcmin).
+        while count < num_iter:
+            aperture_mask = self.get_mask("search", rt.telescope, rt.obs_id, central_coords)[0]
+
+            # Find the peak using the experimental clustering_peak method
+            if method == "hierarchical":
+                try:
+                    peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, peak_unit)
+                except ValueError:
+                    raise PeakConvergenceFailedError("The hierarchical clustering peak finder does not "
+                                                     "have enough points to work with.")
+            elif method == "simple":
+                peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
+                chosen_coords = []
+                other_coords = []
+
+            peak_deg = rt.coord_conv(peak, deg)
+            # Calculate the distance between new peak and old central coordinates
+            separation = Quantity(np.sqrt(abs(peak_deg[0].value - central_coords.ra.value) ** 2 +
+                                          abs(peak_deg[1].value - central_coords.dec.value) ** 2), deg)
+
+            central_coords = SkyCoord(*peak_deg.copy())
+            if self._redshift is not None:
+                separation = ang_to_rad(separation, self._redshift, self._cosmo)
+
+            if count != 0 and self._redshift is not None and separation <= Quantity(15, "kpc"):
+                break
+            elif count != 0 and self._redshift is None and separation <= Quantity(0.15, 'arcmin'):
+                break
+
+            count += 1
+
+        if count == num_iter:
+            converged = False
+            # To do the least amount of damage, if the peak doesn't converge then we just return the
+            #  user supplied coordinates
+            peak = self.ra_dec
+            near_edge = rt.near_edge(peak)
+        else:
+            converged = True
+
+        return peak, near_edge, converged, chosen_coords, other_coords
+
+    # I'm allowing this a setter, as some users may want to update the peak from outside (as is
     def get_peaks(self, obs_id: str = None, inst: str = None) -> Quantity:
         """
         A get method to return the peak of the X-ray emission of this GalaxyCluster.
@@ -373,6 +411,7 @@ class ExtendedSource(BaseSource):
             chosen = self._peaks[obs_id][inst]
 
         return chosen
+    #  done in the ClusterSample init).
 
     def get_1d_brightness_profile(self, outer_rad: Union[Quantity, str], obs_id: str = 'combined',
                                   inst: str = 'combined', central_coord: Quantity = None, radii: Quantity = None,
@@ -439,20 +478,6 @@ class ExtendedSource(BaseSource):
 
         return matched_prods
 
-    # Property SPECIFICALLY FOR THE COMBINED PEAK - as this is the peak we should be using mostly.
-    @property
-    def peak(self) -> Quantity:
-        """
-        A property getter for the combined X-ray peak coordinates. Most analysis will be centered
-        on these coordinates.
-
-        :return: The X-ray peak coordinates for the combined ratemap.
-        :rtype: Quantity
-        """
-        return self._peaks["combined"]
-
-    # I'm allowing this a setter, as some users may want to update the peak from outside (as is
-    #  done in the ClusterSample init).
     @peak.setter
     def peak(self, new_peak: Quantity):
         """
@@ -466,30 +491,6 @@ class ExtendedSource(BaseSource):
             raise ValueError("Please pass an astropy Quantity, in units of degrees, with two entries - "
                              "one for RA and one for DEC.")
         self._peaks["combined"] = new_peak.to("deg")
-
-    @property
-    def custom_radius(self) -> Quantity:
-        """
-        A getter for the custom region that can be defined on initialisation.
-
-        :return: The radius (in kpc) of the user defined custom region.
-        :rtype: Quantity
-        """
-        return self._custom_region_radius
-
-    @property
-    def point_clusters(self) -> Tuple[ndarray, List[ndarray]]:
-        """
-        This allows you to retrieve the point cluster positions from the hierarchical clustering
-        peak finding method run on the combined ratemap. This includes both the chosen cluster and
-        all others that were found.
-
-        :return: A numpy array of the positions of points of the chosen cluster (not galaxy cluster,
-            a cluster of points). A list of numpy arrays with the same information for all the other clusters
-            that were found
-        :rtype: Tuple[ndarray, List[ndarray]]
-        """
-        return self._chosen_peak_cluster, self._other_peak_clusters
 
 
 class PointSource(BaseSource):
