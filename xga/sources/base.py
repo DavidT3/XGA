@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 16:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:26. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2924,12 +2924,12 @@ class BaseSource:
             raise TypeError("BaseSource objects don't have enough information to know which sources "
                             "are interlopers.")
 
-        if obs_id is not None and obs_id != "combined" and obs_id not in self.obs_ids:
-            raise NotAssociatedError("{o} is not associated with {s}; only {a} are "
-                                     "available".format(o=obs_id, s=self.name, a=", ".join(self.obs_ids)))
+        if obs_id is not None and obs_id != "combined" and obs_id not in self.obs_ids[telescope]:
+            raise NotAssociatedError("ObsID {o} is not associated with {s}; only {a} are "
+                                     "available".format(o=obs_id, s=self.name, a=", ".join(self.obs_ids[telescope])))
         elif obs_id is not None and obs_id != "combined":
             mask = self._interloper_masks[telescope][obs_id]
-        elif obs_id is None or obs_id == "combined" and "combined" not in self._interloper_masks:
+        elif obs_id is None or obs_id == "combined" and "combined" not in self._interloper_masks[telescope]:
             comb_ims = self.get_products("combined_image", telescope=telescope)
             if len(comb_ims) == 0:
                 raise NoProductAvailableError("There are no combined images available for which to fetch"
