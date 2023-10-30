@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 18:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:41. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -952,7 +952,7 @@ class GalaxyCluster(ExtendedSource):
         # This fetches any profiles that might have already been generated to our required specifications
         try:
             sb_profile = self.get_1d_brightness_profile(rad, pix_step=pix_step, min_snr=min_snr, lo_en=lo_en,
-                                                        hi_en=hi_en)
+                                                        hi_en=hi_en, telescope='xmm')
             if isinstance(sb_profile, list):
                 raise ValueError("There are multiple matches for this brightness profile, and its the developers "
                                  "fault not yours.")
@@ -969,7 +969,8 @@ class GalaxyCluster(ExtendedSource):
                 psf_sb_profile = self.get_1d_brightness_profile(rad, pix_step=pix_step, min_snr=min_snr,
                                                                 psf_corr=True, psf_model=p_rt.psf_model,
                                                                 psf_bins=p_rt.psf_bins, psf_algo=p_rt.psf_algorithm,
-                                                                psf_iter=p_rt.psf_iterations, lo_en=lo_en, hi_en=hi_en)
+                                                                psf_iter=p_rt.psf_iterations, lo_en=lo_en, hi_en=hi_en,
+                                                                telescope='xmm')
                 if isinstance(psf_sb_profile, list):
                     raise ValueError("There are multiple matches for this brightness profile, and its the developers "
                                      "fault not yours.")
