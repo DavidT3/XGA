@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:47. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -64,10 +64,10 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
                 raise InvalidProductError("All event lists for {} are missing the DATE-OBS header, this is required to"
                                           " run the cifbuild function.".format(obs_id))
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            if not os.path.exists(OUTPUT + 'xmm/' + obs_id):
+                os.mkdir(OUTPUT + 'xmm/' + obs_id)
 
-            dest_dir = "{out}{obs}/".format(out=OUTPUT, obs=obs_id)
+            dest_dir = "{out}xmm/{obs}/".format(out=OUTPUT, obs=obs_id)
             temp_name = "tempdir_{}".format(randint(0, 1e+8))
             temp_dir = dest_dir + temp_name + "/"
 
