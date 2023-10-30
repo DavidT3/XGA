@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/10/2023, 22:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 16:11. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1619,7 +1619,11 @@ class BaseSource:
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
         """
-        masks = []
+        # This is the array that the mask gets built in - initially all ones and as we move through the regions we
+        #  start to set the bits that need to be excluded to zero
+        mask = np.ones(mask_image.shape)
+
+        # TODO Maybe this is a candidate for some intelligent multi-threading?
         for r in self._interloper_regions[mask_image.telescope]:
             if r is not None:
                 # The central coordinate of the current region
@@ -1635,16 +1639,16 @@ class BaseSource:
                     #  so I perturb the angle by 0.1 degrees
                     if isinstance(pr, EllipsePixelRegion) and pr.angle.value == 0:
                         pr.angle += Quantity(0.1, 'deg')
-                    masks.append(pr.to_mask().to_image(mask_image.shape))
+
+                    mask[pr.to_mask().to_image(mask_image.shape) != 0] = 0
                 except ValueError:
                     pass
 
         # masks = [reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
         #          for reg in self._interloper_regions if reg is not None]
-        interlopers = sum([m for m in masks if m is not None])
-
-        mask = np.ones(mask_image.shape)
-        mask[interlopers != 0] = 0
+        # interlopers = sum([m for m in masks if m is not None])
+        #
+        # mask[interlopers != 0] = 0
 
         return mask
 
