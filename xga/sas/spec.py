@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/10/2023, 14:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:36. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -167,15 +167,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         spec_storage_name += extra_name
 
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events", just_obj=False):
-            obs_id = pack[0]
-            inst = pack[1]
+        for pack in source.get_products("events", just_obj=False, telescope='xmm'):
+            obs_id = pack[1]
+            inst = pack[2]
 
             if not os.path.exists(OUTPUT + obs_id):
                 os.mkdir(OUTPUT + obs_id)
 
             # Got to check if this spectrum already exists
-            exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name)
+            exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name, telescope='xmm')
             if len(exists) == 1 and exists[0].usable and not force_gen:
                 continue
 
@@ -239,12 +239,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 #  so for PN we preferentially select MOS2 (as MOS1 was damaged). However if there isn't a MOS2
                 #  events list from the same observation then we select MOS1, and failing that we use PN.
                 try:
-                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos2')[0]
+                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos2', telescope='xmm')[0]
                 except NotAssociatedError:
                     try:
-                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos1')[0]
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos1', telescope='xmm')[0]
                     except NotAssociatedError:
-                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn', telescope='xmm')[0]
                         # If all is lost and there are no MOS event lists then we must revert to the PN expression
                         d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
 
@@ -268,14 +268,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     cur = '2'
                     opp = '1'
                 try:
-                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn', telescope='xmm')[0]
                 except NotAssociatedError:
                     # If we must use a MOS detmap then we have to use the MOS expression
                     d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
                     try:
-                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+opp)[0]
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+opp, telescope='xmm')[0]
                     except NotAssociatedError:
-                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+cur)[0]
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+cur, telescope='xmm')[0]
             else:
                 raise ValueError("You somehow have an illegal value for the instrument name...")
 
@@ -598,7 +598,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
 
         spec_storage_name += extra_name
 
-        exists = source.get_products('combined_spectrum', extra_key=spec_storage_name)
+        exists = source.get_products('combined_spectrum', extra_key=spec_storage_name, telescope='xmm')
         if len(exists) == 0:
             # If it doesn't exist then we do need to call evselect_spectrum
             generate_spec = True
@@ -804,7 +804,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
             for sp_comb in permutations(rel_sp_comp, 2):
                 obs_id = sp_comb[0].obs_id
                 inst = sp_comb[0].instrument
-                evt_list = src.get_products('events', obs_id, inst)[0]
+                evt_list = src.get_products('events', obs_id, inst, telescope='xmm')[0]
 
                 dest_dir = OUTPUT + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=src.name, r=randint(0, 1e+8))
 
