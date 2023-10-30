@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:45. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -80,8 +80,8 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
                 continue
 
             evt_list = pack[-1]
-            dest_dir = OUTPUT + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
-                                                                   n=source.name)
+            dest_dir = OUTPUT + "xmm/{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
+                                                                       n=source.name)
             im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -181,8 +181,8 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
             att = source.get_att_file(obs_id)
             # Set up the paths and names of files
             evt_list = pack[-1]
-            dest_dir = OUTPUT + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
-                                                                   n=source.name)
+            dest_dir = OUTPUT + "xmm/{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
+                                                                       n=source.name)
             exp_map = "{o}_{i}_{l}-{u}keVexpmap.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -304,10 +304,11 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
                 os.mkdir(OUTPUT + obs_id)
 
         # The files produced by this function will now be stored in the combined directory.
-        final_dest_dir = OUTPUT + "combined/"
+        final_dest_dir = OUTPUT + "xmm/combined/"
         rand_ident = randint(0, 1e+8)
         # Makes absolutely sure that the random integer hasn't already been used
-        while len([f for f in os.listdir(final_dest_dir) if str(rand_ident) in f.split(OUTPUT+"combined/")[-1]]) != 0:
+        while len([f for f in os.listdir(final_dest_dir)
+                   if str(rand_ident) in f.split(OUTPUT+"xmm/combined/")[-1]]) != 0:
             rand_ident = randint(0, 1e+8)
 
         dest_dir = os.path.join(final_dest_dir, "temp_emosaic_{}".format(rand_ident))
@@ -399,8 +400,8 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                 obs_id = pack[0]
                 inst = pack[1]
 
-                if not os.path.exists(OUTPUT + obs_id):
-                    os.mkdir(OUTPUT + obs_id)
+                if not os.path.exists(OUTPUT + 'xmm/' + obs_id):
+                    os.mkdir(OUTPUT + 'xmm/' + obs_id)
 
                 # This looks for any image for this ObsID, instrument combo - it does assume that whatever
                 #  it finds will be the same resolution as any images in other energy bands that XGA will
@@ -462,7 +463,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
 
                 ra_dec_coords = image.coord_conv(pix_coords, deg)
 
-                dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source.name)
+                dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source.name)
                 psf = "{o}_{i}_{b}bin_{m}mod_{ra}_{dec}_psf.fits"
 
                 # The change directory and SAS setup commands
