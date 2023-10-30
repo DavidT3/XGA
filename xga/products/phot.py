@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 14:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 14:41. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -158,10 +158,26 @@ class Image(BaseProduct):
                 # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
                 self._comb_oi_pairs = oi_pairs
 
+            # TODO I am confused, and am not sure whether the eROSITA software toolset can actually merge images
+            #  at the moment - thinking about it, it would make sense if they hadn't bothered with that capability
+            elif telescope == 'erosita' and self.header['INSTRUME'] == 'merged':
+
+                # We search for the instrument names of the various components
+                ind_inst_hdrs = [h for h in self.header if 'INSTRUM' in h and h != 'INSTRUME']
+
+                # Build the list of lists of ObsID instrument combos
+                oi_pairs = [[self.header["OBS_ID"], self.header[hdr_en].lower()] for hdr_en in ind_inst_hdrs]
+
+                # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
+                self._comb_oi_pairs = oi_pairs
+
             # And if the user hasn't passed the obs_inst_combs AND we can't pull it from the header than we kick off
-            else:
+            elif telescope == 'xmm':
                 raise ValueError("If an XMM combined image has not been made with emosaic, you have to "
                                  " pass ObsID and Instrument combinations using obs_inst_combs")
+            else:
+                raise ValueError("For combined images, obs_inst_combs must be set to a list of lists "
+                                 "of ['ObsID', 'Inst'] combinations.")
 
         else:
             self._comb_oi_pairs = None
