@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:39. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -395,7 +395,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
             final_paths = []
             extra_info = []
             # Check which event lists are associated with each individual source
-            for pack in source.get_products("events", just_obj=False):
+            for pack in source.get_products("events", just_obj=False, telescope='xmm'):
                 obs_id = pack[0]
                 inst = pack[1]
 
@@ -405,7 +405,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                 # This looks for any image for this ObsID, instrument combo - it does assume that whatever
                 #  it finds will be the same resolution as any images in other energy bands that XGA will
                 #  create in the future.
-                images = source.get_products("image", obs_id, inst, just_obj=True)
+                images = source.get_products("image", obs_id, inst, just_obj=True, telescope='xmm')
 
                 if len(images) == 0:
                     raise NoProductAvailableError("There is no image available for {o} {i}, please generate "
@@ -422,7 +422,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
 
                 # Here we try and find if this PSF configuration has already been run and has been
                 #  associated with the source. If so then don't do it again.
-                psfs = source.get_products("psf", obs_id, inst, extra_key=psf_model + "_" + str(bins))
+                psfs = source.get_products("psf", obs_id, inst, extra_key=psf_model + "_" + str(bins), telescope='xmm')
                 if len(psfs) != 0:
                     continue
 
