@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:31. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2924,9 +2924,13 @@ class BaseSource:
             raise TypeError("BaseSource objects don't have enough information to know which sources "
                             "are interlopers.")
 
-        if obs_id is not None and obs_id != "combined" and obs_id not in self.obs_ids[telescope]:
+        if telescope not in self.telescopes:
+            raise NotAssociatedError("Telescope {t} is not associated with {s}; only {a} are "
+                                     "available.".format(t=telescope, s=self.name, a=", ".join(self.telescopes)))
+        elif obs_id is not None and obs_id != "combined" and obs_id not in self.obs_ids[telescope]:
             raise NotAssociatedError("ObsID {o} is not associated with {s}; only {a} are "
-                                     "available".format(o=obs_id, s=self.name, a=", ".join(self.obs_ids[telescope])))
+                                     "available".format(o=obs_id, s=self.name,
+                                                        a=", ".join(self.obs_ids[telescope])))
         elif obs_id is not None and obs_id != "combined":
             mask = self._interloper_masks[telescope][obs_id]
         elif obs_id is None or obs_id == "combined" and "combined" not in self._interloper_masks[telescope]:
@@ -3911,7 +3915,7 @@ class BaseSource:
                 #  first, then checking where the source lies on the exposure map
                 eexpmap(self, self._peak_lo_en, self._peak_hi_en)
 
-                for o in self.obs_ids:
+                for o in self.obs_ids[tel]:
                     # Exposure maps of the peak finding energy range for this ObsID
                     exp_maps = self.get_expmaps(o, lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
                     m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord)[0]
@@ -4148,13 +4152,13 @@ class BaseSource:
 
     def __len__(self) -> int:
         """
-        Method to return the length of the products dictionary (which means the number of
-        individual ObsIDs associated with this source), when len() is called on an instance of this class.
+        Method to return the length of the products dictionary (which means the number of individual ObsIDs associated
+        with this source, across all telescopes), when len() is called on an instance of this class.
 
-        :return: The integer length of the top level of the _products nested dictionary.
+        :return: The number of observations, across all telescopes, associated with this source.
         :rtype: int
         """
-        return len(self.obs_ids)
+        return sum([len(self.obs_ids[t]) for t in self.telescopes])
 
 
 # Was going to write this as a subclass of BaseSource, as it will behave largely the same, but I don't
