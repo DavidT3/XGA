@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:21. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -171,8 +171,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             obs_id = pack[1]
             inst = pack[2]
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
+                os.mkdir(OUTPUT + "xmm/" + obs_id)
 
             # Got to check if this spectrum already exists
             exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name, telescope='xmm')
