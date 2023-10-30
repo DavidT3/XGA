@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/09/2023, 13:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:33. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -65,15 +65,16 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events", just_obj=False):
-            obs_id = pack[0]
-            inst = pack[1]
+        for pack in source.get_products("events", just_obj=False, telescope='xmm'):
+            obs_id = pack[1]
+            inst = pack[2]
 
             if not os.path.exists(OUTPUT + obs_id):
                 os.mkdir(OUTPUT + obs_id)
 
+            # TODO Switch this get methods to the dedicated image map one
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
+            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='xmm')
                       if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
@@ -160,20 +161,21 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events", just_obj=False):
-            obs_id = pack[0]
-            inst = pack[1]
+        for pack in source.get_products("events", just_obj=False, telescope='xmm'):
+            obs_id = pack[1]
+            inst = pack[2]
 
             if not os.path.exists(OUTPUT + obs_id):
                 os.mkdir(OUTPUT + obs_id)
 
+            # TODO Switch these get methods to the dedicated image/exposure map ones
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False)
+            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False, telescope='xmm')
                       if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
             # Generating an exposure map requires a reference image.
-            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
+            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='xmm')
                       if en_id in match][0][-1]
             # It also requires an attitude file
             att = source.get_att_file(obs_id)
@@ -276,8 +278,10 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
         elif psf_corr:
             en_id += "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
 
+        # TODO Switch these get methods to the dedicated image/exposure map ones
         # Checking if the combined product already exists
-        exists = [match for match in source.get_products("combined_{}".format(to_mosaic), just_obj=False)
+        exists = [match for match in source.get_products("combined_{}".format(to_mosaic), just_obj=False,
+                                                         telescope='xmm')
                   if en_id in match]
         if len(exists) == 1 and exists[0][-1].usable:
             sources_cmds.append(np.array([]))
@@ -287,7 +291,7 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
             continue
 
         # This fetches all image objects with the passed energy bounds
-        matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic, just_obj=False)
+        matches = [[match[1], match[-1]] for match in source.get_products(to_mosaic, just_obj=False, telescope='xmm')
                    if en_id in match]
         paths = [product[1].path for product in matches if product[1].usable]
         obs_ids = [product[0] for product in matches if product[1].usable]
