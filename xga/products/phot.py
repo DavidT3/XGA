@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 14:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 14:47. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -26,7 +26,7 @@ from scipy.signal import fftconvolve
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
 from ..sourcetools import ang_to_rad
-from ..utils import xmm_sky, xmm_det, ALLOWED_INST
+from ..utils import xmm_sky, xmm_det, ALLOWED_INST, PRETTY_TELESCOPE_NAMES
 
 EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
 plt.rcParams['keymap.save'] = ''
@@ -1137,9 +1137,12 @@ class Image(BaseProduct):
         # Check if this is a combined product, because if it is then ObsID and instrument are both 'combined'
         #  and it makes the title ugly
         if self.obs_id == "combined":
-            ident = 'Combined'
+            ident = '{t} Combined'
         else:
             ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
+
+        if self.telescope is not None:
+            ident = PRETTY_TELESCOPE_NAMES[self.telescope] + ' ' + ident
 
         if self.src_name is not None:
             title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident,
