@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 17:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:34. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -386,29 +386,32 @@ class ExtendedSource(BaseSource):
         return peak, near_edge, converged, chosen_coords, other_coords
 
     # I'm allowing this a setter, as some users may want to update the peak from outside (as is
-    def get_peaks(self, obs_id: str = None, inst: str = None) -> Quantity:
+    def get_peaks(self, telescope: str, obs_id: str = None, inst: str = None) -> Quantity:
         """
         A get method to return the peak of the X-ray emission of this GalaxyCluster.
 
+        :param str telescope: The telescope which originated the observation from which the desired peak was measured.
         :param str obs_id: The ObsID to return the X-ray peak coordinates for.
         :param str inst: The instrument to return the X-ray peak coordinates for.
         :return: The X-ray peak coordinates for the input parameters.
         :rtype: Quantity
         """
         # Common sense checks, are the obsids/instruments associated with this source etc.
-        if obs_id is not None and obs_id not in self.obs_ids:
+        if telescope not in self.telescopes:
+            raise NotAssociatedError("Telescope {t} is not associated with {s}.".format(t=telescope, s=self.name))
+        elif obs_id is not None and obs_id not in self.obs_ids[telescope]:
             raise NotAssociatedError("The ObsID {o} is not associated with {s}.".format(o=obs_id, s=self.name))
         elif obs_id is None and inst is not None:
             raise ValueError("If obs_id is None, inst cannot be None as well.")
-        elif obs_id is not None and inst is not None and inst not in self._peaks[obs_id]:
+        elif obs_id is not None and inst is not None and inst not in self._peaks[telescope][obs_id]:
             raise NotAssociatedError("The instrument {i} is not associated with observation {o} of this "
                                      "source.".format(i=inst, o=obs_id))
         elif obs_id is None and inst is None:
-            chosen = self._peaks
+            chosen = self._peaks[telescope]
         elif obs_id is not None and inst is None:
-            chosen = self._peaks[obs_id]
+            chosen = self._peaks[telescope][obs_id]
         else:
-            chosen = self._peaks[obs_id][inst]
+            chosen = self._peaks[telescope][obs_id][inst]
 
         return chosen
     #  done in the ClusterSample init).
