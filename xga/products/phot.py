@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 14:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 13:57. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1137,7 +1137,7 @@ class Image(BaseProduct):
         # Check if this is a combined product, because if it is then ObsID and instrument are both 'combined'
         #  and it makes the title ugly
         if self.obs_id == "combined":
-            ident = '{t} Combined'
+            ident = 'Combined'
         else:
             ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
 
