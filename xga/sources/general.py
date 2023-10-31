@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 13:55. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -218,7 +218,7 @@ class ExtendedSource(BaseSource):
         :rtype: Quantity
         """
         # TODO THIS IS CURRENTLY A HUGE BODGE, AND WILL NEED TO BE ALTERED
-        return self._peaks["combined"]["xmm"]
+        return self._peaks['xmm']["combined"]
 
     # I'm allowing this a setter, as some users may want to update the peak from outside (as is
     @peak.setter
@@ -233,7 +233,7 @@ class ExtendedSource(BaseSource):
         elif len(new_peak) != 2:
             raise ValueError("Please pass an astropy Quantity, in units of degrees, with two entries - "
                              "one for RA and one for DEC.")
-        self._peaks["combined"] = new_peak.to("deg")
+        self._peaks['xmm']["combined"] = new_peak.to("deg")
 
     @property
     def custom_radius(self) -> Quantity:
@@ -534,11 +534,22 @@ class PointSource(BaseSource):
     :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
         to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
         is False. User should only set to True to remove warnings.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        is None in which case standard search distances for different telescopes are used. The user may pass a
+        single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+        telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+        specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra, dec, redshift=None, name=None, point_radius=Quantity(30, 'arcsec'), use_peak=False,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology: Cosmology = DEFAULT_COSMO, load_products=True, load_fits=False,
-                 regen_merged: bool = True, in_sample: bool = False):
+                 regen_merged: bool = True, in_sample: bool = False, telescope: Union[str, List[str]] = None,
+                 search_distance: Union[Quantity, dict] = None):
         """
         The init of the general XGA point source class.
 
@@ -569,18 +580,32 @@ class PointSource(BaseSource):
         :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
             to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
             is False. User should only set to True to remove warnings.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
         """
 
-        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample)
+        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample, telescope,
+                         search_distance)
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by reg-files or by users, will be stored
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("pnt")
-        self._detected = {o: self._regions[o] is not None for o in self._regions}
+        # Constructs the detected dictionary, detailing whether the source has been detected IN REGION FILES
+        #  in each observation.
+        self._detected = {tel: {o: self._regions[tel][o] is not None for o in self._regions[tel]}
+                          for tel in self.telescopes}
 
         # Making a combined list of interloper regions
-        self._interloper_regions = []
-        for o in self._other_regions:
-            self._interloper_regions += self._other_regions[o]
+        self._interloper_regions = {tel: [] for tel in self.telescopes}
+        for tel in self._other_regions:
+            self._interloper_regions[tel] = [r for o in self._other_regions[tel] for r in self._other_regions[tel][o]]
 
         if point_radius is not None and point_radius.unit.is_equivalent("kpc"):
             rad = rad_to_ang(point_radius, self._redshift, self._cosmo).to("deg")
@@ -601,16 +626,18 @@ class PointSource(BaseSource):
         self._radii["search"] = search_aperture
 
         # This generates masks to remove interloper regions
-        self._interloper_masks = {}
-        for obs_id in self.obs_ids:
-            # Generating and storing these because they should only
-            cur_im = self.get_products("image", obs_id)[0]
-            self._interloper_masks[obs_id] = self._generate_interloper_mask(cur_im)
+        self._interloper_masks = {tel: {} for tel in self.telescopes}
+        for tel in self.telescopes:
+            for obs_id in self.obs_ids[tel]:
+                # Generating and storing these because they should only
+                cur_im = self.get_products("image", obs_id, telescope=tel)[0]
+                self._interloper_masks[tel][obs_id] = self._generate_interloper_mask(cur_im)
 
         # Here we automatically clean the observations, to make sure the point source does actually lie
         #  on the detector and not just near it
         # Use a pretty harsh acceptance fraction
         reject_dict = self.obs_check("point", 0.9)
+        print(reject_dict)
         if len(reject_dict) != 0:
             # Use the source method to remove data we've decided isn't worth keeping
             self.disassociate_obs(reject_dict)
@@ -618,7 +645,8 @@ class PointSource(BaseSource):
                 raise NoValidObservationsError("Observation cleaning has been run and there are no remaining"
                                                " observations. ")
 
-            if regen_merged:
+            # TODO Generalise this to more telescopes once generation is better supported
+            if regen_merged and 'xmm' in self.telescopes:
                 from ..sas import emosaic
                 emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                 emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
@@ -629,9 +657,11 @@ class PointSource(BaseSource):
         # Make sure the peak energy boundaries are in keV
         self._peak_lo_en = peak_lo_en.to('keV')
         self._peak_hi_en = peak_hi_en.to('keV')
-        self._peaks = {o: {} for o in self.obs_ids}
-        self._peaks.update({"combined": None})
-        self._peaks_near_edge = {o: {} for o in self.obs_ids}
+        self._peaks = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
+        self._peaks_near_edge = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
+        for tel in self.telescopes:
+            self._peaks[tel]['combined'] = None
+            self._peaks_near_edge[tel]['combined'] = None
 
         self._all_peaks()
 
@@ -648,6 +678,17 @@ class PointSource(BaseSource):
         :rtype: Quantity
         """
         return self._custom_region_radius
+
+    @property
+    def peak(self) -> Quantity:
+        """
+        A property getter for the combined X-ray peak coordinates.
+
+        :return: The X-ray peak coordinates for the combined ratemap.
+        :rtype: Quantity
+        """
+        # TODO THIS IS CURRENTLY A HUGE BODGE, AND WILL NEED TO BE ALTERED
+        return self._peaks['xmm']["combined"]
 
     def _all_peaks(self):
         en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
@@ -687,16 +728,6 @@ class PointSource(BaseSource):
         peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
 
         return peak, near_edge
-
-    @property
-    def peak(self) -> Quantity:
-        """
-        A property getter for the combined X-ray peak coordinates.
-
-        :return: The X-ray peak coordinates for the combined ratemap.
-        :rtype: Quantity
-        """
-        return self._peaks["combined"]
 
 
 
