@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 12:06. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4072,8 +4072,6 @@ class BaseSource:
             else:
                 region_radius = self._custom_region_radius.to("deg")
             print("Custom Region Radius - {}".format(region_radius.round(2)))
-            if len(self.get_products('combined_image')) != 0:
-                print("Custom Region SNR - {}".format(self.get_snr("custom", 'xmm', self._default_coord).round(2)))
 
         if self._r200 is not None:
             print("R200 - {}".format(self._r200.round(2)))
@@ -4127,6 +4125,10 @@ class BaseSource:
                 print("Total exposure - {}".format(ex.get_exp(self.ra_dec).to('ks').round(2)))
             except NoProductAvailableError:
                 pass
+
+            if len(self.get_products('combined_image', telescope=tel)) != 0:
+                print("Custom Region SNR - {}".format(self.get_snr("custom", tel, self._default_coord).round(2)))
+
             print("Spectra associated - {}".format(len(self.get_products("spectrum", telescope=tel))))
 
             # TODO None of this will work right now for the multi-mission setup
