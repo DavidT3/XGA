@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 12:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 14:26. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4126,7 +4126,7 @@ class BaseSource:
             except NoProductAvailableError:
                 pass
 
-            if len(self.get_products('combined_image', telescope=tel)) != 0:
+            if len(self.get_products('combined_image', telescope=tel)) != 0 and 'custom' in self._radii:
                 print("Custom Region SNR - {}".format(self.get_snr("custom", tel, self._default_coord).round(2)))
 
             print("Spectra associated - {}".format(len(self.get_products("spectrum", telescope=tel))))
