@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 14:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 14:28. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4072,6 +4072,12 @@ class BaseSource:
             else:
                 region_radius = self._custom_region_radius.to("deg")
             print("Custom Region Radius - {}".format(region_radius.round(2)))
+        elif self._regions is not None and "point" in self._radii:
+            if self._redshift is not None:
+                region_radius = ang_to_rad(self._radii['point'], self._redshift, cosmo=self._cosmo)
+            else:
+                region_radius = self._radii['point'].to("deg")
+            print("Point Region Radius - {}".format(region_radius.round(2)))
 
         if self._r200 is not None:
             print("R200 - {}".format(self._r200.round(2)))
@@ -4128,6 +4134,8 @@ class BaseSource:
 
             if len(self.get_products('combined_image', telescope=tel)) != 0 and 'custom' in self._radii:
                 print("Custom Region SNR - {}".format(self.get_snr("custom", tel, self._default_coord).round(2)))
+            elif len(self.get_products('combined_image', telescope=tel)) != 0 and 'point' in self._radii:
+                print("Point Region SNR - {}".format(self.get_snr("point", tel, self._default_coord).round(2)))
 
             print("Spectra associated - {}".format(len(self.get_products("spectrum", telescope=tel))))
 
