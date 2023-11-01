@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 17:45. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -17,6 +17,7 @@ from ..products import Spectrum, BaseProfile1D
 from ..products.profile import ProjectedGasTemperature1D, APECNormalisation1D, GasDensity3D, GasTemperature3D, \
     HydrostaticMass
 from ..sourcetools import ang_to_rad, rad_to_ang
+from ..sourcetools.match import _dist_from_source
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -240,17 +241,6 @@ class GalaxyCluster(ExtendedSource):
             and a final dictionary with sources that aren't the target, or in the 2nd dictionary.
         :rtype: Tuple[Dict, Dict, Dict]
         """
-        def dist_from_source(reg):
-            """
-            Calculates the euclidean distance between the centre of a supplied region, and the
-            position of the source.
-
-            :param reg: A region object.
-            :return: Distance between region centre and source position.
-            """
-            ra = reg.center.ra.value
-            dec = reg.center.dec.value
-            return Quantity(np.sqrt(abs(ra - self._ra_dec[0]) ** 2 + abs(dec - self._ra_dec[1]) ** 2), 'deg')
 
         results_dict, alt_match_dict, anti_results_dict = super()._source_type_match('ext')
 
@@ -266,72 +256,74 @@ class GalaxyCluster(ExtendedSource):
         # Here we scrub the anti-results dictionary (I don't know why I called it that...) to make sure cool cores
         #  aren't accidentally removed, and that chunks of cluster emission aren't removed
         new_anti_results = {}
-        for obs in self._obs:
-            # This is where the cleaned interlopers will be stored
-            new_anti_results[obs] = []
-            # Cycling through the current interloper regions for the current ObsID
-            for reg_obj in anti_results_dict[obs]:
-                # Calculating the distance (in degrees) of the centre of the current interloper region from
-                #  the user supplied coordinates of the cluster
-                dist = dist_from_source(reg_obj)
+        for tel in self.telescopes:
+            new_anti_results[tel] = []
+            for obs in self._obs[tel]:
+                # This is where the cleaned interlopers will be stored
+                new_anti_results[tel][obs] = []
+                # Cycling through the current interloper regions for the current ObsID
+                for reg_obj in anti_results_dict[tel][obs]:
+                    # Calculating the distance (in degrees) of the centre of the current interloper region from
+                    #  the user supplied coordinates of the cluster
+                    dist = _dist_from_source(self.ra_dec[0], self.ra_dec[1], reg_obj)
 
-                # If the current interloper source is a point source/a PSF sized extended source and is within the
-                #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
-                #  cool core and allow it to stay in the analysis
-                if reg_obj.visual["color"] == 'red' and dist < check_rad:
-                    warn_text = "A point source has been detected in {o} and is very close to the user supplied " \
-                                "coordinates of {s}. It will not be excluded from analysis due to the possibility " \
-                                "of a mis-identified cool core".format(s=self.name, o=obs)
-                    if not self._samp_member:
-                        # We do print a warning though
-                        warn(warn_text, stacklevel=2)
+                    # If the current interloper source is a point source/a PSF sized extended source and is within the
+                    #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
+                    #  cool core and allow it to stay in the analysis
+                    if reg_obj.visual["color"] == 'red' and dist < check_rad:
+                        warn_text = "A point source has been detected in {o} and is very close to the user supplied " \
+                                    "coordinates of {s}. It will not be excluded from analysis due to the possibility " \
+                                    "of a mis-identified cool core".format(s=self.name, o=obs)
+                        if not self._samp_member:
+                            # We do print a warning though
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
+
+                    elif reg_obj.visual["color"] == "magenta" and dist < check_rad:
+                        warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
+                                    "user supplied coordinates of {s}. It will not be excluded from analysis due " \
+                                    "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)
+                        if not self._samp_member:
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
                     else:
-                        self._supp_warn.append(warn_text)
+                        new_anti_results[tel][obs].append(reg_obj)
 
-                elif reg_obj.visual["color"] == "magenta" and dist < check_rad:
-                    warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
-                                "user supplied coordinates of {s}. It will not be excluded from analysis due " \
-                                "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)
-                    if not self._samp_member:
-                        warn(warn_text, stacklevel=2)
-                    else:
-                        self._supp_warn.append(warn_text)
-                else:
-                    new_anti_results[obs].append(reg_obj)
+                # Here we run through the 'chosen' region for each observation (so the region that we think is the
+                #  cluster) and check if any of the current set of interloper regions intersects with it. If they do
+                #  then they are allowed to stay in the analysis under assumption that they're actually part of the
+                #  cluster
+                for res_obs in results_dict[tel]:
+                    if results_dict[tel][res_obs] is not None:
+                        # Reads out the chosen region for res_obs
+                        src_reg_obj = results_dict[tel][res_obs]
+                        # Stores its central coordinates in an astropy quantity
+                        centre = Quantity([src_reg_obj.center.ra.value, src_reg_obj.center.dec.value], 'deg')
 
-            # Here we run through the 'chosen' region for each observation (so the region that we think is the
-            #  cluster) and check if any of the current set of interloper regions intersects with it. If they do
-            #  then they are allowed to stay in the analysis under assumption that they're actually part of the
-            #  cluster
-            for res_obs in results_dict:
-                if results_dict[res_obs] is not None:
-                    # Reads out the chosen region for res_obs
-                    src_reg_obj = results_dict[res_obs]
-                    # Stores its central coordinates in an astropy quantity
-                    centre = Quantity([src_reg_obj.center.ra.value, src_reg_obj.center.dec.value], 'deg')
+                        # At first I set the checking radius to the semimajor axis
+                        rad = Quantity(src_reg_obj.width.to('deg').value/2, 'deg')
+                        # And use my handy method to find which regions intersect with a circle with the semimajor length
+                        #  as radius, centred on the centre of the current chosen region
+                        within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, 'xmm', centre,
+                                                                 new_anti_results[tel][obs])
+                        # Make sure to only select extended (green) sources
+                        within_width = [reg for reg in within_width if reg.visual['color'] == 'green']
 
-                    # At first I set the checking radius to the semimajor axis
-                    rad = Quantity(src_reg_obj.width.to('deg').value/2, 'deg')
-                    # And use my handy method to find which regions intersect with a circle with the semimajor length
-                    #  as radius, centred on the centre of the current chosen region
-                    within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, 'xmm', centre,
-                                                             new_anti_results[obs])
-                    # Make sure to only select extended (green) sources
-                    within_width = [reg for reg in within_width if reg.visual['color'] == 'green']
+                        # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
+                        #  then it would intersect with the ellipse of the current chosen region.
+                        rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
+                        within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, 'xmm', centre,
+                                                                  new_anti_results[tel][obs])
+                        within_height = [reg for reg in within_height if reg.visual['color'] == 'green']
 
-                    # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
-                    #  then it would intersect with the ellipse of the current chosen region.
-                    rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
-                    within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, 'xmm', centre,
-                                                              new_anti_results[obs])
-                    within_height = [reg for reg in within_height if reg.visual['color'] == 'green']
-
-                    # This finds which regions are present in both lists and makes sure if they are in both
-                    #  then they are NOT removed from the analysis
-                    intersect_regions = list(set(within_width) & set(within_height))
-                    for inter_reg in intersect_regions:
-                        inter_reg_ind = new_anti_results[obs].index(inter_reg)
-                        new_anti_results[obs].pop(inter_reg_ind)
+                        # This finds which regions are present in both lists and makes sure if they are in both
+                        #  then they are NOT removed from the analysis
+                        intersect_regions = list(set(within_width) & set(within_height))
+                        for inter_reg in intersect_regions:
+                            inter_reg_ind = new_anti_results[tel][obs].index(inter_reg)
+                            new_anti_results[tel][obs].pop(inter_reg_ind)
 
         return results_dict, alt_match_dict, new_anti_results
 
