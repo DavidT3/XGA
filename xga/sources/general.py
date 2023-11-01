@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 13:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 10:04. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -602,6 +602,10 @@ class PointSource(BaseSource):
         self._detected = {tel: {o: self._regions[tel][o] is not None for o in self._regions[tel]}
                           for tel in self.telescopes}
 
+        # Make sure the peak energy boundaries are in keV
+        self._peak_lo_en = peak_lo_en.to('keV')
+        self._peak_hi_en = peak_hi_en.to('keV')
+
         # Making a combined list of interloper regions
         self._interloper_regions = {tel: [] for tel in self.telescopes}
         for tel in self._other_regions:
@@ -654,9 +658,6 @@ class PointSource(BaseSource):
         self._use_peak = use_peak
         self._back_inn_factor = back_inn_rad_factor
         self._back_out_factor = back_out_rad_factor
-        # Make sure the peak energy boundaries are in keV
-        self._peak_lo_en = peak_lo_en.to('keV')
-        self._peak_hi_en = peak_hi_en.to('keV')
         self._peaks = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
         self._peaks_near_edge = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
         for tel in self.telescopes:
