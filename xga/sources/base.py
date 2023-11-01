@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 14:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 13:29. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2044,7 +2044,7 @@ class BaseSource:
                     # I want only the name of the file as it is in the storage directory, I don't want an
                     #  absolute path, so I remove the leading information about the absolute location in
                     #  the .path string
-                    f_name = po.path.split(OUTPUT + "{}/".format(obs_id))[-1]
+                    f_name = po.path.split(OUTPUT + "{t}/{o}/".format(t=tel, o=obs_id))[-1]
 
                     # Images, exposure maps, and other such things are not source specific, so I don't want
                     #  the inventory file to assign them a specific source
@@ -3903,7 +3903,7 @@ class BaseSource:
         # TODO This will need a redo once the functions to generate exposure maps are implemented for other telescopes
         # TODO Also just double check I've implemented this right
         for tel in self.telescopes:
-            if tel != 'xmm':
+            if tel not in ['xmm', 'erosita']:
                 warn("The features required for observation checking are not implemented for non-XMM telescopes "
                      "right now - though they are a priority.", stacklevel=2)
                 continue
