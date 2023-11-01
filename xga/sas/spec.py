@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 11:49. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -410,11 +410,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
 
-            final_paths.append(os.path.join(OUTPUT, obs_id, spec))
+            final_paths.append(os.path.join(OUTPUT, obs_id, 'xmm', spec))
             extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
-                               "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
-                               "arf_path": os.path.join(OUTPUT, obs_id, arf),
-                               "b_spec_path": os.path.join(OUTPUT, obs_id, b_spec),
+                               "rmf_path": os.path.join(OUTPUT, obs_id, 'xmm', rmf),
+                               "arf_path": os.path.join(OUTPUT, obs_id, 'xmm', arf),
+                               "b_spec_path": os.path.join(OUTPUT, obs_id, 'xmm', b_spec),
                                "b_rmf_path": '',
                                "b_arf_path": '',
                                "obs_id": obs_id, "instrument": inst, "grouped": group_spec, "min_counts": min_counts,

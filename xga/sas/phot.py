@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 11:49. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -97,7 +97,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
                                                                                   i=im, ex=expr))
 
             # This is the products final resting place, if it exists at the end of this command
-            final_paths.append(os.path.join(OUTPUT, obs_id, im))
+            final_paths.append(os.path.join(OUTPUT, obs_id, 'xmm', im))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -146,6 +146,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
     # image. If they do not already exist, these commands should generate them.
     cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
     sources = evselect_image(sources, lo_en, hi_en)
+
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
     if not isinstance(sources, (list, BaseSample)):
@@ -177,8 +178,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
             # Generating an exposure map requires a reference image.
-            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='xmm')
-                      if en_id in match][0][-1]
+            ref_im = source.get_images(obs_id, inst, lo_en, hi_en, telescope='xmm')
             # It also requires an attitude file
             att = source.get_att_file(obs_id)
             # Set up the paths and names of files
@@ -199,7 +199,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
                                            u=hi_chan, d=dest_dir, ccf=dest_dir + "ccf.cif"))
 
             # This is the products final resting place, if it exists at the end of this command
-            final_paths.append(os.path.join(OUTPUT, obs_id, exp_map))
+            final_paths.append(os.path.join(OUTPUT, obs_id, 'xmm', exp_map))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -495,7 +495,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                 # This is the products final resting place, if it exists at the end of this command
                 # In this case it just checks for the final PSF in the grid, all other files in the grid
                 # get stored in extra info.
-                final_paths.append(os.path.join(OUTPUT, obs_id, psf_file))
+                final_paths.append(os.path.join(OUTPUT, obs_id, 'xmm', psf_file))
                 extra_info.append({"obs_id": obs_id, "instrument": inst, "model": psf_model, "chunks_per_side": bins,
                                    "files": psf_files, "x_bounds": x_bound_coords, "y_bounds": y_bound_coords})
 
