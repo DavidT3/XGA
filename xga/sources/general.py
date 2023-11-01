@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 10:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 15:49. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -641,7 +641,6 @@ class PointSource(BaseSource):
         #  on the detector and not just near it
         # Use a pretty harsh acceptance fraction
         reject_dict = self.obs_check("point", 0.9)
-        print(reject_dict)
         if len(reject_dict) != 0:
             # Use the source method to remove data we've decided isn't worth keeping
             self.disassociate_obs(reject_dict)
