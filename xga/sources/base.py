@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 13:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 15:15. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3773,7 +3773,7 @@ class BaseSource:
                         elif isinstance(insts, list):
                             final_inst_list = []
                             for inst in insts:
-                                if inst.lower() not in self.instruments[tel][v_oi]:
+                                if inst.lower() not in self.instruments[tel][v_oi] and inst != 'combined':
                                     warn("{i} is not an instrument associated with {t}-{o} for {n}, and is being "
                                          "skipped.".format(i=inst.lower(), t=tel, o=v_oi, n=self.name))
                                     continue
@@ -3830,9 +3830,14 @@ class BaseSource:
                     # Because of irritating missions like eROSITA where the event lists are distributed pre-combined
                     #  I have this flag which identifies those missions, we can't necessarily delete
                     #  instrument-specific products, though they MIGHT be there
-                    if not COMBINED_INSTS[tel] or i in self._products[tel][o]:
+                    if not COMBINED_INSTS[tel] and i in self._products[tel][o]:
                         del self._products[tel][o][i]
                         del self._obs[tel][o][self._obs[tel][o].index(i)]
+                    # This is a little out of place, as the top level is iterating through instruments and so am I,
+                    #  but in theory the only 'i' for a 'combined inst' mission should be 'combined' - I am just
+                    #  removing the knowledge of all individual instruments here.
+                    elif COMBINED_INSTS[tel]:
+                        self._obs[tel][o] = []
 
                 if len(self._obs[tel][o]) == 0:
                     del self._products[tel][o]
@@ -3848,9 +3853,11 @@ class BaseSource:
                     if self._peaks is not None and tel in self._peaks:
                         del self._peaks[tel][o]
 
-                    del self._obs[tel][self._obs[tel].index(o)]
+                    if o in self._obs[tel]:
+                        del self._obs[tel][o]
+
                     if o in self._obs_sep[tel]:
-                        del self._obs_sep[tel][self._obs_sep[tel].index(o)]
+                        del self._obs_sep[tel][o]
 
                 if len(self._obs[tel]) == 0:
                     del self._products[tel]
@@ -3918,6 +3925,10 @@ class BaseSource:
                 for o in self.obs_ids[tel]:
                     # Exposure maps of the peak finding energy range for this ObsID
                     exp_maps = self.get_expmaps(o, lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
+                    # Just making sure that the exp_maps variable can be iterated over
+                    if not isinstance(exp_maps, list):
+                        exp_maps = [exp_maps]
+
                     m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord)[0]
                     full_area[tel][o] = m.sum()
 
