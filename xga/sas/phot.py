@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 11:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 12:06. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -97,7 +97,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
                                                                                   i=im, ex=expr))
 
             # This is the products final resting place, if it exists at the end of this command
-            final_paths.append(os.path.join(OUTPUT, obs_id, 'xmm', im))
+            final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, im))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -199,7 +199,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
                                            u=hi_chan, d=dest_dir, ccf=dest_dir + "ccf.cif"))
 
             # This is the products final resting place, if it exists at the end of this command
-            final_paths.append(os.path.join(OUTPUT, obs_id, 'xmm', exp_map))
+            final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, exp_map))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -485,7 +485,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                     ra, dec = ra_dec_coords[pair_ind, :].value
 
                     psf_file = psf.format(o=obs_id, i=inst, b=bins, ra=ra, dec=dec, m=psf_model)
-                    psf_files.append(os.path.join(OUTPUT, obs_id, psf_file))
+                    psf_files.append(os.path.join(OUTPUT, 'xmm', obs_id, psf_file))
                     # Going with xsize and ysize as 400 pixels, I think its enough and quite a bit faster than 1000
                     total_cmd += "psfgen image={i} coordtype=EQPOS level={m} energy=1000 xsize=400 ysize=400 x={ra} " \
                                  "y={dec} output={p}; ".format(i=image.path, m=psf_model, ra=ra, dec=dec, p=psf_file)
@@ -495,7 +495,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                 # This is the products final resting place, if it exists at the end of this command
                 # In this case it just checks for the final PSF in the grid, all other files in the grid
                 # get stored in extra info.
-                final_paths.append(os.path.join(OUTPUT, obs_id, 'xmm', psf_file))
+                final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, psf_file))
                 extra_info.append({"obs_id": obs_id, "instrument": inst, "model": psf_model, "chunks_per_side": bins,
                                    "files": psf_files, "x_bounds": x_bound_coords, "y_bounds": y_bound_coords})
 
