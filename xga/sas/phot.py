@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 12:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 12:14. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -180,7 +180,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
             # Generating an exposure map requires a reference image.
             ref_im = source.get_images(obs_id, inst, lo_en, hi_en, telescope='xmm')
             # It also requires an attitude file
-            att = source.get_att_file(obs_id)
+            att = source.get_att_file(obs_id, 'xmm')
             # Set up the paths and names of files
             evt_list = pack[-1]
             dest_dir = OUTPUT + "xmm/{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
