@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 16:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 16:24. Copyright (c) The Contributors
 
 from typing import Tuple, Dict, Union, List
 
@@ -177,7 +177,7 @@ class Star(PointSource):
         #  I'm running with it), here is where the extra checks occur. This for loop iterates through the
         #  different ObsIDs in the directory.
         for tel in anti_results_dict:
-            for k, v in anti_results_dict.items():
+            for k, v in anti_results_dict[tel].items():
                 # We only want to check regions that are point sources, so in this instance we select red ones
                 recheck = [r for r in v if r.visual['color'] == 'red']
                 # Then we use the handy function I wrote ages ago to find if any of those regions lie within
