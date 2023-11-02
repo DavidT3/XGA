@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/11/2023, 11:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/11/2023, 13:11. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4137,14 +4137,29 @@ class BaseSource:
             # TODO resolve how to supply the separation information now that it isn't as simple as on vs off axis
             print("With initial detection - {}".format(sum([1 for o in self._initial_region_matches[tel]
                                                             if self._initial_region_matches[tel][o].sum() == 1])))
-            # If a combined exposure map exists, we'll use it to give the user an idea of the total exposure
-            try:
-                ex = self.get_combined_expmaps(telescope=tel)
+            # If a combined exposure map exists, we'll use it to give the user an idea of the total exposure. If there
+            #  is only a single observation-instrument combo associated then we will use that, or if the telescope
+            #  is a 'combined instruments' telescope (i.e. the data are shipped combined) and there is only one ObsID
+            #  then we will use that exposure map (if it exists)
+            if len([o+inst for o in self.instruments[tel] for inst in self.instruments[tel][o]]) == 1:
+                # In this case there is only one Obs-ID instrument combo for this telescope, and it isn't one of those
+                #  tricksy telescopes that ship data from multiple instrument combined (looking at you eROSITA
+                #  calibration data
+                # It is possible this will return a list, but they should just be different energies, so we'll use
+                #  the first one if there are multiple
+                ex = self.get_expmaps(telescope=tel)
                 if isinstance(ex, list):
                     ex = ex[0]
                 print("Total exposure - {}".format(ex.get_exp(self.ra_dec).to('ks').round(2)))
-            except NoProductAvailableError:
-                pass
+
+            else:
+                try:
+                    ex = self.get_combined_expmaps(telescope=tel)
+                    if isinstance(ex, list):
+                        ex = ex[0]
+                    print("Total exposure - {}".format(ex.get_exp(self.ra_dec).to('ks').round(2)))
+                except NoProductAvailableError:
+                    pass
 
             if len(self.get_products('combined_image', telescope=tel)) != 0 and 'custom' in self._radii:
                 print("Custom Region SNR - {}".format(self.get_snr("custom", tel, self._default_coord).round(2)))
