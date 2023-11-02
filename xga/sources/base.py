@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 15:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/11/2023, 11:32. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3915,16 +3915,19 @@ class BaseSource:
                      "right now - though they are a priority.", stacklevel=2)
                 continue
             else:
-                # Again don't particularly want to do this local import, but its just easier
-                from xga.sas import eexpmap
+                # TODO BAD BODGE
+                if tel == 'xmm':
+                    # Again don't particularly want to do this local import, but its just easier
+                    from xga.sas import eexpmap
 
-                # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
-                #  first, then checking where the source lies on the exposure map
-                eexpmap(self, self._peak_lo_en, self._peak_hi_en)
+                    # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
+                    #  first, then checking where the source lies on the exposure map
+                    eexpmap(self, self._peak_lo_en, self._peak_hi_en)
 
                 for o in self.obs_ids[tel]:
                     # Exposure maps of the peak finding energy range for this ObsID
                     exp_maps = self.get_expmaps(o, lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
+
                     # Just making sure that the exp_maps variable can be iterated over
                     if not isinstance(exp_maps, list):
                         exp_maps = [exp_maps]
