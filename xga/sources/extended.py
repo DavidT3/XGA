@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 13:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 13:36. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -265,11 +265,12 @@ class GalaxyCluster(ExtendedSource):
                 for reg_obj in anti_results_dict[tel][obs]:
                     # Calculating the distance (in degrees) of the centre of the current interloper region from
                     #  the user supplied coordinates of the cluster
-                    dist = Quantity(_dist_from_source(self.ra_dec[0], self.ra_dec[1], reg_obj), 'deg')
+                    dist = Quantity(_dist_from_source(self.ra_dec[0].value, self.ra_dec[1].value, reg_obj), 'deg')
 
                     # If the current interloper source is a point source/a PSF sized extended source and is within the
                     #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
                     #  cool core and allow it to stay in the analysis
+                    # TODO this will need to be change when I allow for user-defined region colour meanings
                     if reg_obj.visual["color"] == 'red' and dist < check_rad:
                         warn_text = "A point source has been detected in {o} and is very close to the user " \
                                     "supplied coordinates of {s}. It will not be excluded from analysis due to the " \
