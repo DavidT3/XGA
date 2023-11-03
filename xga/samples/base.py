@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 16:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 16:53. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -155,7 +155,8 @@ class BaseSample:
         if len(no_data) != 0 and type(self) == BaseSample:
             nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
             warn("The following do not appear to have any {t} data, and will not be included in the "
-                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)))
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
+                 stacklevel=2)
 
         # This calls the method that checks for suppressed source-level warnings that occurred during declaration, but
         #  only if this init has been called for a BaseSample declaration, rather than by a sub-class
@@ -200,7 +201,7 @@ class BaseSample:
 
         if all([np.array_equal(s.ra_dec.value, s.peak.value) for s in self._sources.values()]):
             warn("All user supplied ra-dec values are the same as the peak ra-dec values, likely means that peak "
-                 "finding was not run for this sample.")
+                 "finding was not run for this sample.", stacklevel=2)
 
         return Quantity([s.peak.value for s in self._sources.values()], 'deg')
 
@@ -407,7 +408,7 @@ class BaseSample:
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
-                warn(str(err))
+                warn(str(err), stacklevel=2)
                 lums.append(np.array([np.NaN, np.NaN, np.NaN]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
