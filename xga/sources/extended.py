@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 13:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 15:58. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -476,6 +476,71 @@ class GalaxyCluster(ExtendedSource):
 
         return Quantity(r_list)
 
+    def _get_spec_based_profiles(self, search_key: str, radii: Quantity = None, group_spec: bool = True,
+                                 min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                                 set_id: int = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+        """
+        The generic get method for profiles which have been based on spectra, the only thing that tends to change
+        about how we search for them is the specific search key. Largely copied from get_annular_spectra.
+
+        :param str search_key: The profile search key, e.g. combined_1d_proj_temperature_profile.
+        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
+            from which the projected temperature profile was measured.
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped
+        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+            counts, what was the minimum number of counts?
+        :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
+            noise, what was the minimum signal to noise.
+        :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
+            the level of over sampling used?
+        :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
+            Passing a value for this parameter will override any other information that you have given this method.
+        :return: An XGA profile object if there is an exact match, a list of such objects if there are multiple matches.
+        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
+        """
+        if group_spec and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif group_spec and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # And if it was oversampled during generation then we need to include that as well
+        if over_sample is not None:
+            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
+        #  degrees in the storage key
+        if radii is not None:
+            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
+            #  storage key and look for a single match
+            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
+            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
+            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
+                                                         dec=self.default_coord[1].value,
+                                                         ar=ann_rad_str, gr=group_spec)
+            spec_storage_name += extra_name
+        else:
+            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
+            #  and we'll look for partial matches
+            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
+            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
+            spec_storage_name = [pos_str, grp_str]
+
+        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
+        #  properly constructed storage key
+        if set_id is None and radii is not None:
+            matched_prods = self.get_products(search_key, extra_key=spec_storage_name)
+        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
+        elif set_id is None and radii is None:
+            matched_prods = [p for p in self.get_products(search_key)
+                             if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
+        # However if they have passed a setID then this over-rides everything else
+        else:
+            matched_prods = [p for p in self.get_products(search_key) if p.set_ident == set_id]
+
+        return matched_prods
+
     def get_results(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
                     group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None):
@@ -548,9 +613,9 @@ class GalaxyCluster(ExtendedSource):
         """
         return super().get_luminosities(outer_radius, telescope, model, inner_radius, lo_en, hi_en, group_spec,
                                         min_counts, min_sn, over_sample)
-
     # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
     #  justified considering how often the cluster temperature is used in X-ray cluster studies.
+
     def get_temperature(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                         min_counts: int = 5, min_sn: float = None, over_sample: float = None):
@@ -581,71 +646,6 @@ class GalaxyCluster(ExtendedSource):
                                over_sample)
 
         return Quantity(res, 'keV')
-
-    def _get_spec_based_profiles(self, search_key: str, radii: Quantity = None, group_spec: bool = True,
-                                 min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                                 set_id: int = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
-        """
-        The generic get method for profiles which have been based on spectra, the only thing that tends to change
-        about how we search for them is the specific search key. Largely copied from get_annular_spectra.
-
-        :param str search_key: The profile search key, e.g. combined_1d_proj_temperature_profile.
-        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
-            from which the projected temperature profile was measured.
-        :param bool group_spec: Was the spectrum set used to generate the profile grouped
-        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
-            counts, what was the minimum number of counts?
-        :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
-            noise, what was the minimum signal to noise.
-        :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
-            the level of over sampling used?
-        :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
-            Passing a value for this parameter will override any other information that you have given this method.
-        :return: An XGA profile object if there is an exact match, a list of such objects if there are multiple matches.
-        :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
-        """
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
-
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
-
-        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
-        #  degrees in the storage key
-        if radii is not None:
-            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
-            #  storage key and look for a single match
-            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
-            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                         dec=self.default_coord[1].value,
-                                                         ar=ann_rad_str, gr=group_spec)
-            spec_storage_name += extra_name
-        else:
-            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
-            #  and we'll look for partial matches
-            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
-            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
-            spec_storage_name = [pos_str, grp_str]
-
-        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
-        #  properly constructed storage key
-        if set_id is None and radii is not None:
-            matched_prods = self.get_products(search_key, extra_key=spec_storage_name)
-        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
-        elif set_id is None and radii is None:
-            matched_prods = [p for p in self.get_products(search_key)
-                             if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
-        # However if they have passed a setID then this over-rides everything else
-        else:
-            matched_prods = [p for p in self.get_products(search_key) if p.set_ident == set_id]
-
-        return matched_prods
 
     def get_proj_temp_profiles(self, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
                                min_sn: float = None, over_sample: float = None, set_id: int = None) \
