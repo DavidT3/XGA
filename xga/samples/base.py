@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 17:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 17:09. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -555,13 +555,21 @@ class BaseSample:
         """
         Simple function to show basic information about the sample.
         """
-        # Finding the number of sources in the sample that have been detected in AT LEAST one ObsID
-        num_det = sum(np.array([sum(s.detected.values()) for s in self._sources.values()]) >= 1)
-        perc_det = int(round(num_det / len(self._sources), 2) * 100)
+        # TODO There must be more useful info I can add to this
+
         print("\n-----------------------------------------------------")
         print("Number of Sources - {}".format(len(self)))
         print("Redshift Information - {}".format(self.redshifts[0] is not None))
-        print("Sources with ≥1 detection - {n} [{p}%]".format(n=num_det, p=perc_det))
+
+        # Have to try-except just in case someone for some reason declares a BaseSample and uses this method - as
+        #  BaseSource objects don't have the ability to declare something detected or not
+        try:
+            # Finding the number of sources in the sample that have been detected in AT LEAST one ObsID
+            num_det = sum(list(self.any_detection.values()))
+            perc_det = int(round(num_det / len(self._sources), 2) * 100)
+            print("Sources with ≥1 detection - {n} [{p}%]".format(n=num_det, p=perc_det))
+        except ValueError:
+            pass
         print("-----------------------------------------------------\n")
 
     def __len__(self):
