@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 17:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 17:13. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -263,7 +263,7 @@ class BaseSample:
         """
         Retrieves the ObsIDs associated with the sources in this sample, for each of the telescopes associated.
 
-        :return: A dictionary (where the top level keys are the source names, lower level keys are telescope
+        :return: A nested dictionary (where the top level keys are the source names, lower level keys are telescope
             names, and the values are lists of ObsIDs) of the ObsIDs associated with the individual sources
             in this sample.
         :rtype: dict
@@ -277,13 +277,25 @@ class BaseSample:
         Retrieves the instruments associated with the ObsIDs associated with sources in this sample, for each
         of the telescopes relevant to the particular source.
 
-        :return: A dictionary (where the top level keys are the source names, mid level keys are telescope
+        :return: A nested dictionary (where the top level keys are the source names, mid level keys are telescope
             names, and low level keys are ObsIDs) of the instruments associated with the ObsIDs for individual sources
             in this sample.
         :rtype: dict
         """
-        return {n: {t: {o: s.instruments[t][o] for o in s.obs_ids[t]} for t in s.telescopes}
-                for n, s in self._sources.items()}
+        return {n: s.instruments for n, s in self._sources.items()}
+
+    @property
+    def detected(self) -> dict:
+        """
+        Retrieves whether each source is considered detected for each of the observations of each of the telescopes
+        associated with the source.
+
+        :return: A nested dictionary (where the top level keys are the source names, mid level keys are telescope
+            names, and low level keys are ObsIDs), and the values are True or False, where True indicates that
+            the object was detected.
+        :rtype: dict
+        """
+        return {n: s.detected for n, s in self._sources.items()}
 
     @property
     def any_detection(self) -> dict:
