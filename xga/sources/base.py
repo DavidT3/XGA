@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 15:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 16:49. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3533,7 +3533,7 @@ class BaseSource:
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
             region files), then any inner radius will be ignored.
-        :param str telescope: The telescope for which to retrieve spectral fit results.
+        :param str telescope: The telescope for which to retrieve spectral fit luminosities.
         :param str model: The name of the fitted model that you're requesting the luminosities
             from (e.g. constant*tbabs*apec).
         :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of

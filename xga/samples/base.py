@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 16:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 16:49. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -247,6 +247,17 @@ class BaseSample:
         return {n: s.telescopes for n, s in self._sources.items()}
 
     @property
+    def associated_telescopes(self) -> list:
+        """
+        Returns a list of any telescope that is associated with at least one of the sources in the sample. This is in
+        contrast to the telescopes property, which returns the telescopes associated with each individual source.
+
+        :return: A list of unique telescope names, where the telescopes are associated with at least one source.
+        :rtype: list
+        """
+        return list(set([t for s in self._sources.values() for t in s.telescopes]))
+
+    @property
     def obs_ids(self) -> dict:
         """
         Retrieves the ObsIDs associated with the sources in this sample, for each of the telescopes associated.
@@ -326,7 +337,7 @@ class BaseSample:
         """
         pass
 
-    def Lx(self, outer_radius: Union[str, Quantity], model: str,
+    def Lx(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
            over_sample: float = None, quality_checks: bool = True):
@@ -337,8 +348,13 @@ class BaseSample:
         been included, so that any Lx measurement with an uncertainty greater than value will be set to NaN, and
         a warning will be issued.
 
+        Luminosities must be retrieved for a specific telescope; if the supplied telescope name is not associated
+        with any of the sources in this sample then an error will be raised. Any source which does not have that
+        specific telescope associated will have a NaN entry in the returned luminosity array.
+
         :param str model: The name of the fitted model that you're requesting the luminosities
             from (e.g. constant*tbabs*apec).
+        :param str telescope: The telescope for which to retrieve spectral fit luminosities.
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). You may also pass a quantity containing radius values,
@@ -369,7 +385,7 @@ class BaseSample:
             # This just parses the input inner and outer radii into something predictable
             inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
         else:
-            raise NotImplementedError("Sorry region fitting is currently well supported")
+            raise NotImplementedError("Sorry region fitting is currently not supported")
 
         lums = []
         for src_ind, src in enumerate(self._sources.values()):
