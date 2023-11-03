@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/11/2023, 13:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 14:51. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4095,16 +4095,10 @@ class BaseSource:
 
         if self._r200 is not None:
             print("R200 - {}".format(self._r200.round(2)))
-            if len(self.get_products('combined_image')) != 0:
-                print("R200 SNR - {}".format(self.get_snr("r200", 'xmm', self._default_coord).round(2)))
         if self._r500 is not None:
             print("R500 - {}".format(self._r500.round(2)))
-            if len(self.get_products('combined_image')) != 0:
-                print("R500 SNR - {}".format(self.get_snr("r500", 'xmm', self._default_coord).round(2)))
         if self._r2500 is not None:
             print("R2500 - {}".format(self._r2500.round(2)))
-            if len(self.get_products('combined_image')) != 0:
-                print("R2500 SNR - {}".format(self.get_snr("r2500", 'xmm', self._default_coord).round(2)))
 
         # There's probably a neater way of doing the observables - maybe a formatting function?
         if self._richness is not None and self._richness_err is not None \
@@ -4146,12 +4140,52 @@ class BaseSource:
                 # In this case there is only one Obs-ID instrument combo for this telescope, and it isn't one of those
                 #  tricksy telescopes that ship data from multiple instrument combined (looking at you eROSITA
                 #  calibration data
-                # It is possible this will return a list, but they should just be different energies, so we'll use
-                #  the first one if there are multiple
-                ex = self.get_expmaps(telescope=tel)
-                if isinstance(ex, list):
-                    ex = ex[0]
-                print("Total exposure - {}".format(ex.get_exp(self.ra_dec).to('ks').round(2)))
+                try:
+                    # It is possible this will return a list, but they should just be different energies, so we'll use
+                    #  the first one if there are multiple
+                    ex = self.get_expmaps(telescope=tel)
+                    if isinstance(ex, list):
+                        ex = ex[0]
+                    print("Total exposure - {}".format(ex.get_exp(self.ra_dec).to('ks').round(2)))
+                except NoProductAvailableError:
+                    pass
+
+                try:
+                    im = self.get_images(self.obs_ids[tel][0], self.instruments[tel][self.obs_ids[0]][0],
+                                         telescope=tel)
+                    if 'point' in self._radii:
+                        print("Point {l}-{u}keV SNR - {s}".format(s=self.get_snr("point", tel, self._default_coord,
+                                                                                 obs_id=im.obs_id,
+                                                                                 inst=im.instrument).round(2),
+                                                                  l=self.peak_lo_en.value.round(2),
+                                                                  u=self.peak_hi_en.value.round()))
+                    if 'custom' in self._radii:
+                        print("Custom {l}-{u}keV SNR - {s}".format(s=self.get_snr("custom", tel, self._default_coord,
+                                                                                  obs_id=im.obs_id,
+                                                                                  inst=im.instrument).round(2),
+                                                                   l=self.peak_lo_en.value.round(2),
+                                                                   u=self.peak_hi_en.value.round()))
+                    if 'r2500' in self._radii:
+                        print("R2500 {l}-{u}keV SNR - {s}".format(s=self.get_snr("r2500", tel, self._default_coord,
+                                                                                 obs_id=im.obs_id,
+                                                                                 inst=im.instrument).round(2),
+                                                                  l=self.peak_lo_en.value.round(2),
+                                                                  u=self.peak_hi_en.value.round()))
+                    if 'r500' in self._radii:
+                        print("R500 {l}-{u}keV SNR - {s}".format(s=self.get_snr("r500", tel, self._default_coord,
+                                                                                obs_id=im.obs_id,
+                                                                                inst=im.instrument).round(2),
+                                                                 l=self.peak_lo_en.value.round(2),
+                                                                 u=self.peak_hi_en.value.round()))
+
+                    if 'r200' in self._radii:
+                        print("R500 {l}-{u}keV SNR - {s}".format(s=self.get_snr("r200", tel, self._default_coord,
+                                                                                obs_id=im.obs_id,
+                                                                                inst=im.instrument).round(2),
+                                                                 l=self.peak_lo_en.value.round(2),
+                                                                 u=self.peak_hi_en.value.round()))
+                except NoProductAvailableError:
+                    pass
 
             else:
                 try:
@@ -4162,10 +4196,38 @@ class BaseSource:
                 except NoProductAvailableError:
                     pass
 
-            if len(self.get_products('combined_image', telescope=tel)) != 0 and 'custom' in self._radii:
-                print("Custom Region SNR - {}".format(self.get_snr("custom", tel, self._default_coord).round(2)))
-            elif len(self.get_products('combined_image', telescope=tel)) != 0 and 'point' in self._radii:
-                print("Point Region SNR - {}".format(self.get_snr("point", tel, self._default_coord).round(2)))
+                try:
+                    if 'point' in self._radii:
+                        print("Point {l}-{u}keV SNR - {s}".format(s=self.get_snr("point", tel,
+                                                                                 self._default_coord).round(2),
+                                                                  l=self.peak_lo_en.value.round(2),
+                                                                  u=self.peak_hi_en.value.round(2)))
+                    if 'custom' in self._radii:
+                        print("Custom {l}-{u}keV SNR - {s}".format(s=self.get_snr("custom", tel,
+                                                                                  self._default_coord).round(2),
+                                                                   l=self.peak_lo_en.value.round(2),
+                                                                   u=self.peak_hi_en.value.round(2)))
+
+                    if 'r2500' in self._radii:
+                        print("R2500 {l}-{u}keV SNR - {s}".format(s=self.get_snr("r2500", tel,
+                                                                                 self._default_coord).round(2),
+                                                                  l=self.peak_lo_en.value.round(2),
+                                                                  u=self.peak_hi_en.value.round(2)))
+
+                    if 'r500' in self._radii:
+                        print("R500 {l}-{u}keV SNR - {s}".format(s=self.get_snr("r500", tel,
+                                                                                self._default_coord).round(2),
+                                                                 l=self.peak_lo_en.value.round(2),
+                                                                 u=self.peak_hi_en.value.round(2)))
+
+                    if 'r200' in self._radii:
+                        print("R200 {l}-{u}keV SNR - {s}".format(s=self.get_snr("r200", tel,
+                                                                                self._default_coord).round(2),
+                                                                 l=self.peak_lo_en.value.round(2),
+                                                                 u=self.peak_hi_en.value.round(2)))
+
+                except NoProductAvailableError:
+                    pass
 
             print("Spectra associated - {}".format(len(self.get_products("spectrum", telescope=tel))))
 
