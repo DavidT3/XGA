@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 17:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 13:31. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -257,7 +257,7 @@ class GalaxyCluster(ExtendedSource):
         #  aren't accidentally removed, and that chunks of cluster emission aren't removed
         new_anti_results = {}
         for tel in self.telescopes:
-            new_anti_results[tel] = []
+            new_anti_results[tel] = {}
             for obs in self._obs[tel]:
                 # This is where the cleaned interlopers will be stored
                 new_anti_results[tel][obs] = []
