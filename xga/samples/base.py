@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 16:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 16:19. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -249,14 +249,15 @@ class BaseSample:
     @property
     def obs_ids(self) -> dict:
         """
-        Property meant to inform the user about the number (and identities) of ObsIDs associated with the sources
-        in a given sample.
+        Retrieves the ObsIDs associated with the sources in this sample, for each of the telescopes associated.
 
-        :return: A dictionary (where the top level keys are the source names) of the ObsIDs associated with the
-        individual sources in this sample.
+        :return: A dictionary (where the top level keys are the source names, lower level keys are telescope
+            names, and the values are lists of ObsIDs) of the ObsIDs associated with the individual sources
+            in this sample.
         :rtype: dict
         """
-        return {n: s.obs_ids for n, s in self._sources.items()}
+
+        return {n: {t: s.obs_ids[t] for t in s.telescopes} for n, s in self._sources.items()}
 
     @property
     def instruments(self) -> dict:
