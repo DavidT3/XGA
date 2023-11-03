@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 15:57. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -16,6 +16,7 @@ from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNo
 from ..exceptions import NoValidObservationsError
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
+from ..utils import check_telescope_choices, PRETTY_TELESCOPE_NAMES
 
 
 class BaseSample:
@@ -34,12 +35,53 @@ class BaseSample:
     :param bool load_products: Whether existing products should be loaded from disk.
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param bool no_prog_bar: Whether a progress bar should be shown as sources are declared.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        is None in which case standard search distances for different telescopes are used. The user may pass a
+        single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+        telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+        specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 no_prog_bar: bool = False):
+                 no_prog_bar: bool = False, telescope: Union[str, List[str]] = None,
+                 search_distance: Union[Quantity, dict] = None):
+        """
+        The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
+        interesting X-ray sources easy. This in particular creates samples of BaseSource object. It doesn't seem
+        likely that users should need to declare one of these, they should use one of the general ExtendedSample or
+        PointSample classes if they are doing exploratory analyses, or a more specific subclass like ClusterSample.
+
+        :param ndarray ra: The right-ascensions of the sources, in degrees.
+        :param ndarray dec: The declinations of the sources, in degrees.
+        :param ndarray redshift: The redshifts of the sources, optional. Default is None
+        :param ndarray name: The names of the sources, optional. Default is None, in which case the names will be
+            constructed from the coordinates.
+        :param Cosmology cosmology: An astropy cosmology object to be used in distance calculations and analyses.
+        :param bool load_products: Whether existing products should be loaded from disk.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool no_prog_bar: Whether a progress bar should be shown as sources are declared.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
+        """
         if len(ra) == 0:
             raise ValueError("You have passed an empty array for the RA values.")
+
+        # We run the telescope input check so that I know that telescope will be a list of telescope names, in case
+        #  I need to use it for joining into a string at the end of this init
+        telescope = check_telescope_choices(telescope)
 
         # There used to be a set of attributes storing the basic information (ra, dec, and redshifts) about
         #  the sources in this sample, but for subclasses its actually way more convenient for the properties
@@ -77,7 +119,8 @@ class BaseSample:
                 try:
                     # We declare the source object, making sure to tell it that its part of a sample
                     #  using in_sample=True
-                    temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits, True)
+                    temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits, True, telescope,
+                                      search_distance)
                     n = temp.name
                     self._sources[n] = temp
                     self._names.append(n)
@@ -98,8 +141,9 @@ class BaseSample:
         # It is possible (especially if someone is using the Sample classes as a way to check whether things have
         #  XMM data) that no sources will have been declared by this point, in which case it should fail now
         if len(self._sources) == 0:
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
             raise NoValidObservationsError("No sources have been declared, likely meaning that none of the sample have"
-                                           " valid XMM data.")
+                                           " valid {t} data.".format(t='/'.join(nice_tels)))
 
         # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
@@ -109,8 +153,9 @@ class BaseSample:
         no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0 and type(self) == BaseSample:
-            warn("The following do not appear to have any XMM data, and will not be included in the "
-                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)))
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
+            warn("The following do not appear to have any {t} data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)))
 
         # This calls the method that checks for suppressed source-level warnings that occurred during declaration, but
         #  only if this init has been called for a BaseSample declaration, rather than by a sub-class
