@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 15:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 16:11. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -236,6 +236,17 @@ class BaseSample:
         return self._cosmo
 
     @property
+    def telescopes(self) -> dict:
+        """
+        Retrieves the telescopes that have data associated with the sources in this sample.
+
+        :return: A dictionary where the keys are source names, and the values are lists of telescope names associated
+            with the sources.
+        :rtype: dict
+        """
+        return {n: s.telescopes for n, s in self._sources.items()}
+
+    @property
     def obs_ids(self) -> dict:
         """
         Property meant to inform the user about the number (and identities) of ObsIDs associated with the sources
@@ -291,6 +302,26 @@ class BaseSample:
         :rtype: Dict[str, List[str]]
         """
         return {n: s.suppressed_warnings for n, s in self._sources.items() if len(s.suppressed_warnings) > 0}
+
+    def _check_source_warnings(self):
+        """
+        This method checks the suppressed_warnings property of the member sources, and if any have had warnings
+        suppressed then it itself raises a warning that instructs the user to look at the suppressed_warnings
+        property of the sample. It doesn't print them all because that could lead to a confusing mess. This method
+        is to be called at the end of every sub-class init.
+        """
+        if any([len(src.suppressed_warnings) > 0 for src in self._sources.values()]):
+            warn("Non-fatal warnings occurred during the declaration of some sources, to access them please use the "
+                 "suppressed_warnings property of this sample.", stacklevel=2)
+
+    def _del_data(self, key: int):
+        """
+        This function will be replaced in subclasses that store more information about sources
+        in internal attributes.
+
+        :param int key: The index or name of the source to delete.
+        """
+        pass
 
     def Lx(self, outer_radius: Union[str, Quantity], model: str,
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
@@ -482,6 +513,7 @@ class BaseSample:
 
         # Show the figure
         plt.show()
+    # The length of the sample object will be the number of associated sources.
 
     def info(self):
         """
@@ -496,7 +528,6 @@ class BaseSample:
         print("Sources with ≥1 detection - {n} [{p}%]".format(n=num_det, p=perc_det))
         print("-----------------------------------------------------\n")
 
-    # The length of the sample object will be the number of associated sources.
     def __len__(self):
         """
         The result of using the Python len() command on this sample.
@@ -566,23 +597,3 @@ class BaseSample:
         # This function is specific to the Sample type, as some Sample classes have extra information stored
         #  that will need to be deleted.
         self._del_data(key)
-
-    def _check_source_warnings(self):
-        """
-        This method checks the suppressed_warnings property of the member sources, and if any have had warnings
-        suppressed then it itself raises a warning that instructs the user to look at the suppressed_warnings
-        property of the sample. It doesn't print them all because that could lead to a confusing mess. This method
-        is to be called at the end of every sub-class init.
-        """
-        if any([len(src.suppressed_warnings) > 0 for src in self._sources.values()]):
-            warn("Non-fatal warnings occurred during the declaration of some sources, to access them please use the "
-                 "suppressed_warnings property of this sample.", stacklevel=2)
-
-    def _del_data(self, key: int):
-        """
-        This function will be replaced in subclasses that store more information about sources
-        in internal attributes.
-
-        :param int key: The index or name of the source to delete.
-        """
-        pass
