@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 16:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 17:04. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -286,6 +286,17 @@ class BaseSample:
                 for n, s in self._sources.items()}
 
     @property
+    def any_detection(self) -> dict:
+        """
+        Determines whether each source has been detected in any region file associated with any observation
+        from any telescope.
+
+        :return: A dictionary with source names as keys and True/False values.
+        :rtype: dict
+        """
+        return {n: any([any(s.detected[t].values()) for t in s.detected]) for n, s in self._sources.items()}
+
+    @property
     def failed_names(self) -> List[str]:
         """
         Yields the names of those sources that could not be declared for some reason.
@@ -451,6 +462,7 @@ class BaseSample:
         :return: The offsets.
         :rtype: Quantity
         """
+        # TODO This will need to be updated when I figure out what to do about peaks
         # This call fetches peaks which we then never use, but it triggers a check that will trigger a warning if
         #  all the ra_dec values are the same as all the peak values
         ps = self.peaks
@@ -485,7 +497,7 @@ class BaseSample:
         :param str save_path: A path to save the figure on, optional. Default is None in which case the figure is
             not saved to disk.
         """
-
+        # TODO This will need to be updated when I figure out what to do about peaks
         # Uses the convenience method for calculating separation that is built into BaseSource to grab
         #  all the offsets
         seps = self.offsets(off_unit)
