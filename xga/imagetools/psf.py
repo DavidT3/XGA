@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 15:34. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -25,15 +25,15 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
            bins: int = 4, num_cores: int = NUM_CORES):
     """
     An implementation of the Richardson-Lucy (doi:10.1364/JOSA.62.000055) PSF deconvolution algorithm that
-    also takes into account the spatial variance of the XMM Newton PSF. The sources passed into this
+    also takes into account the spatial variance of the PSF. The sources passed into this
     function will have all images matching the passed energy range deconvolved, the image objects will have the
     result stored in them alongside the original data, and a combined image will be generated. I view this
     method as quite crude, but it does seem to work, and I may implement a more intelligent way of doing
     PSF deconvolutions later.
-    I initially tried convolving the PSFs generated at different spatial points with the chunks of data relevant
-    to them in isolation, but the edge effects were very obvious. So I settled on convolving the whole
-    original image with each PSF, and after it was finished taking the relevant chunks and patchworking
+    This convolves the whole original image with each section's PSF, then we take the relevant chunks and patchwork
     them into a new array.
+
+    Currently only supports XMM-Newton.
 
     :param BaseSource/BaseSample sources: A single source object, or list of source objects.
     :param int iterations: The number of deconvolution iterations performed by the Richardson-Lucy algorithm.

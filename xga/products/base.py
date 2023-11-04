@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 15:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 15:34. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2014,12 +2014,15 @@ class BaseProfile1D:
         :return: The default XGA save path for this profile.
         :rtype: str
         """
-        if self._save_path is None and self._prof_type != "base":
-            temp_path = OUTPUT + "profiles/{sn}/{pt}_{sn}_{id}.xga"
+        if self._save_path is None and self._prof_type != "base" and self._tele is not None:
+            temp_path = OUTPUT + "{t}/profiles/{sn}/{pt}_{sn}_{id}.xga"
             rand_prof_id = randint(0, 1e+8)
-            while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)):
+            while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)):
                 rand_prof_id = randint(0, 1e+8)
-            self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)
+            self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)
+        elif self._tele is None:
+            raise ValueError("Cannot create an XGA save path for this profile when it does not have "
+                             "telescope information.")
 
         return self._save_path
 
