@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:47. Copyright (c) The Contributors
 
 from typing import List
 
@@ -955,7 +955,7 @@ class ClusterSample(BaseSample):
         rs = Quantity(rs)
         return rs
 
-    def gm_richness(self, rad_name: str, dens_model: str, prof_outer_rad: Union[Quantity, str], dens_method: str,
+    def gm_richness(self, rad_name: str, telescope: str, dens_model: str, prof_outer_rad: Union[Quantity, str], dens_method: str,
                     x_norm: Quantity = Quantity(60), y_norm: Quantity = Quantity(1e+12, 'solMass'),
                     fit_method: str = 'odr', start_pars: list = None, pix_step: int = 1,
                     min_snr: Union[float, int] = 0.0, psf_corr: bool = True, psf_model: str = "ELLBETA",
@@ -965,6 +965,7 @@ class ClusterSample(BaseSample):
         This generates a Gas Mass vs Richness scaling relation for this sample of Galaxy Clusters.
 
         :param str rad_name: The name of the radius (e.g. r500) to measure gas mass within.
+        :param str telescope: The name of the telescope used to measure the gas mass.
         :param str dens_model: The model fit to the density profiles to be used to calculate gas mass. If a fit
             doesn't already exist then one will be performed with default settings.
         :param Quantity/str prof_outer_rad: The outer radii of the density profiles, either a single radius name or a
@@ -1016,8 +1017,8 @@ class ClusterSample(BaseSample):
         r_errs = self.richness[:, 1]
 
         # Read out the gas mass values, and multiply by the inverse e function for each cluster
-        gm_vals = self.gas_mass(rad_name, dens_model, prof_outer_rad, dens_method, pix_step, min_snr, psf_corr,
-                                psf_model, psf_bins, psf_algo, psf_iter, set_ids)
+        gm_vals = self.gas_mass(rad_name, telescope, dens_model, prof_outer_rad, dens_method, pix_step, min_snr,
+                                psf_corr, psf_model, psf_bins, psf_algo, psf_iter, set_ids)
         gm_vals *= e_factor[..., None]
         gm_data = gm_vals[:, 0]
         gm_err = gm_vals[:, 1:]
@@ -1041,8 +1042,8 @@ class ClusterSample(BaseSample):
 
     # I don't allow the user to supply an inner radius here because I cannot think of a reason why you'd want to
     #  make a scaling relation with a core excised temperature.
-    def gm_Tx(self, rad_name: str, dens_model: str, prof_outer_rad: Union[Quantity, str], dens_method: str,
-              x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+12, 'solMass'),
+    def gm_Tx(self, rad_name: str, telescope: str, dens_model: str, prof_outer_rad: Union[Quantity, str],
+              dens_method: str, x_norm: Quantity = Quantity(4, 'keV'), y_norm: Quantity = Quantity(1e+12, 'solMass'),
               fit_method: str = 'odr', start_pars: list = None, model: str = 'constant*tbabs*apec',
               group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
               pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True, psf_model: str = "ELLBETA",
@@ -1052,6 +1053,7 @@ class ClusterSample(BaseSample):
         This generates a Gas Mass vs Tx scaling relation for this sample of Galaxy Clusters.
 
         :param str rad_name: The name of the radius (e.g. r500) to get values for.
+        :param str telescope: The name of the telescope used to measure the gas mass and the temperature.
         :param str dens_model: The model fit to the density profiles to be used to calculate gas mass. If a fit
             doesn't already exist then one will be performed with default settings.
         :param Quantity/str prof_outer_rad: The outer radii of the density profiles, either a single radius name or a
@@ -1107,12 +1109,12 @@ class ClusterSample(BaseSample):
         fit_method = fit_method.lower()
 
         # Read out the temperature values into variables just for convenience sake
-        t_vals = self.Tx(rad_name, model, Quantity(0, 'deg'), group_spec, min_counts, min_sn, over_sample)
+        t_vals = self.Tx(telescope, rad_name, model, Quantity(0, 'deg'), group_spec, min_counts, min_sn, over_sample)
         t_data = t_vals[:, 0]
         t_errs = t_vals[:, 1:]
 
         # Read out the mass values, and multiply by the inverse e function for each cluster
-        gm_vals = self.gas_mass(rad_name, dens_model, prof_outer_rad, dens_method, pix_step, min_snr, psf_corr,
+        gm_vals = self.gas_mass(rad_name, telescope, dens_model, prof_outer_rad, dens_method, pix_step, min_snr, psf_corr,
                                 psf_model, psf_bins, psf_algo, psf_iter, set_ids)
         gm_vals *= e_factor[..., None]
         gm_data = gm_vals[:, 0]
@@ -1136,7 +1138,7 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def Lx_richness(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(60),
+    def Lx_richness(self, telescope: str, outer_radius: str = 'r500', x_norm: Quantity = Quantity(60),
                     y_norm: Quantity = Quantity(1e+44, 'erg/s'), fit_method: str = 'odr', start_pars: list = None,
                     model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
                     hi_en: Quantity = Quantity(2.0, 'keV'), inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
@@ -1147,6 +1149,7 @@ class ClusterSample(BaseSample):
         to find core excised luminosity, and wish to use it in this scaling relation, then please don't forget
         to supply an inner_radius to the method call.
 
+        :param str telescope: The name of the telescope used to measure the Lx.
         :param str outer_radius: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
@@ -1192,7 +1195,7 @@ class ClusterSample(BaseSample):
         r_errs = self.richness[:, 1]
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        lx_vals = self.Lx(outer_radius, model, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
+        lx_vals = self.Lx(outer_radius, telescope, model, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
                           over_sample) * e_factor[..., None]
         lx_data = lx_vals[:, 0]
         lx_err = lx_vals[:, 1:]
@@ -1215,7 +1218,7 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def Lx_Tx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(4, 'keV'),
+    def Lx_Tx(self, telescope: str, outer_radius: str = 'r500', x_norm: Quantity = Quantity(4, 'keV'),
               y_norm: Quantity = Quantity(1e+44, 'erg/s'), fit_method: str = 'odr', start_pars: list = None,
               model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
               hi_en: Quantity = Quantity(2.0, 'keV'), tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
@@ -1228,6 +1231,7 @@ class ClusterSample(BaseSample):
         radius of those spectra using lx_inner_radius, as well as ensuring that you use the temperature
         fit you want by setting tx_inner_radius.
 
+        :param str telescope: The name of the telescope used to measure the Lx and Tx.
         :param str outer_radius: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
@@ -1278,13 +1282,13 @@ class ClusterSample(BaseSample):
         fit_method = fit_method.lower()
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        lx_vals = self.Lx(outer_radius, model, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
-                          over_sample) * e_factor[..., None]
+        lx_vals = self.Lx(outer_radius, telescope, model, lx_inner_radius, lo_en, hi_en, group_spec, min_counts,
+                          min_sn, over_sample) * e_factor[..., None]
         lx_data = lx_vals[:, 0]
         lx_err = lx_vals[:, 1:]
 
         # Read out the temperature values into variables just for convenience sake
-        t_vals = self.Tx(outer_radius, model, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
+        t_vals = self.Tx(telescope, outer_radius, model, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
         t_data = t_vals[:, 0]
         t_errs = t_vals[:, 1:]
 
@@ -1307,7 +1311,7 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def mass_Tx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(4, 'keV'),
+    def mass_Tx(self, telescope: str, outer_radius: str = 'r500', x_norm: Quantity = Quantity(4, 'keV'),
                 y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
                 model: str = 'constant*tbabs*apec', tx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
@@ -1315,6 +1319,7 @@ class ClusterSample(BaseSample):
         """
         A convenience function to generate a hydrostatic mass-temperature relation for this sample of galaxy clusters.
 
+        :param str telescope: The name of the telescope used to measure the hydrostatic mass and temperature.
         :param str outer_radius: The outer radius of the region used to measure temperature and the radius
             out to which you wish to measure mass.
         :param Quantity x_norm: Quantity to normalise the x data by.
@@ -1360,12 +1365,12 @@ class ClusterSample(BaseSample):
         fit_method = fit_method.lower()
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name, dens_model_name) * e_factor[..., None]
+        m_vals = self.hydrostatic_mass(outer_radius, telescope, temp_model_name, dens_model_name) * e_factor[..., None]
         m_data = m_vals[:, 0]
         m_err = m_vals[:, 1:]
 
         # Read out the temperature values into variables just for convenience sake
-        t_vals = self.Tx(outer_radius, model, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
+        t_vals = self.Tx(telescope, outer_radius, model, tx_inner_radius, group_spec, min_counts, min_sn, over_sample)
         t_data = t_vals[:, 0]
         t_errs = t_vals[:, 1:]
 
@@ -1388,12 +1393,14 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def mass_richness(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(60),
+    def mass_richness(self, telescope: str, outer_radius: str = 'r500', x_norm: Quantity = Quantity(60),
                       y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
-                      temp_model_name: str = None, dens_model_name: str = None, inv_efunc: bool = False) -> ScalingRelation:
+                      temp_model_name: str = None, dens_model_name: str = None,
+                      inv_efunc: bool = False) -> ScalingRelation:
         """
         A convenience function to generate a hydrostatic mass-richness relation for this sample of galaxy clusters.
 
+        :param str telescope: The name of the telescope used to measure the hydrostatic mass values.
         :param str outer_radius: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
@@ -1429,7 +1436,7 @@ class ClusterSample(BaseSample):
         r_errs = self.richness[:, 1]
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name, dens_model_name) * e_factor[..., None]
+        m_vals = self.hydrostatic_mass(outer_radius, telescope, temp_model_name, dens_model_name) * e_factor[..., None]
         m_data = m_vals[:, 0]
         m_err = m_vals[:, 1:]
 
@@ -1451,7 +1458,7 @@ class ClusterSample(BaseSample):
 
         return scale_rel
 
-    def mass_Lx(self, outer_radius: str = 'r500', x_norm: Quantity = Quantity(1e+44, 'erg/s'),
+    def mass_Lx(self, telescope: str, outer_radius: str = 'r500', x_norm: Quantity = Quantity(1e+44, 'erg/s'),
                 y_norm: Quantity = Quantity(5e+14, 'Msun'), fit_method: str = 'odr', start_pars: list = None,
                 model: str = 'constant*tbabs*apec', lo_en: Quantity = Quantity(0.5, 'keV'),
                 hi_en: Quantity = Quantity(2.0, 'keV'), lx_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
@@ -1462,6 +1469,7 @@ class ClusterSample(BaseSample):
         to find core excised luminosity, and wish to use it in this scaling relation, then you can specify the inner
         radius of those spectra using lx_inner_radius.
 
+        :param str telescope: The name of the telescope used to measure the hydrostatic mass and Lx values.
         :param str outer_radius: The name of the radius (e.g. r500) to get values for.
         :param Quantity x_norm: Quantity to normalise the x data by.
         :param Quantity y_norm: Quantity to normalise the y data by.
@@ -1510,13 +1518,13 @@ class ClusterSample(BaseSample):
         fit_method = fit_method.lower()
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        m_vals = self.hydrostatic_mass(outer_radius, temp_model_name, dens_model_name) * e_factor[..., None]
+        m_vals = self.hydrostatic_mass(outer_radius, telescope, temp_model_name, dens_model_name) * e_factor[..., None]
         m_data = m_vals[:, 0]
         m_err = m_vals[:, 1:]
 
         # Read out the luminosity values, and multiply by the inverse e function for each cluster
-        lx_vals = self.Lx(outer_radius, model, lx_inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn,
-                          over_sample)
+        lx_vals = self.Lx(outer_radius, telescope, model, lx_inner_radius, lo_en, hi_en, group_spec, min_counts,
+                          min_sn, over_sample)
         lx_data = lx_vals[:, 0]
         lx_err = lx_vals[:, 1:]
 
