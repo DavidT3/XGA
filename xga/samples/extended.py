@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:34. Copyright (c) The Contributors
 
 from typing import List
 
@@ -680,10 +680,10 @@ class ClusterSample(BaseSample):
 
         return temps
 
-    def gas_mass(self, rad_name: str, dens_model: str, method: str, prof_outer_rad: Union[Quantity, str] = None,
-                 pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True,
-                 psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-                 set_ids: List[int] = None, quality_checks: bool = True) -> Quantity:
+    def gas_mass(self, rad_name: str, telescope: str, dens_model: str, method: str,
+                 prof_outer_rad: Union[Quantity, str] = None, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
+                 psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                 psf_iter: int = 15, set_ids: List[int] = None, quality_checks: bool = True) -> Quantity:
         """
         A convenient get method for gas masses measured for the constituent clusters of this sample, though the
         arguments that can  be passed to retrieve gas density profiles are limited to tone-down the complexity.
@@ -699,6 +699,7 @@ class ClusterSample(BaseSample):
         masses, if quality checks are on.
 
         :param str rad_name: The name of the radius (e.g. r500) to calculate the gas mass within.
+        :param str telescope: The name of the telescope used to measure the gas density profile.
         :param str dens_model: The model fit to the density profiles to be used to calculate gas mass. If a fit
             doesn't already exist then one will be performed with default settings.
         :param str method: The method used to generate the density profile. For a profile created by fitting a model
@@ -730,6 +731,11 @@ class ClusterSample(BaseSample):
         # Has to be here to prevent circular import unfortunately
         from ..sas._common import region_setup
 
+        # Have to check that the chosen telescope is actually valid for this sample
+        if telescope not in self.associated_telescopes:
+            raise NotAssociatedError("The {t} telescope is not associated with any source in this "
+                                     "sample.".format(t=telescope))
+
         gms = []
         if prof_outer_rad is not None:
             out_rad_vals = region_setup(self, prof_outer_rad, Quantity(0, 'deg'), True, '')[2]
@@ -750,12 +756,14 @@ class ClusterSample(BaseSample):
                     dens_profs = gcs.get_density_profiles(out_rad_vals[gcs_ind], method, None, None, radii=None,
                                                           pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
                                                           psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
-                                                          psf_iter=psf_iter, set_id=set_ids[gcs_ind])
+                                                          psf_iter=psf_iter, set_id=set_ids[gcs_ind],
+                                                          telescope=telescope)
                 else:
                     dens_profs = gcs.get_density_profiles(out_rad_vals, method, None, None, radii=None,
                                                           pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
                                                           psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
-                                                          psf_iter=psf_iter, set_id=set_ids[gcs_ind])
+                                                          psf_iter=psf_iter, set_id=set_ids[gcs_ind],
+                                                          telescope=telescope)
 
                 if isinstance(dens_profs, GasDensity3D):
                     if dens_model not in dens_profs.good_model_fits:
