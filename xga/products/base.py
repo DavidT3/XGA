@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 22:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 15:09. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -676,10 +676,6 @@ class BaseProfile1D:
             self._rad_ann_bounds = bounds
         else:
             self._rad_ann_bounds = None
-
-        # Just checking that if one of these values is combined, then both are. Doesn't make sense otherwise.
-        if (obs_id == "combined" and inst != "combined") or (inst == "combined" and obs_id != "combined"):
-            raise ValueError("If ObsID or inst is set to combined, then both must be set to combined.")
 
         # Storing the passed source name in an attribute, as well as the ObsID and instrument
         self._src_name = source_name
