@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 14:52. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -10,7 +10,7 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitConversionError, kpc
 
 from .general import ExtendedSource
-from .. import DEFAULT_COSMO
+from .. import DEFAULT_COSMO, COMBINED_INSTS
 from ..exceptions import NoRegionsError, NoProductAvailableError
 from ..imagetools import radial_brightness
 from ..products import Spectrum, BaseProfile1D
@@ -944,7 +944,20 @@ class GalaxyCluster(ExtendedSource):
         elif reg_type == "r2500" and self._r2500 is None:
             raise NoRegionsError("No R2500 region has been setup for this cluster")
 
-        comb_rt = self.get_combined_ratemaps(lo_en, hi_en, telescope=telescope)
+        # This measures the number of observation instrument combinations available for the current telescope
+        tel_obs_inst_num = len([o+inst for o in self.instruments[telescope]
+                                for inst in self.instruments[telescope][o]])
+        # We have to make the distinction here of whether the telescope ships the data combined (i.e. eROSITA), as if
+        #  so then there may only be a single ratemap, but we'll still have the list of instruments that went into it
+        #  in the instruments property.
+        if (tel_obs_inst_num > 1 and not COMBINED_INSTS[telescope]) or \
+                (len(self.obs_ids[telescope]) > 1 and COMBINED_INSTS[telescope]):
+            comb_rt = self.get_combined_ratemaps(lo_en, hi_en, telescope=telescope)
+        # This situation means there is only one ObsID-instrument combo
+        elif (tel_obs_inst_num == 1 and not COMBINED_INSTS[telescope]) or COMBINED_INSTS[telescope]:
+            # There should in theory only ever be one ratemap that matches these criteria in this circumstance.
+            comb_rt = self.get_ratemaps(lo_en=lo_en, hi_en=hi_en, telescope=telescope)
+
         # If there have been PSF deconvolutions of the above data, then we can grab them too
         # I still do it this way rather than with get_combined_ratemaps because I want ALL PSF corrected ratemaps
         en_key = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
