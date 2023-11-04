@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:40. Copyright (c) The Contributors
 
 from typing import List
 
@@ -645,29 +645,31 @@ class ClusterSample(BaseSample):
                 if quality_checks and gcs_temp[0] > 25:
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("A temperature of {m}keV was measured for {s}, anything over 30keV considered a failed "
-                         "fit by XGA".format(s=gcs.name, m=gcs_temp))
+                         "fit by XGA".format(s=gcs.name, m=gcs_temp), stacklevel=2)
                 elif quality_checks and gcs_temp.min() < 0:
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("A negative value was detected in the temperature array for {s}, this is considered a failed "
-                         "measurement".format(s=gcs.name))
+                         "measurement".format(s=gcs.name), stacklevel=2)
                 elif quality_checks and ((gcs_temp[0] - gcs_temp[1]) <= 0):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("The temperature value - the lower error goes below zero for {s}, this makes the temperature"
-                         " hard to use for scaling relations as values are often logged.".format(s=gcs.name))
+                         " hard to use for scaling relations as values are often logged.".format(s=gcs.name),
+                         stacklevel=2)
                 elif quality_checks and ((gcs_temp[1] / gcs_temp[2]) > 3 or (gcs_temp[1] / gcs_temp[2]) < 0.33):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("One of the temperature uncertainty values for {s} is more than three times larger than "
-                         "the other, this means the fit quality is suspect.".format(s=gcs.name))
+                         "the other, this means the fit quality is suspect.".format(s=gcs.name), stacklevel=2)
                 elif quality_checks and ((gcs_temp[0] - gcs_temp[1:].mean()) < 0):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("The temperature value - the average error goes below zero for {s}, this makes the "
-                         "temperature hard to use for scaling relations as values are often logged".format(s=gcs.name))
+                         "temperature hard to use for scaling relations as values are often logged".format(s=gcs.name),
+                         stacklevel=2)
                 temps.append(gcs_temp)
 
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
-                warn(str(err))
+                warn(str(err), stacklevel=2)
                 temps.append(np.array([np.NaN, np.NaN, np.NaN]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
@@ -775,28 +777,28 @@ class ClusterSample(BaseSample):
                             gms.append([np.NaN, np.NaN, np.NaN])
                         elif quality_checks and cur_gmass[0] < Quantity(1e+9, 'Msun'):
                             gms.append([np.NaN, np.NaN, np.NaN])
-                            warn("{s}'s gas mass is less than 1e+12 solar masses")
+                            warn("{s}'s gas mass is less than 1e+12 solar masses", stacklevel=2)
                         elif quality_checks and cur_gmass[0] > Quantity(1e+16, 'Msun'):
                             gms.append([np.NaN, np.NaN, np.NaN])
-                            warn("{s}'s gas mass is greater than 1e+16 solar masses")
+                            warn("{s}'s gas mass is greater than 1e+16 solar masses", stacklevel=2)
                         else:
                             gms.append(cur_gmass.value)
                     except ModelNotAssociatedError:
                         gms.append([np.NaN, np.NaN, np.NaN])
                     except ValueError:
                         gms.append([np.NaN, np.NaN, np.NaN])
-                        warn("{s}'s gas mass is negative")
+                        warn("{s}'s gas mass is negative", stacklevel=2)
 
                 else:
                     warn("Somehow there multiple matches for {s}'s density profile, this is the developer's "
-                         "fault.".format(s=gcs.name))
+                         "fault.".format(s=gcs.name), stacklevel=2)
                     gms.append([np.NaN, np.NaN, np.NaN])
 
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
                 gms.append([np.NaN, np.NaN, np.NaN])
                 warn("{s} doesn't have a density profile associated, please look at "
-                     "sourcetools.density.".format(s=gcs.name))
+                     "sourcetools.density.".format(s=gcs.name), stacklevel=2)
 
         gms = np.array(gms)
 
@@ -807,7 +809,7 @@ class ClusterSample(BaseSample):
 
         return Quantity(gms, 'Msun')
 
-    def hydrostatic_mass(self, rad_name: str, temp_model_name: str = None, dens_model_name: str = None,
+    def hydrostatic_mass(self, rad_name: str, telescope: str, temp_model_name: str = None, dens_model_name: str = None,
                          quality_checks: bool = True) -> Quantity:
         """
         A simple method for fetching hydrostatic masses of this sample of clusters. This function is limited, and if
@@ -823,6 +825,7 @@ class ClusterSample(BaseSample):
         are on), or if no hydrostatic mass profile is available.
 
         :param str rad_name: The name of the radius (e.g. r500) to calculate the hydrostatic mass within.
+        :param str telescope: The name of the telescope used to measure the hydrostatic mass.
         :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
             required hydrostatic mass profile, default is None.
         :param str dens_model_name: The name of the model used to fit the density profile used to generate the
@@ -835,12 +838,17 @@ class ClusterSample(BaseSample):
         """
         ms = []
 
+        # Have to check that the chosen telescope is actually valid for this sample
+        if telescope not in self.associated_telescopes:
+            raise NotAssociatedError("The {t} telescope is not associated with any source in this "
+                                     "sample.".format(t=telescope))
+
         # Iterate through all of our Galaxy Clusters
         for gcs_ind, gcs in enumerate(self._sources.values()):
             actual_rad = gcs.get_radius(rad_name, 'kpc')
             try:
                 mass_profs = gcs.get_hydrostatic_mass_profiles(temp_model_name=temp_model_name,
-                                                               dens_model_name=dens_model_name)
+                                                               dens_model_name=dens_model_name, telescope=telescope)
                 if isinstance(mass_profs, list):
                     raise ValueError("There are multiple matching hydrostatic mass profiles associated with {}, "
                                      "you will have to retrieve masses manually.")
@@ -849,23 +857,24 @@ class ClusterSample(BaseSample):
                         cur_mass = mass_profs.mass(actual_rad)[0]
                         if quality_checks and (cur_mass[1] > cur_mass[0] or cur_mass[2] > cur_mass[0]):
                             ms.append([np.NaN, np.NaN, np.NaN])
-                            warn("{s}'s mass uncertainties are larger than the mass value.")
+                            warn("{s}'s mass uncertainties are larger than the mass value.", stacklevel=2)
                         elif quality_checks and cur_mass[0] < Quantity(1e+12, 'Msun'):
                             ms.append([np.NaN, np.NaN, np.NaN])
-                            warn("{s}'s mass is less than 1e+12 solar masses")
+                            warn("{s}'s mass is less than 1e+12 solar masses", stacklevel=2)
                         elif quality_checks and cur_mass[0] > Quantity(1e+16, 'Msun'):
                             ms.append([np.NaN, np.NaN, np.NaN])
-                            warn("{s}'s mass is greater than 1e+16 solar masses")
+                            warn("{s}'s mass is greater than 1e+16 solar masses", stacklevel=2)
                         else:
                             ms.append(cur_mass.value)
                     except ValueError:
-                        warn("{s}'s mass is negative")
+                        warn("{s}'s mass is negative", stacklevel=2)
                         ms.append([np.NaN, np.NaN, np.NaN])
 
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
                 ms.append([np.NaN, np.NaN, np.NaN])
-                warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name))
+                warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name),
+                     stacklevel=2)
 
         ms = np.array(ms)
         # We're going to throw an error if all the masses are NaN, because obviously something is wrong
@@ -875,7 +884,8 @@ class ClusterSample(BaseSample):
 
         return Quantity(ms, 'Msun')
 
-    def calc_overdensity_radii(self, delta: int, temp_model_name: str = None, dens_model_name: str = None) -> Quantity:
+    def calc_overdensity_radii(self, delta: int, telescope: str, temp_model_name: str = None,
+                               dens_model_name: str = None) -> Quantity:
         """
         A convenience method that allows for the calculation of overdensity radii from hydrostatic mass profiles
         measured for sources in this sample. This method uses the 'overdensity_radius' method of each mass profile
@@ -892,6 +902,8 @@ class ClusterSample(BaseSample):
         with different models then you may use them.
 
         :param int delta: The overdensity factor for which a radius is to be calculated.
+        :param str telescope: The name of the telescope that was used to measure the hydrostatic mass profile used
+            to measure the overdensity radius.
         :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
             hydrostatic mass profile required for measuring overdensity radii, default is None.
         :param str dens_model_name: The name of the model used to fit the density profile used to generate the
@@ -901,13 +913,19 @@ class ClusterSample(BaseSample):
         """
         # Just a list to store the radii in as they're being calculated - turned into an array quantity at the end
         rs = []
+
+        # Have to check that the chosen telescope is actually valid for this sample
+        if telescope not in self.associated_telescopes:
+            raise NotAssociatedError("The {t} telescope is not associated with any source in this "
+                                     "sample.".format(t=telescope))
+
         # Iterating over the galaxy clusters in this sample
         for gcs_ind, gcs in enumerate(self._sources.values()):
             # First off, we try to fetch hydrostatic mass profile(s), and catch the exception if there
             #  aren't any matching profiles
             try:
                 mass_profs = gcs.get_hydrostatic_mass_profiles(temp_model_name=temp_model_name,
-                                                               dens_model_name=dens_model_name)
+                                                               dens_model_name=dens_model_name, telescope=telescope)
                 # As I just ask for temperature and density model names, it's entirely possible that there are
                 #  multiple hydrostatic mass profiles that use those two models. If there are then the user
                 #  has to do this the long way around.
@@ -923,14 +941,15 @@ class ClusterSample(BaseSample):
                 except ValueError:
                     warn("Overdensity radius calculation for {s} failed because the default starting radii "
                          "didn't bracket the requested overdensity radius. See the docs of overdensity_radius "
-                         "method of HydrostaticMass for more info.".format(s=gcs.name))
+                         "method of HydrostaticMass for more info.".format(s=gcs.name), stacklevel=2)
 
                     rs.append(np.NaN)
 
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
                 rs.append(np.NaN)
-                warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name))
+                warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name),
+                     stacklevel=2)
 
         # Turn the radii list into a quantity and return it
         rs = Quantity(rs)
