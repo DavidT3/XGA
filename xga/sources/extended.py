@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:27. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -478,7 +478,8 @@ class GalaxyCluster(ExtendedSource):
 
     def _get_spec_based_profiles(self, search_key: str, radii: Quantity = None, group_spec: bool = True,
                                  min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                                 set_id: int = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                                 set_id: int = None,
+                                 telescope: str = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The generic get method for profiles which have been based on spectra, the only thing that tends to change
         about how we search for them is the specific search key. Largely copied from get_annular_spectra.
@@ -490,11 +491,13 @@ class GalaxyCluster(ExtendedSource):
         :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
-            noise, what was the minimum signal to noise.
+            noise, what was the minimum signal-to-noise.
         :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str telescope: The telescope that was used to generate the profiles. Default is None, in which case
+            all telescopes associated with this source will be searched for.
         :return: An XGA profile object if there is an exact match, a list of such objects if there are multiple matches.
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
@@ -530,14 +533,14 @@ class GalaxyCluster(ExtendedSource):
         # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
         #  properly constructed storage key
         if set_id is None and radii is not None:
-            matched_prods = self.get_products(search_key, extra_key=spec_storage_name)
+            matched_prods = self.get_products(search_key, extra_key=spec_storage_name, telescope=telescope)
         # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
         elif set_id is None and radii is None:
-            matched_prods = [p for p in self.get_products(search_key)
+            matched_prods = [p for p in self.get_products(search_key, telescope=telescope)
                              if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
         # However if they have passed a setID then this over-rides everything else
         else:
-            matched_prods = [p for p in self.get_products(search_key) if p.set_ident == set_id]
+            matched_prods = [p for p in self.get_products(search_key, telescope=telescope) if p.set_ident == set_id]
 
         return matched_prods
 
@@ -702,8 +705,8 @@ class GalaxyCluster(ExtendedSource):
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_gas_temperature_profile", radii, group_spec,
-                                                      min_counts, min_sn, over_sample, set_id)
+        matched_prods = self._get_spec_based_profiles("combined_gas_temperature_profile", radii, group_spec, min_counts,
+                                                      min_sn, over_sample, set_id)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -733,8 +736,8 @@ class GalaxyCluster(ExtendedSource):
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", radii, group_spec,
-                                                      min_counts, min_sn, over_sample, set_id)
+        matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", radii, group_spec, min_counts,
+                                                      min_sn, over_sample, set_id)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
