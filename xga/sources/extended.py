@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 15:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:13. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -558,9 +558,9 @@ class GalaxyCluster(ExtendedSource):
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
             region files), then any inner radius will be ignored.
+        :param str telescope: The telescope for which to retrieve spectral fit results.
         :param str model: The name of the fitted model that you're requesting the results
             from (e.g. constant*tbabs*apec).
-        :param str telescope: The telescope for which to retrieve spectral fit results.
         :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
             for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
@@ -616,7 +616,7 @@ class GalaxyCluster(ExtendedSource):
     # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
     #  justified considering how often the cluster temperature is used in X-ray cluster studies.
 
-    def get_temperature(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
+    def get_temperature(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                         min_counts: int = 5, min_sn: float = None, over_sample: float = None):
         """
@@ -628,6 +628,7 @@ class GalaxyCluster(ExtendedSource):
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
             region files), then any inner radius will be ignored.
+        :param str telescope: The telescope for which to retrieve spectral fit results.
         :param str model: The name of the fitted model that you're requesting the results
             from (e.g. constant*tbabs*apec).
         :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
@@ -642,7 +643,7 @@ class GalaxyCluster(ExtendedSource):
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The temperature value, and uncertainties.
         """
-        res = self.get_results(outer_radius, 'xmm', model, inner_radius, "kT", group_spec, min_counts, min_sn,
+        res = self.get_results(outer_radius, telescope, model, inner_radius, "kT", group_spec, min_counts, min_sn,
                                over_sample)
 
         return Quantity(res, 'keV')

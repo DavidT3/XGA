@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 12:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:13. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -209,15 +209,6 @@ class ExtendedSample(BaseSample):
         #  declarations, but only if there actually were any.
         self._check_source_warnings()
 
-    def _del_data(self, key: int):
-        """
-        Specific to the ExtendedSample class, this deletes the extra data stored during the initialisation
-        of this type of sample.
-
-        :param int key: The index or name of the source to delete.
-        """
-        del self._custom_radii[key]
-
     @property
     def custom_radii(self) -> Quantity:
         """
@@ -239,6 +230,15 @@ class ExtendedSample(BaseSample):
         :rtype: Unit
         """
         return self._cr_unit
+
+    def _del_data(self, key: int):
+        """
+        Specific to the ExtendedSample class, this deletes the extra data stored during the initialisation
+        of this type of sample.
+
+        :param int key: The index or name of the source to delete.
+        """
+        del self._custom_radii[key]
 
 
 class PointSample(BaseSample):
@@ -425,15 +425,6 @@ class PointSample(BaseSample):
         #  declarations, but only if there actually were any.
         self._check_source_warnings()
 
-    def _del_data(self, key: int):
-        """
-        Specific to the PointSample class, this deletes the extra data stored during the initialisation
-        of this type of sample.
-
-        :param int key: The index or name of the source to delete.
-        """
-        del self._point_radii[key]
-
     @property
     def point_radii(self) -> Quantity:
         """
@@ -454,6 +445,15 @@ class PointSample(BaseSample):
         :rtype: Unit
         """
         return self._pr_unit
+
+    def _del_data(self, key: int):
+        """
+        Specific to the PointSample class, this deletes the extra data stored during the initialisation
+        of this type of sample.
+
+        :param int key: The index or name of the source to delete.
+        """
+        del self._point_radii[key]
 
 
 

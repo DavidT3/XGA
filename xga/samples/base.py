@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 17:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:13. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -405,6 +405,7 @@ class BaseSample:
         # Has to be here to prevent circular import unfortunately
         from ..sas._common import region_setup
 
+        # Have to check that the chosen telescope is actually valid for this sample
         if telescope not in self.associated_telescopes:
             raise NotAssociatedError("The {t} telescope is not associated with any source in this "
                                      "sample.".format(t=telescope))

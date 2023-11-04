@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:13. Copyright (c) The Contributors
 
 from typing import List
 
@@ -11,7 +11,7 @@ from tqdm import tqdm
 from .base import BaseSample
 from .. import DEFAULT_COSMO
 from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NoProductAvailableError, NoValidObservationsError
+    NoProductAvailableError, NoValidObservationsError, NotAssociatedError
 from ..products.profile import GasDensity3D
 from ..relations.fit import *
 from ..sources.extended import GalaxyCluster
@@ -55,6 +55,16 @@ class ClusterSample(BaseSample):
     :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
         is 'hierarchical' (uses XGA's hierarchical clustering peak finder), 'simple' may also be passed in which
         case the brightest unmasked pixel within the source region will be selected.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        is None in which case standard search distances for different telescopes are used. The user may pass a
+        single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+        telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+        specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray, name: np.ndarray, r200: Quantity = None,
                  r500: Quantity = None, r2500: Quantity = None, richness: np.ndarray = None,
@@ -64,10 +74,54 @@ class ClusterSample(BaseSample):
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, clean_obs: bool = True,
                  clean_obs_reg: str = "r200", clean_obs_threshold: float = 0.3, no_prog_bar: bool = False,
-                 psf_corr: bool = False, peak_find_method: str = "hierarchical"):
+                 psf_corr: bool = False, peak_find_method: str = "hierarchical",
+                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None):
         """
         The init of the ClusterSample XGA class, for the analysis of a large sample of galaxy clusters.
         Takes information on the clusters to enable analyses.
+
+        :param np.ndarray ra: The right-ascensions of the clusters, in degrees.
+        :param np.ndarray dec: The declinations of the clusters, in degrees.
+        :param np.ndarray redshift: The redshifts of the clusters, required for cluster analysis.
+        :param np.ndarray name: The names of the clusters.
+        :param Quantity r200: Values for the R200s of the clusters. At least one overdensity radius must be passed.
+        :param Quantity r500: Values for the R500s of the clusters. At least one overdensity radius must be passed.
+        :param Quantity r2500: Values for the R2500s of the clusters. At least one overdensity radius must be passed.
+        :param np.ndarray richness: Optical richnesses of the clusters, optional.
+        :param np.ndarray richness_err: Uncertainties on the optical richnesses of the clusters, optional.
+        :param Quantity wl_mass: Weak lensing masses of the clusters, optional.
+        :param Quantity wl_mass_err: Uncertainties on the weak lensing masses of the clusters, optional.
+        :param Quantity custom_region_radius: A custom analysis region radius for this cluster, optional.
+        :param bool use_peak: Whether peak position should be found and used.
+        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak position
+            from. Default is 0.5keV
+        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak position
+            from. Default is 2.0keV.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
+        :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+            is hierarchical, simple may also be passed.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+            is 'hierarchical' (uses XGA's hierarchical clustering peak finder), 'simple' may also be passed in which
+            case the brightest unmasked pixel within the source region will be selected.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
         """
 
         # I don't like having this here, but it does avoid a circular import problem
@@ -75,15 +129,16 @@ class ClusterSample(BaseSample):
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
-                         no_prog_bar=no_prog_bar)
+                         no_prog_bar=no_prog_bar, telescope=telescope, search_distance=search_distance)
 
-        # This part is super useful - it is much quicker to use the base sources to generate all
-        #  necessary ratemaps, as we can do it in parallel for the entire sample, rather than one at a time as
-        #  might be necessary for peak finding in the cluster init.
-        evselect_image(self, peak_lo_en, peak_hi_en)
-        eexpmap(self, peak_lo_en, peak_hi_en)
-        emosaic(self, "image", peak_lo_en, peak_hi_en)
-        emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        if 'xmm' in self.associated_telescopes:
+            # This part is super useful - it is much quicker to use the base sources to generate all
+            #  necessary ratemaps, as we can do it in parallel for the entire sample, rather than one at a time as
+            #  might be necessary for peak finding in the cluster init.
+            evselect_image(self, peak_lo_en, peak_hi_en)
+            eexpmap(self, peak_lo_en, peak_hi_en)
+            emosaic(self, "image", peak_lo_en, peak_hi_en)
+            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
 
         # Now that we've made those images the BaseSource objects aren't required anymore, we're about
         #  to define GalaxyClusters
@@ -167,7 +222,7 @@ class ClusterSample(BaseSample):
                                                          use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                          back_out_rad_factor, cosmology, True, load_fits, clean_obs,
                                                          clean_obs_reg, clean_obs_threshold, False, peak_find_method,
-                                                         True)
+                                                         True, telescope, search_distance)
                         final_names.append(n)
 
                     except PeakConvergenceFailedError:
@@ -179,7 +234,7 @@ class ClusterSample(BaseSample):
                                                              False, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                              back_out_rad_factor, cosmology, True, load_fits, clean_obs,
                                                              clean_obs_reg, clean_obs_threshold, False,
-                                                             peak_find_method, True)
+                                                             peak_find_method, True, telescope, search_distance)
                             final_names.append(n)
                         except NoValidObservationsError:
                             # warn("After a failed attempt to find an X-ray peak, and after applying the criteria for "
@@ -199,7 +254,7 @@ class ClusterSample(BaseSample):
 
         # And again I ask XGA to generate the merged images and exposure maps, in case any sources have been
         #  cleaned and had data removed
-        if clean_obs:
+        if clean_obs and 'xmm' in self.associated_telescopes:
             emosaic(self, "image", peak_lo_en, peak_hi_en)
             emosaic(self, "expmap", peak_lo_en, peak_hi_en)
 
@@ -217,7 +272,7 @@ class ClusterSample(BaseSample):
                         pass
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
-        if psf_corr:
+        if psf_corr and 'xmm' in self.associated_telescopes:
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
@@ -233,7 +288,7 @@ class ClusterSample(BaseSample):
                    self._failed_sources[name] == 'Failed ObsClean']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            warn("The following do not appear to have any XMM data, and will not be included in the "
+            warn("The following do not appear to have any data, and will not be included in the "
                  "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
@@ -337,58 +392,6 @@ class ClusterSample(BaseSample):
 
         return Quantity(wlm, wlm_unit)
 
-    def _get_overdens_rad_checks(self, rad_name: str) -> Quantity:
-        """
-        An internal method to retrieve particular named overdensity radii from the constituent GalaxyCluster instances
-        of this class - basically because the process is exactly the same for the three implemented overdensity
-        radii, and there was no point repeating things. This method also performs checks to ensure that every entry
-        isn't just empty.
-
-        :param str rad_name: The overdensity radius name to retrieve; i.e. 'r2500', 'r500', 'r200'.
-        :return: The requested radii.
-        :rtype: Quantity
-        """
-        # For the radii to be stored in as they are pulled out of the individual GalaxyCluster instances
-        rads = []
-        # Iterating through the galaxy cluster objects
-        for gcs in self._sources.values():
-            # Using the get radius method to ensure that all retrieved radii are in kpc units
-            rad = gcs.get_radius(rad_name, 'kpc')
-            # Result could be None, if the radius wasn't set for that clusters, have to account for that
-            if rad is None:
-                rads.append(np.NaN)
-            else:
-                rads.append(rad)
-
-        # Turn list back into something nicer to work with
-        rads = Quantity(rads)
-        # Select only those radii which are not NaN - only to check, the whole set is returned (even NaN values)
-        #  if even one of the values is not NaN
-        check_rads = rads[~np.isnan(rads)]
-        if len(check_rads) == 0:
-            raise ValueError("All {} values appear to be NaN.".format(rad_name.upper()))
-
-        # Return the radii
-        return rads
-
-    def _set_overdens_rad_checks(self, rad_name: str, new_val: Quantity):
-        """
-        An internal method that does some checks on the new radii being used to set overdensity radii for clusters
-        in this sample - other checks are done on an individual level by the property setter of GalaxyCluster.
-
-        :param str rad_name: The overdensity radius name to retrieve; i.e. 'r2500', 'r500', 'r200'.
-        :param Quantity new_val: The new overdensity radius values
-        """
-        # Throw an error if the new value is scalar, because a ClusterSample should always contain multiple clusters
-        #  and so passing a single value of radius is daft
-        if new_val.isscalar:
-            raise ValueError("Setting a sample {} with a single radius value is not allowed.".format(rad_name.upper()))
-        # Need to check that the passed quantity has the expected number of entries
-        elif len(new_val) != len(self):
-            raise ValueError("The new {r} quantity does not have the same number of entries ({nl}) as there are "
-                             "clusters in this sample ({cl}).".format(nl=len(new_val), cl=len(self),
-                                                                      r=rad_name.upper()))
-
     @property
     def r200(self) -> Quantity:
         """
@@ -464,6 +467,58 @@ class ClusterSample(BaseSample):
         for gcs_ind, gcs in enumerate(self._sources.values()):
             gcs.r2500 = new_val[gcs_ind]
 
+    def _get_overdens_rad_checks(self, rad_name: str) -> Quantity:
+        """
+        An internal method to retrieve particular named overdensity radii from the constituent GalaxyCluster instances
+        of this class - basically because the process is exactly the same for the three implemented overdensity
+        radii, and there was no point repeating things. This method also performs checks to ensure that every entry
+        isn't just empty.
+
+        :param str rad_name: The overdensity radius name to retrieve; i.e. 'r2500', 'r500', 'r200'.
+        :return: The requested radii.
+        :rtype: Quantity
+        """
+        # For the radii to be stored in as they are pulled out of the individual GalaxyCluster instances
+        rads = []
+        # Iterating through the galaxy cluster objects
+        for gcs in self._sources.values():
+            # Using the get radius method to ensure that all retrieved radii are in kpc units
+            rad = gcs.get_radius(rad_name, 'kpc')
+            # Result could be None, if the radius wasn't set for that clusters, have to account for that
+            if rad is None:
+                rads.append(np.NaN)
+            else:
+                rads.append(rad)
+
+        # Turn list back into something nicer to work with
+        rads = Quantity(rads)
+        # Select only those radii which are not NaN - only to check, the whole set is returned (even NaN values)
+        #  if even one of the values is not NaN
+        check_rads = rads[~np.isnan(rads)]
+        if len(check_rads) == 0:
+            raise ValueError("All {} values appear to be NaN.".format(rad_name.upper()))
+
+        # Return the radii
+        return rads
+
+    def _set_overdens_rad_checks(self, rad_name: str, new_val: Quantity):
+        """
+        An internal method that does some checks on the new radii being used to set overdensity radii for clusters
+        in this sample - other checks are done on an individual level by the property setter of GalaxyCluster.
+
+        :param str rad_name: The overdensity radius name to retrieve; i.e. 'r2500', 'r500', 'r200'.
+        :param Quantity new_val: The new overdensity radius values
+        """
+        # Throw an error if the new value is scalar, because a ClusterSample should always contain multiple clusters
+        #  and so passing a single value of radius is daft
+        if new_val.isscalar:
+            raise ValueError("Setting a sample {} with a single radius value is not allowed.".format(rad_name.upper()))
+        # Need to check that the passed quantity has the expected number of entries
+        elif len(new_val) != len(self):
+            raise ValueError("The new {r} quantity does not have the same number of entries ({nl}) as there are "
+                             "clusters in this sample ({cl}).".format(nl=len(new_val), cl=len(self),
+                                                                      r=rad_name.upper()))
+
     def get_radius(self, rad_name: str) -> Quantity:
         """
         Similar to the BaseSource get_radius method, but more limited in that it cannot convert radii to the desired
@@ -484,7 +539,7 @@ class ClusterSample(BaseSample):
         else:
             raise ValueError("Please pass either 'r2500', 'r500', or 'r200'.")
 
-    def Lx(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
+    def Lx(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
            over_sample: float = None, quality_checks: bool = True):
@@ -498,12 +553,13 @@ class ClusterSample(BaseSample):
         This overrides the BaseSample method, but the only difference is that this has a default model, which
         is what single_temp_apec fits (constant*tbabs*apec).
 
-        :param str model: The name of the fitted model that you're requesting the luminosities
-            from (e.g. constant*tbabs*apec).
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). You may also pass a quantity containing radius values,
             with one value for each source in this sample.
+        :param str telescope: The telescope for which to retrieve spectral fit luminosities.
+        :param str model: The name of the fitted model that you're requesting the luminosities
+            from (e.g. constant*tbabs*apec).
         :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
             for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
@@ -523,10 +579,10 @@ class ClusterSample(BaseSample):
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
         :rtype: Quantity
         """
-        return super().Lx(outer_radius, model, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn, over_sample,
-                          quality_checks)
+        return super().Lx(outer_radius, telescope, model, inner_radius, lo_en, hi_en, group_spec, min_counts,
+                          min_sn, over_sample, quality_checks)
 
-    def Tx(self, outer_radius: Union[str, Quantity] = 'r500', model: str = 'constant*tbabs*apec',
+    def Tx(self, telescope: str, outer_radius: Union[str, Quantity] = 'r500', model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
            min_sn: float = None, over_sample: float = None, quality_checks: bool = True):
         """
@@ -538,13 +594,14 @@ class ClusterSample(BaseSample):
         err is less than zero isn't returned, and any temperature where one of the errors is more than three times
         larger than the other is considered failed (if quality checks are on).
 
-        :param str model: The name of the fitted model that you're requesting the results
-            from (e.g. constant*tbabs*apec).
+        :param str telescope: The telescope for which to retrieve spectral fit temperatures.
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
             region files), then any inner radius will be ignored. You may also pass a quantity containing radius
             values, with one value for each source in this sample. The default for this method is r500.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
         :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
             for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
@@ -565,6 +622,11 @@ class ClusterSample(BaseSample):
         # Has to be here to prevent circular import unfortunately
         from ..sas._common import region_setup
 
+        # Have to check that the chosen telescope is actually valid for this sample
+        if telescope not in self.associated_telescopes:
+            raise NotAssociatedError("The {t} telescope is not associated with any source in this "
+                                     "sample.".format(t=telescope))
+
         if outer_radius != 'region':
             # This just parses the input inner and outer radii into something predictable
             inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
@@ -575,8 +637,8 @@ class ClusterSample(BaseSample):
         for src_ind, gcs in enumerate(self._sources.values()):
             try:
                 # Fetch the temperature from a given cluster using the dedicated method
-                gcs_temp = gcs.get_temperature(out_rads[src_ind], model, inn_rads[src_ind], group_spec, min_counts,
-                                               min_sn, over_sample).value
+                gcs_temp = gcs.get_temperature(out_rads[src_ind], telescope, model, inn_rads[src_ind], group_spec,
+                                               min_counts, min_sn, over_sample).value
 
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
                 #  so its set to NaN
