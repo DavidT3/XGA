@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 14:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 09:57. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -98,7 +98,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param str save_samp_results_path: The path to save the final results (temperatures, luminosities, radii) to.
@@ -181,11 +181,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # Keeps track of the current iteration number
     iter_num = 0
 
+    # TODO Rejig this once more telescopes are fully implemented (i.e. have spectral generation/fitting) - at the
+    #  moment I have hard-coded that it should only search for XMM data
     # Set up the ClusterSample to be used for this process (I did consider setting up a new one each time but that
     #  adds overhead, and I think that this way should work fine).
     samp = ClusterSample(sample_data['ra'].values, sample_data['dec'].values, sample_data['redshift'].values,
                          sample_data['name'].values, use_peak=use_peak, peak_find_method=peak_find_method,
-                         clean_obs_threshold=0.7, clean_obs_reg=o_dens, load_fits=False, cosmology=cosmo, **o_dens_arg)
+                         clean_obs_threshold=0.7, clean_obs_reg=o_dens, load_fits=False, cosmology=cosmo, **o_dens_arg,
+                         telescope='xmm')
 
     # As it is possible some clusters in the sample_data dataframe don't actually have X-ray data, we copy
     #  the sample_data and cut it down, so it only contains entries for clusters that were loaded in the sample at the
@@ -354,8 +357,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             #  spectral fit to contend with - if there are no successful fits then the entry for the current
             #  cluster will be NaN
             try:
+                # TODO Another hard-coded XMM here
                 # The temperature measured within the overdensity radius, with its - and + uncertainties are read out
-                vals += list(rel_src.get_temperature(rel_rad, group_spec=group_spec, min_counts=min_counts,
+                vals += list(rel_src.get_temperature(rel_rad, 'xmm', group_spec=group_spec, min_counts=min_counts,
                                                      min_sn=min_sn, over_sample=over_sample).value)
                 # We add columns with informative names
                 cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
@@ -390,8 +394,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             # Now we repeat the above process, but only if we know the user requested core-excised values as well
             if core_excised:
                 try:
+                    # TODO Another hard-coded XMM here
                     # Adding temperature value and uncertainties
-                    vals += list(rel_src.get_temperature(rel_rad, inner_radius=0.15*rel_rad, group_spec=group_spec,
+                    vals += list(rel_src.get_temperature(rel_rad, 'xmm', inner_radius=0.15*rel_rad, group_spec=group_spec,
                                                          min_counts=min_counts, min_sn=min_sn,
                                                          over_sample=over_sample).value)
                     # Corresponding column names (with ce now included to indicate core-excised).
