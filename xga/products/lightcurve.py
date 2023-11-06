@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/04/2023, 23:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 17:32. Copyright (c) The Contributors
 from typing import Union
 from warnings import warn
 
@@ -408,7 +408,7 @@ class LightCurve(BaseProduct):
              lo_time_lim: Quantity = None, hi_time_lim: Quantity = None, colour: str = 'black',
              plot_sep: bool = False, src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick',
              custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
-             highlight_gti: bool = True):
+             highlight_bad_times: bool = True):
 
         if isinstance(time_unit, str):
             time_unit = Unit(time_unit)
@@ -438,14 +438,19 @@ class LightCurve(BaseProduct):
             plt.errorbar(time_x.value, self.count_rate.value, yerr=self.count_rate_err.value, capsize=2,
                          color=colour, label='Background subtracted', fmt='x')
 
-        if highlight_gti:
-            for ind in range(len(self.src_gti)-1):
-                cur_start = self.src_gti[ind, 0] - self.start_time.to(time_unit)
-                cur_stop = self.src_gti[ind, 1] - self.start_time.to(time_unit)
-                plt.axvspan(cur_start.value, cur_stop.value, color='seagreen', alpha=0.3)
-            plt.axvspan(self.src_gti[-1, 0].value - self.start_time.to(time_unit).value,
-                        self.src_gti[-1, 1].value - self.start_time.to(time_unit).value, color='seagreen', alpha=0.3,
-                        label='Good time interval')
+        if highlight_bad_times:
+            for ind in range(len(self.src_gti)-2):
+                if ind == 0 and (self.src_gti[ind, 0]-self.start_time).to('s') != 0:
+                    bad_start = Quantity(0, time_unit)
+                    bad_stop = self.src_gti[ind, 0] - self.start_time.to(time_unit)
+                else:
+                    bad_start = self.src_gti[ind, 1] - self.start_time.to(time_unit)
+                    bad_stop = self.src_gti[ind+1, 0] - self.start_time.to(time_unit)
+
+                plt.axvspan(bad_start.value, bad_stop.value, color='firebrick', alpha=0.3)
+            plt.axvspan(self.src_gti[-2, 1].value - self.start_time.to(time_unit).value,
+                        self.src_gti[-1, 1].value - self.start_time.to(time_unit).value, color='firebrick', alpha=0.3,
+                        label='Bad time interval')
 
         if custom_title is not None:
             plt.title(custom_title, fontsize=title_font_size)
@@ -473,3 +478,6 @@ class LightCurve(BaseProduct):
         plt.tight_layout()
         plt.show()
         plt.close('all')
+
+
+# class AggregateLightCurve(BaseAggregateProduct)
