@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 15:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 09:20. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -13,6 +13,7 @@ from fitsio import write
 from scipy.signal import convolve
 from tqdm import tqdm
 
+from ..exceptions import NotAssociatedError
 from ..products import PSFGrid, Image
 from ..samples.base import BaseSample
 from ..sas import evselect_image, psfgen, emosaic
@@ -103,6 +104,12 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     hi_en = hi_en.to('keV')
     # Making sure that the necessary images and PSFs are generated
     evselect_image(sources, lo_en, hi_en, num_cores=num_cores)
+
+    # This method currently only works for xmm, so we need to make sure that XMM is actually associated with the
+    #  source, or at least one source if it is in a sample
+    if 'xmm' not in sources.telescopes:
+        raise NotAssociatedError("The XMM telescope is not associated with this source/sample, and this method "
+                                 "currently only supports XMM.")
 
     # If just one source is passed in, make it a list of one, makes behaviour more consistent
     #  throughout this function.
