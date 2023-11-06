@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 16:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 17:35. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -486,7 +486,7 @@ class BaseSource:
 
         for po in prod_obj:
             if po is not None:
-                if isinstance(po, Image):
+                if isinstance(po, Image) or isinstance(po, LightCurve):
                     extra_key = po.storage_key
                     en_key = "bound_{l}-{u}".format(l=float(po.energy_bounds[0].value),
                                                     u=float(po.energy_bounds[1].value))
