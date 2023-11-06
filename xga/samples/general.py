@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 09:16. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -118,7 +118,7 @@ class ExtendedSample(BaseSample):
 
         # TODO This will need to be altered when I create a general image making function and exposure
         #  map making function that support the different telescopes after checking which are available
-        if 'xmm' in self.associated_telescopes:
+        if 'xmm' in self.telescopes:
             evselect_image(self, peak_lo_en, peak_hi_en)
             eexpmap(self, peak_lo_en, peak_hi_en)
             emosaic(self, "image", peak_lo_en, peak_hi_en)
@@ -172,7 +172,7 @@ class ExtendedSample(BaseSample):
                 dec_lb.update(1)
         self._names = final_names
 
-        if 'xmm' in self.associated_telescopes:
+        if 'xmm' in self.telescopes:
             # I've cleaned the observations, and its possible some of the data has been thrown away,
             #  so I should regenerate the mosaic images/expmaps
             emosaic(self, "image", peak_lo_en, peak_hi_en)
@@ -180,7 +180,7 @@ class ExtendedSample(BaseSample):
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
         # TODO this won't currently work for non-XMM telescopes
-        if psf_corr and 'xmm' in self.associated_telescopes:
+        if psf_corr and 'xmm' in self.telescopes:
             # Trying to see if this stops a circular import issue I've been having
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
@@ -339,7 +339,7 @@ class PointSample(BaseSample):
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
                          no_prog_bar=no_prog_bar, telescope=telescope, search_distance=search_distance)
 
-        if 'xmm' in self.associated_telescopes:
+        if 'xmm' in self.telescopes:
             evselect_image(self, peak_lo_en, peak_hi_en)
             eexpmap(self, peak_lo_en, peak_hi_en)
             emosaic(self, "image", peak_lo_en, peak_hi_en)
@@ -388,7 +388,7 @@ class PointSample(BaseSample):
                 dec_lb.update(1)
         self._names = final_names
 
-        if 'xmm' in self.associated_telescopes:
+        if 'xmm' in self.telescopes:
             # I've cleaned the observations, and its possible some of the data has been thrown away,
             #  so I should regenerate the mosaic images/expmaps
             emosaic(self, "image", peak_lo_en, peak_hi_en)
@@ -396,7 +396,7 @@ class PointSample(BaseSample):
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
         # TODO this currently won't work for non-XMM telescopes
-        if psf_corr and 'xmm' in self.associated_telescopes:
+        if psf_corr and 'xmm' in self.telescopes:
             # Trying to see if this stops a circular import issue I've been having
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)

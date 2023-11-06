@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 09:16. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -237,18 +237,7 @@ class BaseSample:
         return self._cosmo
 
     @property
-    def telescopes(self) -> dict:
-        """
-        Retrieves the telescopes that have data associated with the sources in this sample.
-
-        :return: A dictionary where the keys are source names, and the values are lists of telescope names associated
-            with the sources.
-        :rtype: dict
-        """
-        return {n: s.telescopes for n, s in self._sources.items()}
-
-    @property
-    def associated_telescopes(self) -> list:
+    def telescopes(self) -> list:
         """
         Returns a list of any telescope that is associated with at least one of the sources in the sample. This is in
         contrast to the telescopes property, which returns the telescopes associated with each individual source.
@@ -259,7 +248,18 @@ class BaseSample:
         return list(set([t for s in self._sources.values() for t in s.telescopes]))
 
     @property
-    def obs_ids(self) -> dict:
+    def src_telescopes(self) -> dict:
+        """
+        Retrieves the telescopes that have data associated with the sources in this sample.
+
+        :return: A dictionary where the keys are source names, and the values are lists of telescope names associated
+            with the sources.
+        :rtype: dict
+        """
+        return {n: s.telescopes for n, s in self._sources.items()}
+
+    @property
+    def src_obs_ids(self) -> dict:
         """
         Retrieves the ObsIDs associated with the sources in this sample, for each of the telescopes associated.
 
@@ -406,7 +406,7 @@ class BaseSample:
         from ..sas._common import region_setup
 
         # Have to check that the chosen telescope is actually valid for this sample
-        if telescope not in self.associated_telescopes:
+        if telescope not in self.telescopes:
             raise NotAssociatedError("The {t} telescope is not associated with any source in this "
                                      "sample.".format(t=telescope))
 

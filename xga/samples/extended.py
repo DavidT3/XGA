@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 13:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 09:16. Copyright (c) The Contributors
 
 from typing import List
 
@@ -131,7 +131,7 @@ class ClusterSample(BaseSample):
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
                          no_prog_bar=no_prog_bar, telescope=telescope, search_distance=search_distance)
 
-        if 'xmm' in self.associated_telescopes:
+        if 'xmm' in self.telescopes:
             # This part is super useful - it is much quicker to use the base sources to generate all
             #  necessary ratemaps, as we can do it in parallel for the entire sample, rather than one at a time as
             #  might be necessary for peak finding in the cluster init.
@@ -254,7 +254,7 @@ class ClusterSample(BaseSample):
 
         # And again I ask XGA to generate the merged images and exposure maps, in case any sources have been
         #  cleaned and had data removed
-        if clean_obs and 'xmm' in self.associated_telescopes:
+        if clean_obs and 'xmm' in self.telescopes:
             emosaic(self, "image", peak_lo_en, peak_hi_en)
             emosaic(self, "expmap", peak_lo_en, peak_hi_en)
 
@@ -272,7 +272,7 @@ class ClusterSample(BaseSample):
                         pass
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
-        if psf_corr and 'xmm' in self.associated_telescopes:
+        if psf_corr and 'xmm' in self.telescopes:
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
@@ -623,7 +623,7 @@ class ClusterSample(BaseSample):
         from ..sas._common import region_setup
 
         # Have to check that the chosen telescope is actually valid for this sample
-        if telescope not in self.associated_telescopes:
+        if telescope not in self.telescopes:
             raise NotAssociatedError("The {t} telescope is not associated with any source in this "
                                      "sample.".format(t=telescope))
 
@@ -734,7 +734,7 @@ class ClusterSample(BaseSample):
         from ..sas._common import region_setup
 
         # Have to check that the chosen telescope is actually valid for this sample
-        if telescope not in self.associated_telescopes:
+        if telescope not in self.telescopes:
             raise NotAssociatedError("The {t} telescope is not associated with any source in this "
                                      "sample.".format(t=telescope))
 
@@ -839,7 +839,7 @@ class ClusterSample(BaseSample):
         ms = []
 
         # Have to check that the chosen telescope is actually valid for this sample
-        if telescope not in self.associated_telescopes:
+        if telescope not in self.telescopes:
             raise NotAssociatedError("The {t} telescope is not associated with any source in this "
                                      "sample.".format(t=telescope))
 
@@ -915,7 +915,7 @@ class ClusterSample(BaseSample):
         rs = []
 
         # Have to check that the chosen telescope is actually valid for this sample
-        if telescope not in self.associated_telescopes:
+        if telescope not in self.telescopes:
             raise NotAssociatedError("The {t} telescope is not associated with any source in this "
                                      "sample.".format(t=telescope))
 
