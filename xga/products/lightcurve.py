@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 18:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 18:35. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -820,7 +820,23 @@ class AggregateLightCurve(BaseAggregateProduct):
 
     @property
     def time_chunks(self) -> Quantity:
-        pass
+        """
+        A getter for the start and stop times of the time chunks associated with this AggregateLightCurve. The left
+        hand column are start times, and the right hand column are stop times. These are the earliest and latest
+        times of coverage for all the observations in the particular time chunk.
+
+        :return: A Nx2 non-scalar Astropy Quantity, where the left hand column are chunk start times, and the
+            right hand column are chunk stop times.
+        :rtype: Quantity
+        """
+        chunk_bounds = []
+        for tc_id in self.time_chunk_ids:
+            rel_lcs = self.get_lightcurves(tc_id)
+            tc_start = min(Quantity([lc.start_time for lc in rel_lcs]))
+            tc_end = max(Quantity([lc.stop_time for lc in rel_lcs]))
+            chunk_bounds.append(Quantity([tc_start, tc_end]))
+
+        return Quantity(chunk_bounds)
 
     def get_lightcurves(self, time_chunk_id: int, obs_id: str = None,
                         inst: str = None) -> Union[List[LightCurve], LightCurve]:
