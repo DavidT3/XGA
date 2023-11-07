@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 14:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 17:26. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -631,24 +631,44 @@ class AggregateLightCurve(BaseAggregateProduct):
         start_sort = np.argsort(Quantity([lc.start_time for lc in lightcurves]))
         lightcurves = lightcurves[start_sort]
 
+        # lightcurves[2]._time_stop = lightcurves[3].start_time + Quantity(20, 's')
+
         super().__init__([lc.path for lc in lightcurves], 'lightcurve', obs_id_to_pass, inst_to_pass)
 
+        self._rel_obs = {}
         overlapping = np.full((len(lightcurves), len(lightcurves)), False)
         for lc_ind, lc in enumerate(lightcurves):
-            print(lc.start_time, lc.stop_time, lc.obs_id, lc.instrument)
-            cur_overlap = lc.overlap_check(lightcurves)
 
-            # cur_overlap = lc.overlap_check(np.delete(lightcurves, lc_ind))
-            # cur_overlap = np.insert(cur_overlap, lc_ind, True)
+            if lc.obs_id not in self._rel_obs:
+                self._rel_obs[lc.obs_id] = [lc.instrument]
+            else:
+                self._rel_obs[lc.obs_id].append(lc.instrument)
+
+            cur_overlap = lc.overlap_check(lightcurves)
             overlapping[lc_ind, :] = cur_overlap
 
-        plt.imshow(overlapping)
-        plt.show()
+        split = np.diag(overlapping, 1)
+        split = np.insert(split, 0, False)
 
-        import sys
-        sys.exit()
+        groupings = np.zeros(len(lightcurves), dtype=int)
+        split_inds = np.argwhere(~split).T[0]
+        for split_ind_ind, split_ind in enumerate(split_inds):
+            if split_ind_ind != (len(split_inds)-1):
+                groupings[split_ind: split_inds[split_ind_ind+1]] = split_ind_ind
+            else:
+                # As I want it to go to the very end of the array
+                groupings[split_ind:] = split_ind_ind
+
         # Maybe there is a more elegant, in-line, way of doing this, but I cannot be bothered to think of it
-        for lc in lightcurves:
+        for lc_ind, lc in enumerate(lightcurves):
+            rel_grp = groupings[lc_ind]
+            if rel_grp not in self._component_products:
+                self._component_products[rel_grp] = {lc.obs_id: {lc.instrument: lc}}
+            elif rel_grp in self._component_products and lc.obs_id not in self._component_products[rel_grp]:
+                self._component_products[rel_grp][lc.obs_id] = {lc.instrument: lc}
+            elif rel_grp in self._component_products and lc.obs_id in self._component_products[rel_grp]:
+                self._component_products[rel_grp][lc.obs_id][lc.instrument] = lc
+
             # This loop just stores the light curves in a nested dictionary product structure
             if lc.obs_id not in self._component_products:
                 self._component_products[lc.obs_id] = {lc.instrument: lc}
@@ -663,7 +683,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         :return: A list of ObsIDs.
         :rtype: list
         """
-        return list(self._component_products.keys())
+        return list(self._rel_obs.keys())
 
     @property
     def instruments(self) -> dict:
@@ -675,7 +695,7 @@ class AggregateLightCurve(BaseAggregateProduct):
             containing instruments associated with those ObsIDs.
         :rtype: dict
         """
-        return {o: list(i_dict.keys()) for o, i_dict in self._component_products.items()}
+        return self._rel_obs
 
     @property
     def all_lightcurves(self) -> List[LightCurve]:
