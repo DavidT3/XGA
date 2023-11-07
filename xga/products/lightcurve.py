@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 14:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 14:50. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -454,7 +454,8 @@ class LightCurve(BaseProduct):
         ends = Quantity([lc.stop_time for lc in lightcurves])
 
         overlap = ((starts >= self.start_time) & (starts < self.stop_time)) | \
-                  (ends >= self.start_time) & (ends < self.stop_time)
+                  ((ends >= self.start_time) & (ends < self.stop_time)) | \
+                  ((starts <= self.start_time) & (ends >= self.stop_time))
 
         if len(overlap) == 1:
             overlap = overlap[0]
@@ -490,12 +491,12 @@ class LightCurve(BaseProduct):
                 raise ValueError("This light-curve is background subtracted, so we cannot plot the total and "
                                  "background separately.")
             ax.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
-                         color=src_colour, label='Source', fmt='x')
+                        color=src_colour, label='Source', fmt='x')
             ax.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
-                         color=bck_colour, label='Background', fmt='x')
+                        color=bck_colour, label='Background', fmt='x')
         else:
             ax.errorbar(time_x.value, self.count_rate.value, yerr=self.count_rate_err.value, capsize=2,
-                         color=colour, label='Background subtracted', fmt='x')
+                        color=colour, label='Background subtracted', fmt='x')
 
         if highlight_bad_times:
             for ind in range(len(self.src_gti)-2):
@@ -506,10 +507,10 @@ class LightCurve(BaseProduct):
                     bad_start = self.src_gti[ind, 1] - self.start_time.to(time_unit)
                     bad_stop = self.src_gti[ind+1, 0] - self.start_time.to(time_unit)
 
-                plt.axvspan(bad_start.value, bad_stop.value, color='firebrick', alpha=0.3)
-            plt.axvspan(self.src_gti[-2, 1].value - self.start_time.to(time_unit).value,
-                        self.src_gti[-1, 0].value - self.start_time.to(time_unit).value, color='firebrick', alpha=0.3,
-                        label='Bad time interval')
+                ax.axvspan(bad_start.value, bad_stop.value, color='firebrick', alpha=0.3)
+            ax.axvspan(self.src_gti[-2, 1].value - self.start_time.to(time_unit).value,
+                       self.src_gti[-1, 0].value - self.start_time.to(time_unit).value, color='firebrick', alpha=0.3,
+                       label='Bad time interval')
 
         if custom_title is not None:
             ax.set_title(custom_title, fontsize=title_font_size)
@@ -626,12 +627,26 @@ class AggregateLightCurve(BaseAggregateProduct):
         else:
             inst_to_pass = 'combined'
 
+        # This just sorts the lightcurves by their start time, for earliest to latest
+        start_sort = np.argsort(Quantity([lc.start_time for lc in lightcurves]))
+        lightcurves = lightcurves[start_sort]
+
         super().__init__([lc.path for lc in lightcurves], 'lightcurve', obs_id_to_pass, inst_to_pass)
 
+        overlapping = np.full((len(lightcurves), len(lightcurves)), False)
         for lc_ind, lc in enumerate(lightcurves):
-            lc.overlap_check(np.delete(lightcurves, lc_ind))
-            print('')
+            print(lc.start_time, lc.stop_time, lc.obs_id, lc.instrument)
+            cur_overlap = lc.overlap_check(lightcurves)
 
+            # cur_overlap = lc.overlap_check(np.delete(lightcurves, lc_ind))
+            # cur_overlap = np.insert(cur_overlap, lc_ind, True)
+            overlapping[lc_ind, :] = cur_overlap
+
+        plt.imshow(overlapping)
+        plt.show()
+
+        import sys
+        sys.exit()
         # Maybe there is a more elegant, in-line, way of doing this, but I cannot be bothered to think of it
         for lc in lightcurves:
             # This loop just stores the light curves in a nested dictionary product structure
