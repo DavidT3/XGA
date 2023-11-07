@@ -1,6 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 10:16. Copyright (c) The Contributors
-from typing import Union
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 12:14. Copyright (c) The Contributors
+from typing import Union, List
 from warnings import warn
 
 import matplotlib.pyplot as plt
@@ -9,8 +9,8 @@ from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
 
-from xga.exceptions import FailedProductError
-from xga.products import BaseProduct
+from xga.exceptions import FailedProductError, IncompatibleProductError
+from xga.products import BaseProduct, BaseAggregateProduct
 
 
 class LightCurve(BaseProduct):
@@ -128,7 +128,7 @@ class LightCurve(BaseProduct):
         This property provides the central coordinates (RA-Dec) of the region that this light curve
         was generated from.
 
-        :return: Astropy quantity object containing the central coordinate in degrees.
+        :return: Astropy Quantity object containing the central coordinate in degrees.
         :rtype: Quantity
         """
         return self._central_coord
@@ -155,7 +155,7 @@ class LightCurve(BaseProduct):
         return self._inner_rad
 
     @property
-    def outer_rad(self):
+    def outer_rad(self) -> Quantity:
         """
         Gives the outer radius (if circular) or radii (if elliptical - semi-major, semi-minor) of the
         region in which this light curve was generated.
@@ -164,6 +164,16 @@ class LightCurve(BaseProduct):
         :rtype: Quantity
         """
         return self._outer_rad
+
+    @property
+    def time_bin_size(self) -> Quantity:
+        """
+        Gives the time bin size used to generate the lightcurve.
+
+        :return: The time bin size used to generate the lightcurve.
+        :rtype: Quantity
+        """
+        return self._time_bin
 
     @property
     def count_rate(self) -> Quantity:
@@ -522,7 +532,202 @@ class LightCurve(BaseProduct):
         plt.close("all")
 
 
+class AggregateLightCurve(BaseAggregateProduct):
+    def __init__(self, lightcurves: List[LightCurve]):
+        """
+        The init method for the AggregateLightCurve class, performs checks and organises the light-curves which
+        have been passed in, for easy retrieval. It also allows for analysis to be performed on the combined
+        data, and for visualisations to be created.
 
-# class AggregateLightCurve(BaseAggregateProduct):
-#     def __init__(self):
-#         pass
+        This class is designed to package light-curves generated for the same source, with the same settings, and
+        for the same energy bounds - if interested in the time varying behaviours of multiple energy bands then
+        the HardnessCurve and AggregateHardnessCurve products should be used. It can take light-curves from different
+        instruments, and will deal with them simultaneously rather than stacking them.
+        """
+        # Obviously we need to make sure there are enough light curves to aggregate
+        if len(lightcurves) < 2:
+            raise ValueError("At least two light curves must be passed in order to declare an AggregateLightCurve.")
+
+        # We need to do some checking on the input light-curves, to make sure they're for the same source, region, and
+        #  energy bands - the first of the light curves is selected as the comparison point. We're going to check that
+        #  each of them has the same central coordinates, region shape, inner radius, outer radius, and energy bounds
+        comp_lc = lightcurves[0]
+        if not all([np.array_equal(comp_lc.central_coord, lc.central_coord) for lc in lightcurves[1:]]):
+            raise IncompatibleProductError("Central coordinates of all lightcurves passed to AggregateLightCurve must "
+                                           "be the same.")
+        elif not all([lc.shape == comp_lc.shape for lc in lightcurves[1:]]):
+            raise IncompatibleProductError("Region shape of all lightcurves passed to AggregateLightCurve must "
+                                           "be the same.")
+        elif not all([np.array_equal(comp_lc.inner_rad, lc.inner_rad) for lc in lightcurves[1:]]):
+            raise IncompatibleProductError("Inner radii of lightcurves passed to AggregateLightCurve must "
+                                           "be the same.")
+        elif not all([np.array_equal(comp_lc.outer_rad, lc.outer_rad) for lc in lightcurves[1:]]):
+            raise IncompatibleProductError("Outer radii of lightcurves passed to AggregateLightCurve must "
+                                           "be the same.")
+        # Past me made the energy_bounds return a tuple for some reason - just need to convert to a Quantity to compare
+        elif not all([np.array_equal(Quantity(comp_lc.energy_bounds), Quantity(lc.energy_bounds))
+                      for lc in lightcurves[1:]]):
+            raise IncompatibleProductError("The energy bounds of lightcurves passed to AggregateLightCurve must "
+                                           "be the same - if interested in the time varying behaviours of multiple "
+                                           "energy bands then the HardnessCurve and AggregateHardnessCurve products "
+                                           "should be used.")
+        # Checks that the time bin sizes used to generate the lightcurves are the same
+        elif not all([lc.time_bin_size == comp_lc.time_bin_size for lc in lightcurves[1:]]):
+            raise IncompatibleProductError("Time bin sizes of lightcurves passed to AggregateLightCurve must "
+                                           "be the same.")
+
+        # Pulls out all the ObsIDs and instruments associated with these light curves
+        obs_ids = list(set([lc.obs_id for lc in lightcurves]))
+        insts = list(set([lc.instrument for lc in lightcurves]))
+
+        if len(obs_ids) == 1:
+            obs_id_to_pass = obs_ids[0]
+        else:
+            obs_id_to_pass = 'combined'
+
+        if len(insts) == 1:
+            inst_to_pass = insts[0]
+        else:
+            inst_to_pass = 'combined'
+
+        super().__init__([lc.path for lc in lightcurves], 'lightcurve', obs_id_to_pass, inst_to_pass)
+
+        for lc in lightcurves:
+            print(lc.start_time, lc.stop_time)
+
+        # Maybe there is a more elegant, in-line, way of doing this, but I cannot be bothered to think of it
+        for lc in lightcurves:
+            # This loop just stores the light curves in a nested dictionary product structure
+            if lc.obs_id not in self._component_products:
+                self._component_products[lc.obs_id] = {lc.instrument: lc}
+            else:
+                self._component_products[lc.obs_id][lc.instrument] = lc
+
+    @property
+    def obs_ids(self) -> list:
+        """
+        A property of this spectrum set that details which ObsIDs have contributed lightcurves to this object.
+
+        :return: A list of ObsIDs.
+        :rtype: list
+        """
+        return list(self._component_products.keys())
+
+    @property
+    def instruments(self) -> dict:
+        """
+        A property of this spectrum set that details which ObsIDs and instruments have contributed lightcurves
+        to this object. The top level keys are ObsIDs, and the values are lists of instruments.
+
+        :return: A dictionary of lists, with the top level keys being ObsIDs, and the lists
+            containing instruments associated with those ObsIDs.
+        :rtype: dict
+        """
+        return {o: list(i_dict.keys()) for o, i_dict in self._component_products.items()}
+
+    @property
+    def all_lightcurves(self) -> List[LightCurve]:
+        """
+        Simple extra wrapper for get_lightcurve that allows the user to retrieve every single lightcurve associated
+        with this AggregateLightCurve instance, for all ObsIDs and Instruments.
+
+        :return: A list of every single lightcurve associated with this object.
+        :rtype: List[LightCurve]
+        """
+        # Just means that there is a property, users might be more inclined to look for it than thinking of calling
+        #  this method to get a flattened list of light-curves. Don't even need to check that the return is a list
+        #  because we checked in the init that at least two lightcurves were passed
+        all_lc = self.get_lightcurves()
+
+        return all_lc
+
+    @property
+    def central_coord(self) -> Quantity:
+        """
+        This property provides the central coordinates (RA-Dec) of the region that this set of light curves
+        was generated from.
+
+        :return: Astropy Quantity object containing the central coordinate in degrees.
+        :rtype: Quantity
+        """
+        return self.all_lightcurves[0].central_coord
+
+    @property
+    def shape(self) -> str:
+        """
+        Returns the shape of the outer edge of the region this set of light curves was generated from.
+
+        :return: The shape (either circular or elliptical).
+        :rtype: str
+        """
+        return self.all_lightcurves[0].shape
+
+    @property
+    def inner_rad(self) -> Quantity:
+        """
+        Gives the inner radius (if circular) or radii (if elliptical - semi-major, semi-minor) of the
+        region in which this set of light curves was generated.
+
+        :return: The inner radius(ii) of the region.
+        :rtype: Quantity
+        """
+        return self.all_lightcurves[0].inner_rad
+
+    @property
+    def outer_rad(self):
+        """
+        Gives the outer radius (if circular) or radii (if elliptical - semi-major, semi-minor) of the
+        region in which this set of light curves was generated.
+
+        :return: The outer radius(ii) of the region.
+        :rtype: Quantity
+        """
+        return self.all_lightcurves[0].outer_rad
+
+    # def get_lightcurves(self, obs_id: str = None, inst: str = None) -> Union[List[LightCurve], LightCurve]:
+    #     """
+    #     This is the getter for the lightcurves stored in the AggregateLightCurve data storage structure. They can
+    #     be retrieved based on ObsID and instrument.
+    #
+    #     :param str obs_id: Optionally, a specific obs_id to search for can be supplied.
+    #     :param str inst: Optionally, a specific instrument to search for can be supplied.
+    #     :return: List of matching lightcurves, or just a LightCurve object if one match is found.
+    #     :rtype: Union[List[LightCurve], LightCurve]
+    #     """
+    #
+    #     def unpack_list(to_unpack: list):
+    #         """
+    #         A recursive function to go through every layer of a nested list and flatten it all out. It
+    #         doesn't return anything because to make life easier the 'results' are appended to a variable
+    #         in the namespace above this one.
+    #
+    #         :param list to_unpack: The list that needs unpacking.
+    #         """
+    #         # Must iterate through the given list
+    #         for entry in to_unpack:
+    #             # If the current element is not a list then all is chill, this element is ready for appending
+    #             # to the final list
+    #             if not isinstance(entry, list):
+    #                 out.append(entry)
+    #             else:
+    #                 # If the current element IS a list, then obviously we still have more unpacking to do,
+    #                 # so we call this function recursively.
+    #                 unpack_list(entry)
+    #
+    #     if obs_id not in self._component_products and obs_id is not None:
+    #         raise NotAssociatedError("{0} is not associated with this AggregateLightCurve.".format(obs_id))
+    #     elif (obs_id is not None and obs_id in self._component_products) and \
+    #             (inst is not None and inst not in self._component_products[obs_id]):
+    #         raise NotAssociatedError("Instrument {1} is not associated with {0}".format(obs_id, inst))
+    #
+    #     matches = []
+    #     for match in dict_search(annulus_ident, self._component_products):
+    #         out = []
+    #         unpack_list(match)
+    #         if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None):
+    #             matches.append(out[-1])
+    #
+    #     # Here I only return the object if one match was found
+    #     if len(matches) == 1:
+    #         matches = matches[0]
+    #     return matches
