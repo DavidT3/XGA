@@ -1,9 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 20:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 09:37. Copyright (c) The Contributors
 from typing import Union
 from warnings import warn
 
 import matplotlib.pyplot as plt
+import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS, FITSHDR, read_header
 
@@ -366,6 +367,8 @@ class LightCurve(BaseProduct):
         memory, and that the source file has actually been classed as usable, and then read the relevant data into
         attributes of this class.
         """
+        # TODO The way this is laid out is a bit weird
+
         # Usable flag to check that nothing went wrong in the light-curve generation, and the _read_in flag to
         #  check that we haven't already read this in to memory - no sense doing it again
         if self.usable and not self._read_in:
@@ -375,15 +378,30 @@ class LightCurve(BaseProduct):
                 if self._is_back_sub:
                     self._bck_sub_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
                     self._bck_sub_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+
+                    if np.isnan(self._bck_sub_cnt_rate).any():
+                        good_ent = np.where(~np.isnan(self._bck_sub_cnt_rate))
+                        self._bck_sub_cnt_rate = self._bck_sub_cnt_rate[good_ent]
+                        self._bck_sub_cnt_rate_err = self._bck_sub_cnt_rate_err[good_ent]
+                    else:
+                        good_ent = np.arange(0, len(self._bck_sub_cnt_rate))
                 else:
                     # If we weren't told that the rate data are background subtracted when the light curve was
                     #  declared, then we store the values in the source count rate attributes
                     self._src_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
                     self._src_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
-                self._time = Quantity(all_lc['RATE'].read_column('TIME'), 's')
-                self._frac_exp = Quantity(all_lc['RATE'].read_column('FRACEXP'))
-                self._bck_cnt_rate = Quantity(all_lc['RATE'].read_column('BACKV'), 'ct/s')
-                self._bck_cnt_rate_err = Quantity(all_lc['RATE'].read_column('BACKE'), 'ct/s')
+
+                    if np.isnan(self._src_cnt_rate).any():
+                        good_ent = np.where(~np.isnan(self._src_cnt_rate))
+                        self._src_cnt_rate = self._src_cnt_rate[good_ent]
+                        self._src_cnt_rate_err = self._src_cnt_rate_err[good_ent]
+                    else:
+                        good_ent = np.arange(0, len(self._src_cnt_rate))
+
+                self._time = Quantity(all_lc['RATE'].read_column('TIME'), 's')[good_ent]
+                self._frac_exp = Quantity(all_lc['RATE'].read_column('FRACEXP'))[good_ent]
+                self._bck_cnt_rate = Quantity(all_lc['RATE'].read_column('BACKV'), 'ct/s')[good_ent]
+                self._bck_cnt_rate_err = Quantity(all_lc['RATE'].read_column('BACKE'), 'ct/s')[good_ent]
 
                 # Here we read out the beginning and end times of the GTIs for source and background
                 self._src_gti = Quantity([all_lc['SRC_GTIS'].read_column('START'),
@@ -398,7 +416,6 @@ class LightCurve(BaseProduct):
                 self._time_assign = hdr['TASSIGN']
 
             # TODO add calculation for error prop of src-bck or bck+bckcorr
-
             # And set this attribute to make sure that no further reading in is done
             self._read_in = True
 
@@ -435,6 +452,9 @@ class LightCurve(BaseProduct):
 
         plt.figure(figsize=figsize)
         if plot_sep:
+            if self.src_count_rate is None:
+                raise ValueError("This light-curve is background subtracted, so we cannot plot the total and "
+                                 "background separately.")
             plt.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
                          color=src_colour, label='Source', fmt='x')
             plt.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
@@ -483,6 +503,8 @@ class LightCurve(BaseProduct):
         plt.tight_layout()
         plt.show()
         plt.close('all')
+
+
 
 
 # class AggregateLightCurve(BaseAggregateProduct)
