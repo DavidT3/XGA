@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 20:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 20:15. Copyright (c) The Contributors
 from typing import Union
 from warnings import warn
 
@@ -454,7 +454,7 @@ class LightCurve(BaseProduct):
 
                 plt.axvspan(bad_start.value, bad_stop.value, color='firebrick', alpha=0.3)
             plt.axvspan(self.src_gti[-2, 1].value - self.start_time.to(time_unit).value,
-                        self.src_gti[-1, 1].value - self.start_time.to(time_unit).value, color='firebrick', alpha=0.3,
+                        self.src_gti[-1, 0].value - self.start_time.to(time_unit).value, color='firebrick', alpha=0.3,
                         label='Bad time interval')
 
         if custom_title is not None:
