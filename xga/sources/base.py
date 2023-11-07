@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 17:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 20:02. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -490,8 +490,7 @@ class BaseSource:
                     extra_key = po.storage_key
                     en_key = "bound_{l}-{u}".format(l=float(po.energy_bounds[0].value),
                                                     u=float(po.energy_bounds[1].value))
-                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D) \
-                        or isinstance(po, LightCurve):
+                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D):
                     extra_key = po.storage_key
                 elif type(po) == PSFGrid:
                     # The first part of the key is the model used (by default its ELLBETA for example), and

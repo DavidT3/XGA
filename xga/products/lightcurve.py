@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 17:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 20:02. Copyright (c) The Contributors
 from typing import Union
 from warnings import warn
 
@@ -42,20 +42,24 @@ class LightCurve(BaseProduct):
         # This describes whether this spectrum was generated directly from a region present in a region file
         self._region = region
 
-        lc_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}"
+        lc_storage_name = "bound_{l}-{u}_ra{ra}_dec{dec}_ri{ri}_ro{ro}"
         if not self._region and self.inner_rad.isscalar:
             lc_storage_name = lc_storage_name.format(ra=self.central_coord[0].value, dec=self.central_coord[1].value,
-                                                     ri=self._inner_rad.value, ro=self._outer_rad.value)
+                                                     ri=self._inner_rad.value, ro=self._outer_rad.value,
+                                                     l=self.energy_bounds[0].to('keV').value,
+                                                     u=self.energy_bounds[1].to('keV').value)
         elif not self._region and not self._inner_rad.isscalar:
             inn_rad_str = 'and'.join(self._inner_rad.value.astype(str))
             out_rad_str = 'and'.join(self._outer_rad.value.astype(str))
             lc_storage_name = lc_storage_name.format(ra=self.central_coord[0].value, dec=self.central_coord[1].value,
-                                                     ri=inn_rad_str, ro=out_rad_str)
+                                                     ri=inn_rad_str, ro=out_rad_str,
+                                                     l=self.energy_bounds[0].to('keV').value,
+                                                     u=self.energy_bounds[1].to('keV').value)
         else:
             lc_storage_name = "region"
 
         # Won't include energy bounds in this right now because I think the update_products method will do that
-        #  part for us - _{l}-{u}keV l=lo_en.value, u=hi_en.value
+        #  part for us - bound_{l}-{u}keV l=lo_en.value, u=hi_en.value
         lc_storage_name += "_timebin{tb}_pattern{p}".format(tb=time_bin_size, p=self._pattern_name)
 
         # And we save the completed key to an attribute
@@ -410,6 +414,7 @@ class LightCurve(BaseProduct):
              custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
              highlight_bad_times: bool = True):
 
+        # TODO set this up like view of image, make a get_view - just in case that might be useful at some point
         if isinstance(time_unit, str):
             time_unit = Unit(time_unit)
 
