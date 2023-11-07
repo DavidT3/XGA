@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 09:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 10:16. Copyright (c) The Contributors
 from typing import Union
 from warnings import warn
 
@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS, FITSHDR, read_header
+from matplotlib.axes import Axes
 
 from xga.exceptions import FailedProductError
 from xga.products import BaseProduct
@@ -425,13 +426,11 @@ class LightCurve(BaseProduct):
                                      "data from it; reason given is {}.".format(reasons))
 
     # Then define user-facing methods
-    def view(self, figsize: tuple = (14, 6), time_unit: Union[str, Unit] = Unit('s'),
-             lo_time_lim: Quantity = None, hi_time_lim: Quantity = None, colour: str = 'black',
-             plot_sep: bool = False, src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick',
-             custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
-             highlight_bad_times: bool = True):
+    def get_view(self, ax: Axes, time_unit: Union[str, Unit] = Unit('s'), lo_time_lim: Quantity = None,
+                 hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
+                 src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
+                 label_font_size: int = 15, title_font_size: int = 18, highlight_bad_times: bool = True):
 
-        # TODO set this up like view of image, make a get_view - just in case that might be useful at some point
         if isinstance(time_unit, str):
             time_unit = Unit(time_unit)
 
@@ -450,17 +449,16 @@ class LightCurve(BaseProduct):
         elif hi_time_lim is not None and hi_time_lim.unit.is_equivalent(time_unit):
             hi_time_lim = hi_time_lim.to(time_unit)
 
-        plt.figure(figsize=figsize)
         if plot_sep:
             if self.src_count_rate is None:
                 raise ValueError("This light-curve is background subtracted, so we cannot plot the total and "
                                  "background separately.")
-            plt.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
+            ax.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
                          color=src_colour, label='Source', fmt='x')
-            plt.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
+            ax.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
                          color=bck_colour, label='Background', fmt='x')
         else:
-            plt.errorbar(time_x.value, self.count_rate.value, yerr=self.count_rate_err.value, capsize=2,
+            ax.errorbar(time_x.value, self.count_rate.value, yerr=self.count_rate_err.value, capsize=2,
                          color=colour, label='Background subtracted', fmt='x')
 
         if highlight_bad_times:
@@ -478,33 +476,53 @@ class LightCurve(BaseProduct):
                         label='Bad time interval')
 
         if custom_title is not None:
-            plt.title(custom_title, fontsize=title_font_size)
+            ax.set_title(custom_title, fontsize=title_font_size)
         else:
             pass
 
         if lo_time_lim < time_x.min():
             warn('The lower time limit is smaller than the lowest time value, it has been set to the '
-                 'lowest available value.')
+                 'lowest available value.', stacklevel=2)
             lo_time_lim = time_x.min()
         if hi_time_lim > time_x.max():
             warn('The upper time limit is higher than the greatest time value, it has been set to the '
-                 'greatest available value.')
+                 'greatest available value.', stacklevel=2)
             hi_time_lim = time_x.max()
 
-        plt.minorticks_on()
-        plt.tick_params(direction='in', which='both', right=True, top=True)
+        ax.minorticks_on()
+        ax.tick_params(direction='in', which='both', right=True, top=True)
 
         # Setting the axis limits
-        plt.xlim(lo_time_lim.value, hi_time_lim.value)
+        ax.set_xlim(lo_time_lim.value, hi_time_lim.value)
 
-        plt.xlabel(" Relative Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
-        plt.ylabel("Count-rate [{}]".format(self.count_rate.unit.to_string('latex')), fontsize=label_font_size)
-        plt.legend(loc='best')
+        ax.set_xlabel("Relative Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
+        ax.set_ylabel("Count-rate [{}]".format(self.count_rate.unit.to_string('latex')), fontsize=label_font_size)
+        ax.legend(loc='best')
+
+        return ax
+
+    def view(self, figsize: tuple = (14, 6), time_unit: Union[str, Unit] = Unit('s'),
+             lo_time_lim: Quantity = None, hi_time_lim: Quantity = None, colour: str = 'black',
+             plot_sep: bool = False, src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick',
+             custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
+             highlight_bad_times: bool = True):
+
+        # Create figure object
+        fig = plt.figure(figsize=figsize)
+
+        ax = plt.gca()
+
+        ax = self.get_view(ax, time_unit, lo_time_lim, hi_time_lim, colour, plot_sep, src_colour, bck_colour,
+                           custom_title, label_font_size, title_font_size, highlight_bad_times)
         plt.tight_layout()
+        # Display the image
         plt.show()
-        plt.close('all')
+
+        # Wipe the figure
+        plt.close("all")
 
 
 
-
-# class AggregateLightCurve(BaseAggregateProduct)
+# class AggregateLightCurve(BaseAggregateProduct):
+#     def __init__(self):
+#         pass
