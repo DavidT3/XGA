@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 17:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 18:20. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -9,8 +9,9 @@ from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
 
-from xga.exceptions import FailedProductError, IncompatibleProductError
+from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError
 from xga.products import BaseProduct, BaseAggregateProduct
+from xga.utils import dict_search
 
 
 class LightCurve(BaseProduct):
@@ -570,6 +571,12 @@ class AggregateLightCurve(BaseAggregateProduct):
         for the same energy bounds - if interested in the time varying behaviours of multiple energy bands then
         the HardnessCurve and AggregateHardnessCurve products should be used. It can take light-curves from different
         instruments, and will deal with them simultaneously rather than stacking them.
+
+        Light curves that are part of an AggregateLightCurve will be separated into 'time chunks', where a time chunk
+        is a period that has uninterrupted coverage. For instance, three XMM observations separated by a year each would
+        be in three different time chunks, but if there were a fourth observation that was taken by another telescope
+        and happened concurrently (even if it didn't start and end at the same time) with the first XMM
+        observation, then it would be in the same time chunk.
         """
         if isinstance(lightcurves, list):
             lightcurves = np.array(lightcurves)
@@ -634,7 +641,6 @@ class AggregateLightCurve(BaseAggregateProduct):
         # lightcurves[2]._time_stop = lightcurves[3].start_time + Quantity(20, 's')
 
         super().__init__([lc.path for lc in lightcurves], 'lightcurve', obs_id_to_pass, inst_to_pass)
-
         self._rel_obs = {}
         overlapping = np.full((len(lightcurves), len(lightcurves)), False)
         for lc_ind, lc in enumerate(lightcurves):
@@ -659,21 +665,33 @@ class AggregateLightCurve(BaseAggregateProduct):
                 # As I want it to go to the very end of the array
                 groupings[split_ind:] = split_ind_ind
 
+        self._time_chunk_ids = np.arange(0, len(split_inds))
+        print(self._time_chunk_ids)
+
         # Maybe there is a more elegant, in-line, way of doing this, but I cannot be bothered to think of it
+        # for lc_ind, lc in enumerate(lightcurves):
+        #     rel_grp = groupings[lc_ind]
+        #     if rel_grp not in self._component_products:
+        #         self._component_products[rel_grp] = {lc.obs_id: {lc.instrument: lc}}
+        #     elif rel_grp in self._component_products and lc.obs_id not in self._component_products[rel_grp]:
+        #         self._component_products[rel_grp][lc.obs_id] = {lc.instrument: lc}
+        #     elif rel_grp in self._component_products and lc.obs_id in self._component_products[rel_grp]:
+        #         self._component_products[rel_grp][lc.obs_id][lc.instrument] = lc
+
         for lc_ind, lc in enumerate(lightcurves):
             rel_grp = groupings[lc_ind]
-            if rel_grp not in self._component_products:
-                self._component_products[rel_grp] = {lc.obs_id: {lc.instrument: lc}}
-            elif rel_grp in self._component_products and lc.obs_id not in self._component_products[rel_grp]:
-                self._component_products[rel_grp][lc.obs_id] = {lc.instrument: lc}
-            elif rel_grp in self._component_products and lc.obs_id in self._component_products[rel_grp]:
-                self._component_products[rel_grp][lc.obs_id][lc.instrument] = lc
-
-            # This loop just stores the light curves in a nested dictionary product structure
             if lc.obs_id not in self._component_products:
-                self._component_products[lc.obs_id] = {lc.instrument: lc}
-            else:
-                self._component_products[lc.obs_id][lc.instrument] = lc
+                self._component_products[lc.obs_id] = {lc.instrument: {rel_grp: lc}}
+            elif lc.obs_id in self._component_products and lc.instrument not in self._component_products[lc.obs_id]:
+                self._component_products[lc.obs_id][lc.instrument] = {rel_grp: lc}
+            elif lc.obs_id in self._component_products and lc.instrument in self._component_products[lc.obs_id]:
+                self._component_products[lc.obs_id][lc.instrument][rel_grp] = lc
+        #
+        #     # This loop just stores the light curves in a nested dictionary product structure
+        #     if lc.obs_id not in self._component_products:
+        #         self._component_products[lc.obs_id] = {lc.instrument: lc}
+        #     else:
+        #         self._component_products[lc.obs_id][lc.instrument] = lc
 
     @property
     def obs_ids(self) -> list:
@@ -701,17 +719,21 @@ class AggregateLightCurve(BaseAggregateProduct):
     def all_lightcurves(self) -> List[LightCurve]:
         """
         Simple extra wrapper for get_lightcurve that allows the user to retrieve every single lightcurve associated
-        with this AggregateLightCurve instance, for all ObsIDs and Instruments.
+        with this AggregateLightCurve instance, for all time chunk IDs, ObsIDs, and Instruments.
 
         :return: A list of every single lightcurve associated with this object.
         :rtype: List[LightCurve]
         """
-        # Just means that there is a property, users might be more inclined to look for it than thinking of calling
-        #  this method to get a flattened list of light-curves. Don't even need to check that the return is a list
-        #  because we checked in the init that at least two lightcurves were passed
-        all_lc = self.get_lightcurves()
+        all_lcs = []
+        for tc_i in self.time_chunk_ids:
+            # If there is only one light curve per time chunk then get_lightcurves will just return an object
+            rel_lcs = self.get_lightcurves(tc_i)
+            if isinstance(rel_lcs, LightCurve):
+                rel_lcs = [rel_lcs]
 
-        return all_lc
+            all_lcs += rel_lcs
+
+        return all_lcs
 
     @property
     def central_coord(self) -> Quantity:
@@ -766,50 +788,89 @@ class AggregateLightCurve(BaseAggregateProduct):
         """
         return self.all_lightcurves[0].time_bin_size
 
-    # def get_lightcurves(self, obs_id: str = None, inst: str = None) -> Union[List[LightCurve], LightCurve]:
-    #     """
-    #     This is the getter for the lightcurves stored in the AggregateLightCurve data storage structure. They can
-    #     be retrieved based on ObsID and instrument.
-    #
-    #     :param str obs_id: Optionally, a specific obs_id to search for can be supplied.
-    #     :param str inst: Optionally, a specific instrument to search for can be supplied.
-    #     :return: List of matching lightcurves, or just a LightCurve object if one match is found.
-    #     :rtype: Union[List[LightCurve], LightCurve]
-    #     """
-    #
-    #     def unpack_list(to_unpack: list):
-    #         """
-    #         A recursive function to go through every layer of a nested list and flatten it all out. It
-    #         doesn't return anything because to make life easier the 'results' are appended to a variable
-    #         in the namespace above this one.
-    #
-    #         :param list to_unpack: The list that needs unpacking.
-    #         """
-    #         # Must iterate through the given list
-    #         for entry in to_unpack:
-    #             # If the current element is not a list then all is chill, this element is ready for appending
-    #             # to the final list
-    #             if not isinstance(entry, list):
-    #                 out.append(entry)
-    #             else:
-    #                 # If the current element IS a list, then obviously we still have more unpacking to do,
-    #                 # so we call this function recursively.
-    #                 unpack_list(entry)
-    #
-    #     if obs_id not in self._component_products and obs_id is not None:
-    #         raise NotAssociatedError("{0} is not associated with this AggregateLightCurve.".format(obs_id))
-    #     elif (obs_id is not None and obs_id in self._component_products) and \
-    #             (inst is not None and inst not in self._component_products[obs_id]):
-    #         raise NotAssociatedError("Instrument {1} is not associated with {0}".format(obs_id, inst))
-    #
-    #     matches = []
-    #     for match in dict_search(annulus_ident, self._component_products):
-    #         out = []
-    #         unpack_list(match)
-    #         if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None):
-    #             matches.append(out[-1])
-    #
-    #     # Here I only return the object if one match was found
-    #     if len(matches) == 1:
-    #         matches = matches[0]
-    #     return matches
+    @property
+    def time_chunk_ids(self) -> np.ndarray:
+        """
+        Getter for the time chunk IDs associated with this AggregateLightCurve. Light curves that are part of an
+        AggregateLightCurve will be separated into 'time chunks', where a time chunk is a period that has
+        uninterrupted coverage. For instance, three XMM observations separated by a year each would be in three
+        different time chunks, but if there were a fourth observation that was taken by another telescope and
+        happened concurrently (even if it didn't start and end at the same time) with the first XMM observation, then
+        it would be in the same time chunk.
+
+        :return: np.ndarray
+        :rtype: An array of integer time chunk identifiers, ordered from earlier to later times.
+        """
+        return self._time_chunk_ids
+
+    @property
+    def num_time_chunks(self) -> int:
+        """
+        Getter for the number of time chunks associated with this AggregateLightCurve. Light curves that are part
+        of an AggregateLightCurve will be separated into 'time chunks', where a time chunk is a period that has
+        uninterrupted coverage. For instance, three XMM observations separated by a year each would be in three
+        different time chunks, but if there were a fourth observation that was taken by another telescope and
+        happened concurrently (even if it didn't start and end at the same time) with the first XMM observation, then
+        it would be in the same time chunk.
+
+        :return: np.ndarray
+        :rtype: An array of integer time chunk identifiers, ordered from earlier to later times.
+        """
+        return len(self._time_chunk_ids)
+
+    @property
+    def time_chunks(self) -> Quantity:
+        pass
+
+    def get_lightcurves(self, time_chunk_id: int, obs_id: str = None,
+                        inst: str = None) -> Union[List[LightCurve], LightCurve]:
+        """
+        This is the getter for the lightcurves stored in the AggregateLightCurve data storage structure. They can
+        be retrieved based on ObsID and instrument.
+
+        :param int time_chunk_id: The time chunk identifier to retrieve lightcurves for.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied.
+        :param str inst: Optionally, a specific instrument to search for can be supplied.
+        :return: List of matching lightcurves, or just a LightCurve object if one match is found.
+        :rtype: Union[List[LightCurve], LightCurve]
+        """
+        def unpack_list(to_unpack: list):
+            """
+            A recursive function to go through every layer of a nested list and flatten it all out. It
+            doesn't return anything because to make life easier the 'results' are appended to a variable
+            in the namespace above this one.
+
+            :param list to_unpack: The list that needs unpacking.
+            """
+            # Must iterate through the given list
+            for entry in to_unpack:
+                # If the current element is not a list then all is chill, this element is ready for appending
+                # to the final list
+                if not isinstance(entry, list):
+                    out.append(entry)
+                else:
+                    # If the current element IS a list, then obviously we still have more unpacking to do,
+                    # so we call this function recursively.
+                    unpack_list(entry)
+
+        if time_chunk_id not in self.time_chunk_ids:
+            tc_str = ", ".join(self.time_chunk_ids.astype(str))
+            raise IndexError("{i} is not a time chunk ID associated with this AggregateLightCurve object. "
+                             "Allowed time chunk IDs are; {a}".format(i=time_chunk_id, a=tc_str))
+        elif obs_id not in self.obs_ids and obs_id is not None:
+            raise NotAssociatedError("{0} is not associated with this AggregateLightCurve.".format(obs_id))
+        elif (obs_id is not None and obs_id in self.obs_ids) and \
+                (inst is not None and inst not in self.instruments[obs_id]):
+            raise NotAssociatedError("Instrument {1} is not associated with {0}".format(obs_id, inst))
+
+        matches = []
+        for match in dict_search(time_chunk_id, self._component_products):
+            out = []
+            unpack_list(match)
+            if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None):
+                matches.append(out[-1])
+
+        # Here I only return the object if one match was found
+        if len(matches) == 1:
+            matches = matches[0]
+        return matches
