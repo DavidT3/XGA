@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 12:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 14:03. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -435,6 +435,32 @@ class LightCurve(BaseProduct):
             raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
                                      "data from it; reason given is {}.".format(reasons))
 
+    def overlap_check(self, lightcurves: Union['LightCurve', List['LightCurve']]) -> Union[np.ndarray, bool]:
+        """
+        A simple method which checks whether a passed LightCurve (or list of lightcurves) overlap temporally with
+        this lightcurve.
+
+        :param LightCurve/List[LightCurve] lightcurves: A LightCurve, or a list of LightCurves, to check for overlap
+            with this LightCurve.
+        :rtype: np.ndarray/bool
+        :return: A boolean value (or an array of boolean values if multiple LightCurve instances were passed) which
+            is True if the passed LightCurve temporally overlaps with this one, and False if it does not.
+        """
+        # Make sure that the input is iterable to normalise the behaviour later on
+        if isinstance(lightcurves, LightCurve):
+            lightcurves = [lightcurves]
+
+        starts = Quantity([lc.start_time for lc in lightcurves])
+        ends = Quantity([lc.stop_time for lc in lightcurves])
+
+        overlap = ((starts >= self.start_time) & (starts < self.stop_time)) | \
+                  (ends >= self.start_time) & (ends < self.stop_time)
+
+        if len(overlap) == 1:
+            overlap = overlap[0]
+
+        return overlap
+
     # Then define user-facing methods
     def get_view(self, ax: Axes, time_unit: Union[str, Unit] = Unit('s'), lo_time_lim: Quantity = None,
                  hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
@@ -533,7 +559,7 @@ class LightCurve(BaseProduct):
 
 
 class AggregateLightCurve(BaseAggregateProduct):
-    def __init__(self, lightcurves: List[LightCurve]):
+    def __init__(self, lightcurves: Union[List[LightCurve], np.ndarray]):
         """
         The init method for the AggregateLightCurve class, performs checks and organises the light-curves which
         have been passed in, for easy retrieval. It also allows for analysis to be performed on the combined
@@ -544,6 +570,16 @@ class AggregateLightCurve(BaseAggregateProduct):
         the HardnessCurve and AggregateHardnessCurve products should be used. It can take light-curves from different
         instruments, and will deal with them simultaneously rather than stacking them.
         """
+        if isinstance(lightcurves, list):
+            lightcurves = np.array(lightcurves)
+        elif not isinstance(lightcurves, np.ndarray):
+            raise TypeError("The AggregateLightCurve argument must be either a list of LightCurve objects, or a "
+                            "numpy array of LightCurve Objects.")
+
+        # Check that all the elements of the list/array are actually LightCurve objects
+        if any([not isinstance(lc, LightCurve) for lc in lightcurves]):
+            raise TypeError("You cannot pass a list/array containing an object that is not an instance of LightCurve.")
+
         # Obviously we need to make sure there are enough light curves to aggregate
         if len(lightcurves) < 2:
             raise ValueError("At least two light curves must be passed in order to declare an AggregateLightCurve.")
@@ -592,8 +628,9 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         super().__init__([lc.path for lc in lightcurves], 'lightcurve', obs_id_to_pass, inst_to_pass)
 
-        for lc in lightcurves:
-            print(lc.start_time, lc.stop_time)
+        for lc_ind, lc in enumerate(lightcurves):
+            lc.overlap_check(np.delete(lightcurves, lc_ind))
+            print('')
 
         # Maybe there is a more elegant, in-line, way of doing this, but I cannot be bothered to think of it
         for lc in lightcurves:
@@ -683,6 +720,16 @@ class AggregateLightCurve(BaseAggregateProduct):
         :rtype: Quantity
         """
         return self.all_lightcurves[0].outer_rad
+
+    @property
+    def time_bin_size(self) -> Quantity:
+        """
+        Gives the time bin size used to generate this set of light curves.
+
+        :return: The time bin size used to generate this set of light curves.
+        :rtype: Quantity
+        """
+        return self.all_lightcurves[0].time_bin_size
 
     # def get_lightcurves(self, obs_id: str = None, inst: str = None) -> Union[List[LightCurve], LightCurve]:
     #     """
