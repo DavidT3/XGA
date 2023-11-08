@@ -1,9 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 11:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 12:38. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List
 from warnings import warn
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.time import Time, TimeDelta
@@ -915,7 +916,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         return Quantity(chunk_bounds)
 
     @property
-    def datetime_chunks(self) -> datetime:
+    def datetime_chunks(self) -> np.ndarray:
         """
         A getter for the start and stop datetimes of the time chunks associated with this AggregateLightCurve. The
         left hand column are start datetimes, and the right hand column are stop datetimes. These are the earliest
@@ -923,16 +924,16 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         :return: A Nx2 array of datetime objects, where the left hand column are chunk start datetimes, and the
             right hand column are chunk stop datetimes.
-        :rtype: Quantity
+        :rtype: np.ndarray(datetime)
         """
         chunk_bounds = []
         for tc_id in self.time_chunk_ids:
             rel_lcs = self.get_lightcurves(tc_id)
-            tc_start = min(Quantity([lc.start_time for lc in rel_lcs]))
-            tc_end = max(Quantity([lc.stop_time for lc in rel_lcs]))
-            chunk_bounds.append(Quantity([tc_start, tc_end]))
+            tc_start = min([lc.start_datetime for lc in rel_lcs])
+            tc_end = max([lc.stop_datetime for lc in rel_lcs])
+            chunk_bounds.append([tc_start, tc_end])
 
-        return Quantity(chunk_bounds)
+        return np.array(chunk_bounds)
 
     def get_lightcurves(self, time_chunk_id: int, obs_id: str = None,
                         inst: str = None) -> Union[List[LightCurve], LightCurve]:
@@ -994,7 +995,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                  lo_time_lim: Quantity = None,
                  hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
                  src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
-                 label_font_size: int = 15, title_font_size: int = 18, highlight_bad_times: bool = True):
+                 label_font_size: int = 18, title_font_size: int = 18, highlight_bad_times: bool = True):
 
         # TODO this will need a little bit of TLC once this and the multi-mission branch cross paths
         if isinstance(time_unit, str):
@@ -1021,24 +1022,30 @@ class AggregateLightCurve(BaseAggregateProduct):
                 y_lab = "Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex'))
                 axes_dict[tc_id].set_ylabel(y_lab, fontsize=label_font_size)
                 axes_dict[tc_id].spines.right.set_visible(False)
-                axes_dict[tc_id].tick_params(direction='in', which='both', right=False, top=True)
+
+                low_lim = min([(lc.count_rate-lc.count_rate_err).min() for lc in self.all_lightcurves]).value*0.95
+                upp_lim = max([(lc.count_rate+lc.count_rate_err).max() for lc in self.all_lightcurves]).value*1.05
+                axes_dict[tc_id].set_ylim(low_lim, upp_lim)
+
                 if self.num_time_chunks != 1:
                     axes_dict[tc_id].spines.right.set_visible(False)
                     axes_dict[tc_id].plot([1, 1], [1, 0], transform=axes_dict[tc_id].transAxes, **break_kwargs)
 
             elif tc_id != (self.num_time_chunks - 1):
-                axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0], yticklabels=[])
+                axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0])
                 axes_dict[tc_id].spines.left.set_visible(False)
                 axes_dict[tc_id].spines.right.set_visible(False)
-                axes_dict[tc_id].tick_params(direction='in', which='both', right=False, left=False, top=True)
+                axes_dict[tc_id].tick_params(direction='in', which='both', right=False, left=False, top=True,
+                                             labelleft=False)
                 axes_dict[tc_id].plot([1, 1], [1, 0], transform=axes_dict[tc_id].transAxes, **break_kwargs)
                 axes_dict[tc_id].plot([0, 0], [0, 1], transform=axes_dict[tc_id].transAxes, **break_kwargs)
 
             else:
-                axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0], yticklabels=[])
+                axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0])
                 axes_dict[tc_id].spines.right.set_visible(True)
                 axes_dict[tc_id].spines.left.set_visible(False)
-                axes_dict[tc_id].tick_params(direction='in', which='both', right=True, left=False, top=True)
+                axes_dict[tc_id].tick_params(direction='in', which='both', right=True, left=False, top=True,
+                                             labelleft=False)
                 axes_dict[tc_id].plot([0, 0], [0, 1], transform=axes_dict[tc_id].transAxes, **break_kwargs)
 
             cumu_x_pos += (rel_frac+buffer_frac)
@@ -1046,26 +1053,15 @@ class AggregateLightCurve(BaseAggregateProduct):
             axes_dict[tc_id].minorticks_on()
 
             # Setting the axis limits
-            # axes_dict[tc_id].set_xlim(self.time_chunks[tc_id, 0].value, self.time_chunks[tc_id, 1].value)
+            axes_dict[tc_id].set_xlim(self.datetime_chunks[tc_id, 0], self.datetime_chunks[tc_id, 1])
 
             # axes_dict[tc_id].set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
             #               fontsize=label_font_size)
 
+        # axes_dict[0].yaxis.set_tick_params(which='both', labelleft=True)
+
         # fig.supxlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
-        fig.text(0.5, 0.01, "Time [{}]".format(time_unit.to_string('latex')), ha='center', fontsize=label_font_size)
-
-
-        # plt.show()
-
-        # axs = {
-        #     "ax1": fig.add_axes([0.2, 0.7, 0.6, 0.2], xticklabels=[]),
-        #     "ax2": fig.add_axes([0.2, 0.49, 0.6, 0.2], xticklabels=[]),
-        #     "ax3": fig.add_axes([0.2, 0.28, 0.6, 0.2]),
-        # }
-
-
-        # import sys
-        # sys.exit()
+        fig.text(0.5, 0.01, "Time", ha='center', fontsize=label_font_size)
 
         for tc_id in self.time_chunk_ids:
             ax = axes_dict[tc_id]
@@ -1087,7 +1083,14 @@ class AggregateLightCurve(BaseAggregateProduct):
                     # ax.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
                     #             color=bck_colour, label='Background', fmt='x')
 
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
+                for label in ax.get_xticklabels(which='major'):
+                    label.set(y=label.y*0.9, rotation=40, horizontalalignment='right')
+
                 ax.legend(loc='best')
+
+            # print(ax.get_yticklabels())
+
         plt.show()
         import sys
         sys.exit()
