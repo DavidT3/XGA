@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 10:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 10:55. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -239,6 +239,16 @@ class LightCurve(BaseProduct):
         self._read_on_demand()
 
         return self._src_cnt_rate_err
+
+    @property
+    def ref_time(self) -> Time:
+        """
+        Returns the reference time for this lightcurve, which is what the 'time' values are calculated from.
+
+        :return: An Astropy Time object that defines the reference time for this lightcurve.
+        :rtype: Time
+        """
+        return self._ref_time
 
     @property
     def time(self) -> Quantity:
