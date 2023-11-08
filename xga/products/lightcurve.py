@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 12:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 17:06. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List
 from warnings import warn
@@ -579,19 +579,36 @@ class LightCurve(BaseProduct):
             ax.errorbar(time_x.value, self.count_rate.value, yerr=self.count_rate_err.value, capsize=2,
                         color=colour, label='Background subtracted', fmt='x')
 
-        if highlight_bad_times:
-            for ind in range(len(self.src_gti)-2):
-                if ind == 0 and (self.src_gti[ind, 0]-self.start_time).to('s') != 0:
-                    bad_start = Quantity(0, time_unit)
-                    bad_stop = self.src_gti[ind, 0] - self.start_time.to(time_unit)
+        if highlight_bad_times and (len(self.src_gti) != 1 or self.src_gti[0, 0] != self.start_time
+                                    or self.src_gti[0, 1] != self.stop_time):
+            for ind in range(len(self.src_gti)):
+                if ind == 0:
+                    # This is where the first GTI DOESN'T begin with the start of the observation - so there is a
+                    #  bad period between the start of the LC time coverage and the first GTI start
+                    if (self.src_gti[ind, 0] - self.start_time).to('s') != 0:
+                        bad_start = Quantity(0, 's')
+                    else:
+                        bad_start = self.src_gti[ind, 1] - self.start_time.to(time_unit)
+
+                    # Here the first BAD time interval goes from the end of the first GTI to the start of the
+                    #  next one, OR to the end of the obs if there isn't a next one
+                    if len(self.src_gti) != 1:
+                        bad_stop = self.src_gti[ind + 1, 0] - self.start_time.to(time_unit)
+                    else:
+                        bad_stop = self.stop_time - self.start_time
+
+                    # bad_stop = self.src_gti[ind, 0] - self.start_time.to(time_unit)
+                    label = "Bad time interval"
+                elif ind == (len(self.src_gti)-1):
+                    bad_start = self.src_gti[ind, 1]
+                    bad_stop = self.stop_time - self.start_time
+                    label = ""
                 else:
                     bad_start = self.src_gti[ind, 1] - self.start_time.to(time_unit)
                     bad_stop = self.src_gti[ind+1, 0] - self.start_time.to(time_unit)
+                    label = ""
 
-                ax.axvspan(bad_start.value, bad_stop.value, color='firebrick', alpha=0.3)
-            ax.axvspan(self.src_gti[-2, 1].value - self.start_time.to(time_unit).value,
-                       self.src_gti[-1, 0].value - self.start_time.to(time_unit).value, color='firebrick', alpha=0.3,
-                       label='Bad time interval')
+                ax.axvspan(bad_start.value, bad_stop.value, color='firebrick', alpha=0.3, label=label)
 
         if custom_title is not None:
             ax.set_title(custom_title, fontsize=title_font_size)
@@ -909,6 +926,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         chunk_bounds = []
         for tc_id in self.time_chunk_ids:
             rel_lcs = self.get_lightcurves(tc_id)
+            if isinstance(rel_lcs, LightCurve):
+                rel_lcs = [rel_lcs]
             tc_start = min(Quantity([lc.start_time for lc in rel_lcs]))
             tc_end = max(Quantity([lc.stop_time for lc in rel_lcs]))
             chunk_bounds.append(Quantity([tc_start, tc_end]))
@@ -929,6 +948,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         chunk_bounds = []
         for tc_id in self.time_chunk_ids:
             rel_lcs = self.get_lightcurves(tc_id)
+            if isinstance(rel_lcs, LightCurve):
+                rel_lcs = [rel_lcs]
             tc_start = min([lc.start_datetime for lc in rel_lcs])
             tc_end = max([lc.stop_datetime for lc in rel_lcs])
             chunk_bounds.append([tc_start, tc_end])
@@ -995,7 +1016,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                  lo_time_lim: Quantity = None,
                  hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
                  src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
-                 label_font_size: int = 18, title_font_size: int = 18, highlight_bad_times: bool = True):
+                 label_font_size: int = 18, title_font_size: int = 20, highlight_bad_times: bool = True):
 
         # TODO this will need a little bit of TLC once this and the multi-mission branch cross paths
         if isinstance(time_unit, str):
@@ -1055,13 +1076,7 @@ class AggregateLightCurve(BaseAggregateProduct):
             # Setting the axis limits
             axes_dict[tc_id].set_xlim(self.datetime_chunks[tc_id, 0], self.datetime_chunks[tc_id, 1])
 
-            # axes_dict[tc_id].set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
-            #               fontsize=label_font_size)
-
-        # axes_dict[0].yaxis.set_tick_params(which='both', labelleft=True)
-
-        # fig.supxlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
-        fig.text(0.5, -0.015, "Time", ha='center', fontsize=label_font_size)
+        fig.text(0.5, -0.04, "Time", ha='center', fontsize=label_font_size)
 
         for tc_id in self.time_chunk_ids:
             ax = axes_dict[tc_id]
@@ -1089,85 +1104,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
             ax.legend(loc='best')
 
-            # print(ax.get_yticklabels())
-
-        plt.show()
-        import sys
-        sys.exit()
-        # time_x = self.time.to(time_unit) - self.start_time.to(time_unit)
-
-        # if lo_time_lim is None:
-        #     lo_time_lim = time_x.min()
-        # elif lo_time_lim is not None and lo_time_lim.unit.is_equivalent(time_unit):
-        #     lo_time_lim = lo_time_lim.to(time_unit)
-        #
-        # if hi_time_lim is None:
-        #     hi_time_lim = time_x.max()
-        # elif hi_time_lim is not None and hi_time_lim.unit.is_equivalent(time_unit):
-        #     hi_time_lim = hi_time_lim.to(time_unit)
-
-        # if plot_sep:
-        #     if self.src_count_rate is None:
-        #         raise ValueError("This light-curve is background subtracted, so we cannot plot the total and "
-        #                          "background separately.")
-        #     ax.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
-        #                 color=src_colour, label='Source', fmt='x')
-        #     ax.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
-        #                 color=bck_colour, label='Background', fmt='x')
-        # else:
-        #     ax.errorbar(time_x.value, self.count_rate.value, yerr=self.count_rate_err.value, capsize=2,
-        #                 color=colour, label='Background subtracted', fmt='x')
-
-        # if highlight_bad_times:
-        #     for ind in range(len(self.src_gti)-2):
-        #         if ind == 0 and (self.src_gti[ind, 0]-self.start_time).to('s') != 0:
-        #             bad_start = Quantity(0, time_unit)
-        #             bad_stop = self.src_gti[ind, 0] - self.start_time.to(time_unit)
-        #         else:
-        #             bad_start = self.src_gti[ind, 1] - self.start_time.to(time_unit)
-        #             bad_stop = self.src_gti[ind+1, 0] - self.start_time.to(time_unit)
-        #
-        #         ax.axvspan(bad_start.value, bad_stop.value, color='firebrick', alpha=0.3)
-        #     ax.axvspan(self.src_gti[-2, 1].value - self.start_time.to(time_unit).value,
-        #                self.src_gti[-1, 0].value - self.start_time.to(time_unit).value, color='firebrick', alpha=0.3,
-        #                label='Bad time interval')
-
-        # if custom_title is not None:
-        #     ax.set_title(custom_title, fontsize=title_font_size)
-        # elif self.src_name is not None:
-        #     ax.set_title("{s} {t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
-        #                                                                 i=self.instrument.upper(),
-        #                                                                 l=self.energy_bounds[0].to('keV').value,
-        #                                                                 u=self.energy_bounds[1].to('keV').value),
-        #                  fontsize=title_font_size)
-        # else:
-        #     ax.set_title("{t} {o} {i} {l}-{u}keV Aggregate Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
-        #                                                                       i=self.instrument.upper(),
-        #                                                                       l=self.energy_bounds[0].to('keV').value,
-        #                                                                       u=self.energy_bounds[1].to('keV').value),
-        #                  fontsize=title_font_size)
-
-        # if lo_time_lim < time_x.min():
-        #     warn('The lower time limit is smaller than the lowest time value, it has been set to the '
-        #          'lowest available value.', stacklevel=2)
-        #     lo_time_lim = time_x.min()
-        # if hi_time_lim > time_x.max():
-        #     warn('The upper time limit is higher than the greatest time value, it has been set to the '
-        #          'greatest available value.', stacklevel=2)
-        #     hi_time_lim = time_x.max()
-
-        # ax.minorticks_on()
-        # ax.tick_params(direction='in', which='both', right=True, top=True)
-        #
-        # # Setting the axis limits
-        # ax.set_xlim(self.time_chunks[0, 0].value, self.time_chunks[-1, 1].value)
-        #
-        # ax.set_xlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
-        # ax.set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
-        #               fontsize=label_font_size)
-        # ax.legend(loc='best')
-
-        return ax
+        return axes_dict, fig
 
     def view(self, figsize: tuple = (14, 6), time_unit: Union[str, Unit] = Unit('s'),
              lo_time_lim: Quantity = None, hi_time_lim: Quantity = None, colour: str = 'black',
@@ -1178,10 +1115,11 @@ class AggregateLightCurve(BaseAggregateProduct):
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
-        ax = self.get_view(fig, time_unit, lo_time_lim, hi_time_lim, colour, plot_sep, src_colour, bck_colour,
-                           custom_title, label_font_size, title_font_size, highlight_bad_times)
-        plt.tight_layout()
-        # Display the image
+        ax, fig = self.get_view(fig, time_unit, lo_time_lim, hi_time_lim, colour, plot_sep, src_colour, bck_colour,
+                                custom_title, label_font_size, title_font_size, highlight_bad_times)
+
+        # plt.tight_layout()
+        # Display the plot
         plt.show()
 
         # Wipe the figure
