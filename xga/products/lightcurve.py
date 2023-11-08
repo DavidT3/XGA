@@ -1,11 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 10:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 11:15. Copyright (c) The Contributors
+from datetime import datetime
 from typing import Union, List
 from warnings import warn
 
 import matplotlib.pyplot as plt
 import numpy as np
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
@@ -87,6 +88,8 @@ class LightCurve(BaseProduct):
         self._src_cnt_rate_err = None
         # This stores an important quantity, the reference time for the light curve time values
         self._ref_time = None
+        # This stores the 'time system' - so for default XMM lightcurves for instance it will be TT (terrestrial time)
+        self._time_sys = None
         # Here we store the x-axis, the time steps which the count-rates are attributed to
         self._time = None
         # The fractional exposure time of the livetime for each data point
@@ -251,6 +254,16 @@ class LightCurve(BaseProduct):
         return self._ref_time
 
     @property
+    def time_system(self) -> str:
+        """
+        Returns the time system for this lightcurve; e.g. TT or terrestrial time.
+
+        :return: The time system.
+        :rtype: str
+        """
+        return self._time_sys
+
+    @property
     def time(self) -> Quantity:
         """
         Returns the time steps that correspond to the count-rates measured for this light curve
@@ -264,6 +277,17 @@ class LightCurve(BaseProduct):
         self._read_on_demand()
 
         return self._time
+
+    @property
+    def datetime(self) -> datetime:
+        """
+        Returns the time steps for this light curve, but in a datetime format, and no longer relative to a
+        reference time.
+
+        :return: The absolute datetimes that the time steps correspond to.
+        :rtype: np.ndarray(datetime)
+        """
+        return (self.ref_time + TimeDelta(self.time, format='sec', scale=self.time_system.lower())).to_datetime()
 
     @property
     def bck_count_rate(self) -> Quantity:
@@ -442,6 +466,7 @@ class LightCurve(BaseProduct):
                 self._time_stop = Quantity(hdr['TSTOP'], 's')
                 self._time_assign = hdr['TASSIGN']
                 self._ref_time = Time(hdr['MJDREF'], format='mjd')
+                self._time_sys = hdr['TIMESYS']
 
             # TODO add calculation for error prop of src-bck or bck+bckcorr
             # And set this attribute to make sure that no further reading in is done
@@ -924,7 +949,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         chunk_len = (self.time_chunks[:, 1] - self.time_chunks[:, 0]).value
         chunk_frac = chunk_len / (chunk_len.sum() + buffer_frac*len(chunk_len)-1)
 
-        break_slant = 0.9  # proportion of vertical to horizontal extent of the slanted line
+        break_slant = 1.3  # proportion of vertical to horizontal extent of the slanted line
         break_kwargs = dict(marker=[(-1, -break_slant), (1, break_slant)], markersize=12,
                             linestyle="none", color='k', mec='k', mew=1, clip_on=False)
 
