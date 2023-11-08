@@ -1,10 +1,11 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 22:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 10:54. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.time import Time
 from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
@@ -84,6 +85,8 @@ class LightCurve(BaseProduct):
         self._src_cnt_rate = None
         # The count-rate should be accompanied by uncertainties, and they will live in this attribute
         self._src_cnt_rate_err = None
+        # This stores an important quantity, the reference time for the light curve time values
+        self._ref_time = None
         # Here we store the x-axis, the time steps which the count-rates are attributed to
         self._time = None
         # The fractional exposure time of the livetime for each data point
@@ -428,6 +431,7 @@ class LightCurve(BaseProduct):
                 self._time_start = Quantity(hdr['TSTART'], 's')
                 self._time_stop = Quantity(hdr['TSTOP'], 's')
                 self._time_assign = hdr['TASSIGN']
+                self._ref_time = Time(hdr['MJDREF'], format='mjd')
 
             # TODO add calculation for error prop of src-bck or bck+bckcorr
             # And set this attribute to make sure that no further reading in is done
@@ -906,9 +910,13 @@ class AggregateLightCurve(BaseAggregateProduct):
         if not self.all_lightcurves[0].time.unit.is_equivalent(time_unit):
             raise UnitConversionError("You have supplied a 'time_unit' that cannot be converted to seconds.")
 
-        chunk_len = self.time_chunks[:, 1] - self.time_chunks[:, 0]
-        chunk_frac = chunk_len / chunk_len.sum()
-        print(chunk_frac)
+        buffer_frac = 0.008
+        chunk_len = (self.time_chunks[:, 1] - self.time_chunks[:, 0]).value
+        chunk_frac = chunk_len / (chunk_len.sum() + buffer_frac*len(chunk_len)-1)
+
+        break_slant = 0.9  # proportion of vertical to horizontal extent of the slanted line
+        break_kwargs = dict(marker=[(-1, -break_slant), (1, break_slant)], markersize=12,
+                            linestyle="none", color='k', mec='k', mew=1, clip_on=False)
 
         axes_dict = {}
         cumu_x_pos = 0
@@ -917,20 +925,41 @@ class AggregateLightCurve(BaseAggregateProduct):
 
             if tc_id == 0:
                 axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1])
+                y_lab = "Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex'))
+                axes_dict[tc_id].set_ylabel(y_lab, fontsize=label_font_size)
+                axes_dict[tc_id].spines.right.set_visible(False)
+                axes_dict[tc_id].tick_params(direction='in', which='both', right=False, top=True)
+                if self.num_time_chunks != 1:
+                    axes_dict[tc_id].spines.right.set_visible(False)
+                    axes_dict[tc_id].plot([1, 1], [1, 0], transform=axes_dict[tc_id].transAxes, **break_kwargs)
+
+            elif tc_id != (self.num_time_chunks - 1):
+                axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0], yticklabels=[])
+                axes_dict[tc_id].spines.left.set_visible(False)
+                axes_dict[tc_id].spines.right.set_visible(False)
+                axes_dict[tc_id].tick_params(direction='in', which='both', right=False, left=False, top=True)
+                axes_dict[tc_id].plot([1, 1], [1, 0], transform=axes_dict[tc_id].transAxes, **break_kwargs)
+                axes_dict[tc_id].plot([0, 0], [0, 1], transform=axes_dict[tc_id].transAxes, **break_kwargs)
+
             else:
                 axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0], yticklabels=[])
+                axes_dict[tc_id].spines.right.set_visible(True)
+                axes_dict[tc_id].spines.left.set_visible(False)
+                axes_dict[tc_id].tick_params(direction='in', which='both', right=True, left=False, top=True)
+                axes_dict[tc_id].plot([0, 0], [0, 1], transform=axes_dict[tc_id].transAxes, **break_kwargs)
 
-            cumu_x_pos += rel_frac
+            cumu_x_pos += (rel_frac+buffer_frac)
 
             axes_dict[tc_id].minorticks_on()
-            axes_dict[tc_id].tick_params(direction='in', which='both', right=True, top=True)
 
             # Setting the axis limits
             axes_dict[tc_id].set_xlim(self.time_chunks[tc_id, 0].value, self.time_chunks[tc_id, 1].value)
 
-            axes_dict[tc_id].set_xlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
-            axes_dict[tc_id].set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
-                          fontsize=label_font_size)
+            # axes_dict[tc_id].set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
+            #               fontsize=label_font_size)
+
+        # fig.supxlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
+        fig.text(0.5, 0.04, "Time [{}]".format(time_unit.to_string('latex')), ha='center')
 
 
         # plt.show()
