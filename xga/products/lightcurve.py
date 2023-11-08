@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 21:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 22:09. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -518,13 +518,13 @@ class LightCurve(BaseProduct):
             ax.set_title(custom_title, fontsize=title_font_size)
         elif self.src_name is not None:
             ax.set_title("{s} {t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
-                                                                        i=self.instrument,
+                                                                        i=self.instrument.upper(),
                                                                         l=self.energy_bounds[0].to('keV').value,
                                                                         u=self.energy_bounds[1].to('keV').value),
                          fontsize=title_font_size)
         else:
             ax.set_title("{t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
-                                                                    i=self.instrument,
+                                                                    i=self.instrument.upper(),
                                                                     l=self.energy_bounds[0].to('keV').value,
                                                                     u=self.energy_bounds[1].to('keV').value),
                          fontsize=title_font_size)
@@ -650,6 +650,11 @@ class AggregateLightCurve(BaseAggregateProduct):
         lightcurves = lightcurves[start_sort]
 
         super().__init__([lc.path for lc in lightcurves], 'lightcurve', obs_id_to_pass, inst_to_pass)
+
+        # Make sure to add the energy bounds to the attribute - we require and know that they are the same for
+        #  all the lightcurves that have been passed.
+        self._energy_bounds = lightcurves[0].energy_bounds
+
         self._rel_obs = {}
         overlapping = np.full((len(lightcurves), len(lightcurves)), False)
         for lc_ind, lc in enumerate(lightcurves):
@@ -675,7 +680,6 @@ class AggregateLightCurve(BaseAggregateProduct):
                 groupings[split_ind:] = split_ind_ind
 
         self._time_chunk_ids = np.arange(0, len(split_inds))
-        print(self._time_chunk_ids)
 
         # Maybe there is a more elegant, in-line, way of doing this, but I cannot be bothered to think of it
         for lc_ind, lc in enumerate(lightcurves):
@@ -898,7 +902,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         if isinstance(time_unit, str):
             time_unit = Unit(time_unit)
 
-        if not self.time.unit.is_equivalent(time_unit):
+        if not self.all_lightcurves[0].time.unit.is_equivalent(time_unit):
             raise UnitConversionError("You have supplied a 'time_unit' that cannot be converted to seconds.")
 
         for tc_id in self.time_chunk_ids:
@@ -963,13 +967,13 @@ class AggregateLightCurve(BaseAggregateProduct):
             ax.set_title(custom_title, fontsize=title_font_size)
         elif self.src_name is not None:
             ax.set_title("{s} {t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
-                                                                        i=self.instrument,
+                                                                        i=self.instrument.upper(),
                                                                         l=self.energy_bounds[0].to('keV').value,
                                                                         u=self.energy_bounds[1].to('keV').value),
                          fontsize=title_font_size)
         else:
             ax.set_title("{t} {o} {i} {l}-{u}keV Aggregate Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
-                                                                              i=self.instrument,
+                                                                              i=self.instrument.upper(),
                                                                               l=self.energy_bounds[0].to('keV').value,
                                                                               u=self.energy_bounds[1].to('keV').value),
                          fontsize=title_font_size)
@@ -987,7 +991,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         ax.tick_params(direction='in', which='both', right=True, top=True)
 
         # Setting the axis limits
-        ax.set_xlim(lo_time_lim.value, hi_time_lim.value)
+        ax.set_xlim(self.time_chunks[0, 0].value, self.time_chunks[-1, 1].value)
 
         ax.set_xlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
         ax.set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
