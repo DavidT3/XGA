@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 18:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 21:45. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -388,6 +388,7 @@ class LightCurve(BaseProduct):
                 # This chunk reads out the various columns of the 'RATE' entry in the light curve file, storing
                 #  them in suitably unit-ed astropy quantities
                 if self._is_back_sub:
+                    # TODO I should email the XMM help desk about this and double check
                     self._bck_sub_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
                     self._bck_sub_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
 
@@ -515,8 +516,18 @@ class LightCurve(BaseProduct):
 
         if custom_title is not None:
             ax.set_title(custom_title, fontsize=title_font_size)
+        elif self.src_name is not None:
+            ax.set_title("{s} {t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
+                                                                        i=self.instrument,
+                                                                        l=self.energy_bounds[0].to('keV').value,
+                                                                        u=self.energy_bounds[1].to('keV').value),
+                         fontsize=title_font_size)
         else:
-            pass
+            ax.set_title("{t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
+                                                                    i=self.instrument,
+                                                                    l=self.energy_bounds[0].to('keV').value,
+                                                                    u=self.energy_bounds[1].to('keV').value),
+                         fontsize=title_font_size)
 
         if lo_time_lim < time_x.min():
             warn('The lower time limit is smaller than the lowest time value, it has been set to the '
@@ -638,8 +649,6 @@ class AggregateLightCurve(BaseAggregateProduct):
         start_sort = np.argsort(Quantity([lc.start_time for lc in lightcurves]))
         lightcurves = lightcurves[start_sort]
 
-        # lightcurves[2]._time_stop = lightcurves[3].start_time + Quantity(20, 's')
-
         super().__init__([lc.path for lc in lightcurves], 'lightcurve', obs_id_to_pass, inst_to_pass)
         self._rel_obs = {}
         overlapping = np.full((len(lightcurves), len(lightcurves)), False)
@@ -669,15 +678,6 @@ class AggregateLightCurve(BaseAggregateProduct):
         print(self._time_chunk_ids)
 
         # Maybe there is a more elegant, in-line, way of doing this, but I cannot be bothered to think of it
-        # for lc_ind, lc in enumerate(lightcurves):
-        #     rel_grp = groupings[lc_ind]
-        #     if rel_grp not in self._component_products:
-        #         self._component_products[rel_grp] = {lc.obs_id: {lc.instrument: lc}}
-        #     elif rel_grp in self._component_products and lc.obs_id not in self._component_products[rel_grp]:
-        #         self._component_products[rel_grp][lc.obs_id] = {lc.instrument: lc}
-        #     elif rel_grp in self._component_products and lc.obs_id in self._component_products[rel_grp]:
-        #         self._component_products[rel_grp][lc.obs_id][lc.instrument] = lc
-
         for lc_ind, lc in enumerate(lightcurves):
             rel_grp = groupings[lc_ind]
             if lc.obs_id not in self._component_products:
@@ -686,12 +686,6 @@ class AggregateLightCurve(BaseAggregateProduct):
                 self._component_products[lc.obs_id][lc.instrument] = {rel_grp: lc}
             elif lc.obs_id in self._component_products and lc.instrument in self._component_products[lc.obs_id]:
                 self._component_products[lc.obs_id][lc.instrument][rel_grp] = lc
-        #
-        #     # This loop just stores the light curves in a nested dictionary product structure
-        #     if lc.obs_id not in self._component_products:
-        #         self._component_products[lc.obs_id] = {lc.instrument: lc}
-        #     else:
-        #         self._component_products[lc.obs_id][lc.instrument] = lc
 
     @property
     def obs_ids(self) -> list:
@@ -890,3 +884,134 @@ class AggregateLightCurve(BaseAggregateProduct):
         if len(matches) == 1:
             matches = matches[0]
         return matches
+
+    # def get_count_rate
+
+# Then define user-facing methods
+    def get_view(self, ax: Axes, time_unit: Union[str, Unit] = Unit('s'),
+                 lo_time_lim: Quantity = None,
+                 hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
+                 src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
+                 label_font_size: int = 15, title_font_size: int = 18, highlight_bad_times: bool = True):
+
+        # TODO this will need a little bit of TLC once this and the multi-mission branch cross paths
+        if isinstance(time_unit, str):
+            time_unit = Unit(time_unit)
+
+        if not self.time.unit.is_equivalent(time_unit):
+            raise UnitConversionError("You have supplied a 'time_unit' that cannot be converted to seconds.")
+
+        for tc_id in self.time_chunk_ids:
+            rel_lcs = self.get_lightcurves(tc_id)
+            if isinstance(rel_lcs, LightCurve):
+                rel_lcs = [rel_lcs]
+
+            for rel_lc in rel_lcs:
+                ident = "{t} {o}-{i}".format(t='XMM', o=rel_lc.obs_id, i=rel_lc.instrument)
+                if not plot_sep:
+                    ax.errorbar(rel_lc.time.value, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value, capsize=2,
+                                color=colour, label=ident, fmt='x')
+
+                else:
+                    raise NotImplementedError("Not decided whether I will add this feature yet")
+
+                    # ax.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
+                    #             color=src_colour, label='Source', fmt='x')
+                    # ax.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
+                    #             color=bck_colour, label='Background', fmt='x')
+
+
+        # time_x = self.time.to(time_unit) - self.start_time.to(time_unit)
+
+        # if lo_time_lim is None:
+        #     lo_time_lim = time_x.min()
+        # elif lo_time_lim is not None and lo_time_lim.unit.is_equivalent(time_unit):
+        #     lo_time_lim = lo_time_lim.to(time_unit)
+        #
+        # if hi_time_lim is None:
+        #     hi_time_lim = time_x.max()
+        # elif hi_time_lim is not None and hi_time_lim.unit.is_equivalent(time_unit):
+        #     hi_time_lim = hi_time_lim.to(time_unit)
+
+        # if plot_sep:
+        #     if self.src_count_rate is None:
+        #         raise ValueError("This light-curve is background subtracted, so we cannot plot the total and "
+        #                          "background separately.")
+        #     ax.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
+        #                 color=src_colour, label='Source', fmt='x')
+        #     ax.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
+        #                 color=bck_colour, label='Background', fmt='x')
+        # else:
+        #     ax.errorbar(time_x.value, self.count_rate.value, yerr=self.count_rate_err.value, capsize=2,
+        #                 color=colour, label='Background subtracted', fmt='x')
+
+        # if highlight_bad_times:
+        #     for ind in range(len(self.src_gti)-2):
+        #         if ind == 0 and (self.src_gti[ind, 0]-self.start_time).to('s') != 0:
+        #             bad_start = Quantity(0, time_unit)
+        #             bad_stop = self.src_gti[ind, 0] - self.start_time.to(time_unit)
+        #         else:
+        #             bad_start = self.src_gti[ind, 1] - self.start_time.to(time_unit)
+        #             bad_stop = self.src_gti[ind+1, 0] - self.start_time.to(time_unit)
+        #
+        #         ax.axvspan(bad_start.value, bad_stop.value, color='firebrick', alpha=0.3)
+        #     ax.axvspan(self.src_gti[-2, 1].value - self.start_time.to(time_unit).value,
+        #                self.src_gti[-1, 0].value - self.start_time.to(time_unit).value, color='firebrick', alpha=0.3,
+        #                label='Bad time interval')
+
+        if custom_title is not None:
+            ax.set_title(custom_title, fontsize=title_font_size)
+        elif self.src_name is not None:
+            ax.set_title("{s} {t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
+                                                                        i=self.instrument,
+                                                                        l=self.energy_bounds[0].to('keV').value,
+                                                                        u=self.energy_bounds[1].to('keV').value),
+                         fontsize=title_font_size)
+        else:
+            ax.set_title("{t} {o} {i} {l}-{u}keV Aggregate Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
+                                                                              i=self.instrument,
+                                                                              l=self.energy_bounds[0].to('keV').value,
+                                                                              u=self.energy_bounds[1].to('keV').value),
+                         fontsize=title_font_size)
+
+        # if lo_time_lim < time_x.min():
+        #     warn('The lower time limit is smaller than the lowest time value, it has been set to the '
+        #          'lowest available value.', stacklevel=2)
+        #     lo_time_lim = time_x.min()
+        # if hi_time_lim > time_x.max():
+        #     warn('The upper time limit is higher than the greatest time value, it has been set to the '
+        #          'greatest available value.', stacklevel=2)
+        #     hi_time_lim = time_x.max()
+
+        ax.minorticks_on()
+        ax.tick_params(direction='in', which='both', right=True, top=True)
+
+        # Setting the axis limits
+        ax.set_xlim(lo_time_lim.value, hi_time_lim.value)
+
+        ax.set_xlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
+        ax.set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
+                      fontsize=label_font_size)
+        ax.legend(loc='best')
+
+        return ax
+
+    def view(self, figsize: tuple = (14, 6), time_unit: Union[str, Unit] = Unit('s'),
+             lo_time_lim: Quantity = None, hi_time_lim: Quantity = None, colour: str = 'black',
+             plot_sep: bool = False, src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick',
+             custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
+             highlight_bad_times: bool = True):
+
+        # Create figure object
+        fig = plt.figure(figsize=figsize)
+
+        ax = plt.gca()
+
+        ax = self.get_view(ax, time_unit, lo_time_lim, hi_time_lim, colour, plot_sep, src_colour, bck_colour,
+                           custom_title, label_font_size, title_font_size, highlight_bad_times)
+        plt.tight_layout()
+        # Display the image
+        plt.show()
+
+        # Wipe the figure
+        plt.close("all")
