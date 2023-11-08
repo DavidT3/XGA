@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 22:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 22:56. Copyright (c) The Contributors
 from typing import Union, List
 from warnings import warn
 
@@ -8,6 +8,7 @@ import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError
 from xga.products import BaseProduct, BaseAggregateProduct
@@ -892,7 +893,7 @@ class AggregateLightCurve(BaseAggregateProduct):
     # def get_count_rate
 
 # Then define user-facing methods
-    def get_view(self, ax: Axes, time_unit: Union[str, Unit] = Unit('s'),
+    def get_view(self, fig: Figure, time_unit: Union[str, Unit] = Unit('s'),
                  lo_time_lim: Quantity = None,
                  hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
                  src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
@@ -905,7 +906,47 @@ class AggregateLightCurve(BaseAggregateProduct):
         if not self.all_lightcurves[0].time.unit.is_equivalent(time_unit):
             raise UnitConversionError("You have supplied a 'time_unit' that cannot be converted to seconds.")
 
+        chunk_len = self.time_chunks[:, 1] - self.time_chunks[:, 0]
+        chunk_frac = chunk_len / chunk_len.sum()
+        print(chunk_frac)
+
+        axes_dict = {}
+        cumu_x_pos = 0
         for tc_id in self.time_chunk_ids:
+            rel_frac = chunk_frac[tc_id]
+
+            if tc_id == 0:
+                axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1])
+            else:
+                axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0], yticklabels=[])
+
+            cumu_x_pos += rel_frac
+
+            axes_dict[tc_id].minorticks_on()
+            axes_dict[tc_id].tick_params(direction='in', which='both', right=True, top=True)
+
+            # Setting the axis limits
+            axes_dict[tc_id].set_xlim(self.time_chunks[tc_id, 0].value, self.time_chunks[tc_id, 1].value)
+
+            axes_dict[tc_id].set_xlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
+            axes_dict[tc_id].set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
+                          fontsize=label_font_size)
+
+
+        # plt.show()
+
+        # axs = {
+        #     "ax1": fig.add_axes([0.2, 0.7, 0.6, 0.2], xticklabels=[]),
+        #     "ax2": fig.add_axes([0.2, 0.49, 0.6, 0.2], xticklabels=[]),
+        #     "ax3": fig.add_axes([0.2, 0.28, 0.6, 0.2]),
+        # }
+
+
+        # import sys
+        # sys.exit()
+
+        for tc_id in self.time_chunk_ids:
+            ax = axes_dict[tc_id]
             rel_lcs = self.get_lightcurves(tc_id)
             if isinstance(rel_lcs, LightCurve):
                 rel_lcs = [rel_lcs]
@@ -913,8 +954,8 @@ class AggregateLightCurve(BaseAggregateProduct):
             for rel_lc in rel_lcs:
                 ident = "{t} {o}-{i}".format(t='XMM', o=rel_lc.obs_id, i=rel_lc.instrument)
                 if not plot_sep:
-                    ax.errorbar(rel_lc.time.value, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value, capsize=2,
-                                color=colour, label=ident, fmt='x')
+                    ax.errorbar(rel_lc.time.value, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
+                                capsize=2, label=ident, fmt='x')
 
                 else:
                     raise NotImplementedError("Not decided whether I will add this feature yet")
@@ -924,7 +965,10 @@ class AggregateLightCurve(BaseAggregateProduct):
                     # ax.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
                     #             color=bck_colour, label='Background', fmt='x')
 
-
+                ax.legend(loc='best')
+        plt.show()
+        import sys
+        sys.exit()
         # time_x = self.time.to(time_unit) - self.start_time.to(time_unit)
 
         # if lo_time_lim is None:
@@ -963,20 +1007,20 @@ class AggregateLightCurve(BaseAggregateProduct):
         #                self.src_gti[-1, 0].value - self.start_time.to(time_unit).value, color='firebrick', alpha=0.3,
         #                label='Bad time interval')
 
-        if custom_title is not None:
-            ax.set_title(custom_title, fontsize=title_font_size)
-        elif self.src_name is not None:
-            ax.set_title("{s} {t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
-                                                                        i=self.instrument.upper(),
-                                                                        l=self.energy_bounds[0].to('keV').value,
-                                                                        u=self.energy_bounds[1].to('keV').value),
-                         fontsize=title_font_size)
-        else:
-            ax.set_title("{t} {o} {i} {l}-{u}keV Aggregate Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
-                                                                              i=self.instrument.upper(),
-                                                                              l=self.energy_bounds[0].to('keV').value,
-                                                                              u=self.energy_bounds[1].to('keV').value),
-                         fontsize=title_font_size)
+        # if custom_title is not None:
+        #     ax.set_title(custom_title, fontsize=title_font_size)
+        # elif self.src_name is not None:
+        #     ax.set_title("{s} {t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
+        #                                                                 i=self.instrument.upper(),
+        #                                                                 l=self.energy_bounds[0].to('keV').value,
+        #                                                                 u=self.energy_bounds[1].to('keV').value),
+        #                  fontsize=title_font_size)
+        # else:
+        #     ax.set_title("{t} {o} {i} {l}-{u}keV Aggregate Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
+        #                                                                       i=self.instrument.upper(),
+        #                                                                       l=self.energy_bounds[0].to('keV').value,
+        #                                                                       u=self.energy_bounds[1].to('keV').value),
+        #                  fontsize=title_font_size)
 
         # if lo_time_lim < time_x.min():
         #     warn('The lower time limit is smaller than the lowest time value, it has been set to the '
@@ -987,16 +1031,16 @@ class AggregateLightCurve(BaseAggregateProduct):
         #          'greatest available value.', stacklevel=2)
         #     hi_time_lim = time_x.max()
 
-        ax.minorticks_on()
-        ax.tick_params(direction='in', which='both', right=True, top=True)
-
-        # Setting the axis limits
-        ax.set_xlim(self.time_chunks[0, 0].value, self.time_chunks[-1, 1].value)
-
-        ax.set_xlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
-        ax.set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
-                      fontsize=label_font_size)
-        ax.legend(loc='best')
+        # ax.minorticks_on()
+        # ax.tick_params(direction='in', which='both', right=True, top=True)
+        #
+        # # Setting the axis limits
+        # ax.set_xlim(self.time_chunks[0, 0].value, self.time_chunks[-1, 1].value)
+        #
+        # ax.set_xlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
+        # ax.set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
+        #               fontsize=label_font_size)
+        # ax.legend(loc='best')
 
         return ax
 
@@ -1009,9 +1053,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
-        ax = plt.gca()
-
-        ax = self.get_view(ax, time_unit, lo_time_lim, hi_time_lim, colour, plot_sep, src_colour, bck_colour,
+        ax = self.get_view(fig, time_unit, lo_time_lim, hi_time_lim, colour, plot_sep, src_colour, bck_colour,
                            custom_title, label_font_size, title_font_size, highlight_bad_times)
         plt.tight_layout()
         # Display the image
