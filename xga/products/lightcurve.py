@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 11:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 11:30. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List
 from warnings import warn
@@ -251,6 +251,11 @@ class LightCurve(BaseProduct):
         :return: An Astropy Time object that defines the reference time for this lightcurve.
         :rtype: Time
         """
+        # The version of read on demand for this class will itself check to see if the data have already been
+        #  read in, so we don't need to check that here - this method will read our LC data from disk into this
+        #  XGA product instance
+        self._read_on_demand()
+
         return self._ref_time
 
     @property
@@ -261,6 +266,11 @@ class LightCurve(BaseProduct):
         :return: The time system.
         :rtype: str
         """
+        # The version of read on demand for this class will itself check to see if the data have already been
+        #  read in, so we don't need to check that here - this method will read our LC data from disk into this
+        #  XGA product instance
+        self._read_on_demand()
+
         return self._time_sys
 
     @property
@@ -287,6 +297,11 @@ class LightCurve(BaseProduct):
         :return: The absolute datetimes that the time steps correspond to.
         :rtype: np.ndarray(datetime)
         """
+        # The version of read on demand for this class will itself check to see if the data have already been
+        #  read in, so we don't need to check that here - this method will read our LC data from disk into this
+        #  XGA product instance
+        self._read_on_demand()
+
         return (self.ref_time + TimeDelta(self.time, format='sec', scale=self.time_system.lower())).to_datetime()
 
     @property
@@ -380,6 +395,29 @@ class LightCurve(BaseProduct):
         """
         self._read_on_demand()
         return self._time_stop
+
+    @property
+    def start_datetime(self) -> datetime:
+        """
+        A property getter to access the recorded start datetime for this light curve.
+
+        :return: Light curve start datetime.
+        :rtype: datetime
+        """
+        self._read_on_demand()
+
+        return (self.ref_time + TimeDelta(self._time_start, format='sec', scale=self.time_system.lower())).to_datetime()
+
+    @property
+    def stop_datetime(self) -> datetime:
+        """
+        A property getter to access the recorded stop datetime for this light curve.
+
+        :return: Light curve stop datetime.
+        :rtype: datetime
+        """
+        self._read_on_demand()
+        return (self.ref_time + TimeDelta(self._time_stop, format='sec', scale=self.time_system.lower())).to_datetime()
 
     @property
     def time_assign(self) -> str:
@@ -876,6 +914,26 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         return Quantity(chunk_bounds)
 
+    @property
+    def datetime_chunks(self) -> datetime:
+        """
+        A getter for the start and stop datetimes of the time chunks associated with this AggregateLightCurve. The
+        left hand column are start datetimes, and the right hand column are stop datetimes. These are the earliest
+        and latest times of coverage for all the observations in the particular time chunk.
+
+        :return: A Nx2 array of datetime objects, where the left hand column are chunk start datetimes, and the
+            right hand column are chunk stop datetimes.
+        :rtype: Quantity
+        """
+        chunk_bounds = []
+        for tc_id in self.time_chunk_ids:
+            rel_lcs = self.get_lightcurves(tc_id)
+            tc_start = min(Quantity([lc.start_time for lc in rel_lcs]))
+            tc_end = max(Quantity([lc.stop_time for lc in rel_lcs]))
+            chunk_bounds.append(Quantity([tc_start, tc_end]))
+
+        return Quantity(chunk_bounds)
+
     def get_lightcurves(self, time_chunk_id: int, obs_id: str = None,
                         inst: str = None) -> Union[List[LightCurve], LightCurve]:
         """
@@ -988,13 +1046,13 @@ class AggregateLightCurve(BaseAggregateProduct):
             axes_dict[tc_id].minorticks_on()
 
             # Setting the axis limits
-            axes_dict[tc_id].set_xlim(self.time_chunks[tc_id, 0].value, self.time_chunks[tc_id, 1].value)
+            # axes_dict[tc_id].set_xlim(self.time_chunks[tc_id, 0].value, self.time_chunks[tc_id, 1].value)
 
             # axes_dict[tc_id].set_ylabel("Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex')),
             #               fontsize=label_font_size)
 
         # fig.supxlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
-        fig.text(0.5, 0.04, "Time [{}]".format(time_unit.to_string('latex')), ha='center')
+        fig.text(0.5, 0.01, "Time [{}]".format(time_unit.to_string('latex')), ha='center', fontsize=label_font_size)
 
 
         # plt.show()
@@ -1018,7 +1076,7 @@ class AggregateLightCurve(BaseAggregateProduct):
             for rel_lc in rel_lcs:
                 ident = "{t} {o}-{i}".format(t='XMM', o=rel_lc.obs_id, i=rel_lc.instrument)
                 if not plot_sep:
-                    ax.errorbar(rel_lc.time.value, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
+                    ax.errorbar(rel_lc.datetime, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
                                 capsize=2, label=ident, fmt='x')
 
                 else:
