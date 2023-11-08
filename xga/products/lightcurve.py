@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 12:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 12:48. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List
 from warnings import warn
@@ -1061,7 +1061,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         # axes_dict[0].yaxis.set_tick_params(which='both', labelleft=True)
 
         # fig.supxlabel("Time [{}]".format(time_unit.to_string('latex')), fontsize=label_font_size)
-        fig.text(0.5, 0.01, "Time", ha='center', fontsize=label_font_size)
+        fig.text(0.5, -0.015, "Time", ha='center', fontsize=label_font_size)
 
         for tc_id in self.time_chunk_ids:
             ax = axes_dict[tc_id]
@@ -1083,11 +1083,11 @@ class AggregateLightCurve(BaseAggregateProduct):
                     # ax.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
                     #             color=bck_colour, label='Background', fmt='x')
 
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
-                for label in ax.get_xticklabels(which='major'):
-                    label.set(y=label.y*0.9, rotation=40, horizontalalignment='right')
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
+            for label in ax.get_xticklabels(which='major'):
+                label.set(y=label.get_position()[1]-0.03, rotation=40, horizontalalignment='right')
 
-                ax.legend(loc='best')
+            ax.legend(loc='best')
 
             # print(ax.get_yticklabels())
 
