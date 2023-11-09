@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 11:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 11:49. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -1016,6 +1016,11 @@ class AggregateLightCurve(BaseAggregateProduct):
         # Here I only return the object if one match was found
         if len(matches) == 1:
             matches = matches[0]
+        elif len(matches) == 0:
+            # This probably means that an instrument was requested without a specific ObsID and it doesn't exist for
+            #  the specified time chunk
+            raise NotAssociatedError("The requested data are not associated with time chunk {} of this "
+                                     "AggregateLightCurve.".format(time_chunk_id))
         return matches
 
 # Then define user-facing methods
@@ -1091,7 +1096,11 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         for tc_id in self.time_chunk_ids:
             ax = axes_dict[tc_id]
-            rel_lcs = self.get_lightcurves(tc_id)
+            try:
+                rel_lcs = self.get_lightcurves(tc_id, inst=inst)
+            except NotAssociatedError:
+                continue
+
             if isinstance(rel_lcs, LightCurve):
                 rel_lcs = [rel_lcs]
 
