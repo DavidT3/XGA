@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 11:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 11:56. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -1097,6 +1097,10 @@ class AggregateLightCurve(BaseAggregateProduct):
         for tc_id in self.time_chunk_ids:
             ax = axes_dict[tc_id]
             try:
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
+                for label in ax.get_xticklabels(which='major'):
+                    label.set(y=label.get_position()[1] - 0.03, rotation=40, horizontalalignment='right')
+
                 rel_lcs = self.get_lightcurves(tc_id, inst=inst)
             except NotAssociatedError:
                 continue
@@ -1109,29 +1113,33 @@ class AggregateLightCurve(BaseAggregateProduct):
                 ax.errorbar(rel_lc.datetime, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
                             capsize=2, label=ident, fmt='x')
 
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
-            for label in ax.get_xticklabels(which='major'):
-                label.set(y=label.get_position()[1]-0.03, rotation=40, horizontalalignment='right')
+            # ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
+            # for label in ax.get_xticklabels(which='major'):
+            #     label.set(y=label.get_position()[1]-0.03, rotation=40, horizontalalignment='right')
 
             ax.legend(loc='best')
 
         if custom_title is not None:
-            fig.suptitle(custom_title, fontsize=title_font_size)
+            fig.suptitle(custom_title, fontsize=title_font_size, y=1.01)
         elif self.src_name is not None:
             fig.suptitle("{s} {l}-{u}keV Aggregate Lightcurve".format(s=self.src_name,
                                                                       l=self.energy_bounds[0].to('keV').value,
                                                                       u=self.energy_bounds[1].to('keV').value),
-                         fontsize=title_font_size)
+                         fontsize=title_font_size, y=1.01)
         else:
             fig.suptitle("{l}-{u}keV Aggregate Lightcurve".format(l=self.energy_bounds[0].to('keV').value,
                                                                   u=self.energy_bounds[1].to('keV').value),
-                         fontsize=title_font_size)
+                         fontsize=title_font_size, y=1.01)
 
         return axes_dict, fig
 
     def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
              title_font_size: int = 18):
         """
+        This method creates a combined visualisation of all the light curves associated with this object (apart from
+        when you specify a single instrument, then it uses all the light curves from that instrument). The data are
+        displayed in the correct temporal order, with the x-axis labels indicating the date and time rather than the
+        mission specific internal time.
 
         :param tuple figsize: The size of the visualisation figure, default is (14, 6). Adjusting this value is the
             best way to achieve nice looking plots when labels are overlapping, particularly when there are many
