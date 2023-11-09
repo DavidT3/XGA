@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 16:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 17:21. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -758,6 +758,25 @@ class AggregateLightCurve(BaseAggregateProduct):
         #  all the lightcurves that have been passed.
         self._energy_bounds = lightcurves[0].energy_bounds
 
+        # TODO This will need some TLC when support for multiple telescopes is implemented
+        # This sets the storage key as the same as the LightCurve, but we do account for different patterns accepted
+        #  for different instruments - as mos1 and 2 should be treated the same we don't look at the specific MOS
+        #  instrument. Having particular instrument behaviour like that will have to be re-examined for
+        #  non-XMM lightcurves
+        self._patterns = {}
+        for lc in lightcurves:
+            patt = lc.storage_key.split('_pattern')[-1]
+            # Turns mos1 and mos2 into just mos
+            rel_inst = lc.instrument.replace('1', '').replace('2', '')
+            if rel_inst not in self._patterns:
+                self._patterns[rel_inst] = patt
+            elif lc.instrument and self._patterns[rel_inst] != patt:
+                raise IncompatibleProductError("Lightcurves for the same instrument ({}) must have the same event "
+                                               "selection pattern.".format(rel_inst.upper()))
+
+        patts = [pk + 'pattern' + pv for pk, pv in self._patterns.items()]
+        self._storage_key = lightcurves[0].storage_key.split('_pattern')[0] + '_' + '_'.join(patts)
+
         self._rel_obs = {}
         overlapping = np.full((len(lightcurves), len(lightcurves)), False)
         for lc_ind, lc in enumerate(lightcurves):
@@ -963,6 +982,28 @@ class AggregateLightCurve(BaseAggregateProduct):
             chunk_bounds.append([tc_start, tc_end])
 
         return np.array(chunk_bounds)
+
+    @property
+    def storage_key(self) -> str:
+        """
+        This property returns the storage key which this object assembles to place the AggregateLightCurve in
+        an XGA source's storage structure. The key is based on the properties of the AggregateLightCurve, and
+        some of the configuration options, and is basically human-readable.
+
+        :return: String storage key.
+        :rtype: str
+        """
+        return self._storage_key
+
+    @property
+    def event_selection_patterns(self) -> dict:
+        """
+        The event selection patterns used for different instruments that are associated with this AggregateLightCurve.
+
+        :return: A dictionary where keys are instrument names and values are event selection patterns.
+        :rtype: dict
+        """
+        return self._patterns
 
     # Then define user-facing methods
     def get_lightcurves(self, time_chunk_id: int, obs_id: str = None,
