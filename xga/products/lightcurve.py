@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 11:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 12:03. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -1120,16 +1120,16 @@ class AggregateLightCurve(BaseAggregateProduct):
             ax.legend(loc='best')
 
         if custom_title is not None:
-            fig.suptitle(custom_title, fontsize=title_font_size, y=1.01)
+            fig.suptitle(custom_title, fontsize=title_font_size, y=1.05)
         elif self.src_name is not None:
             fig.suptitle("{s} {l}-{u}keV Aggregate Lightcurve".format(s=self.src_name,
                                                                       l=self.energy_bounds[0].to('keV').value,
                                                                       u=self.energy_bounds[1].to('keV').value),
-                         fontsize=title_font_size, y=1.01)
+                         fontsize=title_font_size, y=1.05)
         else:
             fig.suptitle("{l}-{u}keV Aggregate Lightcurve".format(l=self.energy_bounds[0].to('keV').value,
                                                                   u=self.energy_bounds[1].to('keV').value),
-                         fontsize=title_font_size, y=1.01)
+                         fontsize=title_font_size, y=1.05)
 
         return axes_dict, fig
 
