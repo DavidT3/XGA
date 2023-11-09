@@ -1,7 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 11:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 11:44. Copyright (c) The Contributors
 from datetime import datetime
-from typing import Union, List
+from typing import Union, List, Tuple
 from warnings import warn
 
 import matplotlib.dates as mdates
@@ -726,6 +726,9 @@ class AggregateLightCurve(BaseAggregateProduct):
         elif not all([lc.time_bin_size == comp_lc.time_bin_size for lc in lightcurves[1:]]):
             raise IncompatibleProductError("Time bin sizes of lightcurves passed to AggregateLightCurve must "
                                            "be the same.")
+        elif len(list(set([lc.src_name for lc in lightcurves]))) > 1:
+            raise ValueError("Some of the passed light curves were not generated for the same object; their "
+                             "source names must match.")
 
         # Pulls out all the ObsIDs and instruments associated with these light curves
         obs_ids = list(set([lc.obs_id for lc in lightcurves]))
@@ -746,6 +749,10 @@ class AggregateLightCurve(BaseAggregateProduct):
         lightcurves = lightcurves[start_sort]
 
         super().__init__([lc.path for lc in lightcurves], 'lightcurve', obs_id_to_pass, inst_to_pass)
+
+        # Storing the name of the object for which we've generated light curves - we've already checked that all the
+        #  input light curves have the same src name.
+        self._src_name = lightcurves[0].src_name
 
         # Make sure to add the energy bounds to the attribute - we require and know that they are the same for
         #  all the lightcurves that have been passed.
@@ -992,10 +999,12 @@ class AggregateLightCurve(BaseAggregateProduct):
             raise IndexError("{i} is not a time chunk ID associated with this AggregateLightCurve object. "
                              "Allowed time chunk IDs are; {a}".format(i=time_chunk_id, a=tc_str))
         elif obs_id not in self.obs_ids and obs_id is not None:
-            raise NotAssociatedError("{0} is not associated with this AggregateLightCurve.".format(obs_id))
+            raise NotAssociatedError("{0} is not associated with chunk {1} of this "
+                                     "AggregateLightCurve.".format(obs_id, time_chunk_id))
         elif (obs_id is not None and obs_id in self.obs_ids) and \
                 (inst is not None and inst not in self.instruments[obs_id]):
-            raise NotAssociatedError("Instrument {1} is not associated with {0}".format(obs_id, inst))
+            raise NotAssociatedError("Instrument {1} is not associated with {0} for time chunk {2} of this "
+                                     "AggregateLightCurve.".format(obs_id, inst, time_chunk_id))
 
         matches = []
         for match in dict_search(time_chunk_id, self._component_products):
@@ -1009,19 +1018,23 @@ class AggregateLightCurve(BaseAggregateProduct):
             matches = matches[0]
         return matches
 
-    # def get_count_rate
-
 # Then define user-facing methods
-    def get_view(self, fig: Figure, time_unit: Union[str, Unit] = Unit('s'),  plot_sep: bool = False,
-                 src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
-                 label_font_size: int = 18, title_font_size: int = 20):
+    def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
+                 title_font_size: int = 20) -> Tuple[dict, Figure]:
+        """
+        A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
+        :param Figure fig: The matplotlib Figure object to create axes on, and thus make the plot.
+        :param str inst: A specific instrument to display data for. Default is None, in which case all instruments
+            are plotted.
+        :param str custom_title: A custom title to add to the visualisation - the default is None, in which case a
+            title containing the source name and energy band will be generated.
+        :param int label_font_size: The font size for axes labels, default is 18.
+        :param int title_font_size: The font size for the title, default is 20.
+        :return: A dictionary of axes objects that have been added, and the figure object that was passed in.
+        :rtype: Tuple[dict, Figure]
+        """
         # TODO this will need a little bit of TLC once this and the multi-mission branch cross paths
-        if isinstance(time_unit, str):
-            time_unit = Unit(time_unit)
-
-        if not self.all_lightcurves[0].time.unit.is_equivalent(time_unit):
-            raise UnitConversionError("You have supplied a 'time_unit' that cannot be converted to seconds.")
 
         buffer_frac = 0.008
         chunk_len = (self.time_chunks[:, 1] - self.time_chunks[:, 0]).value
@@ -1084,17 +1097,8 @@ class AggregateLightCurve(BaseAggregateProduct):
 
             for rel_lc in rel_lcs:
                 ident = "{t} {o}-{i}".format(t='XMM', o=rel_lc.obs_id, i=rel_lc.instrument)
-                if not plot_sep:
-                    ax.errorbar(rel_lc.datetime, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
-                                capsize=2, label=ident, fmt='x')
-
-                else:
-                    raise NotImplementedError("Not decided whether I will add this feature yet")
-
-                    # ax.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
-                    #             color=src_colour, label='Source', fmt='x')
-                    # ax.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
-                    #             color=bck_colour, label='Background', fmt='x')
+                ax.errorbar(rel_lc.datetime, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
+                            capsize=2, label=ident, fmt='x')
 
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
             for label in ax.get_xticklabels(which='major'):
@@ -1116,17 +1120,24 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         return axes_dict, fig
 
-    def view(self, figsize: tuple = (14, 6), time_unit: Union[str, Unit] = Unit('s'),
-             lo_time_lim: Quantity = None, hi_time_lim: Quantity = None, colour: str = 'black',
-             plot_sep: bool = False, src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick',
-             custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
-             highlight_bad_times: bool = True):
+    def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
+             title_font_size: int = 18):
+        """
 
+        :param tuple figsize: The size of the visualisation figure, default is (14, 6). Adjusting this value is the
+            best way to achieve nice looking plots when labels are overlapping, particularly when there are many
+            observations and time chunks to plot in the x-direction.
+        :param str inst: A specific instrument to display data for. Default is None, in which case all instruments
+            are plotted.
+        :param str custom_title: A custom title to add to the visualisation - the default is None, in which case a
+            title containing the source name and energy band will be generated.
+        :param int label_font_size: The font size for axes labels, default is 18.
+        :param int title_font_size: The font size for the title, default is 20.
+        """
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
-        ax, fig = self.get_view(fig, time_unit, lo_time_lim, hi_time_lim, colour, plot_sep, src_colour, bck_colour,
-                                custom_title, label_font_size, title_font_size, highlight_bad_times)
+        ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size)
 
         # plt.tight_layout()
         # Display the plot
