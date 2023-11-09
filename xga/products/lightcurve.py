@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/11/2023, 17:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 11:08. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List
 from warnings import warn
@@ -1012,11 +1012,9 @@ class AggregateLightCurve(BaseAggregateProduct):
     # def get_count_rate
 
 # Then define user-facing methods
-    def get_view(self, fig: Figure, time_unit: Union[str, Unit] = Unit('s'),
-                 lo_time_lim: Quantity = None,
-                 hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
+    def get_view(self, fig: Figure, time_unit: Union[str, Unit] = Unit('s'),  plot_sep: bool = False,
                  src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
-                 label_font_size: int = 18, title_font_size: int = 20, highlight_bad_times: bool = True):
+                 label_font_size: int = 18, title_font_size: int = 20):
 
         # TODO this will need a little bit of TLC once this and the multi-mission branch cross paths
         if isinstance(time_unit, str):
@@ -1103,6 +1101,18 @@ class AggregateLightCurve(BaseAggregateProduct):
                 label.set(y=label.get_position()[1]-0.03, rotation=40, horizontalalignment='right')
 
             ax.legend(loc='best')
+
+        if custom_title is not None:
+            fig.suptitle(custom_title, fontsize=title_font_size)
+        elif self.src_name is not None:
+            fig.suptitle("{s} {l}-{u}keV Aggregate Lightcurve".format(s=self.src_name,
+                                                                      l=self.energy_bounds[0].to('keV').value,
+                                                                      u=self.energy_bounds[1].to('keV').value),
+                         fontsize=title_font_size)
+        else:
+            fig.suptitle("{l}-{u}keV Aggregate Lightcurve".format(l=self.energy_bounds[0].to('keV').value,
+                                                                  u=self.energy_bounds[1].to('keV').value),
+                         fontsize=title_font_size)
 
         return axes_dict, fig
 
