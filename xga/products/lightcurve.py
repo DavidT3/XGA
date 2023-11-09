@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 12:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 16:01. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -794,6 +794,7 @@ class AggregateLightCurve(BaseAggregateProduct):
             elif lc.obs_id in self._component_products and lc.instrument in self._component_products[lc.obs_id]:
                 self._component_products[lc.obs_id][lc.instrument][rel_grp] = lc
 
+    # Start by defining properties, then internal (protected) methods, and then user facing methods
     @property
     def obs_ids(self) -> list:
         """
@@ -963,6 +964,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         return np.array(chunk_bounds)
 
+    # Then define user-facing methods
     def get_lightcurves(self, time_chunk_id: int, obs_id: str = None,
                         inst: str = None) -> Union[List[LightCurve], LightCurve]:
         """
@@ -1023,7 +1025,39 @@ class AggregateLightCurve(BaseAggregateProduct):
                                      "AggregateLightCurve.".format(time_chunk_id))
         return matches
 
-# Then define user-facing methods
+    def get_data(self, inst: str, date_time: bool = False) -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
+        """
+        A get method to retrieve all count-rate and timing data for a particular instrument from this
+        AggregateLightCurve. The data are in the correct temporal order.
+
+        :param str inst: The instrument for which to retrieve the overall count-rate and time data.
+        :param bool date_time: Whether the time data should be returned as an array of datetimes (not the default), or
+            an Astropy TimeDelta object with the time as a different from MJD 50814.0 in seconds (the default).
+        :return: The count rate data, count rate uncertainty data, and time data for the selected instrument. These
+            are in the correct temporal order.
+        :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]
+        """
+        cr_data = []
+        cr_err_data = []
+        t_data = []
+        for tc_id in self.time_chunk_ids:
+            try:
+                rel_lcs = self.get_lightcurves(tc_id, inst=inst)
+            except NotAssociatedError:
+                continue
+
+            cr_data.append(rel_lcs.count_rate)
+            cr_err_data.append(rel_lcs.count_rate_err)
+
+            cur_dt = rel_lcs.datetime
+            t_data.append(cur_dt)
+
+        t_data = np.concatenate(t_data)
+        if not date_time:
+            t_data = Time(t_data) - Time(50814.0, format='mjd').sec
+
+        return np.concatenate(cr_data), np.concatenate(cr_err_data), t_data
+
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
                  title_font_size: int = 20) -> Tuple[dict, Figure]:
         """
@@ -1112,10 +1146,6 @@ class AggregateLightCurve(BaseAggregateProduct):
                 ident = "{t} {o}-{i}".format(t='XMM', o=rel_lc.obs_id, i=rel_lc.instrument)
                 ax.errorbar(rel_lc.datetime, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
                             capsize=2, label=ident, fmt='x')
-
-            # ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
-            # for label in ax.get_xticklabels(which='major'):
-            #     label.set(y=label.get_position()[1]-0.03, rotation=40, horizontalalignment='right')
 
             ax.legend(loc='best')
 
