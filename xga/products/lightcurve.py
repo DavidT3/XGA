@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 17:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 17:55. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -668,6 +668,26 @@ class LightCurve(BaseProduct):
 
 
 class AggregateLightCurve(BaseAggregateProduct):
+    """
+    The init method for the AggregateLightCurve class, performs checks and organises the light-curves which
+    have been passed in, for easy retrieval. It also allows for analysis to be performed on the combined
+    data, and for visualisations to be created.
+
+    This class is designed to package light-curves generated for the same source, with the same settings, and
+    for the same energy bounds - if interested in the time varying behaviours of multiple energy bands then
+    the HardnessCurve and AggregateHardnessCurve products should be used. It can take light-curves from different
+    instruments, and will deal with them simultaneously rather than stacking them.
+
+    Light curves that are part of an AggregateLightCurve will be separated into 'time chunks', where a time chunk
+    is a period that has uninterrupted coverage. For instance, three XMM observations separated by a year each would
+    be in three different time chunks, but if there were a fourth observation that was taken by another telescope
+    and happened concurrently (even if it didn't start and end at the same time) with the first XMM
+    observation, then it would be in the same time chunk.
+
+    :param Union[List[LightCurve], np.ndarray] lightcurves: A list or array of LightCurve objects that are to be
+        collated in an AggregateLightCurve. These must be for the same source, and generated with the same
+        settings.
+    """
     def __init__(self, lightcurves: Union[List[LightCurve], np.ndarray]):
         """
         The init method for the AggregateLightCurve class, performs checks and organises the light-curves which
@@ -684,6 +704,10 @@ class AggregateLightCurve(BaseAggregateProduct):
         be in three different time chunks, but if there were a fourth observation that was taken by another telescope
         and happened concurrently (even if it didn't start and end at the same time) with the first XMM
         observation, then it would be in the same time chunk.
+
+        :param Union[List[LightCurve], np.ndarray] lightcurves: A list or array of LightCurve objects that are to be
+            collated in an AggregateLightCurve. These must be for the same source, and generated with the same
+            settings.
         """
         if isinstance(lightcurves, list):
             lightcurves = np.array(lightcurves)
@@ -775,25 +799,39 @@ class AggregateLightCurve(BaseAggregateProduct):
                                                "selection pattern.".format(rel_inst.upper()))
 
         patts = [pk + 'pattern' + pv for pk, pv in self._patterns.items()]
+        # This is what the AggregateLightCurve will be stored under in an XGA source product storage structure.
         self._storage_key = lightcurves[0].storage_key.split('_pattern')[0] + '_' + '_'.join(patts)
 
+        # This stores the ObsIDs and their instruments, for the lightcurves associated with this objcet
         self._rel_obs = {}
+        # This array determines which lightcurves have overlapping temporal coverage
         overlapping = np.full((len(lightcurves), len(lightcurves)), False)
         for lc_ind, lc in enumerate(lightcurves):
-
+            # If an ObsID is already present in the rel_obs dict then we need to add the current instrument as part
+            #  of a new list, otherwise we need to append our current instrument to an existing list
             if lc.obs_id not in self._rel_obs:
                 self._rel_obs[lc.obs_id] = [lc.instrument]
             else:
                 self._rel_obs[lc.obs_id].append(lc.instrument)
 
+            # Use the LightCurve overlap checking method to figure out which of our set of light curves overlaps with
+            #  the current one. Checking like this does include the current light curve which obviously will overlap,
+            #  but we're setting up an overlap matrix and those values will be the diagonal, so we don't mind
             cur_overlap = lc.overlap_check(lightcurves)
             overlapping[lc_ind, :] = cur_overlap
 
+        # Get the entries one up from the diagonal, we'll use them to split the light curves up into time chunks, which
+        #  is where there are gaps between coverage. This works because there will be False overlap entries in the
+        #  shifted diagonal of the matrix, and those are cases where there is a break in the observations
         split = np.diag(overlapping, 1)
         split = np.insert(split, 0, False)
 
+        # Here we want to index the light curves into time chunk groupings
         groupings = np.zeros(len(lightcurves), dtype=int)
+        # This gives us the indices of where we need to split the light curves into chunks, as we know that the light
+        #  curves are already sorted into the correct temporal order
         split_inds = np.argwhere(~split).T[0]
+        # Just sets up the time chunk ID 1D matrix for our light curves
         for split_ind_ind, split_ind in enumerate(split_inds):
             if split_ind_ind != (len(split_inds)-1):
                 groupings[split_ind: split_inds[split_ind_ind+1]] = split_ind_ind
@@ -845,13 +883,18 @@ class AggregateLightCurve(BaseAggregateProduct):
         :return: A list of every single lightcurve associated with this object.
         :rtype: List[LightCurve]
         """
+        # This stores the flattened set of all lightcurves
         all_lcs = []
+        # Iterate through the time chunks associated with this AggregateLightCurve, as we need to pass an ID to
+        #  get_lightcurves to retrieve lightcurves
         for tc_i in self.time_chunk_ids:
-            # If there is only one light curve per time chunk then get_lightcurves will just return an object
+            # If there is only one light curve per time chunk then get_lightcurves will just return a
+            #  LightCurve object, but I always want it to be a list
             rel_lcs = self.get_lightcurves(tc_i)
             if isinstance(rel_lcs, LightCurve):
                 rel_lcs = [rel_lcs]
 
+            # Add the list of lightcurves for the current time chunk to the overall flattened lightcurve list
             all_lcs += rel_lcs
 
         return all_lcs
@@ -950,11 +993,16 @@ class AggregateLightCurve(BaseAggregateProduct):
             right hand column are chunk stop times.
         :rtype: Quantity
         """
+        # Stores the chunk start and stop times until they are turned into a non-scalar Quantity at the end
         chunk_bounds = []
+        # Iterates through the time chunks associated with this object
         for tc_id in self.time_chunk_ids:
+            # Fetching lightcurves, making sure the return is a list
             rel_lcs = self.get_lightcurves(tc_id)
             if isinstance(rel_lcs, LightCurve):
                 rel_lcs = [rel_lcs]
+                # Finds the minimum start_time (i.e. the earliest start time) for lightcurves in this time chunk, and
+                #  the maximum (i.e. latest) stop time - these define the bounds of this chunk
             tc_start = min(Quantity([lc.start_time for lc in rel_lcs]))
             tc_end = max(Quantity([lc.stop_time for lc in rel_lcs]))
             chunk_bounds.append(Quantity([tc_start, tc_end]))
@@ -972,6 +1020,7 @@ class AggregateLightCurve(BaseAggregateProduct):
             right hand column are chunk stop datetimes.
         :rtype: np.ndarray(datetime)
         """
+        # This behaves exactly the same as time_chunks, but works on datetime objects instead.
         chunk_bounds = []
         for tc_id in self.time_chunk_ids:
             rel_lcs = self.get_lightcurves(tc_id)
@@ -1078,25 +1127,35 @@ class AggregateLightCurve(BaseAggregateProduct):
             are in the correct temporal order.
         :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]
         """
+        # These store the countrates, errors, and times that we pull out for the chosen instrument for all
+        #  time chunks
         cr_data = []
         cr_err_data = []
         t_data = []
+        # Iterate through the time chunk IDs associated with this object
         for tc_id in self.time_chunk_ids:
             try:
+                # Grab the light curves, but catch if there isn't an entry for the chosen instrument for this
+                #  time chunk and handle it gracefully
                 rel_lcs = self.get_lightcurves(tc_id, inst=inst)
             except NotAssociatedError:
                 continue
 
+            # Append the current time chunk's chosen instrument's count rate data and error to their lists
             cr_data.append(rel_lcs.count_rate)
             cr_err_data.append(rel_lcs.count_rate_err)
 
+            # Do the same with the datetime
             cur_dt = rel_lcs.datetime
             t_data.append(cur_dt)
 
+        # Combine the datetime arrays in t_data into one array
         t_data = np.concatenate(t_data)
+        # If the user wants the time data as a TimeDelta from the reference MJD time then calculate that
         if not date_time:
             t_data = (Time(t_data) - Time(50814.0, format='mjd')).sec
 
+        # Concatenate the count rate data and error into one quantity each and return everything
         return np.concatenate(cr_data), np.concatenate(cr_err_data), t_data
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
@@ -1116,73 +1175,119 @@ class AggregateLightCurve(BaseAggregateProduct):
         """
         # TODO this will need a little bit of TLC once this and the multi-mission branch cross paths
 
+        # This sets the fraction of the total x-width of the figure that is set between each axes
         buffer_frac = 0.008
+        # This calculates the total time length of all time chunks
         chunk_len = (self.time_chunks[:, 1] - self.time_chunks[:, 0]).value
+        # Then finds what fraction of the total coverage each time chunk covers, taking into account the buffer
         chunk_frac = chunk_len / (chunk_len.sum() + buffer_frac*len(chunk_len)-1)
 
-        break_slant = 1.3  # proportion of vertical to horizontal extent of the slanted line
+        # Proportion of vertical to horizontal extent of the slanted line that breaks the separate axes
+        break_slant = 1.3
+        # Set properties of the break lines
         break_kwargs = dict(marker=[(-1, -break_slant), (1, break_slant)], markersize=12,
                             linestyle="none", color='k', mec='k', mew=1, clip_on=False)
 
+        # To store the to-be-setup axes in
         axes_dict = {}
+        # This is added to each iteration so that the next axes knows what x-position to start at
         cumu_x_pos = 0
+        # Iterate through the time chunks, each will have a sub-axes
         for tc_id in self.time_chunk_ids:
+            # Grab the fraction of time coverage for this time chunk (e.g. size of this axes)
             rel_frac = chunk_frac[tc_id]
 
+            # We deal with axes differently depending on whether they are the first time chunk in a series, one in
+            #  the middle of a series of time chunks, or the last. We also have to account for the fact that there
+            #  could only be one or two time chunks. This all defines whether we plot break lines, which axes
+            #  boundaries are visible, which axis tick labels are shown etc.
             if tc_id == 0:
+                # Adding a new axes, the size defined by the fractional coverage time, and the position by
+                #  cumu_x_pos (though that should always be zero for tc_id == 0). It extends the full height of
+                #  the figure
                 axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1])
+                # Set up a y-label - other axes won't have this because they share the y-axis and we only want to
+                #  label the first one
                 y_lab = "Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex'))
                 axes_dict[tc_id].set_ylabel(y_lab, fontsize=label_font_size)
-                axes_dict[tc_id].spines.right.set_visible(False)
 
+                # We set the upper and lower y-axis limits based on the maximum and minimum count rates across all
+                #  the lightcurves in this object, as the y-axis is shared
                 low_lim = min([(lc.count_rate-lc.count_rate_err).min() for lc in self.all_lightcurves]).value*0.95
                 upp_lim = max([(lc.count_rate+lc.count_rate_err).max() for lc in self.all_lightcurves]).value*1.05
                 axes_dict[tc_id].set_ylim(low_lim, upp_lim)
 
+                # If there is more than one time chunk, we turn off the line on the right hand side of this initial
+                #  axes - so there is no unsightly barrier between it and the next axes - we also add slanted lines
+                #  to indicate a break in the y-axis
                 if self.num_time_chunks != 1:
                     axes_dict[tc_id].spines.right.set_visible(False)
                     axes_dict[tc_id].plot([1, 1], [1, 0], transform=axes_dict[tc_id].transAxes, **break_kwargs)
 
+                # We make sure the ticks look how we want them
+                axes_dict[tc_id].tick_params(direction='in', which='both', right=False, left=True, top=True)
+
+            # In this case we are at a time chunk that is not the first, and not the last
             elif tc_id != (self.num_time_chunks - 1):
+                # Add the axes at the correct position, making sure to share the y-axis with the first axes
                 axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0])
+                # Both the left hand and the right hand axis lines are turned off
                 axes_dict[tc_id].spines.left.set_visible(False)
                 axes_dict[tc_id].spines.right.set_visible(False)
+                # We make sure to setup the ticks as we want them - making sure that the y-axis is not labelled for
+                #  this one, and that the left and right ticks are turned off
                 axes_dict[tc_id].tick_params(direction='in', which='both', right=False, left=False, top=True,
                                              labelleft=False)
+                # This is what sets up the break lines on the left and right hand sides of the x-axis, at the top
+                #  and bottom
                 axes_dict[tc_id].plot([1, 1], [1, 0], transform=axes_dict[tc_id].transAxes, **break_kwargs)
                 axes_dict[tc_id].plot([0, 0], [0, 1], transform=axes_dict[tc_id].transAxes, **break_kwargs)
 
+            # Finally this is triggered when we're at the last time chunks
             else:
                 axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0])
+                # The right hand axis line is visible, but not the left
                 axes_dict[tc_id].spines.right.set_visible(True)
                 axes_dict[tc_id].spines.left.set_visible(False)
+                # And we make sure to add the tick setup and ensure that the final break lines on the left are drawn
                 axes_dict[tc_id].tick_params(direction='in', which='both', right=True, left=False, top=True,
                                              labelleft=False)
                 axes_dict[tc_id].plot([0, 0], [0, 1], transform=axes_dict[tc_id].transAxes, **break_kwargs)
 
+            # Iterate the cumulative position
             cumu_x_pos += (rel_frac+buffer_frac)
-
+            # And turn on minor ticks, because I prefer how that looks
             axes_dict[tc_id].minorticks_on()
 
-            # Setting the axis limits
+            # Setting the x-axis limits, based on the known time coverage of the time chunk
             axes_dict[tc_id].set_xlim(self.datetime_chunks[tc_id, 0], self.datetime_chunks[tc_id, 1])
 
+        # Create a single x-axis label for all axes, it looks ugly and is unnecessary to have one for each
         fig.text(0.5, -0.04, "Time", ha='center', fontsize=label_font_size)
 
+        # Now we need to populate our carefully set up axes with DATA
         for tc_id in self.time_chunk_ids:
             ax = axes_dict[tc_id]
             try:
+                # That this is the first part of the try-except, and won't trigger the except, is quite deliberate. It
+                #  sets up the x-axis tick labels, even if there are no data for the requested instrument (if the
+                #  user has even requested a specific instrument) - makes the plot look nice
+                # The labels will have hour, minute, date, month (shortened word so as not to be ambigious with
+                #  american date system), and year
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
                 for label in ax.get_xticklabels(which='major'):
                     label.set(y=label.get_position()[1] - 0.03, rotation=40, horizontalalignment='right')
 
+                # This is what _might_ trigger the NotAssociatedError
                 rel_lcs = self.get_lightcurves(tc_id, inst=inst)
             except NotAssociatedError:
                 continue
 
+            # Make sure rel_lcs, even if it only contains a single light curve
             if isinstance(rel_lcs, LightCurve):
                 rel_lcs = [rel_lcs]
 
+            # Now we cycle through the light curves for the current time chunk and add them to the plot
             for rel_lc in rel_lcs:
                 ident = "{t} {o}-{i}".format(t='XMM', o=rel_lc.obs_id, i=rel_lc.instrument)
                 ax.errorbar(rel_lc.datetime, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
@@ -1190,6 +1295,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
             ax.legend(loc='best')
 
+        # Check if the user has defined a custom title, and if not then we build one and add it to the plot
         if custom_title is not None:
             fig.suptitle(custom_title, fontsize=title_font_size, y=1.05)
         elif self.src_name is not None:
