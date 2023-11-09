@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 17:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 18:10. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -19,9 +19,51 @@ from xga.utils import dict_search
 
 
 class LightCurve(BaseProduct):
+    """
+    This is the XGA LightCurve product class, which is used to interface with X-ray lightcurves generated
+    for a variety of sources. It provides simple access to data and information about the lightcurve, fitting
+    capabilities, and the ability to easily create lightcurve visualisations.
+
+    :param str path: The path to the lightcurve.
+    :param str obs_id: The ObsID from which this lightcurve was generated.
+    :param str instrument: The instrument from which this lightcurve.
+    :param str stdout_str: The stdout from the generation process.
+    :param str stderr_str: The stderr for the generation process.
+    :param str gen_cmd: The generation command for the lightcurve.
+    :param Quantity central_coord: The central coordinate of the region from which this lightcurve was extracted.
+    :param Quantity inn_rad: The inner radius of the lightcurve region.
+    :param Quantity out_rad: The outer radius of the lightcurve region.
+    :param Quantity lo_en: The lower energy bound for this lightcurve.
+    :param Quantity hi_en: The upper energy bound for this lightcurve.
+    :param Quantity time_bin_size: The time bin size used to generate the lightcurve.
+    :param str pattern_expr: The event selection pattern used to generate the lightcurve.
+    :param bool region: Whether this was generated from a region in a region file
+    :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
+    """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, lo_en: Quantity, hi_en: Quantity,
                  time_bin_size: Quantity, pattern_expr: str, region: bool = False, is_back_sub: bool = True):
+        """
+        This is the XGA LightCurve product class, which is used to interface with X-ray lightcurves generated
+        for a variety of sources. It provides simple access to data and information about the lightcurve, fitting
+        capabilities, and the ability to easily create lightcurve visualisations.
+
+        :param str path: The path to the lightcurve.
+        :param str obs_id: The ObsID from which this lightcurve was generated.
+        :param str instrument: The instrument from which this lightcurve.
+        :param str stdout_str: The stdout from the generation process.
+        :param str stderr_str: The stderr for the generation process.
+        :param str gen_cmd: The generation command for the lightcurve.
+        :param Quantity central_coord: The central coordinate of the region from which this lightcurve was extracted.
+        :param Quantity inn_rad: The inner radius of the lightcurve region.
+        :param Quantity out_rad: The outer radius of the lightcurve region.
+        :param Quantity lo_en: The lower energy bound for this lightcurve.
+        :param Quantity hi_en: The upper energy bound for this lightcurve.
+        :param Quantity time_bin_size: The time bin size used to generate the lightcurve.
+        :param str pattern_expr: The event selection pattern used to generate the lightcurve.
+        :param bool region: Whether this was generated from a region in a region file
+        :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
+        """
         # Unfortunate local import to avoid circular import errors
         from xga.sas import check_pattern
 
@@ -531,9 +573,12 @@ class LightCurve(BaseProduct):
         if isinstance(lightcurves, LightCurve):
             lightcurves = [lightcurves]
 
+        # Grabs the start and stop times for the passed lightcurves, puts them all in non-scalar quantities
         starts = Quantity([lc.start_time for lc in lightcurves])
         ends = Quantity([lc.stop_time for lc in lightcurves])
 
+        # Simply constructs a boolean array that tells us if each lightcurve starts in, finishes in, or completely
+        #  encloses the light curve we're checking against
         overlap = ((starts >= self.start_time) & (starts < self.stop_time)) | \
                   ((ends >= self.start_time) & (ends < self.stop_time)) | \
                   ((starts <= self.start_time) & (ends >= self.stop_time))
