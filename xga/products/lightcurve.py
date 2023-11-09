@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 16:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 16:05. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -1054,7 +1054,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         t_data = np.concatenate(t_data)
         if not date_time:
-            t_data = Time(t_data) - Time(50814.0, format='mjd').sec
+            t_data = (Time(t_data) - Time(50814.0, format='mjd')).sec
 
         return np.concatenate(cr_data), np.concatenate(cr_err_data), t_data
 
