@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 15:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 15:55. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3329,13 +3329,15 @@ class BaseSource:
             patt_search = "pattern"
         elif isinstance(pattern, str):
             pattern = {'pn': '<=4', 'mos': '<=12'}
-            patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
+            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                           for inst, patt in pattern.items()}
         elif isinstance(pattern, dict):
             if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
                 raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
                                  "should be one entry for 'mos'.")
             pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
-            patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
+            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                           for inst, patt in pattern.items()}
         else:
             raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
                             "instrument names and values are string patterns.")
@@ -3347,7 +3349,7 @@ class BaseSource:
             if isinstance(patt_search, str):
                 rel_patt_search = [patt_search]
             else:
-                rel_patt_search = ['_' + inst + 'pattern' + patt for inst, patt in patt_search.items()]
+                rel_patt_search = [patt for inst, patt in patt_search.items()]
 
             if all([rps in lc.storage_key for rps in rel_patt_search]):
                 matched_prods.append(lc)
