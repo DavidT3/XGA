@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 14:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 14:26. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3151,7 +3151,10 @@ class BaseSource:
             is None (which will retrieve all lightcurves regardless of energy limit).
         :param Quantity time_bin_size: The time bin size used to generate the desired lightcurve. The default value
             is None, in which case all lightcurves matching other criteria will be retrieved.
-        :param dict pattern:
+        :param dict pattern: Event selection patterns used to create lightcurves of interest. The default is None,
+            which means all light curves matching other search terms will be returned. You can also pass 'default'
+            which uses the default values for generating lightcurves for different instruments, or you can pass a
+            dictionary with patterns in; e.g. {'pn': '<=4', 'mos': '<=12'}
         :return: An XGA LightCurve object (if there is an exact match), or a list of XGA LightCurve objects (if there
             were multiple matching products).
         :rtype: Union[LightCurve, List[LightCurve]]
