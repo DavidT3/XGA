@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/11/2023, 18:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 14:57. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -918,6 +918,30 @@ class AggregateLightCurve(BaseAggregateProduct):
         :rtype: dict
         """
         return self._rel_obs
+
+    @property
+    def src_name(self) -> str:
+        """
+        Method to return the name of the object a product is associated with. The product becomes
+        aware of this once it is added to a source object.
+
+        :return: The name of the source object this product is associated with.
+        :rtype: str
+        """
+        return self._src_name
+
+    # This needs a setter, as this property only becomes not-None when the product is added to a source object.
+    @src_name.setter
+    def src_name(self, name: str):
+        """
+        Property setter for the src_name attribute of a product, should only really be called by a source object,
+        not by a user.
+
+        :param str name: The name of the source object associated with this product.
+        """
+        self._src_name = name
+        for p in self.all_lightcurves:
+            p.src_name = name
 
     @property
     def all_lightcurves(self) -> List[LightCurve]:
