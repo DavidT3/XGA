@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 14:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 14:42. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3186,18 +3186,18 @@ class BaseSource:
         #  value just creates a key that looks for the 'ri' or 'ro' precursor to the value in the key, i.e. it doesn't
         #  do anything - we also make sure that any radii passed by the user are converted properly
         if inner_radius is not None and isinstance(inner_radius, Quantity):
-            inn_rad_search = '_ri{}_'.format(self.convert_radius(inner_radius, 'deg'))
+            inn_rad_search = '_ri{}_'.format(self.convert_radius(inner_radius, 'deg').value)
         elif inner_radius is not None and isinstance(inner_radius, str):
-            inn_rad_search = '_ri{}_'.format(self.get_radius(inner_radius, 'deg'))
+            inn_rad_search = '_ri{}_'.format(self.get_radius(inner_radius, 'deg').value)
         elif inner_radius is None:
             inn_rad_search = "_ri"
         else:
             raise TypeError("You may only pass a quantity or a string as inner_radius")
 
         if outer_radius is not None and isinstance(outer_radius, Quantity):
-            out_rad_search = '_ro{}_'.format(self.convert_radius(outer_radius, 'deg'))
+            out_rad_search = '_ro{}_'.format(self.convert_radius(outer_radius, 'deg').value)
         elif outer_radius is not None and isinstance(outer_radius, str):
-            out_rad_search = '_ro{}_'.format(self.get_radius(outer_radius, 'deg'))
+            out_rad_search = '_ro{}_'.format(self.get_radius(outer_radius, 'deg').value)
         elif outer_radius is None:
             out_rad_search = "_ro"
         else:

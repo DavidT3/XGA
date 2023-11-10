@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/04/2023, 16:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 14:42. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -11,6 +11,7 @@ from astropy.units import Quantity, UnitConversionError
 from ._common import region_setup, check_pattern
 from .run import sas_call
 from .. import OUTPUT, NUM_CORES
+from ..exceptions import NoProductAvailableError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..utils import energy_to_channel
@@ -136,6 +137,14 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         for pack in source.get_products("events", just_obj=False):
             obs_id = pack[0]
             inst = pack[1]
+            try:
+                # If we can find an exact match then we don't need to generate this light curve, it already exists, so
+                #  we would move onto the next ObsID-instrument combo
+                source.get_lightcurves(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], lo_en, hi_en,
+                                       Quantity(time_bin_size, 's'), {'pn': pn_patt, 'mos': mos_patt})
+                continue
+            except NoProductAvailableError:
+                pass
 
             if not os.path.exists(OUTPUT + obs_id):
                 os.mkdir(OUTPUT + obs_id)
