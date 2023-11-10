@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 15:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 15:08. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3214,9 +3214,7 @@ class BaseSource:
                     time_bin_search in lc.storage_key and en_search in lc.storage_key:
                 matched_prods.append(lc)
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        if len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
 
         return matched_prods
