@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/11/2023, 15:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/11/2023, 14:36. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -703,17 +703,17 @@ class BaseSource:
         :param bool read_fits: Boolean flag that controls whether past fits are read back in or not.
         """
 
-        def parse_image_like(file_path: str, exact_type: str, merged: bool = False) -> BaseProduct:
+        def parse_image_like(file_path: str, exact_type: str, merged: bool = False) -> Union[Image, ExpMap]:
             """
             Very simple little function that takes the path to an XGA generated image-like product (so either an
             image or an exposure map), parses the file path and makes an XGA object of the correct type by using
             the exact_type variable.
 
-            :param str file_path: Absolute path to an XGA-generated XMM data product.
+            :param str file_path: Absolute path to an XGA-generated data product.
             :param str exact_type: Either 'image' or 'expmap', the type of product that the file_path leads to.
             :param bool merged: Whether this is a merged file or not.
-            :return: An XGA product object.
-            :rtype: BaseProduct
+            :return: An XGA Image or ExpMap object.
+            :rtype: Union[Image, ExpMap]
             """
             # Get rid of the absolute part of the path, then split by _ to get the information from the file name
             im_info = file_path.split("/")[-1].split("_")
@@ -752,6 +752,53 @@ class BaseSource:
 
             return final_obj
 
+        def parse_lightcurve(inven_entry: pd.Series) -> LightCurve:
+            """
+            Very simple little function that takes information on an XGA-generated lightcurve (including a path to
+            the file), and sets up a LightCurve product that can be added to the product storage structure
+            of the source.
+
+            :param pd.Series inven_entry: The inventory entry from which a LightCurve object should be parsed.
+            :return: An XGA LightCurve object
+            :rtype: LightCurve
+            """
+            if inven_entry['src_name'] == self.name:
+                # The path, ObsID, and instrument can be read directly from inventory entries
+                rel_path = inven_entry['file_name']
+                rel_obs_id = inven_entry['obs_id']
+                rel_inst = inven_entry['inst']
+
+                # We split up the information contained in the info key - this is going to tell us what settings were
+                #  used to generate the lightcurve
+                lc_info = inven_entry['info_key'].split("_")
+
+                # Pull out the energy bounds of the lightcurve, then make them Astropy Quantity
+                rel_lo_en, rel_hi_en = lc_info[1].split("-")
+                rel_lo_en = Quantity(float(rel_lo_en), "keV")
+                rel_hi_en = Quantity(float(rel_hi_en), "keV")
+
+                # We also need to grab the central coordinates and turn them into an Astropy Quantity
+                rel_central_coord = Quantity([float(lc_info[2].replace('ra', '')),
+                                              float(lc_info[3].replace('dec', ''))], 'deg')
+
+                # The inner and outer radii are always in degrees at this stage, because then we are independent of
+                #  a cosmology or redshift
+                rel_inn_rad = Quantity(lc_info[4].replace('ri', ''), 'deg')
+                rel_out_rad = Quantity(lc_info[5].replace('ro', ''), 'deg')
+
+                # The timebin size is always in seconds
+                rel_time_bin = Quantity(lc_info[6].replace('timebin', ''), 's')
+
+                rel_patt = lc_info[7].replace('pattern', '')
+
+                # Setting up the lightcurve to be passed back out and stored in the source
+                final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "", rel_central_coord, rel_inn_rad,
+                                       rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True)
+            else:
+                final_obj = None
+
+            return final_obj
+
         og_dir = os.getcwd()
         # This is used for spectra that should be part of an AnnularSpectra object
         ann_spec_constituents = {}
@@ -774,6 +821,11 @@ class BaseSource:
                     rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
                     for r_ind, r in rel_ims.iterrows():
                         self.update_products(parse_image_like(cur_d+r['file_name'], r['type']), update_inv=False)
+
+                # This finds the lines of the inventory that are lightCurve entries
+                lc_lines = inven[inven['type'] == 'lightcurve']
+                for row_ind, row in lc_lines.iterrows():
+                    self.update_products(parse_lightcurve(row), update_inv=False)
 
                 # For spectra we search for products that have the name of this object in, as they are for
                 #  specific parts of the observation.
