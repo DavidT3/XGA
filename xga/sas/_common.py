@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2023, 15:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/11/2023, 14:18. Copyright (c) The Contributors
 
 import warnings
 from typing import Union, Tuple, List
@@ -139,6 +139,11 @@ def check_pattern(pattern: Union[str, int]) -> Tuple[str, str]:
     # First off I remove whitespace from the beginning and end of the term
     pattern = pattern.strip()
     # pattern = pattern.replace(' ', '')
+    # Sometimes we will pass in patterns that have been converted to the 'XGA format', if you want to call it
+    #  that. This namely happens when we're reading light curves that have been saved to disk back in. As such we
+    #  replace the XGA-isms with their original string meanings
+    pattern = pattern.replace('lteq', '<=').replace('gteq', '>=').replace('eq', '==') \
+        .replace('lteq', '<=').replace('lt', '<').replace('gt', '>')
 
     # Then we check for understandable selection commands; inequalities, equals, and 'in'
     if pattern[:2] not in ['in', '<=', '>=', '=='] and pattern[:1] not in ['<', '>']:
@@ -158,7 +163,8 @@ def check_pattern(pattern: Union[str, int]) -> Tuple[str, str]:
 
     # SAS doesn't like having file names with special characters, so I am trying to come up with safe replacements
     #  that still convey what the pattern selection was
+    # .replace('in', '')
     patt_file_name = pattern.replace(' ', '').replace('<=', 'lteq').replace('>=', 'gteq').replace('==', 'eq')\
-        .replace('<=', 'lteq').replace('<', 'lt').replace('>', 'gt').replace('in', '')
+        .replace('<=', 'lteq').replace('<', 'lt').replace('>', 'gt')
 
     return pattern, patt_file_name
