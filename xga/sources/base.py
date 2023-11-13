@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/11/2023, 14:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/11/2023, 14:50. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -763,8 +763,10 @@ class BaseSource:
             :rtype: LightCurve
             """
             if inven_entry['src_name'] == self.name:
-                # The path, ObsID, and instrument can be read directly from inventory entries
-                rel_path = inven_entry['file_name']
+                # The path, ObsID, and instrument can be read directly from inventory entries - we also use the
+                #  'cur_d' parameter from the upper scope to provide an absolute path, as the object will need it
+                #  later to read in the data
+                rel_path = cur_d + inven_entry['file_name']
                 rel_obs_id = inven_entry['obs_id']
                 rel_inst = inven_entry['inst']
 
