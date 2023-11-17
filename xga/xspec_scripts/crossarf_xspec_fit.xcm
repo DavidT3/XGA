@@ -2,8 +2,10 @@
 #  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/02/2021, 10:03. Copyright (c) David J Turner
 
 # This XSPEC script template requires quite a few parameters to be filled in, using the Python formatting
-#  syntax. This *should* act as a general script for model combinations, so long as the formatted
-#  parameter values are valid.
+#  syntax. It will NOT function as a completely general script, but should work as a semi-general script for fitting
+#  with cross-arf information. As in the user can specify what model to use.
+# Much of the infrastructure is shared with the 'general_xspec_fit.xcm' script, but this should only be used for
+#  annular spectra, with all spectra being fit in one run rather than separately.
 
 # As this script is designed to be populated by a Python script, the single curly braces denote places for the Python
 #  .format command to inject a value, and every normal TCL use of curly braces has to be double curly braces
@@ -13,6 +15,9 @@
 #################################################
 # The TCl file containing the function that extracts and writes out the final results
 source {xsp}
+
+puts NOTHING DOING YET
+exit
 
 #################################################
 # Setting up XSPEC

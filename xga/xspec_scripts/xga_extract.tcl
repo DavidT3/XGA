@@ -30,6 +30,8 @@ proc xga_extract { args } {
     set redshift [lindex $args 2]
     set conf [lindex $args 3]
     set mod_name [lindex $args 4]
+    # This tells us which parameters are the nH that should be zeroed for unabsorbed luminosity calculations
+    set nh_pars [lindex $args 5]
 
     #################################################
     # Fetching exp times and rates
@@ -86,26 +88,20 @@ proc xga_extract { args } {
     set col_list "MODEL,TOTAL_EXPOSURE,TOTAL_COUNT_RATE,TOTAL_COUNT_RATE_ERR,NUM_UNLINKED_THAWED_VARS,FIT_STATISTIC,TEST_STATISTIC,DOF"
 
     # Now all the relevant parameter columns get named (those that are allowed to vary and are unlinked)
-    # Also record where-ever there is a parameter called nH, so we know which parameters to 0 later for unabsorbed
-    #  luminosity calculations
-    set nh_pars {}
     set count 0
     for {set ipar 1} {$ipar <= [array size spardel]} {incr ipar} {
-	    set punit " "
-	    scan [tcloutr pinfo $ipar] "%s %s" pname punit
-	    if {$pname == "nH"} {
-	        lappend nh_pars $ipar
-	        }
-	    lappend idents $ipar
+        set punit " "
+        scan [tcloutr pinfo $ipar] "%s %s" pname punit
+        lappend idents $ipar
         if { $spardel($ipar) > 0 } {
 
-    # Each parameter gets three columns; the value, the -error, and the +error
+            # Each parameter gets three columns; the value, the -error, and the +error
             set divid "|"
             append col_list "," $pname$divid$ipar
             append col_list "," $pname$divid$ipar-
             append col_list "," $pname$divid$ipar+
             incr count
-	    }
+        }
     }
 
     #################################################

@@ -2459,7 +2459,7 @@ class ExpMap(Image):
         # Need to overwrite the data unit attribute set by the Image init
         self._data_unit = Unit("s")
 
-    def get_exp(self, at_coord: Quantity) -> float:
+    def get_exp(self, at_coord: Quantity) -> Quantity:
         """
         A simple method that converts the given coordinates to pixels, then finds the exposure time
         at those coordinates.
@@ -2645,7 +2645,7 @@ class RateMap(Image):
         """
         pix_coord = self.coord_conv(at_coord, pix).value
         rate = self.data[pix_coord[1], pix_coord[0]]
-        return Quantity(rate, "ct/s^-1")
+        return Quantity(rate, "ct/s")
 
     def get_count(self, at_coord: Quantity) -> float:
         """
@@ -3201,11 +3201,11 @@ class PSF(Image):
 
     def get_val(self, at_coord: Quantity) -> float:
         """
-        A simple method that converts the given coordinates to pixels, then finds the exposure time
+        A simple method that converts the given coordinates to pixels, then finds the PSF value
         at those coordinates.
 
-        :param Quantity at_coord: A pair of coordinates to find the exposure time for.
-        :return: The exposure time at the supplied coordinates.
+        :param Quantity at_coord: A pair of coordinates to find the PSF value time for.
+        :return: The PSF value at the supplied coordinates.
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/04/2023, 15:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:48. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -29,7 +29,8 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                              temp_lo_en: Quantity = Quantity(0.3, 'keV'), temp_hi_en: Quantity = Quantity(7.9, 'keV'),
                              group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
                              over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                             show_warn: bool = True) -> Union[List[HydrostaticMass], HydrostaticMass]:
+                             show_warn: bool = True,
+                             psf_bins: int = 4) -> Union[List[HydrostaticMass], HydrostaticMass]:
     """
     A convenience function that should allow the user to easily measure hydrostatic masses of a sample of galaxy
     clusters, elegantly dealing with any sources that have inadequate data or aren't fit properly. For the sake
@@ -105,6 +106,8 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     :param int num_cores: The number of cores on your local machine which this function is allowed, default is
         90% of the cores in your system.
     :param bool show_warn: Should profile fit warnings be shown, or only stored in the profile models.
+    :param int psf_bins: The number of bins per side when generating a grid of PSFs for image correction prior
+        to surface brightness profile (and thus density) measurements.
     :return: A list of the hydrostatic mass profiles measured by this function, though if the measurement was not
         successful an entry of None will be added to the list.
     :rtype: List[HydrostaticMass]/HydrostaticMass
@@ -119,7 +122,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                                                           temp_min_snr, temp_min_cnt, temp_min_width, temp_use_combined,
                                                           temp_use_worst, freeze_met, abund_table, temp_lo_en,
                                                           temp_hi_en, group_spec, spec_min_counts, spec_min_sn,
-                                                          over_sample, one_rmf, num_cores, show_warn)
+                                                          over_sample, one_rmf, num_cores, show_warn, psf_bins)
 
     # So I can return a list of profiles, a tad more elegant than fetching them from the sources sometimes
     final_mass_profs = []

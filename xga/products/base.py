@@ -19,6 +19,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 from scipy.optimize import curve_fit, minimize
+from scipy.stats import truncnorm
 from tabulate import tabulate
 
 from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
@@ -39,10 +40,26 @@ class BaseProduct:
     :param str stdout_str: The stdout from calling the terminal command.
     :param str stderr_str: The stderr from calling the terminal command.
     :param str gen_cmd: The command used to generate the product.
+    :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
+        object for later use by another processing step. It isn't intended for use by a user and will only be
+        accessible when defining a BaseProduct.
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 extra_info: dict = None):
         """
-        The initialisation method for the BaseProduct class.
+        The initialisation method for the BaseProduct class, the super class for all SAS generated products in XGA.
+        Stores relevant file path information, parses the std_err output of the generation process, and stores the
+        instrument and ObsID that the product was generated for.
+
+        :param str path: The path to where the product file SHOULD be located.
+        :param str obs_id: The ObsID related to the product being declared.
+        :param str instrument: The instrument related to the product being declared.
+        :param str stdout_str: The stdout from calling the terminal command.
+        :param str stderr_str: The stderr from calling the terminal command.
+        :param str gen_cmd: The command used to generate the product.
+        :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
+            object for later use by another processing step. It isn't intended for use by a user and will only be
+            accessible when defining a BaseProduct.
         """
         # This attribute stores strings that indicate why a product object has been deemed as unusable
         self._why_unusable = []
@@ -65,6 +82,12 @@ class BaseProduct:
         self._energy_bounds = (None, None)
         self._prod_type = None
         self._src_name = None
+
+        # Any extra information which a processing step might want to store in this base product - generally only
+        #  used when a product has been generated that doesn't need its only product class, but is being put in
+        #  a product class to be returned from 'execute_cmd'. I'm not even going to give it a property to hopefully
+        #  highlight to the user that it shouldn't be accessed by them.
+        self._extra_info = extra_info
 
     # Users are not allowed to change this, so just a getter.
     @property
@@ -519,7 +542,7 @@ class BaseProfile1D:
     :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. If this
         value is supplied a set_storage_key value must also be supplied.
     :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
-        associated AnnularSpectra generates to place itself in XGA's store structure.
+        associated AnnularSpectra generates to place itself in XGA's storage structure.
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
@@ -1410,29 +1433,42 @@ class BaseProfile1D:
         g.triangle_plot([gd_samp], filled=True)
         plt.show()
 
-    def generate_data_realisations(self, num_real: int):
+    def generate_data_realisations(self, num_real: int, truncate_zero: bool = False):
         """
         A method to generate random realisations of the data points in this profile, using their y-axis values
         and uncertainties. This can be useful for error propagation for instance, and does not require a model fit
         to work. This method assumes that the y-errors are 1-sigma, which isn't necessarily the case.
 
         :param int num_real: The number of random realisations to generate.
+        :param bool truncate_zero: Should the data realisations be truncated at zero, default is False. This could
+            be used for generating realisations of profiles where negative values are not physical.
         :return: An N x R astropy quantity, where N is the number of realisations and R is the number of radii
             at which there are data points in this profile.
         :rtype: Quantity
         """
+        # If we have no error information on the profile y values, then we can hardly generate distributions from them
         if self.values_err is None:
             raise ValueError("This profile has no y-error information, and as such you cannot generate random"
                              " realisations of the data.")
 
-        # Here I copy the values and value uncertainties N times, where N is the number of realisations
-        #  the user wants
-        ext_values = np.repeat(self.values[..., None], num_real, axis=1).T
-        ext_value_errs = np.repeat(self.values_err[..., None], num_real, axis=1).T
+        # The user can choose to ensure that the realisation distributions are truncated at zero, in which case we
+        #  use a truncated normal distribution.
+        if truncate_zero:
+            # The truncnorm setup wants the limits in units of scale essentially
+            trunc_lims = ((0 - self.values) / self.values_err, (np.inf - self.values) / self.values_err)
+            realisations = truncnorm(trunc_lims[0], trunc_lims[1], loc=self.values,
+                                     scale=self.values_err).rvs([num_real, len(self.values)])
+        # But the default behaviour is to just use a normal distribution
+        else:
+            # Here I copy the values and value uncertainties N times, where N is the number of realisations
+            #  the user wants
+            ext_values = np.repeat(self.values[..., None], num_real, axis=1).T
+            ext_value_errs = np.repeat(self.values_err[..., None], num_real, axis=1).T
+            # Here I just generate N realisations of the profiles using a normal distribution, though this does assume
+            #  that the errors are one sigma which isn't necessarily true
+            realisations = np.random.normal(ext_values, ext_value_errs)
 
-        # Then I just generate N realisations of the profiles using a normal distribution, though this does assume
-        #  that the errors are one sigma which isn't necessarily true
-        realisations = np.random.normal(ext_values, ext_value_errs)
+        # Ensure that our value distributions are passed back as quantities with the correct units
         realisations = Quantity(realisations, self.values_unit)
 
         return realisations
@@ -1441,7 +1477,8 @@ class BaseProfile1D:
                  back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
-                 show_legend: bool = True, show_residual_ax: bool = True):
+                 show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
+                 auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
@@ -1461,7 +1498,7 @@ class BaseProfile1D:
         :param str custom_title: A plot title to replace the automatically generated title, default is None.
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
             the dictionary key they are stored under is what they will be labelled.
-            e.g. ({'r500': Quantity(), 'r200': Quantity()}
+            e.g. {'r500': Quantity(), 'r200': Quantity()}
         :param bool x_norm: Controls whether the x-axis of the profile is normalised by another value, the default is
             False, in which case no normalisation is applied. If it is set to True then it will attempt to use the
             internal normalisation value (which can be set with the x_norm property), and if a quantity is passed it
@@ -1477,6 +1514,19 @@ class BaseProfile1D:
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
             model (if a model is fitted and being shown) is displayed. Default is True.
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX
+            formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$': Quantity([6, 0.2, 0.3], 'keV')},
+            where 0.2 is the negative error, and 0.3 is the positive error.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
+        :param bool joined_points: If True, the data in the profile will be plotted as a line, rather than points, as
+            will any uncertainty regions.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -1484,6 +1534,17 @@ class BaseProfile1D:
         if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
             raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
                                       "{}".format(self.radii_unit.to_string()))
+
+        # Checks that any extra y-axis values that have been passed are the correct units (i.e. the same as the
+        #  y-value units used in this profile)
+        if not all([v.unit == self.values_unit for v in draw_vals.values()]):
+            raise UnitConversionError("All values in draw_vals have to be in the same units as this profile, "
+                                      "{}".format(self.values_unit.to_string()))
+
+        if axis_formatters is not None and \
+                not all([k in ['xmajor', 'xminor', 'ymajor', 'yminor'] for k in axis_formatters.keys()]):
+            raise KeyError("The axis_formatters dictionary may only contain the following keys; xmajor, xminor, "
+                           "ymajor, and yminor.")
 
         # Default is to show models, but that flag is set to False here if there are none, otherwise we get
         #  extra plotted stuff that doesn't make sense
@@ -1538,19 +1599,25 @@ class BaseProfile1D:
         rad_vals /= x_norm
 
         # Now the actual plotting of the data
-        if self.radii_err is not None and self.values_err is None:
+        if self.radii_err is not None and self.values_err is None and not joined_points:
             x_errs = (self.radii_err.copy() / x_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
                                     label=leg_label, color=data_colour)
-        elif self.radii_err is None and self.values_err is not None:
+        elif self.radii_err is None and self.values_err is not None and not joined_points:
             y_errs = (self.values_err.copy() / y_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
                                     label=leg_label, color=data_colour)
-        elif self.radii_err is not None and self.values_err is not None:
+        elif self.radii_err is not None and self.values_err is not None and not joined_points:
             x_errs = (self.radii_err.copy() / x_norm).value
             y_errs = (self.values_err.copy() / y_norm).value
             line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
                                     label=leg_label, color=data_colour)
+        elif joined_points:
+            line = main_ax.plot(rad_vals.value, plot_y_vals.value, label=leg_label, color=data_colour)
+            if self.values_err is not None:
+                y_errs = (self.values_err.copy() / y_norm).value
+                main_ax.fill_between(rad_vals, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
+                                     color=data_colour,  linestyle='dashdot', alpha=0.7)
         else:
             line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label, color=data_colour)
 
@@ -1566,12 +1633,21 @@ class BaseProfile1D:
                             color=line[0].get_color())
 
         if models:
+            # We use the slightly-no-longer-useful fit_radii property (it is only useful if any of the radii values
+            #  are at zero, which used to be the case for most of the profiles generated by XGA). In the case where
+            #  no radii values are zero, then fit_radii will just be the radii. Then we subtract the errors and add
+            #  the errors, if they are available - to find the minimum and maximum radii we should plot the model to
+            if self.radii_err is not None:
+                lo_rad = (self.fit_radii-self.radii_err).min()
+                hi_rad = (self.fit_radii+self.radii_err).max()
+            else:
+                lo_rad = self.fit_radii.min()
+                hi_rad = self.fit_radii.max()
+            mod_rads = np.linspace(lo_rad, hi_rad, 100)
+
             for method in self._good_model_fits:
                 for model in self._good_model_fits[method]:
                     model_obj = self._good_model_fits[method][model]
-                    lo_rad = self.fit_radii.min()
-                    hi_rad = self.fit_radii.max()
-                    mod_rads = np.linspace(lo_rad, hi_rad, 100)
                     mod_reals = model_obj.get_realisations(mod_rads)
                     # mean_model = np.mean(mod_reals, axis=1)
                     median_model = np.percentile(mod_reals, 50, axis=1)
@@ -1625,13 +1701,6 @@ class BaseProfile1D:
         elif y_label is not None:
             main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
 
-        # If the user wants a legend to be shown, then we create one
-        if show_legend:
-            main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
-            # This makes sure legend keys are shown, even if the data is hidden
-            for leg_key in main_leg.legendHandles:
-                leg_key.set_visible(True)
-
         # If the user has manually set limits then we can use them, only on the main axis because
         #  we grab those limits from the axes object for the residual axis later
         if xlim is not None:
@@ -1679,23 +1748,75 @@ class BaseProfile1D:
             main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
                              color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
-        # Use the axis limits quite a lot in this next bit, so read them out into variables
+        # Use the axis limits quite a lot in these next bits, so read them out into variables
         x_axis_lims = main_ax.get_xlim()
         y_axis_lims = main_ax.get_ylim()
 
-        # This dynamically changes how tick labels are formatted depending on the values displayed
-        if max(x_axis_lims) < 100 and not models and min(x_axis_lims) > 0.1:
-            main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-            main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        elif max(x_axis_lims) < 100 and models and show_residual_ax:
-            res_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-            res_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        # If the user has passed extra values to plot, then we plot them
+        for v_name in draw_vals:
+            d_val = (draw_vals[v_name] / y_norm).value
+            if draw_vals[v_name].isscalar:
+                main_ax.axhline(d_val, linestyle='dashed', color=data_colour, alpha=0.8,
+                                label=v_name)
+            elif len(d_val) == 2:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0]-d_val[1], d_val[0]+d_val[1], color=data_colour, alpha=0.5)
+            elif len(d_val) == 3:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0]-d_val[1], d_val[0]+d_val[2], color=data_colour, alpha=0.5)
 
-        if max(y_axis_lims) < 100 and min(y_axis_lims) > 0.1:
-            main_ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-            main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        elif max(y_axis_lims) < 100 and min(y_axis_lims) <= 0.1:
-            main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            main_ax.set_xlim(x_axis_lims)
+
+        # If the user wants a legend to be shown, then we create one
+        if show_legend:
+            # In this case the user wants matplotlib to decide where best to put the legend
+            if auto_legend:
+                main_leg = main_ax.legend(loc="best", ncol=1)
+            # Otherwise the legend is placed outside the main axis, on the right hand side.
+            else:
+                main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+            # This makes sure legend keys are shown, even if the data is hidden
+            for leg_key in main_leg.legendHandles:
+                leg_key.set_visible(True)
+
+        # If this variable is not None it means that the user has specified their own formatters, and these will
+        #  now override the automatic formatting
+
+        if axis_formatters is not None:
+            # We specify which axes object needs formatters applied, depends on whether the residual ax is being
+            #  shown or not - slightly dodgy way of checking for a local declaration of the residual axes
+            if show_residual_ax and 'res_ax' in locals():
+                form_ax = res_ax
+            else:
+                form_ax = main_ax
+            # Checks for and uses formatters that the user may have specified for the plot
+            if 'xminor' in axis_formatters:
+                form_ax.xaxis.set_minor_formatter(axis_formatters['xminor'])
+            if 'xmajor' in axis_formatters:
+                form_ax.xaxis.set_major_formatter(axis_formatters['xmajor'])
+
+            # The y-axis formatters are applied to the main axis
+            if 'yminor' in axis_formatters:
+                main_ax.yaxis.set_minor_formatter(axis_formatters['yminor'])
+            if 'ymajor' in axis_formatters:
+                main_ax.yaxis.set_major_formatter(axis_formatters['ymajor'])
+
+        else:
+            # This dynamically changes how tick labels are formatted depending on the values displayed
+            if max(x_axis_lims) < 100 and not models and min(x_axis_lims) > 0.1:
+                main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            elif max(x_axis_lims) < 100 and models and show_residual_ax:
+                res_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                res_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+
+            if max(y_axis_lims) < 100 and min(y_axis_lims) > 0.1:
+                main_ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+            elif max(y_axis_lims) < 100 and min(y_axis_lims) <= 0.1:
+                main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         if models and show_residual_ax:
             return main_ax, res_ax
@@ -1706,7 +1827,8 @@ class BaseProfile1D:
              back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
              x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
              y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen', show_legend: bool = True,
-             show_residual_ax: bool = True):
+             show_residual_ax: bool = True, draw_vals: dict = {}, auto_legend: bool = True,
+             joined_points: bool = False, axis_formatters: dict = None):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -1741,6 +1863,19 @@ class BaseProfile1D:
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
             model (if a model is fitted and being shown) is displayed. Default is True.
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX
+            formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$': Quantity([6, 0.2, 0.3], 'keV')},
+            where 0.2 is the negative error, and 0.3 is the positive error.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
+        :param bool joined_points: If True, the data in the profile will be plotted as a line, rather than points, as
+            will any uncertainty regions.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1749,7 +1884,8 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend, show_residual_ax)
+                                        model_colour, show_legend, show_residual_ax, draw_vals, auto_legend,
+                                        joined_points, axis_formatters)
 
         # plt.tight_layout()
         plt.show()
@@ -1761,7 +1897,8 @@ class BaseProfile1D:
                   back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
                   x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
                   y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
-                  show_legend: bool = True, show_residual_ax: bool = True):
+                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
+                  auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
         fitted to it, and their residuals. The models are plotted by generating random model realisations from
@@ -1799,6 +1936,19 @@ class BaseProfile1D:
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
             model (if a model is fitted and being shown) is displayed. Default is True.
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX
+            formatted); e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$': Quantity([6, 0.2, 0.3], 'keV')},
+            where 0.2 is the negative error, and 0.3 is the positive error.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
+        :param bool joined_points: If True, the data in the profile will be plotted as a line, rather than points, as
+            will any uncertainty regions.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
         """
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
@@ -1807,12 +1957,10 @@ class BaseProfile1D:
 
         main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
                                         custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend, show_residual_ax)
+                                        model_colour, show_legend, show_residual_ax, draw_vals, auto_legend,
+                                        joined_points, axis_formatters)
 
-        plt.savefig(save_path)
-
-        # plt.tight_layout()
-        plt.show()
+        fig.savefig(save_path, bbox_inches='tight')
 
         # Wipe the figure
         plt.close("all")
@@ -1896,11 +2044,11 @@ class BaseProfile1D:
     def fit_radii(self) -> Quantity:
         """
         This property gives the user a sanitised set of radii that is safe to use for fitting to XGA models, by
-        which I mean if the first element is zero (true for many of XGA's profiles), then it will be replaced by
-        a value slightly above zero that won't cause divide by zeros in the fit process.
+        which I mean if the first element is zero, then it will be replaced by a value slightly above zero that
+        won't cause divide by zeros in the fit process.
 
-        If the radius units are convertible to kpc then the zero value will be set to the equivelant of 1kpc, if
-        they have pixel units then it will be set to one pixel, and if they are equivelant to degrees then it will
+        If the radius units are convertible to kpc then the zero value will be set to the equivalent of 1kpc, if
+        they have pixel units then it will be set to one pixel, and if they are equivalent to degrees then it will
         be set to 1e−5 degrees. The value for degrees is loosely based on the value of 1kpc at a redshift of 1.
 
         :return: A Quantity with a set of radii that are 'safe' for fitting
@@ -2389,9 +2537,11 @@ class BaseAggregateProfile1D:
                              " as the original.")
 
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
-             ylim: Tuple = None, model: str = None, back_sub: bool = True, legend: bool = True,
-             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, normalise_x: bool = False,
-             normalise_y: bool = False, x_label: str = None, y_label: str = None, save_path: str = None):
+             ylim: Tuple = None, model: str = None, back_sub: bool = True, show_legend: bool = True,
+             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, x_norm: bool = False,
+             y_norm: bool = False, x_label: str = None, y_label: str = None, save_path: str = None,
+             draw_vals: dict = {}, auto_legend: bool = True, axis_formatters: dict = None,
+             show_residual_ax: bool = True, joined_points: bool = False):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -2406,21 +2556,39 @@ class BaseAggregateProfile1D:
         :param str model: The name of the model fit to display, default is None. If the model
             hasn't been fitted, or it failed, then it won't be displayed.
         :param bool back_sub: Should the plotted data be background subtracted, default is True.
-        :param bool legend: Should a legend with source names be added to the figure, default is True.
+        :param bool show_legend: Should a legend with source names be added to the figure, default is True.
         :param bool just_model: Should only the models, not the data, be plotted. Default is False.
         :param str custom_title: A plot title to replace the automatically generated title, default is None.
         :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
             the dictionary key they are stored under is what they will be labelled.
             e.g. ({'r500': Quantity(), 'r200': Quantity()}. If normalise_x option is also used, and the x-norm values
             are not the same for each profile, then draw_rads will be disabled.
-        :param bool normalise_x: Should the x-axis values be normalised with the x_norm value passed on the
+        :param bool x_norm: Should the x-axis values be normalised with the x_norm value passed on the
             definition of the constituent profile objects.
-        :param bool normalise_y: Should the y-axis values be normalised with the y_norm value passed on the
+        :param bool y_norm: Should the y-axis values be normalised with the y_norm value passed on the
             definition of the constituent profile objects.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+                    dictionary key they are stored under is what they will be labelled (keys can be LaTeX formatted);
+                    e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+                    passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$':
+                    Quantity([6, 0.2, 0.3], 'keV')}, where 0.2 is the negative error, and 0.3 is the positive error.
+                    Finally, plotting colour may be specified by setting the value to a list, with the first entry
+                    being the quantity, and the second being a colour;
+                    e.g. {r'$T_{\rm{X,500}}$': [Quantity([6, 0.2, 0.3], 'keV'), 'tab:blue']}.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
+        :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
+            will any uncertainty regions.
         """
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
@@ -2429,13 +2597,30 @@ class BaseAggregateProfile1D:
             raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
                                       "{}".format(self.radii_unit.to_string()))
 
+        # Checks that any entries in draw_vals are either quantities or lists
+        if not all([isinstance(v, (Quantity, list)) for v in draw_vals.values()]):
+            raise TypeError("All values in draw_vals must either be an astropy quantity, or list with the first"
+                            "element being the astropy quantity, and the second being a string matplotlib colour.")
+
+        # Checks that any extra y-axis values that have been passed are the correct units (i.e. the same as the
+        #  y-value units used in this profile)
+        if not all([v.unit == self.values_unit if isinstance(v, Quantity) else v[0].unit == self.values_unit
+                    for v in draw_vals.values()]):
+            raise UnitConversionError("All values in draw_vals have to be in the same units as this profile, "
+                                      "{}".format(self.values_unit.to_string()))
+
+        if axis_formatters is not None and \
+                not all([k in ['xmajor', 'xminor', 'ymajor', 'yminor'] for k in axis_formatters.keys()]):
+            raise KeyError("The axis_formatters dictionary may only contain the following keys; xmajor, xminor, "
+                           "ymajor, and yminor.")
+
         # Set up the x normalisation and y normalisation variables
-        if normalise_x:
+        if x_norm:
             x_norms = self.x_norms
         else:
             x_norms = [Quantity(1, '') for n in self.x_norms]
 
-        if normalise_y:
+        if y_norm:
             y_norms = self.y_norms
         else:
             y_norms = [Quantity(1, '') for n in self.y_norms]
@@ -2444,13 +2629,16 @@ class BaseAggregateProfile1D:
         #  if the profiles all have different normalisations then the draw_rads values can't be normalised
         if len(draw_rads) != 0 and len(set(x_norms)) != 1:
             draw_rads = {}
+        # Same deal with draw_vals, different y-norms would screw up plotting draw_vals
+        if len(draw_vals) != 0 and len(set(y_norms)) != 1:
+            draw_vals = {}
 
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
         # Grabbing the axis object and making sure the ticks are set up how we want
         main_ax = plt.gca()
         main_ax.minorticks_on()
-        if model is not None:
+        if model is not None and show_residual_ax:
             # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
             res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
             res_ax.minorticks_on()
@@ -2482,19 +2670,25 @@ class BaseAggregateProfile1D:
             rad_vals /= x_norms[p_ind]
 
             # Now the actual plotting of the data
-            if p.radii_err is not None and p.values_err is None:
+            if p.radii_err is not None and p.values_err is None and not joined_points:
                 x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
                 line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
                                         label=leg_label)
-            elif p.radii_err is None and p.values_err is not None:
+            elif p.radii_err is None and p.values_err is not None and not joined_points:
                 y_errs = (p.values_err.copy() / y_norms[p_ind]).value
                 line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
                                         label=leg_label)
-            elif p.radii_err is not None and p.values_err is not None:
+            elif p.radii_err is not None and p.values_err is not None and not joined_points:
                 x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
                 y_errs = (p.values_err.copy() / y_norms[p_ind]).value
-                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
-                                        label=leg_label)
+                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x",
+                                        capsize=2, label=leg_label)
+            elif joined_points:
+                line = main_ax.plot(rad_vals.value, plot_y_vals.value, label=leg_label)
+                if p.values_err is not None:
+                    y_errs = (p.values_err.copy() / y_norms[p_ind]).value
+                    main_ax.fill_between(rad_vals, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
+                                         linestyle='dashdot', alpha=0.7)
             else:
                 line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
 
@@ -2520,8 +2714,15 @@ class BaseAggregateProfile1D:
                 for method in ['mcmc', 'odr', 'curve_fit']:
                     try:
                         model_obj = p.get_model_fit(model, method)
-                        lo_rad = p.radii.min()
-                        hi_rad = p.radii.max()
+
+                        # This makes sure that, if there are radius 'uncertainties' - the models are created so they
+                        #  plot all the way from the leftmost errorbar, to the end of the rightmost
+                        if p.radii_err is not None:
+                            lo_rad = (p.fit_radii - p.radii_err).min()
+                            hi_rad = (p.fit_radii + p.radii_err).max()
+                        else:
+                            lo_rad = p.fit_radii.min()
+                            hi_rad = p.fit_radii.max()
                         mod_rads = np.linspace(lo_rad, hi_rad, 100)
                         mod_reals = model_obj.get_realisations(mod_rads)
                         median_model = np.percentile(mod_reals, 50, axis=1)
@@ -2544,11 +2745,12 @@ class BaseAggregateProfile1D:
                         main_ax.plot(mod_rads.value / x_norms[p_ind].value, upper_model.value / y_norms[p_ind].value,
                                      color=colour, linestyle="dashed")
 
-                        # This calculates and plots the residuals between the model and the data on the extra
-                        #  axis we added near the beginning of this method
-                        res = np.percentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
-                              (plot_y_vals * y_norms[p_ind])
-                        res_ax.plot(rad_vals.value, res.value, 'D', color=colour)
+                        if show_residual_ax:
+                            # This calculates and plots the residuals between the model and the data on the extra
+                            #  axis we added near the beginning of this method
+                            res = np.percentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
+                                  (plot_y_vals * y_norms[p_ind])
+                            res_ax.plot(rad_vals.value, res.value, 'D', color=colour)
 
                         break
                     except ModelNotAssociatedError:
@@ -2572,14 +2774,6 @@ class BaseAggregateProfile1D:
         elif y_label is not None:
             main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
 
-        # Adds a legend with source names to the side if the user requested it
-        # I let the user decide because there could be quite a few names in it and it could get messy
-        if legend:
-            main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
-            # This makes sure legend keys are shown, even if the data is hidden
-            for leg_key in main_leg.legendHandles:
-                leg_key.set_visible(True)
-
         # If the user has manually set limits then we can use them, only on the main axis because
         #  we grab those limits from the axes object for the residual axis later
         if xlim is not None:
@@ -2590,7 +2784,7 @@ class BaseAggregateProfile1D:
         # Setup the scale that the user wants to see, again on the main axis
         main_ax.set_xscale(xscale)
         main_ax.set_yscale(yscale)
-        if model is not None:
+        if model is not None and show_residual_ax:
             # We want the residual x axis limits to be identical to the main axis, as the
             # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
@@ -2620,9 +2814,68 @@ class BaseAggregateProfile1D:
             main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
                              color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
+        # Reads out the axis limits of the plot thus far
+        x_axis_lims = main_ax.get_xlim()
+        # If the user has passed extra values to plot, then we plot them
+        for v_name in draw_vals:
+            if isinstance(draw_vals[v_name], Quantity):
+                d_val = draw_vals[v_name].value
+                cur_col = None
+                is_scalar = draw_vals[v_name].isscalar
+            else:
+                d_val = draw_vals[v_name][0].value
+                cur_col = draw_vals[v_name][1]
+                is_scalar = draw_vals[v_name][0].isscalar
+
+            if is_scalar:
+                main_ax.axhline(d_val, linestyle='dashed', color=cur_col, alpha=0.8,
+                                label=v_name)
+            elif len(d_val) == 2:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=cur_col,
+                                     alpha=0.5)
+            elif len(d_val) == 3:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=cur_col,
+                                     alpha=0.5)
+
+            main_ax.set_xlim(x_axis_lims)
+
+        # Adds a legend with source names to the side if the user requested it
+        # I let the user decide because there could be quite a few names in it and it could get messy
+        if show_legend:
+            # This allows the user to exercise some control over where the legend is placed.
+            if auto_legend:
+                main_leg = main_ax.legend(loc="best", ncol=1)
+            else:
+                main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
+            # This makes sure legend keys are shown, even if the data is hidden
+            for leg_key in main_leg.legendHandles:
+                leg_key.set_visible(True)
+
+        # We specify which axes object needs formatters applied, depends on whether the residual ax is being
+        #  shown or not - slightly dodgy way of checking for a local declaration of the residual axes
+        if show_residual_ax and 'res_ax' in locals():
+            form_ax = res_ax
+        else:
+            form_ax = main_ax
+        # Checks for and uses formatters that the user may have specified for the plot
+        if axis_formatters is not None and 'xminor' in axis_formatters:
+            form_ax.xaxis.set_minor_formatter(axis_formatters['xminor'])
+        if axis_formatters is not None and 'xmajor' in axis_formatters:
+            form_ax.xaxis.set_major_formatter(axis_formatters['xmajor'])
+
+        # The y-axis formatters are applied to the main axis
+        if axis_formatters is not None and 'yminor' in axis_formatters:
+            main_ax.yaxis.set_minor_formatter(axis_formatters['yminor'])
+        if axis_formatters is not None and 'ymajor' in axis_formatters:
+            main_ax.yaxis.set_major_formatter(axis_formatters['ymajor'])
+
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
-            plt.savefig(save_path)
+            fig.savefig(save_path, bbox_inches='tight')
 
         # And of course actually showing it
         plt.show()

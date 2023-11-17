@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/04/2023, 23:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:25. Copyright (c) The Contributors
 
 from typing import List
 
@@ -108,21 +108,30 @@ class ClusterSample(BaseSample):
                 if n in self.names:
                     # I know this code is a bit ugly, but oh well
                     if r200 is not None and not r200.isscalar:
-                        r2 = r200[ind]
+                        if not np.isnan(r200[ind]):
+                            r2 = r200[ind]
+                        else:
+                            r2 = None
                     elif r200 is not None and r200.isscalar:
                         r2 = r200
                     else:
                         r2 = None
 
                     if r500 is not None and not r500.isscalar:
-                        r5 = r500[ind]
+                        if not np.isnan(r500[ind]):
+                            r5 = r500[ind]
+                        else:
+                            r5 = None
                     elif r500 is not None and r500.isscalar:
                         r5 = r500
                     else:
                         r5 = None
 
                     if r2500 is not None and not r2500.isscalar:
-                        r25 = r2500[ind]
+                        if not np.isnan(r2500[ind]):
+                            r25 = r2500[ind]
+                        else:
+                            r25 = None
                     elif r2500 is not None and r2500.isscalar:
                         r25 = r2500
                     else:
@@ -554,7 +563,7 @@ class ClusterSample(BaseSample):
         :rtype: Quantity
         """
         # Has to be here to prevent circular import unfortunately
-        from ..sas.spec import region_setup
+        from ..sas._common import region_setup
 
         if outer_radius != 'region':
             # This just parses the input inner and outer radii into something predictable
@@ -657,7 +666,7 @@ class ClusterSample(BaseSample):
         :rtype: Quantity
         """
         # Has to be here to prevent circular import unfortunately
-        from ..sas.spec import region_setup
+        from ..sas._common import region_setup
 
         gms = []
         if prof_outer_rad is not None:

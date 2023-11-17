@@ -1,6 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 13/11/2023, 14:18. Copyright (c) The Contributors
 
+import os.path
 import warnings
 from typing import Union, Tuple, List
 
@@ -11,18 +12,17 @@ from ..samples.base import BaseSample
 from ..sources import BaseSource, GalaxyCluster
 from ..sources.base import NullSource
 from ..utils import RAD_LABELS, NUM_CORES
-
+from ..exceptions import NotAssociatedError
 
 def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                  inner_radius: Union[str, Quantity], disable_progress: bool, obs_id: str, num_cores: int = NUM_CORES) \
         -> Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]:
     """
-    The preparation and value checking stage for SAS spectrum/lightcurve generation.
+    The preparation and value checking stage for SAS spectrum generation.
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
-        the spectrum/lightcurve (for instance 'r200' would be acceptable for a GalaxyCluster, or
-        Quantity(1000, 'kpc')).
+        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')).
     :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
         the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
         default this is zero arcseconds, resulting in a circular spectrum.
@@ -168,3 +168,90 @@ def check_pattern(pattern: Union[str, int]) -> Tuple[str, str]:
         .replace('<=', 'lteq').replace('<', 'lt').replace('>', 'gt')
 
     return pattern, patt_file_name
+
+
+def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 200) -> Tuple[str, str, str]:
+    """
+    An internal method for generating SAS commands required to create detector maps for the weighting of ARFs.
+
+    :param BaseSource source: The source for which the parent method is generating ARFs for, and that needs
+        a detector map.
+    :param str obs_id: The ObsID of the data we are generating ARFs for.
+    :param str inst: The instrument of the data we are generating ARFs for. NOTE - ideally this instrument WILL NOT
+        be used for the detector map, as it is beneficial to source a detector map from a different instrument to
+        the one you are generating ARFs for.
+    :param int bin_size: The x and y binning that should be applied to the image. Larger numbers will cause ARF
+        generation to be faster, but arguably the results will be less accurate.
+    :return: The command to generate the requested detector map (will be blank if the detector map already
+        exists), the path where the detmap will be after the command is run (i.e. the ObsID directory if it was
+        already generated, or the temporary directory if it has just been generated), and the final output path
+        of the detector.
+    :rtype: Tuple[str, str, str]
+    """
+    # This is the command that will be filled out to generate the detmap of our dreams!
+    detmap_cmd = "evselect table={e} imageset={d} xcolumn=DETX ycolumn=DETY imagebinning=binSize ximagebinsize={bs} " \
+                 "yimagebinsize={bs} {ex}"
+
+    # Some settings depend on the instrument, we use different patterns for different instruments
+    if "pn" in inst:
+        # Also the upper channel limit is different for EPN and EMOS detectors
+        spec_lim = 20479
+        # This is an expression without region information to be used for making the detmaps
+        #  required for ARF generation, we start off assuming we'll use a MOS observation as the detmap
+        d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
+
+        # The detmap for the arfgen call should ideally not be from the same instrument as the observation,
+        #  so for PN we preferentially select MOS2 (as MOS1 was damaged). However if there isn't a MOS2
+        #  events list from the same observation then we select MOS1, and failing that we use PN.
+        try:
+            detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos2')[0]
+        except NotAssociatedError:
+            try:
+                detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos1')[0]
+            except NotAssociatedError:
+                detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+                # If all is lost and there are no MOS event lists then we must revert to the PN expression
+                d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
+
+    elif "mos" in inst:
+        spec_lim = 11999
+        # This is an expression without region information to be used for making the detmaps
+        #  required for ARF generation, we start off assuming we'll use the PN observation as the detmap
+        d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
+
+        # The detmap for the arfgen call should ideally not be from the same instrument as the observation,
+        #  so for MOS observations we preferentially select PN. However if there isn't a PN events list
+        #  from the same observation then for MOS2 we select MOS1, and for MOS1 we select MOS2 (as they
+        #  are rotated wrt one another it is still semi-valid), and failing that MOS2 will get MOS2 and MOS1
+        #  will get MOS1.
+        if inst[-1] == 1:
+            cur = '1'
+            opp = '2'
+        else:
+            cur = '2'
+            opp = '1'
+        try:
+            detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+        except NotAssociatedError:
+            # If we must use a MOS detmap then we have to use the MOS expression
+            d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
+            try:
+                detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos' + opp)[0]
+            except NotAssociatedError:
+                detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos' + cur)[0]
+    else:
+        raise ValueError("You somehow have an illegal value for the instrument name...")
+
+    det_map = "{o}_{i}_bin{bs}_detmap.fits".format(o=detmap_evts.obs_id, i=detmap_evts.instrument, bs=bin_size)
+    det_map_path = os.path.join(OUTPUT, obs_id, det_map)
+
+    # If the detmap that we've decided we need already exists, then we don't need to generate it again
+    if os.path.exists(det_map_path):
+        d_cmd_str = ""
+        det_map_cmd_path = det_map_path
+    else:
+        # Does the same thing for the evselect command to make the detmap
+        d_cmd_str = detmap_cmd.format(e=detmap_evts.path, d=det_map, ex=d_expr, bs=bin_size) + "; "
+        det_map_cmd_path = det_map
+
+    return d_cmd_str, det_map_cmd_path, det_map_path
