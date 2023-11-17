@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/06/2023, 12:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/11/2023, 14:50. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -29,6 +29,7 @@ from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
+from ..products.lightcurve import LightCurve, AggregateLightCurve
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS, \
@@ -485,11 +486,12 @@ class BaseSource:
 
         for po in prod_obj:
             if po is not None:
-                if isinstance(po, Image):
+                if isinstance(po, Image) or isinstance(po, LightCurve):
                     extra_key = po.storage_key
                     en_key = "bound_{l}-{u}".format(l=float(po.energy_bounds[0].value),
                                                     u=float(po.energy_bounds[1].value))
-                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D):
+                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D) or \
+                        isinstance(po, AggregateLightCurve):
                     extra_key = po.storage_key
                 elif type(po) == PSFGrid:
                     # The first part of the key is the model used (by default its ELLBETA for example), and
@@ -701,17 +703,17 @@ class BaseSource:
         :param bool read_fits: Boolean flag that controls whether past fits are read back in or not.
         """
 
-        def parse_image_like(file_path: str, exact_type: str, merged: bool = False) -> BaseProduct:
+        def parse_image_like(file_path: str, exact_type: str, merged: bool = False) -> Union[Image, ExpMap]:
             """
             Very simple little function that takes the path to an XGA generated image-like product (so either an
             image or an exposure map), parses the file path and makes an XGA object of the correct type by using
             the exact_type variable.
 
-            :param str file_path: Absolute path to an XGA-generated XMM data product.
+            :param str file_path: Absolute path to an XGA-generated data product.
             :param str exact_type: Either 'image' or 'expmap', the type of product that the file_path leads to.
             :param bool merged: Whether this is a merged file or not.
-            :return: An XGA product object.
-            :rtype: BaseProduct
+            :return: An XGA Image or ExpMap object.
+            :rtype: Union[Image, ExpMap]
             """
             # Get rid of the absolute part of the path, then split by _ to get the information from the file name
             im_info = file_path.split("/")[-1].split("_")
@@ -750,6 +752,55 @@ class BaseSource:
 
             return final_obj
 
+        def parse_lightcurve(inven_entry: pd.Series) -> LightCurve:
+            """
+            Very simple little function that takes information on an XGA-generated lightcurve (including a path to
+            the file), and sets up a LightCurve product that can be added to the product storage structure
+            of the source.
+
+            :param pd.Series inven_entry: The inventory entry from which a LightCurve object should be parsed.
+            :return: An XGA LightCurve object
+            :rtype: LightCurve
+            """
+            if inven_entry['src_name'] == self.name:
+                # The path, ObsID, and instrument can be read directly from inventory entries - we also use the
+                #  'cur_d' parameter from the upper scope to provide an absolute path, as the object will need it
+                #  later to read in the data
+                rel_path = cur_d + inven_entry['file_name']
+                rel_obs_id = inven_entry['obs_id']
+                rel_inst = inven_entry['inst']
+
+                # We split up the information contained in the info key - this is going to tell us what settings were
+                #  used to generate the lightcurve
+                lc_info = inven_entry['info_key'].split("_")
+
+                # Pull out the energy bounds of the lightcurve, then make them Astropy Quantity
+                rel_lo_en, rel_hi_en = lc_info[1].split("-")
+                rel_lo_en = Quantity(float(rel_lo_en), "keV")
+                rel_hi_en = Quantity(float(rel_hi_en), "keV")
+
+                # We also need to grab the central coordinates and turn them into an Astropy Quantity
+                rel_central_coord = Quantity([float(lc_info[2].replace('ra', '')),
+                                              float(lc_info[3].replace('dec', ''))], 'deg')
+
+                # The inner and outer radii are always in degrees at this stage, because then we are independent of
+                #  a cosmology or redshift
+                rel_inn_rad = Quantity(lc_info[4].replace('ri', ''), 'deg')
+                rel_out_rad = Quantity(lc_info[5].replace('ro', ''), 'deg')
+
+                # The timebin size is always in seconds
+                rel_time_bin = Quantity(lc_info[6].replace('timebin', ''), 's')
+
+                rel_patt = lc_info[7].replace('pattern', '')
+
+                # Setting up the lightcurve to be passed back out and stored in the source
+                final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "", rel_central_coord, rel_inn_rad,
+                                       rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True)
+            else:
+                final_obj = None
+
+            return final_obj
+
         og_dir = os.getcwd()
         # This is used for spectra that should be part of an AnnularSpectra object
         ann_spec_constituents = {}
@@ -772,6 +823,11 @@ class BaseSource:
                     rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
                     for r_ind, r in rel_ims.iterrows():
                         self.update_products(parse_image_like(cur_d+r['file_name'], r['type']), update_inv=False)
+
+                # This finds the lines of the inventory that are lightCurve entries
+                lc_lines = inven[inven['type'] == 'lightcurve']
+                for row_ind, row in lc_lines.iterrows():
+                    self.update_products(parse_lightcurve(row), update_inv=False)
 
                 # For spectra we search for products that have the name of this object in, as they are for
                 #  specific parts of the observation.
@@ -2863,14 +2919,14 @@ class BaseSource:
         elif isinstance(inner_radius, str):
             inn_rad_num = self.get_radius(inner_radius, 'deg')
         else:
-            raise TypeError("You may only a quantity or a string as inner_radius")
+            raise TypeError("You may only pass a quantity or a string as inner_radius")
 
         if isinstance(outer_radius, Quantity):
             out_rad_num = self.convert_radius(outer_radius, 'deg')
         elif isinstance(outer_radius, str):
             out_rad_num = self.get_radius(outer_radius, 'deg')
         else:
-            raise TypeError("You may only a quantity or a string as outer_radius")
+            raise TypeError("You may only pass a quantity or a string as outer_radius")
 
         if over_sample is not None:
             over_sample = int(over_sample)
@@ -3126,6 +3182,238 @@ class BaseSource:
         """
         return self._get_phot_prod("ratemap", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                                    psf_iter)
+
+    def _get_lc_prod(self, outer_radius: Union[str, Quantity] = None, obs_id: str = None, inst: str = None,
+                     inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                     time_bin_size: Quantity = None) \
+            -> Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]:
+        """
+        A protected method to retrieve XGA LightCurve objects, the user should never interact with this directly.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(100, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(0, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param Quantity lo_en: The lower energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity time_bin_size: The time bin size used to generate the desired lightcurve. The default value
+            is None, in which case all lightcurves matching other criteria will be retrieved.
+        :return: An XGA LightCurve object (if there is an exact match), or a list of XGA LightCurve objects (if there
+            were multiple matching products), or a single/list of AggregateLightCurve objects.
+        :rtype: Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]
+        """
+        # Set up search strings (for the product storage keys) for the inner and outer radii here. The default None
+        #  value just creates a key that looks for the 'ri' or 'ro' precursor to the value in the key, i.e. it doesn't
+        #  do anything - we also make sure that any radii passed by the user are converted properly
+        if inner_radius is not None and isinstance(inner_radius, Quantity):
+            inn_rad_search = '_ri{}_'.format(self.convert_radius(inner_radius, 'deg').value)
+        elif inner_radius is not None and isinstance(inner_radius, str):
+            inn_rad_search = '_ri{}_'.format(self.get_radius(inner_radius, 'deg').value)
+        elif inner_radius is None:
+            inn_rad_search = "_ri"
+        else:
+            raise TypeError("You may only pass a quantity or a string as inner_radius")
+
+        if outer_radius is not None and isinstance(outer_radius, Quantity):
+            out_rad_search = '_ro{}_'.format(self.convert_radius(outer_radius, 'deg').value)
+        elif outer_radius is not None and isinstance(outer_radius, str):
+            out_rad_search = '_ro{}_'.format(self.get_radius(outer_radius, 'deg').value)
+        elif outer_radius is None:
+            out_rad_search = "_ro"
+        else:
+            raise TypeError("You may only pass a quantity or a string as outer_radius")
+
+        # Check to make sure that the time bin size is a legal value, and set up a search string for the time bin
+        #  size in order to narrow down the lightcurves to just the ones that the user wants
+        if time_bin_size is not None and not time_bin_size.unit.is_equivalent('s'):
+            raise UnitConversionError("The 'time_bin_size' argument must be convertible to seconds.")
+        elif time_bin_size is None:
+            time_bin_search = '_timebin'
+        else:
+            time_bin_search = '_timebin{}'.format(time_bin_size.to('s').value)
+
+        # Setting up the energy band search string - if one bound is specified then the other has to be as well, I
+        #  didn't think it made sense otherwise
+        if any([lo_en is not None, hi_en is not None]) and not all([lo_en is not None, hi_en is not None]):
+            raise ValueError("The 'lo_en' and 'hi_en' values must either both be None, or both be an energy value.")
+        if (lo_en is not None and not lo_en.unit.is_equivalent('keV')) or \
+                (hi_en is not None and not hi_en.unit.is_equivalent('keV')):
+            raise UnitConversionError("The 'lo_en' and 'hi_en' arguments must be convertible to keV.")
+        # If either is None then we know both are because we checked earlier
+        elif lo_en is None:
+            en_search = 'bound_'
+        elif lo_en is not None:
+            en_search = 'bound_{l}-{u}'.format(l=lo_en.to('keV').value, u=hi_en.to('keV').value)
+
+        if obs_id == 'combined':
+            search_key = 'combined_lightcurve'
+        else:
+            search_key = 'lightcurve'
+        # Grabbing every single lightcurve that matches ObsID and inst passed by the user (remember they could be
+        #  None values, indeed they are by default) - we'll then sweep through whatever list is returned and
+        #  narrow them down
+        all_lcs = self.get_products(search_key, obs_id, inst)
+        # It was getting to the point where a list comprehension was less readable than a for loop, particularly
+        #  with the pattern logic, so I changed it to this
+        matched_prods = []
+        for lc in all_lcs:
+            if out_rad_search in lc.storage_key and inn_rad_search in lc.storage_key and \
+                    time_bin_search in lc.storage_key and en_search in lc.storage_key:
+                matched_prods.append(lc)
+
+        if len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
+
+        return matched_prods
+
+    def get_lightcurves(self, outer_radius: Union[str, Quantity] = None, obs_id: str = None, inst: str = None,
+                        inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
+                        hi_en: Quantity = None, time_bin_size: Quantity = None,
+                        pattern: Union[dict, str] = None) -> Union[LightCurve, List[LightCurve]]:
+        """
+        A method to retrieve XGA LightCurve objects.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(100, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(0, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param Quantity lo_en: The lower energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity time_bin_size: The time bin size used to generate the desired lightcurve. The default value
+            is None, in which case all lightcurves matching other criteria will be retrieved.
+        :param dict pattern: Event selection patterns used to create lightcurves of interest. The default is None,
+            which means all light curves matching other search terms will be returned. You can also pass 'default'
+            which uses the default values for generating lightcurves for different instruments, or you can pass a
+            dictionary with patterns in; e.g. {'pn': '<=4', 'mos': '<=12'}
+        :return: An XGA LightCurve object (if there is an exact match), or a list of XGA LightCurve objects (if there
+            were multiple matching products).
+        :rtype: Union[LightCurve, List[LightCurve]]
+        """
+        from xga.sas import check_pattern
+
+        # TODO This is XMM specific because of the patterns currently
+        # This is where we set up the search string for the patterns specified by the user.
+        if pattern is None:
+            patt_search = "_pattern"
+        elif isinstance(pattern, str):
+            pattern = {'pn': '<=4', 'mos': '<=12'}
+            patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
+        elif isinstance(pattern, dict):
+            if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
+                raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
+                                 "should be one entry for 'mos'.")
+            pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
+            patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
+        else:
+            raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
+                            "instrument names and values are string patterns.")
+
+        # Just makes the search easier down the line
+        if 'mos' in patt_search:
+            patt_search.update({'mos1': patt_search['mos'], 'mos2': patt_search['mos']})
+
+        some_lcs = self._get_lc_prod(outer_radius, obs_id, inst, inner_radius, lo_en, hi_en, time_bin_size)
+        matched_prods = []
+        for lc in some_lcs:
+            if isinstance(patt_search, str):
+                rel_patt_search = patt_search
+            else:
+                rel_patt_search = patt_search[lc.instrument]
+
+            if rel_patt_search in lc.storage_key:
+                matched_prods.append(lc)
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
+
+        return matched_prods
+
+    def get_combined_lightcurves(self, outer_radius: Union[str, Quantity] = None,
+                                 inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
+                                 hi_en: Quantity = None, time_bin_size: Quantity = None,
+                                 pattern: Union[dict, str] = None) \
+            -> Union[AggregateLightCurve, List[AggregateLightCurve]]:
+        """
+        A method to retrieve XGA AggregateLightCurve objects (i.e. lightcurves for this object that were generated at
+        the same time and have been packaged together).
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the aggregate lightcurve (for instance 'point' would be acceptable for a PointSource, or
+            Quantity(100, 'kpc')). Default is None, meaning all aggregate lightcurves will be retrieved.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the aggregate lightcurve (for instance 'point' would be acceptable for a PointSource, or
+            Quantity(0, 'kpc')). Default is None, meaning all aggregate lightcurves will be retrieved.
+        :param Quantity lo_en: The lower energy limit of the aggregate lightcurves you wish to retrieve, the default
+            is None (which will retrieve all aggregate lightcurves regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the aggregate lightcurves you wish to retrieve, the default
+            is None (which will retrieve all aggregate lightcurves regardless of energy limit).
+        :param Quantity time_bin_size: The time bin size used to generate the desired aggregate lightcurve. The
+            default value is None, in which case all aggregate lightcurves matching other criteria will be retrieved.
+        :param dict pattern: Event selection patterns used to create aggregate lightcurves of interest. The default
+            is None, which means all aggregate  light curves matching other search terms will be returned. You can also
+            pass 'default' which uses the default values for generating lightcurves for different instruments, or you
+            can pass a dictionary with patterns in; e.g. {'pn': '<=4', 'mos': '<=12'}
+        :return: An XGA AggregateLightCurve object (if there is an exact match), or a list of XGA AggregateLightCurve
+            objects (if there were multiple matching products).
+        :rtype: Union[AggregateLightCurve, List[AggregateLightCurve]]
+        """
+        from xga.sas import check_pattern
+
+        # TODO This is XMM specific because of the patterns currently
+        # This is where we set up the search string for the patterns specified by the user.
+        if pattern is None:
+            patt_search = "pattern"
+        elif isinstance(pattern, str):
+            pattern = {'pn': '<=4', 'mos': '<=12'}
+            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                           for inst, patt in pattern.items()}
+        elif isinstance(pattern, dict):
+            if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
+                raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
+                                 "should be one entry for 'mos'.")
+            pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
+            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                           for inst, patt in pattern.items()}
+        else:
+            raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
+                            "instrument names and values are string patterns.")
+
+        # Use the internal function to find the combined light curves, then apply pattern checks after
+        some_lcs = self._get_lc_prod(outer_radius, 'combined', None, inner_radius, lo_en, hi_en, time_bin_size)
+        matched_prods = []
+        for lc in some_lcs:
+            if isinstance(patt_search, str):
+                rel_patt_search = [patt_search]
+            else:
+                rel_patt_search = [patt for inst, patt in patt_search.items()]
+
+            if all([rps in lc.storage_key for rps in rel_patt_search]):
+                matched_prods.append(lc)
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
+
+        return matched_prods
 
     # The combined photometric products don't really NEED their own get methods, but I figured I would just for
     #  clarity's sake

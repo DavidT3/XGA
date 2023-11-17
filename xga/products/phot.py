@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/06/2023, 00:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 10:16. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1279,9 +1279,7 @@ class Image(BaseProduct):
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
-        # Turns off any ticks and tick labels, we don't want them in an image
         ax = plt.gca()
-
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
                            ch_thickness)

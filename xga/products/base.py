@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 21:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 12:05. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -398,10 +398,10 @@ class BaseAggregateProduct:
     @property
     def obs_id(self) -> str:
         """
-        Property getter for the ObsID of this image. Admittedly this information is implicit in the location
+        Property getter for the ObsID of this AggregateProduct. Admittedly this information is implicit in the location
         this object is stored in a source object, but I think it worth storing directly as a property as well.
 
-        :return: The XMM ObsID of this image.
+        :return: The ObsID of this AggregateProduct.
         :rtype: str
         """
         return self._obs_id
@@ -409,11 +409,11 @@ class BaseAggregateProduct:
     @property
     def instrument(self) -> str:
         """
-        Property getter for the instrument used to take this image. Admittedly this information is implicit
+        Property getter for the instrument of this AggregateProduct. Admittedly this information is implicit
         in the location this object is stored in a source object, but I think it worth storing
         directly as a property as well.
 
-        :return: The XMM instrument used to take this image.
+        :return: The ObsID of this AggregateProduct.
         :rtype: str
         """
         return self._inst
@@ -440,7 +440,6 @@ class BaseAggregateProduct:
         """
         return self._all_usable
 
-    # This is a fundamental property of the generated product, so I won't allow it be changed.
     @property
     def energy_bounds(self) -> Tuple[Quantity, Quantity]:
         """

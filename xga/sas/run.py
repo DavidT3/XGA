@@ -12,6 +12,7 @@ from tqdm import tqdm
 from .. import SAS_AVAIL, SAS_VERSION
 from ..exceptions import SASGenerationError, SASNotFoundError
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpectra
+from ..products.lightcurve import LightCurve
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
@@ -65,6 +66,11 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                        extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
                        extra_info["instrument"], out, err, cmd)
+    elif p_type == 'light curve' and "NullSource" not in src:
+        prod = LightCurve(p_path[0],  extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+                          extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
+                          extra_info["lo_en"], extra_info["hi_en"], extra_info['time_bin'], extra_info['pattern'],
+                          extra_info["from_region"])
     elif p_type == "cross arfs":
         prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info)
     elif "NullSource" in src:
