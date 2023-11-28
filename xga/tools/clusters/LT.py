@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2023, 18:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 20:40. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -249,9 +249,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                  "failures.".format(', '.join(bad_gen)), stacklevel=2)
 
         # We generate and fit spectra for the current value of the overdensity radius
-        single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, num_cores=num_cores, timeout=timeout,
-                         lum_en=lum_en, freeze_met=freeze_met, freeze_nh=freeze_nh, lo_en=lo_en, hi_en=hi_en,
-                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+        single_temp_apec(samp, samp.get_radius(o_dens), lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
+                         lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                         over_sample=over_sample, one_rmf=False, num_cores=num_cores, timeout=timeout)
 
         # Just reading out the temperatures, not the uncertainties at the moment
         txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
@@ -316,16 +316,17 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
-    single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, lum_en=lum_en, num_cores=num_cores,
-                     freeze_met=freeze_met, freeze_nh=freeze_nh, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
-                     min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+    single_temp_apec(samp, samp.get_radius(o_dens), lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
+                     lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                     over_sample=over_sample, one_rmf=False, num_cores=num_cores)
 
     # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
     #  just multiply the current radius by 0.15 and use that for the inner radius.
     if core_excised:
-        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens)*0.15, one_rmf=False, lum_en=lum_en,
-                         num_cores=num_cores, freeze_met=freeze_met, freeze_nh=freeze_nh, lo_en=lo_en, hi_en=hi_en,
-                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, lum_en=lum_en,
+                         freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
+                         min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
+                         num_cores=num_cores)
 
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the

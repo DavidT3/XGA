@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 20:40. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -126,8 +126,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     else:
         # Check that the spectra we will be relying on for conversion calculation have been fitted, calling
         #  this function will also make sure that they are generated
-        single_temp_apec(sources, conv_outer_radius, inner_radius, abund_table=abund_table, num_cores=num_cores,
-                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+        single_temp_apec(sources, conv_outer_radius, inner_radius, abund_table=abund_table, group_spec=group_spec,
+                         min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, num_cores=num_cores)
 
         # Then we need to grab the temperatures and pass them through to the cluster conversion factor
         #  calculator - this may well change as I intend to let cluster_cr_conv grab temperatures for
