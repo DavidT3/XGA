@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 21:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 21:17. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -136,15 +136,11 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, t, start_met,
                                                           source.redshift, 1.)
 
-        # Set up the TCL list that defines which parameters are frozen, dependant on user input
-        if freeze_nh and freeze_met:
-            freezing = "{F T F T T F}"
-        elif not freeze_nh and freeze_met:
-            freezing = "{F F F T T F}"
-        elif freeze_nh and not freeze_met:
-            freezing = "{F T F F T F}"
-        elif not freeze_nh and not freeze_met:
-            freezing = "{F F F F T F}"
+        # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
+        #  include the temperature, if the user wants it fixed at the start value
+        freezing = "{{F {n} {t} {a} T F}}".format(n="T" if freeze_nh else "F",
+                                                  t="T" if freeze_temp else "F",
+                                                  a="T" if freeze_met else "F")
 
         # Set up the TCL list that defines which parameters are linked across different spectra, only the
         #  multiplicative constant that accounts for variation in normalisation over different observations is not
