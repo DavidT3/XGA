@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 20:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 21:11. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -88,6 +88,15 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                                                           min_sn, over_sample, one_rmf, num_cores)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
+    # Have to check that every source has a start temperature entry, if the user decided to pass a set of them
+    if not start_temp.isscalar and len(start_temp) != len(sources):
+        raise ValueError("If a non-scalar Quantity is passed for 'start_temp', it must have one entry for each "
+                         "source.")
+    # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
+    #  after this point, it means we normalise how we deal with it.
+    elif start_temp.isscalar:
+        start_temp = Quantity([start_temp.value]*len(sources), start_temp.unit)
+
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
     #  of TCL lists.
@@ -122,7 +131,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             raise ValueError("You cannot supply a source without a redshift to this model.")
 
         # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
+        t = start_temp[src_ind].to("keV", equivalencies=u.temperature_energy()).value
         # Another TCL list, this time of the parameter start values for this model.
         par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, t, start_met,
                                                           source.redshift, 1.)
