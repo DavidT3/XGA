@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/09/2023, 21:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 20:40. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -20,12 +20,12 @@ from ...sources import BaseSource
 def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                      start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
-                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                     freeze_nh: bool = True, freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
+                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
+                     freeze_met: bool = True, freeze_temp: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                     abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
-                     min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                     num_cores: int = NUM_CORES, spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr')):
+                     abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
+                     min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
+                     spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr')):
     """
     This is a convenience function for fitting an absorbed single temperature apec model(constant*tbabs*apec) to an
     object. It would be possible to do the exact same fit using the custom_model function, but as it will
@@ -38,6 +38,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     that spectrum will be rejected and not included in the final fit. Spectrum checking also involves rejecting any
     spectra with fewer than 10 noticed channels.
 
+    Freezing the temperature value of the fit is also possible, in cases where the data may not be sufficient to
+    constrain it, and an external temperature constrain is used (by passing to the 'start_temp' argument).
+
     :param List[BaseSource] sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
         desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
@@ -48,11 +51,14 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
         or Quantity(1000, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum. If
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
-    :param Quantity start_temp: The initial temperature for the fit.
+    :param Quantity start_temp: The initial temperature for the fit, the default is 3 keV. This value can also be
+        a non-scalar Quantity, with an entry for every source in a sample (this is most useful when used with the
+        'freeze_temp' argument, to provide some external constraint on temperature for objects with poor data).
     :param start_met: The initial metallicity for the fit (in ZSun).
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
     :param bool freeze_met: Whether the metallicity parameter in the fit should be frozen.
+    :param bool freeze_temp: Whether the temperature parameter in the fit should be frozen.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
