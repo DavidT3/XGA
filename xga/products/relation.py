@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 15:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 14:01. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -733,7 +733,7 @@ class ScalingRelation:
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
              save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
-             point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = True,
+             point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
              third_dim_cmap: Union[str, Colormap] = 'plasma'):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
@@ -772,7 +772,8 @@ class ScalingRelation:
         :param int point_label_size: The fontsize of the label text.
         :param bool show_third_dim: Colour the data points by the third dimension data passed in on creation of this
             scaling relation, with a colour bar to communicate values. Only possible if data were passed to
-            'third_dim_info' on initialization. Default is False.
+            'third_dim_info' on initialization. Default is None, which automatically gets converted to True if there
+            is a third data dimension, and converted to False if there is not.
         :param str/Colormap third_dim_cmap: The colour map which should be used for the third dimension data points.
             A matplotlib colour map name or a colour map object may be passed. Default is 'plasma'. This essentially
             overwrites the 'data_colour' argument if show_third_dim is True.
@@ -820,12 +821,20 @@ class ScalingRelation:
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
+        # I wanted this to react to whether there is a third dimension of data or not, so that the warning below
+        #  is still shown if the user sets show_third_dim=True when there is no third dimension, but otherwise they
+        #  don't have to worry about/see that warning.
+        if show_third_dim is None and self.third_dimension_data is None:
+            show_third_dim = False
+        elif show_third_dim is None and self.third_dimension_data is not None:
+            show_third_dim = True
+
         # We check to see a) whether the user wants a third dimension of data communicated via the colour of the
         #  data, and b) if they actually passed the data necessary to make that happen. If there is no data but they
-        #  have set show_third_dim=True, we set it back to False and give a warning
+        #  have set show_third_dim=True, we set it back to False
         if show_third_dim and self.third_dimension_data is None:
-            warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on the creation "
-                 "of this scaling relation. Setting 'show_third_im' to False.")
+            warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
+                 "the creation of this scaling relation. Setting 'show_third_dim' to False.")
             show_third_dim = False
 
         # Plot the data with uncertainties, if any data is present in this scaling relation.
