@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2023, 11:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 22:51. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2443,6 +2443,8 @@ class BaseSource:
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The requested result value, and uncertainties.
         """
+        print('get results')
+        print(outer_radius)
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
         specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
@@ -2523,6 +2525,8 @@ class BaseSource:
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The requested luminosity value, and uncertainties.
         """
+        print('get luminosity')
+        print(outer_radius)
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
         specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
