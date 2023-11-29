@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 23:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 23:36. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -289,37 +289,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
         #  the temperature-luminosity scaling relation has to step in for us, and we just need to read out Lxs
         else:
-
-            # for sp in samp[0].get_products('spectrum'):
-            #     print(sp.storage_key)
-            #     print(sp.outer_rad)
-            #     print('')
-            #
-            # print(samp[0]._fit_results)
-            # print('------')
-            # print(samp[0].get_radius(o_dens, 'deg').value)
-            # print(samp.get_radius(o_dens)[0])
-            # print(samp[0].convert_radius(samp.get_radius(o_dens)[0]))
-            # print('------')
-            # print(samp[0]._luminosities)
-            # print('\n')
-            # print(samp[0]._products)
-            # print(samp[0].get_luminosities('r500', group_spec=group_spec, min_counts=min_counts,
-            #               min_sn=min_sn, over_sample=over_sample))
-            # stop
-            # TODO sort out how to identify the right luminosity energy range to perform predictions with
-            # lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
-            #               min_sn=min_sn, over_sample=over_sample)[:, 0]
-            # print(lxs)
-            print('then with energy')
             lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
                           min_sn=min_sn, over_sample=over_sample, lo_en=Quantity(0.5, 'keV'),
                           hi_en=Quantity(2.0, 'keV'))[:, 0]
-            print('all done')
-            # stop
             txs = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
-            print(txs)
-            print('boi')
 
         # This uses the scaling relation to predict the overdensity radius from the measured temperatures
         pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
@@ -338,6 +311,21 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  generation failed.
         for name in samp.names[bad_pr_rs]:
             del samp[name]
+
+        # There was probably a more elegant way to do this, but if the pipeline is operating in frozen temperature mode
+        #  I read out the lxs from the current sample, and convert them into temperature estimations using the
+        #  temperature-luminosity scaling relation. Those estimates are set as the start_temp value, and so will be
+        #  fed into the next spectral fit as the frozen temperature value
+        # This HAS to go here because it is after sources have been deleted from the sample (if any are) and BEFORE
+        #  the overdensity radius calculated from this iteration is added to the sources
+        if freeze_temp:
+            # print(samp.get_radius(o_dens))
+            # print(samp)
+            lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
+                          min_counts=min_counts,
+                          min_sn=min_sn, over_sample=over_sample, lo_en=Quantity(0.5, 'keV'),
+                          hi_en=Quantity(2.0, 'keV'))[:, 0]
+            start_temp = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
 
         # The basis of this method is that we measure a temperature, starting in some user-specified fixed aperture,
         #  and then use that to predict an overdensity radius (something far more useful than a fixed aperture). This
@@ -370,16 +358,6 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # This dictionary is used to store the various radius steps that are made for each source
         rad_hist = {n: vals + [samp[n].get_radius(o_dens, 'kpc').value] if n in samp.names else vals
                     for n, vals in rad_hist.items()}
-
-        # There was probably a more elegant way to do this, but if the pipeline is operating in frozen temperature mode
-        #  I read out the lxs from the current sample, and convert them into temperature estimations using the
-        #  temperature-luminosity scaling relation. Those estimates are set as the start_temp value, and so will be
-        #  fed into the next spectral fit as the frozen temperature value
-        if freeze_temp:
-            lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
-                          min_sn=min_sn, over_sample=over_sample, lo_en=Quantity(0.5, 'keV'),
-                          hi_en=Quantity(2.0, 'keV'))[:, 0]
-            start_temp = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
 
         # Got to increment the counter otherwise the while loop may go on and on forever :O
         iter_num += 1
