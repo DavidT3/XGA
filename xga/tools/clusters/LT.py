@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/11/2023, 10:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/11/2023, 11:01. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -433,7 +433,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 else:
                     # I am going to make a distinction in the column name for temperatures arrived at by this
                     #  route - there are also currently no uncertainties
-                    vals += [start_temp_lookup[rel_src.name]]
+                    vals += [start_temp_lookup[rel_src.name].value]
                     cols += ['froz_Tx' + o_dens[1:]]
 
                 # Cycle through every available luminosity, this will return all luminosities in all energy bands
