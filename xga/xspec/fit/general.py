@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/11/2023, 09:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/11/2023, 11:50. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -176,8 +176,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
         # If the fit has already been performed we do not wish to perform it again
         try:
-            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'kT', group_spec, min_counts,
-                                     min_sn, over_sample)
+            # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
+            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'norm', group_spec,
+                                     min_counts, min_sn, over_sample)
         except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
@@ -345,8 +346,9 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
 
         # If the fit has already been performed we do not wish to perform it again
         try:
-            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'kT', group_spec, min_counts,
-                                     min_sn, over_sample)
+            # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
+            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'norm', group_spec,
+                                     min_counts, min_sn, over_sample)
         except ModelNotAssociatedError:
             script_paths.append(script_file)
             outfile_paths.append(out_file)
