@@ -133,11 +133,22 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
                                                     cy=central_coord[1].value, r=outer_radius.value)
         
     elif not inner_radius.isscalar and inner_radius[0].value != 0:
-        # Make an elliptical annulus
-        pass    
+        esass_source_area = "ellipse {cx} {cy} {wi} {hi} {wo} {ho} {rot}"
+        esass_source_area = esass_source_area.format(cx=central_coord[0].value,
+                                                     cy=central_coord[1].value,
+                                                     wi=inner_radius[0].value,
+                                                     hi=inner_radius[1].value,
+                                                     wo=outer_radius[0].value,
+                                                     ho=outer_radius[1].value,
+                                                     rot=rot_angle.to('deg').value)
+
     elif not inner_radius.isscalar and inner_radius[0].value == 0:
-        # Make an ellipse
-        pass
+        esass_source_area = "ellipse {cx} {cy} {w} {h} {rot}"
+        esass_source_area = esass_source_area.format(cx=central_coord[0].value,
+                                                     cy=central_coord[1].value,
+                                                     w=outer_radius[0].value,
+                                                     h=outer_radius[1].value,
+                                                     rot=rot_angle.to('deg').value)
 
     
 
