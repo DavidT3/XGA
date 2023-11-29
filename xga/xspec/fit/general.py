@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 23:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 20:33. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -84,6 +84,8 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
     """
+    print(start_temp)
+
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
