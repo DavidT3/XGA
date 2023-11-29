@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 23:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 23:26. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -316,8 +316,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                           min_sn=min_sn, over_sample=over_sample, lo_en=Quantity(0.5, 'keV'),
                           hi_en=Quantity(2.0, 'keV'))[:, 0]
             print('all done')
-            stop
+            # stop
             txs = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
+            print(txs)
+            print('boi')
 
         # This uses the scaling relation to predict the overdensity radius from the measured temperatures
         pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
