@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 22:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 22:25. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -289,25 +289,26 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
         #  the temperature-luminosity scaling relation has to step in for us, and we just need to read out Lxs
         else:
-            for sp in samp[0].get_products('spectrum'):
-                print(sp.storage_key)
-                print(sp.outer_rad)
-                print('')
-
-            print(samp[0]._fit_results)
-            print(samp[0].get_radius(o_dens, 'deg').value)
-            print(samp.get_radius(o_dens))
-            print(samp[0].convert_radius(samp.get_radius(o_dens)[0]), 'deg')
-            print(samp[0]._luminosities)
-            print('\n')
-            print(samp[0]._products)
-            print(samp[0].get_luminosities('r500', group_spec=group_spec, min_counts=min_counts,
-                          min_sn=min_sn, over_sample=over_sample))
-            stop
+            # for sp in samp[0].get_products('spectrum'):
+            #     print(sp.storage_key)
+            #     print(sp.outer_rad)
+            #     print('')
+            #
+            # print(samp[0]._fit_results)
+            # print(samp[0].get_radius(o_dens, 'deg').value)
+            # print(samp.get_radius(o_dens))
+            # print(samp[0].convert_radius(samp.get_radius(o_dens)[0]), 'deg')
+            # print(samp[0]._luminosities)
+            # print('\n')
+            # print(samp[0]._products)
+            # print(samp[0].get_luminosities('r500', group_spec=group_spec, min_counts=min_counts,
+            #               min_sn=min_sn, over_sample=over_sample))
+            # stop
             # TODO sort out how to identify the right luminosity energy range to perform predictions with
-            lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
+            lxs = samp.Lx(o_dens, quality_checks=False, group_spec=group_spec, min_counts=min_counts,
                           min_sn=min_sn, over_sample=over_sample, lo_en=Quantity(0.5, 'keV'),
                           hi_en=Quantity(2.0, 'keV'))[:, 0]
+            stop
             txs = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
 
         # This uses the scaling relation to predict the overdensity radius from the measured temperatures

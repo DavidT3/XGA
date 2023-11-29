@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 22:25. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -291,6 +291,8 @@ class BaseSample:
             inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
         else:
             raise NotImplementedError("Sorry region fitting is currently well supported")
+
+        print(out_rads)
 
         lums = []
         for src_ind, src in enumerate(self._sources.values()):
