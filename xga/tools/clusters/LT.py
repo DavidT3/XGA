@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/11/2023, 10:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/11/2023, 10:45. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -373,7 +373,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # This is probably unnecessary, but rather than rely on ordering staying the same, I am making a lookup
     #  dictionary for the start temperatures IF the pipeline was operating in frozen-temperature mode
     if freeze_temp:
-        start_temp = {sn: start_temp[sn_ind] for sn_ind, sn in enumerate(samp.names)}
+        start_temp_lookup = {sn: start_temp[sn_ind] for sn_ind, sn in enumerate(samp.names)}
 
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
@@ -433,7 +433,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 else:
                     # I am going to make a distinction in the column name for temperatures arrived at by this
                     #  route - there are also currently no uncertainties
-                    vals += [start_temp[rel_src.name]]
+                    vals += [start_temp_lookup[rel_src.name]]
                     cols += ['froz_Tx' + o_dens[1:]]
 
                 # Cycle through every available luminosity, this will return all luminosities in all energy bands
