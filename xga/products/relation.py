@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 18:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 18:46. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -85,10 +85,10 @@ class ScalingRelation:
     :param str third_dim_name: The name of the third dimension data.
     :param Tuple[Quantity] x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
         can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
-        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
     :param Tuple[Quantity] y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
         can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
-        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, dim_hubb_ind=None, fit_method: str = 'unknown', x_data: Quantity = None,
