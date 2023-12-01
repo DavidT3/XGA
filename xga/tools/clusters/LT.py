@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:47. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -164,6 +164,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  a bit of a clunky way of checking, but ah well these arrays will always be tiny
     if freeze_temp:
         rel_lum_bounds = temp_lum_rel.x_energy_bounds
+
+        # Have to make sure that the return from that wasn't None
+        if rel_lum_bounds is None:
+            raise TypeError("The supplied temperature-luminosity relation does not have the energy bounds which "
+                            "the luminosity was measured set - you can remedy this by setting the "
+                            "'x_energy_bounds' property.")
+
         present = False
         for row_ind in range(len(lum_en)):
             if np.in1d(rel_lum_bounds, lum_en[row_ind, :]).sum() == 2:
