@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/11/2023, 11:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:14. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -34,33 +34,39 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     num_cores: int = NUM_CORES) \
         -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
     """
-     This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
-     radii, for a sample of clusters. No knowledge of the overdensity radii of the clusters is required
-     beforehand, only the position and redshift of the objects. A name is also required for each of them.
+    This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
+    radii, for a sample of clusters. No knowledge of the overdensity radii of the clusters is required
+    beforehand, only the position and redshift of the objects. A name is also required for each of them.
 
-     The pipeline works by measuring a temperature from a spectrum generated with radius equal to the
-     'start_aperture', and the using the radius temperature relation ('rad_temp_rel') to infer a value for the
-     overdensity radius you are targeting. The cluster's overdensity radius is set equal to the new radius estimate
-     and we repeat the process.
+    The pipeline works by measuring a temperature from a spectrum generated with radius equal to the
+    'start_aperture', and the using the radius temperature relation ('rad_temp_rel') to infer a value for the
+    overdensity radius you are targeting. The cluster's overdensity radius is set equal to the new radius estimate
+    and we repeat the process.
 
-     A cluster radius measurement is accepted if the 'current' estimate of the radius is considered to be converged
-     with the last estimate. For instance if 'convergence_frac' is set to 0.1, convergence occurs when a change of
-     less than 10% from the last radius estimate is measured. The radii cannot be assessed for convergence until
-     at least 'min_iter' iterations have been passed, and the iterative process will end if the number of iterations
-     reaches 'max_iter'.
+    A cluster radius measurement is accepted if the 'current' estimate of the radius is considered to be converged
+    with the last estimate. For instance if 'convergence_frac' is set to 0.1, convergence occurs when a change of
+    less than 10% from the last radius estimate is measured. The radii cannot be assessed for convergence until
+    at least 'min_iter' iterations have been passed, and the iterative process will end if the number of iterations
+    reaches 'max_iter'.
 
-     This pipeline will only work for clusters that we can successfully measure temperatures for, which requires a
-     minimum data quality - as such you may find that some do not achieve successful radius measurements with this
-     pipeline. In these cases the pipeline should not error, but the failure will be recorded in the results and
-     radius history dataframes returned from the function (and optionally written to CSV files). The pipeline will
-     also gracefully handle SAS spectrum generation failures, removing the offending clusters from the sample being
-     analysed and warning the user of the failure.
+    In its standard mode the pipeline will only work for clusters that we can successfully measure temperatures
+    for, which requires a minimum data quality - as such you may find that some do not achieve successful radius
+    measurements with this pipeline. In these cases the pipeline should not error, but the failure will be recorded
+    in the results and radius history dataframes returned from the function (and optionally written to CSV files).
+    The pipeline will also gracefully handle SAS spectrum generation failures, removing the offending clusters from
+    the sample being analysed and warning the user of the failure.
 
-     As with all XGA sources and samples, the XGA luminosity-temperature pipeline DOES NOT require all objects
-     passed in the sample_data to have X-ray observations. Those that do not will simply be filtered out.
+    If YOUR DATA ARE OF A LOW QUALITY, you may wish to run the pipeline in 'frozen-temperature' mode, where the
+    temperature is not allowed to vary during the spectral fits, instead staying at the initial value. Each iteration
+    the luminosity from the model is read out and, with the help of a temperature-luminosity relation supplied through
+    'temp_lum_rel', used to estimate the temperature that the next spectral fit will be frozen at. To activate this
+    mode, set 'freeze_temp=True'. Please note that we do not currently
 
-     This pipeline will not read in previous XSPEC fits in its current form, though previously generated spectra
-     will be read in.
+    As with all XGA sources and samples, the XGA luminosity-temperature pipeline DOES NOT require all objects
+    passed in the sample_data to have X-ray observations. Those that do not will simply be filtered out.
+
+    This pipeline will not read in previous XSPEC fits in its current form, though previously generated spectra
+    will be read in.
 
     :param pd.DataFrame sample_data: A dataframe of information on the galaxy clusters. The columns 'ra', 'dec',
         'name', and 'redshift' are required for this pipeline to work.
@@ -153,6 +159,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                   "rad_temp_rel relation is {bu}. It cannot be converted to "
                                   "kpc.".format(bu=rad_temp_rel.y_unit.to_string()))
 
+    #
+
     # I'm going to make sure that the user isn't allowed to request that it not iterate at all
     if min_iter < 2:
         raise ValueError("The minimum number of iterations set by 'min_iter' must be 2 or more.")
@@ -202,7 +210,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         raise UnitConversionError("Frozen-temperature mode requires a temperature-luminosity relation, but the y-unit "
                                   "of the rad_temp_rel relation is {bu}. It cannot be converted to "
                                   "keV.".format(bu=temp_lum_rel.y_unit.to_string()))
-    elif freeze_temp and o_dens[1:] not in temp_lum_rel.y_name:
+    elif freeze_temp and (o_dens[1:] not in temp_lum_rel.y_name or
+                          (o_dens[1:] == '500' and '2500' in temp_lum_rel.y_name)):
         # TODO THIS WON'T WORK FOR SOMETHING LIKE 500 ODENS AND 2500 TEMP_LUM_REL
         raise ValueError("The y-axis label of the temperature-luminosity scaling relation ({ya}) does not seem to "
                          "contain the targeted overdensity ({o}).".format(ya=temp_lum_rel.y_name, o=o_dens[1:]))
