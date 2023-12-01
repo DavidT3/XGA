@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 21:30. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -12,6 +12,7 @@ from xga import DEFAULT_COSMO, NUM_CORES
 from xga.exceptions import ModelNotAssociatedError, SASGenerationError
 from xga.products import ScalingRelation
 from xga.relations.clusters.RT import arnaud_r500
+from xga.relations.clusters.TL import xcs_sdss_r500_52_TL
 from xga.samples import ClusterSample
 from xga.sas import evselect_spectrum
 from xga.xspec import single_temp_apec
@@ -26,12 +27,12 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
                                     core_excised: bool = False, freeze_nh: bool = True, freeze_met: bool = True,
                                     freeze_temp: bool = False, start_temp: Quantity = Quantity(3.0, 'keV'),
-                                    temp_lum_rel: ScalingRelation = None, lo_en: Quantity = Quantity(0.3, "keV"),
-                                    hi_en: Quantity = Quantity(7.9, "keV"), group_spec: bool = True,
-                                    min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                                    save_samp_results_path: str = None, save_rad_history_path: str = None,
-                                    cosmo: Cosmology = DEFAULT_COSMO, timeout: Quantity = Quantity(1, 'hr'),
-                                    num_cores: int = NUM_CORES) \
+                                    temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
+                                    lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
+                                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                                    over_sample: float = None, save_samp_results_path: str = None,
+                                    save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
+                                    timeout: Quantity = Quantity(1, 'hr'), num_cores: int = NUM_CORES) \
         -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
     """
     This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
