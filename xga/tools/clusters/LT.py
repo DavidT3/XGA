@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:39. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -173,7 +173,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # If the luminosity energies aren't being measured (based on the value of lum_en passed by the user), then
         #  we make sure to add it, so that we have a matching luminosity to feed into the scaling relation
         if not present:
-            lum_en = np.vstack(lum_en, rel_lum_bounds)
+            lum_en = np.vstack([lum_en, rel_lum_bounds])
             warn("The passed value of 'lum_en' meant that the energy-bound luminosity required to predict "
                  "temperature from the passed temperature-luminosity scaling relation would not be measured - the"
                  "required energy bounds have been added.", stacklevel=2)
