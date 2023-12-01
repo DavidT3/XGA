@@ -178,6 +178,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                  "temperature from the passed temperature-luminosity scaling relation would not be measured - the"
                  "required energy bounds have been added.", stacklevel=2)
 
+    print(lum_en)
+    stop
+
     # I'm going to make sure that the user isn't allowed to request that it not iterate at all
     if min_iter < 2:
         raise ValueError("The minimum number of iterations set by 'min_iter' must be 2 or more.")
