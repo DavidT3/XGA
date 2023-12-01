@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:41. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -177,9 +177,6 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             warn("The passed value of 'lum_en' meant that the energy-bound luminosity required to predict "
                  "temperature from the passed temperature-luminosity scaling relation would not be measured - the"
                  "required energy bounds have been added.", stacklevel=2)
-
-    print(lum_en)
-    stop
 
     # I'm going to make sure that the user isn't allowed to request that it not iterate at all
     if min_iter < 2:
