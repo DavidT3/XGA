@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 18:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:50. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -627,6 +627,19 @@ class ScalingRelation:
         """
         return self._x_quantity_en_bounds
 
+    @x_energy_bounds.setter
+    def x_energy_bounds(self, new_val: Quantity):
+        """
+        Set the energy bounds within which the x-axis data have been measured (e.g. a 0.5-2.0 keV luminosity).
+
+        :param Quantity new_val:
+        """
+        if not isinstance(new_val, Quantity) or new_val.isscalar or len(new_val) != 2:
+            raise TypeError("The new value of 'x_energy_bounds' must be a non-scalar Astropy Quantity with "
+                            "two elements.")
+        else:
+            self._x_quantity_en_bounds = new_val
+
     @property
     def y_energy_bounds(self) -> Quantity:
         """
@@ -637,6 +650,19 @@ class ScalingRelation:
         :rtype: Quantity
         """
         return self._y_quantity_en_bounds
+
+    @y_energy_bounds.setter
+    def y_energy_bounds(self, new_val: Quantity):
+        """
+        Set the energy bounds within which the y-axis data have been measured (e.g. a 0.5-2.0 keV luminosity).
+
+        :param Quantity new_val:
+        """
+        if not isinstance(new_val, Quantity) or new_val.isscalar or len(new_val) != 2:
+            raise TypeError("The new value of 'y_energy_bounds' must be a non-scalar Astropy Quantity with "
+                            "two elements.")
+        else:
+            self._y_quantity_en_bounds = new_val
 
     def view_chains(self, figsize: tuple = None, colour: str = None):
         """
