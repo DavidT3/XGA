@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:35. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -159,7 +159,24 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                   "rad_temp_rel relation is {bu}. It cannot be converted to "
                                   "kpc.".format(bu=rad_temp_rel.y_unit.to_string()))
 
-    #
+    # We ensure that the energy bounds used to measure the luminosity in the temperature-luminosity relation are also
+    #  being measured by our pipeline run - if they aren't already then we add them and give the user a warning. This
+    #  a bit of a clunky way of checking, but ah well these arrays will always be tiny
+    if freeze_temp:
+        rel_lum_bounds = temp_lum_rel.x_energy_bounds
+        present = False
+        for row_ind in range(len(lum_en)):
+            if np.in1d(rel_lum_bounds, lum_en[row_ind, :]).sum() == 2:
+                present = True
+                break
+
+        # If the luminosity energies aren't being measured (based on the value of lum_en passed by the user), then
+        #  we make sure to add it, so that we have a matching luminosity to feed into the scaling relation
+        if not present:
+            lum_en = np.vstack(lum_en, rel_lum_bounds)
+            warn("The passed value of 'lum_en' meant that the energy-bound luminosity required to predict "
+                 "temperature from the passed temperature-luminosity scaling relation would not be measured - the"
+                 "required energy bounds have been added.", stacklevel=2)
 
     # I'm going to make sure that the user isn't allowed to request that it not iterate at all
     if min_iter < 2:
