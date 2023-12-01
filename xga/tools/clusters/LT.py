@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:44. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -229,7 +229,6 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                   "keV.".format(bu=temp_lum_rel.y_unit.to_string()))
     elif freeze_temp and (o_dens[1:] not in temp_lum_rel.y_name or
                           (o_dens[1:] == '500' and '2500' in temp_lum_rel.y_name)):
-        # TODO THIS WON'T WORK FOR SOMETHING LIKE 500 ODENS AND 2500 TEMP_LUM_REL
         raise ValueError("The y-axis label of the temperature-luminosity scaling relation ({ya}) does not seem to "
                          "contain the targeted overdensity ({o}).".format(ya=temp_lum_rel.y_name, o=o_dens[1:]))
 
@@ -319,8 +318,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  the temperature-luminosity scaling relation has to step in for us, and we just need to read out Lxs
         else:
             lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
-                          min_sn=min_sn, over_sample=over_sample, lo_en=Quantity(0.5, 'keV'),
-                          hi_en=Quantity(2.0, 'keV'))[:, 0]
+                          min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
+                          hi_en=rel_lum_bounds[1])[:, 0]
             txs = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
 
         # This uses the scaling relation to predict the overdensity radius from the measured temperatures
@@ -348,12 +347,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # This HAS to go here because it is after sources have been deleted from the sample (if any are) and BEFORE
         #  the overdensity radius calculated from this iteration is added to the sources
         if freeze_temp:
-            # print(samp.get_radius(o_dens))
-            # print(samp)
             lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
-                          min_counts=min_counts,
-                          min_sn=min_sn, over_sample=over_sample, lo_en=Quantity(0.5, 'keV'),
-                          hi_en=Quantity(2.0, 'keV'))[:, 0]
+                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
+                          hi_en=rel_lum_bounds[1])[:, 0]
             start_temp = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
 
         # The basis of this method is that we measure a temperature, starting in some user-specified fixed aperture,
