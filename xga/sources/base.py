@@ -770,32 +770,38 @@ class BaseSource:
                 rel_obs_id = inven_entry['obs_id']
                 rel_inst = inven_entry['inst']
 
-                # We split up the information contained in the info key - this is going to tell us what settings were
-                #  used to generate the lightcurve
-                lc_info = inven_entry['info_key'].split("_")
+                # Make sure that the current ObsID and instrument are actually associated with the source
+                if rel_obs_id in self.obs_ids and rel_inst in self.instruments[rel_obs_id]:
+                    # We split up the information contained in the info key - this is going to tell us what
+                    #  settings were used to generate the lightcurve
+                    lc_info = inven_entry['info_key'].split("_")
 
-                # Pull out the energy bounds of the lightcurve, then make them Astropy Quantity
-                rel_lo_en, rel_hi_en = lc_info[1].split("-")
-                rel_lo_en = Quantity(float(rel_lo_en), "keV")
-                rel_hi_en = Quantity(float(rel_hi_en), "keV")
+                    # Pull out the energy bounds of the lightcurve, then make them Astropy Quantity
+                    rel_lo_en, rel_hi_en = lc_info[1].split("-")
+                    rel_lo_en = Quantity(float(rel_lo_en), "keV")
+                    rel_hi_en = Quantity(float(rel_hi_en), "keV")
 
-                # We also need to grab the central coordinates and turn them into an Astropy Quantity
-                rel_central_coord = Quantity([float(lc_info[2].replace('ra', '')),
-                                              float(lc_info[3].replace('dec', ''))], 'deg')
+                    # We also need to grab the central coordinates and turn them into an Astropy Quantity
+                    rel_central_coord = Quantity([float(lc_info[2].replace('ra', '')),
+                                                  float(lc_info[3].replace('dec', ''))], 'deg')
 
-                # The inner and outer radii are always in degrees at this stage, because then we are independent of
-                #  a cosmology or redshift
-                rel_inn_rad = Quantity(lc_info[4].replace('ri', ''), 'deg')
-                rel_out_rad = Quantity(lc_info[5].replace('ro', ''), 'deg')
+                    # The inner and outer radii are always in degrees at this stage, because then we are
+                    #  independent of a cosmology or redshift
+                    rel_inn_rad = Quantity(lc_info[4].replace('ri', ''), 'deg')
+                    rel_out_rad = Quantity(lc_info[5].replace('ro', ''), 'deg')
 
-                # The timebin size is always in seconds
-                rel_time_bin = Quantity(lc_info[6].replace('timebin', ''), 's')
+                    # The timebin size is always in seconds
+                    rel_time_bin = Quantity(lc_info[6].replace('timebin', ''), 's')
 
-                rel_patt = lc_info[7].replace('pattern', '')
+                    rel_patt = lc_info[7].replace('pattern', '')
 
-                # Setting up the lightcurve to be passed back out and stored in the source
-                final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "", rel_central_coord, rel_inn_rad,
-                                       rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True)
+                    # Setting up the lightcurve to be passed back out and stored in the source
+                    final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "", rel_central_coord, rel_inn_rad,
+                                           rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True)
+
+                else:
+                    final_obj = None
+
             else:
                 final_obj = None
 
@@ -827,6 +833,8 @@ class BaseSource:
                 # This finds the lines of the inventory that are lightCurve entries
                 lc_lines = inven[inven['type'] == 'lightcurve']
                 for row_ind, row in lc_lines.iterrows():
+                    # The parse lightcurve function does check to see if an inventory entry is relevant to this
+                    #  source (using the source name), and if the ObsID and instrument are still associated.
                     self.update_products(parse_lightcurve(row), update_inv=False)
 
                 # For spectra we search for products that have the name of this object in, as they are for
