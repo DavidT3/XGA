@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/08/2023, 15:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 20:40. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -36,8 +36,8 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     # We do this here (even though its also in the density measurement), because if we can't measure a global
     #  temperature then its absurdly unlikely that we'll be able to measure a temperature profile, so we can avoid
     #  even trying and save some time.
-    single_temp_apec(sources, global_radius, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
-                     num_cores=num_cores, abund_table=abund_table, group_spec=group_spec)
+    single_temp_apec(sources, global_radius, abund_table=abund_table, group_spec=group_spec, min_counts=min_counts,
+                     min_sn=min_sn, over_sample=over_sample, num_cores=num_cores)
 
     has_glob_temp = []
     for src_ind, src in enumerate(sources):

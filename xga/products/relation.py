@@ -1,11 +1,11 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 15:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:50. Copyright (c) The Contributors
 
 import inspect
 import pickle
 from copy import deepcopy
 from datetime import date
-from typing import List, Union
+from typing import List, Union, Tuple
 from warnings import warn
 
 import numpy as np
@@ -83,6 +83,12 @@ class ScalingRelation:
         not have been involved in the fitting process, and the relation should not be in three dimensions, but these
         can be used to colour the data points in a view method.
     :param str third_dim_name: The name of the third dimension data.
+    :param Tuple[Quantity] x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
+        can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
+    :param Tuple[Quantity] y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
+        can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, dim_hubb_ind=None, fit_method: str = 'unknown', x_data: Quantity = None,
@@ -91,7 +97,7 @@ class ScalingRelation:
                  relation_author: str = 'XGA', relation_year: str = str(date.today().year), relation_doi: str = '',
                  scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None, model_colour: str = None,
                  point_names: Union[np.ndarray, list] = None, third_dim_info: Union[np.ndarray, Quantity] = None,
-                 third_dim_name: str = None):
+                 third_dim_name: str = None, x_en_bounds: Quantity = None, y_en_bounds: Quantity = None):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -172,6 +178,31 @@ class ScalingRelation:
         else:
             # If nothing is passed then its just None
             self._x_lims = x_lims
+
+        # We are double-checking that the values for the x and y energy bounds for the measured quantities are legal
+        if x_en_bounds is not None and (not isinstance(x_en_bounds, Quantity)
+                                        or (isinstance(x_en_bounds, Quantity) and x_en_bounds.isscalar)
+                                        or (isinstance(x_en_bounds, Quantity) and not x_en_bounds.isscalar and
+                                            len(x_en_bounds) != 2)):
+            raise TypeError("The 'x_en_bounds' argument must be either None, or a non-scalar Astropy Quantity with "
+                            "two entries, the lower energy bound and the upper energy bound.")
+        elif x_en_bounds is not None and x_en_bounds[0] >= x_en_bounds[1]:
+            raise ValueError("The first entry in 'x_en_bounds' is larger than or equal to the second entry, as the "
+                             "first entry is meant to be the lower energy bound this is not permitted.")
+
+        if y_en_bounds is not None and (not isinstance(y_en_bounds, Quantity)
+                                        or (isinstance(y_en_bounds, Quantity) and y_en_bounds.isscalar)
+                                        or (isinstance(y_en_bounds, Quantity) and not y_en_bounds.isscalar and
+                                            len(y_en_bounds) != 2)):
+            raise TypeError("The 'y_en_bounds' argument must be either None, or a non-scalar Astropy Quantity with "
+                            "two entries, the lower energy bound and the upper energy bound.")
+        elif y_en_bounds is not None and y_en_bounds[0] >= y_en_bounds[1]:
+            raise ValueError("The first entry in 'y_en_bounds' is larger than or equal to the second entry, as the "
+                             "first entry is meant to be the lower energy bound this is not permitted.")
+
+        # If we get this far then the energy bounds are fine, so we store them
+        self._x_quantity_en_bounds = x_en_bounds
+        self._y_quantity_en_bounds = y_en_bounds
 
         # If the profile was created by XGA and fitted with ODR, then the user can pass the output object
         #  from that fitting method - I likely won't do much with it but it will be accessible
@@ -585,6 +616,54 @@ class ScalingRelation:
         """
         return self._third_dim_name
 
+    @property
+    def x_energy_bounds(self) -> Quantity:
+        """
+        The energy bounds within which the x-axis data have been measured (e.g. a 0.5-2.0 keV luminosity).
+
+        :return: A non-scalar Astropy Quantity with two entries if the x-data energy bounds have been set, and None if
+            they have not.
+        :rtype: Quantity
+        """
+        return self._x_quantity_en_bounds
+
+    @x_energy_bounds.setter
+    def x_energy_bounds(self, new_val: Quantity):
+        """
+        Set the energy bounds within which the x-axis data have been measured (e.g. a 0.5-2.0 keV luminosity).
+
+        :param Quantity new_val:
+        """
+        if not isinstance(new_val, Quantity) or new_val.isscalar or len(new_val) != 2:
+            raise TypeError("The new value of 'x_energy_bounds' must be a non-scalar Astropy Quantity with "
+                            "two elements.")
+        else:
+            self._x_quantity_en_bounds = new_val
+
+    @property
+    def y_energy_bounds(self) -> Quantity:
+        """
+        The energy bounds within which the y-axis data have been measured (e.g. a 0.5-2.0 keV luminosity).
+
+        :return: A non-scalar Astropy Quantity with two entries if the y-data energy bounds have been set, and None if
+            they have not.
+        :rtype: Quantity
+        """
+        return self._y_quantity_en_bounds
+
+    @y_energy_bounds.setter
+    def y_energy_bounds(self, new_val: Quantity):
+        """
+        Set the energy bounds within which the y-axis data have been measured (e.g. a 0.5-2.0 keV luminosity).
+
+        :param Quantity new_val:
+        """
+        if not isinstance(new_val, Quantity) or new_val.isscalar or len(new_val) != 2:
+            raise TypeError("The new value of 'y_energy_bounds' must be a non-scalar Astropy Quantity with "
+                            "two elements.")
+        else:
+            self._y_quantity_en_bounds = new_val
+
     def view_chains(self, figsize: tuple = None, colour: str = None):
         """
         Simple view method to quickly look at the MCMC chains for a scaling relation fit.
@@ -733,7 +812,7 @@ class ScalingRelation:
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
              save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
-             point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = True,
+             point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
              third_dim_cmap: Union[str, Colormap] = 'plasma'):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
@@ -772,7 +851,8 @@ class ScalingRelation:
         :param int point_label_size: The fontsize of the label text.
         :param bool show_third_dim: Colour the data points by the third dimension data passed in on creation of this
             scaling relation, with a colour bar to communicate values. Only possible if data were passed to
-            'third_dim_info' on initialization. Default is False.
+            'third_dim_info' on initialization. Default is None, which automatically gets converted to True if there
+            is a third data dimension, and converted to False if there is not.
         :param str/Colormap third_dim_cmap: The colour map which should be used for the third dimension data points.
             A matplotlib colour map name or a colour map object may be passed. Default is 'plasma'. This essentially
             overwrites the 'data_colour' argument if show_third_dim is True.
@@ -820,12 +900,20 @@ class ScalingRelation:
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
+        # I wanted this to react to whether there is a third dimension of data or not, so that the warning below
+        #  is still shown if the user sets show_third_dim=True when there is no third dimension, but otherwise they
+        #  don't have to worry about/see that warning.
+        if show_third_dim is None and self.third_dimension_data is None:
+            show_third_dim = False
+        elif show_third_dim is None and self.third_dimension_data is not None:
+            show_third_dim = True
+
         # We check to see a) whether the user wants a third dimension of data communicated via the colour of the
         #  data, and b) if they actually passed the data necessary to make that happen. If there is no data but they
-        #  have set show_third_dim=True, we set it back to False and give a warning
+        #  have set show_third_dim=True, we set it back to False
         if show_third_dim and self.third_dimension_data is None:
-            warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on the creation "
-                 "of this scaling relation. Setting 'show_third_im' to False.")
+            warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
+                 "the creation of this scaling relation. Setting 'show_third_dim' to False.")
             show_third_dim = False
 
         # Plot the data with uncertainties, if any data is present in this scaling relation.

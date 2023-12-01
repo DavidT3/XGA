@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2023, 18:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 21:30. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -12,6 +12,7 @@ from xga import DEFAULT_COSMO, NUM_CORES
 from xga.exceptions import ModelNotAssociatedError, SASGenerationError
 from xga.products import ScalingRelation
 from xga.relations.clusters.RT import arnaud_r500
+from xga.relations.clusters.TL import xcs_sdss_r500_52_TL
 from xga.samples import ClusterSample
 from xga.sas import evselect_spectrum
 from xga.xspec import single_temp_apec
@@ -25,6 +26,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
                                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
                                     core_excised: bool = False, freeze_nh: bool = True, freeze_met: bool = True,
+                                    freeze_temp: bool = False, start_temp: Quantity = Quantity(3.0, 'keV'),
+                                    temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
                                     lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
                                     group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                                     over_sample: float = None, save_samp_results_path: str = None,
@@ -32,33 +35,39 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     timeout: Quantity = Quantity(1, 'hr'), num_cores: int = NUM_CORES) \
         -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
     """
-     This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
-     radii, for a sample of clusters. No knowledge of the overdensity radii of the clusters is required
-     beforehand, only the position and redshift of the objects. A name is also required for each of them.
+    This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
+    radii, for a sample of clusters. No knowledge of the overdensity radii of the clusters is required
+    beforehand, only the position and redshift of the objects. A name is also required for each of them.
 
-     The pipeline works by measuring a temperature from a spectrum generated with radius equal to the
-     'start_aperture', and the using the radius temperature relation ('rad_temp_rel') to infer a value for the
-     overdensity radius you are targeting. The cluster's overdensity radius is set equal to the new radius estimate
-     and we repeat the process.
+    The pipeline works by measuring a temperature from a spectrum generated with radius equal to the
+    'start_aperture', and the using the radius temperature relation ('rad_temp_rel') to infer a value for the
+    overdensity radius you are targeting. The cluster's overdensity radius is set equal to the new radius estimate
+    and we repeat the process.
 
-     A cluster radius measurement is accepted if the 'current' estimate of the radius is considered to be converged
-     with the last estimate. For instance if 'convergence_frac' is set to 0.1, convergence occurs when a change of
-     less than 10% from the last radius estimate is measured. The radii cannot be assessed for convergence until
-     at least 'min_iter' iterations have been passed, and the iterative process will end if the number of iterations
-     reaches 'max_iter'.
+    A cluster radius measurement is accepted if the 'current' estimate of the radius is considered to be converged
+    with the last estimate. For instance if 'convergence_frac' is set to 0.1, convergence occurs when a change of
+    less than 10% from the last radius estimate is measured. The radii cannot be assessed for convergence until
+    at least 'min_iter' iterations have been passed, and the iterative process will end if the number of iterations
+    reaches 'max_iter'.
 
-     This pipeline will only work for clusters that we can successfully measure temperatures for, which requires a
-     minimum data quality - as such you may find that some do not achieve successful radius measurements with this
-     pipeline. In these cases the pipeline should not error, but the failure will be recorded in the results and
-     radius history dataframes returned from the function (and optionally written to CSV files). The pipeline will
-     also gracefully handle SAS spectrum generation failures, removing the offending clusters from the sample being
-     analysed and warning the user of the failure.
+    In its standard mode the pipeline will only work for clusters that we can successfully measure temperatures
+    for, which requires a minimum data quality - as such you may find that some do not achieve successful radius
+    measurements with this pipeline. In these cases the pipeline should not error, but the failure will be recorded
+    in the results and radius history dataframes returned from the function (and optionally written to CSV files).
+    The pipeline will also gracefully handle SAS spectrum generation failures, removing the offending clusters from
+    the sample being analysed and warning the user of the failure.
 
-     As with all XGA sources and samples, the XGA luminosity-temperature pipeline DOES NOT require all objects
-     passed in the sample_data to have X-ray observations. Those that do not will simply be filtered out.
+    If YOUR DATA ARE OF A LOW QUALITY, you may wish to run the pipeline in 'frozen-temperature' mode, where the
+    temperature is not allowed to vary during the spectral fits, instead staying at the initial value. Each iteration
+    the luminosity from the model is read out and, with the help of a temperature-luminosity relation supplied through
+    'temp_lum_rel', used to estimate the temperature that the next spectral fit will be frozen at. To activate this
+    mode, set 'freeze_temp=True'. Please note that we do not currently
 
-     This pipeline will not read in previous XSPEC fits in its current form, though previously generated spectra
-     will be read in.
+    As with all XGA sources and samples, the XGA luminosity-temperature pipeline DOES NOT require all objects
+    passed in the sample_data to have X-ray observations. Those that do not will simply be filtered out.
+
+    This pipeline will not read in previous XSPEC fits in its current form, though previously generated spectra
+    will be read in.
 
     :param pd.DataFrame sample_data: A dataframe of information on the galaxy clusters. The columns 'ra', 'dec',
         'name', and 'redshift' are required for this pipeline to work.
@@ -91,6 +100,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         spectra, the default is True.
     :param bool freeze_met: Controls whether metallicity should be frozen during XSPEC fits to spectra, the default
         is False. Leaving metallicity free to vary tends to require more photons to achieve a good fit.
+    :param bool freeze_temp:
+    :param bool start_temp:
+    :param ScalingRelation temp_lum_rel:
     :param Quantity lo_en: The lower energy limit for the data to be fitted by XSPEC. The default is 0.3 keV.
     :param Quantity hi_en: The upper energy limit for the data to be fitted by XSPEC. The default is 7.9 keV, but
         reducing this value may help achieve a good fit for suspected lower temperature systems.
@@ -131,7 +143,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     if (sample_data['name'].str.contains(' ') | sample_data['name'].str.contains('_')).any():
         warn("One or more cluster name has been modified. Empty spaces (' ') are removed, and underscores ('_') are "
-             "replaced with hyphens ('-').")
+             "replaced with hyphens ('-').", stacklevel=2)
         sample_data['name'] = sample_data['name'].apply(lambda x: x.replace(" ", "").replace("_", "-"))
 
     # A key part of this process is a relation between the temperature we measure, and the overdensity radius. As
@@ -147,6 +159,32 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         raise UnitConversionError("This pipeline requires a radius-temperature relation, but the y-unit of the "
                                   "rad_temp_rel relation is {bu}. It cannot be converted to "
                                   "kpc.".format(bu=rad_temp_rel.y_unit.to_string()))
+
+    # We ensure that the energy bounds used to measure the luminosity in the temperature-luminosity relation are also
+    #  being measured by our pipeline run - if they aren't already then we add them and give the user a warning. This
+    #  a bit of a clunky way of checking, but ah well these arrays will always be tiny
+    if freeze_temp:
+        rel_lum_bounds = temp_lum_rel.x_energy_bounds
+
+        # Have to make sure that the return from that wasn't None
+        if rel_lum_bounds is None:
+            raise TypeError("The supplied temperature-luminosity relation does not have the energy bounds which "
+                            "the luminosity was measured set - you can remedy this by setting the "
+                            "'x_energy_bounds' property.")
+
+        present = False
+        for row_ind in range(len(lum_en)):
+            if np.in1d(rel_lum_bounds, lum_en[row_ind, :]).sum() == 2:
+                present = True
+                break
+
+        # If the luminosity energies aren't being measured (based on the value of lum_en passed by the user), then
+        #  we make sure to add it, so that we have a matching luminosity to feed into the scaling relation
+        if not present:
+            lum_en = np.vstack([lum_en, rel_lum_bounds])
+            warn("The passed value of 'lum_en' meant that the energy-bound luminosity required to predict "
+                 "temperature from the passed temperature-luminosity scaling relation would not be measured - the"
+                 "required energy bounds have been added.", stacklevel=2)
 
     # I'm going to make sure that the user isn't allowed to request that it not iterate at all
     if min_iter < 2:
@@ -175,8 +213,32 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # Just a little warning to a user who may have made a silly decision
     if core_excised and o_dens == 'r2500':
         warn("You may not measure reliable core-excised results when iterating on R2500 - the radii can be small "
-             " enough that multiplying by 0.15 for an inner radius will result in too small of a "
+             "enough that multiplying by 0.15 for an inner radius will result in too small of a "
              "radius.", stacklevel=2)
+    # Another warning if there is a combination of core-excision and frozen-temperature mode
+    if core_excised and freeze_temp:
+        warn("Core-excised temperatures will not be reported when running in frozen-temperature mode.", stacklevel=2)
+
+    # The XGA LTR pipeline can be run in 'frozen temperature mode', which does not allow the temperature to vary
+    #  during the fitting process - instead it fixes the temperature at some value and essentially fits for the
+    #  normalisation, measures the luminosity, and uses that combined with a temp-lum scaling relation to calculate
+    #  the temperature that the next fitting step should be fixed at
+    if freeze_temp and not isinstance(temp_lum_rel, ScalingRelation):
+        raise TypeError("The pipeline is operating in frozen-temperature mode, which means that at each step we "
+                        "must estimate the next temperature with a temperature-luminosity relation; as such "
+                        "'temp_lum_rel' cannot be None.")
+    elif freeze_temp and not temp_lum_rel.x_unit.is_equivalent(Unit('erg/s')):
+        raise UnitConversionError("Frozen-temperature mode requires a temperature-luminosity relation, but the x-unit "
+                                  "of the rad_temp_rel relation is {bu}. It cannot be converted to "
+                                  "erg/s.".format(bu=temp_lum_rel.x_unit.to_string()))
+    elif freeze_temp and not temp_lum_rel.y_unit.is_equivalent(Unit('keV')):
+        raise UnitConversionError("Frozen-temperature mode requires a temperature-luminosity relation, but the y-unit "
+                                  "of the rad_temp_rel relation is {bu}. It cannot be converted to "
+                                  "keV.".format(bu=temp_lum_rel.y_unit.to_string()))
+    elif freeze_temp and (o_dens[1:] not in temp_lum_rel.y_name or
+                          (o_dens[1:] == '500' and '2500' in temp_lum_rel.y_name)):
+        raise ValueError("The y-axis label of the temperature-luminosity scaling relation ({ya}) does not seem to "
+                         "contain the targeted overdensity ({o}).".format(ya=temp_lum_rel.y_name, o=o_dens[1:]))
 
     # Keeps track of the current iteration number
     iter_num = 0
@@ -225,7 +287,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             bad_gen = [en for en in poss_bad_gen if en in samp.names]
             if len(bad_gen) != len(poss_bad_gen):
                 # If there are entries in poss_bad_gen that ARE NOT names in the sample, then something has gone wrong
-                #  with the error parsing and we need to warn the user.
+                #  with the error parsing, and we need to warn the user.
                 problem = [en for en in poss_bad_gen if en not in samp.names]
                 warn("SASGenerationError parsing has recovered a string that is not a source name, a "
                      "problem source may not have been removed from the sample (contact the development team). The "
@@ -249,13 +311,24 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                  "failures.".format(', '.join(bad_gen)), stacklevel=2)
 
         # We generate and fit spectra for the current value of the overdensity radius
-        single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, num_cores=num_cores, timeout=timeout,
-                         lum_en=lum_en, freeze_met=freeze_met, freeze_nh=freeze_nh, lo_en=lo_en, hi_en=hi_en,
-                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+        single_temp_apec(samp, samp.get_radius(o_dens), lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
+                         lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                         over_sample=over_sample, one_rmf=False, num_cores=num_cores, timeout=timeout,
+                         start_temp=start_temp, freeze_temp=freeze_temp)
 
-        # Just reading out the temperatures, not the uncertainties at the moment
-        txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
-                      min_sn=min_sn, over_sample=over_sample)[:, 0]
+        # This is for the standard use of this pipeline, where the temperature has been allowed to vary during the
+        #  spectral fit - as such we are reading out the measured temperatures here
+        if not freeze_temp:
+            # Just reading out the temperatures, not the uncertainties at the moment
+            txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
+                          min_sn=min_sn, over_sample=over_sample)[:, 0]
+        # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
+        #  the temperature-luminosity scaling relation has to step in for us, and we just need to read out Lxs
+        else:
+            lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
+                          min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
+                          hi_en=rel_lum_bounds[1])[:, 0]
+            txs = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
 
         # This uses the scaling relation to predict the overdensity radius from the measured temperatures
         pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
@@ -274,6 +347,18 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  generation failed.
         for name in samp.names[bad_pr_rs]:
             del samp[name]
+
+        # There was probably a more elegant way to do this, but if the pipeline is operating in frozen temperature mode
+        #  I read out the lxs from the current sample, and convert them into temperature estimations using the
+        #  temperature-luminosity scaling relation. Those estimates are set as the start_temp value, and so will be
+        #  fed into the next spectral fit as the frozen temperature value
+        # This HAS to go here because it is after sources have been deleted from the sample (if any are) and BEFORE
+        #  the overdensity radius calculated from this iteration is added to the sources
+        if freeze_temp:
+            lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
+                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
+                          hi_en=rel_lum_bounds[1])[:, 0]
+            start_temp = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
 
         # The basis of this method is that we measure a temperature, starting in some user-specified fixed aperture,
         #  and then use that to predict an overdensity radius (something far more useful than a fixed aperture). This
@@ -303,29 +388,37 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  be changed the next time around.
         if iter_num >= min_iter:
             acc_rad = ((rad_rat > (1 - convergence_frac)) & (rad_rat < (1 + convergence_frac))) | acc_rad
-
+        # This dictionary is used to store the various radius steps that are made for each source
         rad_hist = {n: vals + [samp[n].get_radius(o_dens, 'kpc').value] if n in samp.names else vals
                     for n, vals in rad_hist.items()}
+
         # Got to increment the counter otherwise the while loop may go on and on forever :O
         iter_num += 1
 
     # Throw a warning if the maximum number of iterations being reached was the reason the loop exited
     if iter_num == max_iter:
         warn("The radius measurement process reached the maximum number of iterations; as such one or more clusters "
-             "may have unconverged radii.")
+             "may have unconverged radii.", stacklevel=2)
+
+    # This is probably unnecessary, but rather than rely on ordering staying the same, I am making a lookup
+    #  dictionary for the start temperatures IF the pipeline was operating in frozen-temperature mode
+    if freeze_temp:
+        start_temp_lookup = {sn: start_temp[sn_ind] for sn_ind, sn in enumerate(samp.names)}
 
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
-    single_temp_apec(samp, samp.get_radius(o_dens), one_rmf=False, lum_en=lum_en, num_cores=num_cores,
-                     freeze_met=freeze_met, freeze_nh=freeze_nh, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
-                     min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+    single_temp_apec(samp, samp.get_radius(o_dens), lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
+                     lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                     over_sample=over_sample, one_rmf=False, num_cores=num_cores, start_temp=start_temp,
+                     freeze_temp=freeze_temp)
 
     # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
     #  just multiply the current radius by 0.15 and use that for the inner radius.
     if core_excised:
-        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens)*0.15, one_rmf=False, lum_en=lum_en,
-                         num_cores=num_cores, freeze_met=freeze_met, freeze_nh=freeze_nh, lo_en=lo_en, hi_en=hi_en,
-                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, lum_en=lum_en,
+                         freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
+                         min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
+                         num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp)
 
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
@@ -354,11 +447,24 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             #  spectral fit to contend with - if there are no successful fits then the entry for the current
             #  cluster will be NaN
             try:
-                # The temperature measured within the overdensity radius, with its - and + uncertainties are read out
-                vals += list(rel_src.get_temperature(rel_rad, group_spec=group_spec, min_counts=min_counts,
-                                                     min_sn=min_sn, over_sample=over_sample).value)
-                # We add columns with informative names
-                cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+                # If the pipeline was operating in its normal mode, where the temperature was allowed to vary during
+                #  the spectral fits, then there will be a temperature to read out from the galaxy cluster
+                if not freeze_temp:
+                    # The temperature measured within the overdensity radius, with its - and + uncertainties are
+                    #  read out
+                    vals += list(rel_src.get_temperature(rel_rad, group_spec=group_spec, min_counts=min_counts,
+                                                         min_sn=min_sn, over_sample=over_sample).value)
+                    # We add columns with informative names
+                    cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+
+                # If operating in frozen-temperature mode however, we can't extract a temperature from the XGA
+                #  sources - instead we use the look-up dictionary for the final temperatures arrived at by feeding
+                #  the luminosity into a temperature-luminosity relation.
+                else:
+                    # I am going to make a distinction in the column name for temperatures arrived at by this
+                    #  route - there are also currently no uncertainties
+                    vals += [start_temp_lookup[rel_src.name].value]
+                    cols += ['froz_Tx' + o_dens[1:]]
 
                 # Cycle through every available luminosity, this will return all luminosities in all energy bands
                 #  requested by the user with lum_en
@@ -390,12 +496,16 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             # Now we repeat the above process, but only if we know the user requested core-excised values as well
             if core_excised:
                 try:
-                    # Adding temperature value and uncertainties
-                    vals += list(rel_src.get_temperature(rel_rad, inner_radius=0.15*rel_rad, group_spec=group_spec,
-                                                         min_counts=min_counts, min_sn=min_sn,
-                                                         over_sample=over_sample).value)
-                    # Corresponding column names (with ce now included to indicate core-excised).
-                    cols += ['Tx' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
+                    # We can only extract core-excised temperatures when the pipeline is running in normal mode, not
+                    #  frozen-temperature mode, as that would require a different, core-excised, temperature-luminosity
+                    #  relation to be passed.
+                    if not freeze_temp:
+                        # Adding temperature value and uncertainties
+                        vals += list(rel_src.get_temperature(rel_rad, inner_radius=0.15*rel_rad, group_spec=group_spec,
+                                                             min_counts=min_counts, min_sn=min_sn,
+                                                             over_sample=over_sample).value)
+                        # Corresponding column names (with ce now included to indicate core-excised).
+                        cols += ['Tx' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                     # The same process again for core-excised luminosities
                     lce_res = rel_src.get_luminosities(rel_rad, inner_radius=0.15*rel_rad, group_spec=group_spec,
