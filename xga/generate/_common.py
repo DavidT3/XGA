@@ -1,10 +1,12 @@
 from subprocess import Popen, PIPE
 from typing import Tuple, Union
+import os
 
 import numpy as np
 from astropy.units import Quantity, UnitBase, deg
 
-from ..utils import erosita_sky
+from ..utils import erosita_sky, OUTPUT
+from ..sources import BaseSource
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 
 #ASSUMPTION7 that the telescope agnostic region_setup will go here
@@ -80,12 +82,11 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
 
 def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
                                output_unit: Union[UnitBase, str] = deg, rot_angle: Quantity = Quantity(0, 'deg'),
-                               interloper_regions: np.ndarray = None, central_coord: Quantity = None) -> str:
+                               interloper_regions: np.ndarray = None, central_coord: Quantity = None, bkg_reg: bool = False) -> str:
     """
     A method to generate an eSASS region string for an arbitrary circular or elliptical annular region, with
     interloper sources removed.
     """
-    # DAVID_QUESTION what system is this in? Need to convert to ICRS for srctool
     if central_coord is None:
         central_coord = self._default_coord
 
@@ -119,6 +120,8 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
     elif interloper_regions is None and not inner_radius.isscalar:
         interloper_regions = self.regions_within_radii(min(inner_radius), max(outer_radius), central_coord, telescope="erosita")
 
+    # TODO write _interloper_esass_string function
+    esass_interloper = interloper_regions
     #TODO I have assumed that the eSASS versions of the regions are in the correct format
 
     if inner_radius.isscalar and inner_radius.value !=0:
@@ -130,7 +133,7 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
     elif inner_radius.isscalar and inner_radius.value == 0:
         esass_source_area = "fk5; circle {cx} {cy} {r}d"
         esass_source_area = esass_source_area.format(cx=central_coord[0].value,
-                                                    cy=central_coord[1].value, r=outer_radius.value)
+                                                     cy=central_coord[1].value, r=outer_radius.value)
         
     elif not inner_radius.isscalar and inner_radius[0].value != 0:
         esass_source_area = "ellipse {cx} {cy} {wi} {hi} {wo} {ho} {rot}"
@@ -151,7 +154,26 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
                                                      rot=rot_angle.to('deg').value)
 
     
+    # Combining the source region with regions we need to cut out
+    if len(esass_interloper) == 0:
+        final_src = esass_source_area
+    else:
+        # Multiple regions must be parsed to eSASS via an ASCII file, so I will write this here
+        reg_file_path = OUTPUT +  'erosita/' + obs_id + '/temp_regs'
+        reg_str = esass_source_area.replace(" ", "_") # replacing spaces with underscores for file naming purposes
+        reg_str = reg_str.replace(".", "-") # replacing any dots with dashes 
 
+        if bkg_reg: 
+            # adding backround prefix for background region files
+            reg_str = 'BACK_' + reg_str
+        
+        reg_file_name = f"{reg_str}.reg"
 
+        # Making a temporary directory to write files into
+        os.makedirs(reg_file_path, exist_ok=True) # extra arguement means no error is raised if directories already exist
 
-    pass
+        # Making the file
+        with open(reg_file_path + '/' + reg_file_name, 'w') as file:
+            file.write(esass_source_area + "\n" + "\n".join(esass_interloper))
+
+    return final_src

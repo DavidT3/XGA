@@ -202,7 +202,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                   dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
 
             #TODO occupy these variables 
-            #TODO convert to icrs system, as per the srctool website
+            # DAVID_QUESTION what coordinate system are these in 
             coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
             src_reg_str = None # dealt with in get_annular_esass_region
             #TODO allow user to chose tstep and xgrid
