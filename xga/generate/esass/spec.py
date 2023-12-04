@@ -227,6 +227,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             cmd_str += remove_merged_cmd
             # Adds clean up commands to move all generated files and remove temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+            # If temporary region files were made, they will be here
+            if os.path.exists(OUTPUT +  'erosita/' + obs_id + '/temp_regs'):
+                # Removing this directory
+                 cmd_str += ";rm -r temp_regs"
+
             cmds.append(cmd_str)  # Adds the full command to the set
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
