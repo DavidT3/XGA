@@ -175,5 +175,7 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
         # Making the file
         with open(reg_file_path + '/' + reg_file_name, 'w') as file:
             file.write(esass_source_area + "\n" + "\n".join(esass_interloper))
+        
+        final_src= reg_file_path + '/' + reg_file_name
 
     return final_src
