@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 from astropy.units import Quantity, UnitBase, deg
+from regions import EllipseSkyRegion
 
 from ..utils import erosita_sky, OUTPUT
 from ..sources import BaseSource
@@ -80,6 +81,30 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
 
     return prod, src
 
+def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
+    """
+    Converts ellipse sky regions into eSASS region strings for use in eSASS tasks.
+
+    :param EllipseSkyRegion reg: The interloper region to generate an eSASS string for
+    :return: The eSASS string region for this interloper
+    :rtype: str
+    """
+
+    w = reg.width.to('deg').value
+    h = reg.height.to('deg').value
+    cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
+
+    if w == h:
+        shape_str = "-circle {cx} {cy} {r}"
+        shape_str = shape_str.format(cx=cen[0].value, cy=cen[1].value, r=h)
+    else:
+        # The rotation angle from the region object is in degrees already
+        shape_str = "-ellipse {cx} {cy} {w} {h} {rot}"
+        shape_str = shape_str.format(cx=cen[0].value, cy=cen[1].value, w=w,
+                                     h=h, rot=reg.angle.value)
+
+    return shape_str
+
 def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
                                output_unit: Union[UnitBase, str] = deg, rot_angle: Quantity = Quantity(0, 'deg'),
                                interloper_regions: np.ndarray = None, central_coord: Quantity = None, bkg_reg: bool = False) -> str:
@@ -87,6 +112,7 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
     A method to generate an eSASS region string for an arbitrary circular or elliptical annular region, with
     interloper sources removed.
     """
+
     if central_coord is None:
         central_coord = self._default_coord
 
@@ -120,8 +146,8 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
     elif interloper_regions is None and not inner_radius.isscalar:
         interloper_regions = self.regions_within_radii(min(inner_radius), max(outer_radius), central_coord, telescope="erosita")
 
-    # TODO write _interloper_esass_string function
-    esass_interloper = interloper_regions
+    # So now we convert our interloper regions into their eSASS equivalents
+    esass_interloper = [self._interloper_esass_string(i) for i in interloper_regions]
     #TODO I have assumed that the eSASS versions of the regions are in the correct format
 
     if inner_radius.isscalar and inner_radius.value !=0:
@@ -131,7 +157,7 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
                                                      ri=inner_radius.value, ro=outer_radius.value)
 
     elif inner_radius.isscalar and inner_radius.value == 0:
-        esass_source_area = "fk5; circle {cx} {cy} {r}d"
+        esass_source_area = "circle {cx} {cy} {r}d"
         esass_source_area = esass_source_area.format(cx=central_coord[0].value,
                                                      cy=central_coord[1].value, r=outer_radius.value)
         

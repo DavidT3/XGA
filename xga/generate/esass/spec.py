@@ -12,6 +12,7 @@ from astropy.units import Quantity
 from .._common import region_setup
 
 from .. import OUTPUT, NUM_CORES
+from .._common import get_annular_esass_region
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 from ...samples.base import BaseSample
 from ...exceptions import eROSITAImplentationError
@@ -153,14 +154,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             else:
                 # This constructs the sas strings for any radius that isn't 'region'
                 #TODO get_annular_esass_region - dont put it in BaseSource
-                reg = source.get_annular_sas_region(inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
+                reg = source.get_annular_esass_region(inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
                                                     interloper_regions=interloper_regions,
                                                     central_coord=source.default_coord)
                 #TODO get_annular_esass_region
-                b_reg = source.get_annular_sas_region(outer_radii[s_ind] * source.background_radius_factors[0],
+                b_reg = source.get_annular_esass_region(outer_radii[s_ind] * source.background_radius_factors[0],
                                                       outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
                                                       inst, interloper_regions=back_inter_reg,
-                                                      central_coord=source.default_coord)
+                                                      central_coord=source.default_coord, bkg_reg=True)
                 inn_rad_degrees = inner_radii[s_ind]
                 out_rad_degrees = outer_radii[s_ind]
             
@@ -201,13 +202,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                   dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
 
-            #TODO occupy these variables 
             # DAVID_QUESTION what coordinate system are these in 
             coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
-            src_reg_str = None # dealt with in get_annular_esass_region
+            src_reg_str = reg # dealt with in get_annular_esass_region
             #TODO allow user to chose tstep and xgrid
             tstep = 0.5 # put it as 0.5 for now
-            bsrc_reg_str = None
+            bsrc_reg_str = b_reg
 
             # Fills out the srctool command to make the main and background spectra
             s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
