@@ -56,14 +56,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
     ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                ' srcreg="{reg}" backreg={breg} insts="{i}" tstep={ts}' \
+                ' srcreg="{reg}" backreg=NONE insts="{i}" tstep={ts}' \
                 ' psftype=NONE'
 
-    #TODO add in separate background command
     # For extended sources, it is best to make a background spectra with a separate command
-    #bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                       # ' srcreg="{breg}" backreg=NONE insts="{i}" prefix="bckgr_"' \
-                       # ' tstep={ts} xgrid={xg} psftype=NONE'
+    bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
+                        ' srcreg="{breg}" backreg=NONE insts="{i}"' \
+                        ' tstep={ts} psftype=NONE'
 
     #TODO check the point source command in esass with some EDR obs
     pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF" insts="{i}"' \
@@ -129,7 +128,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         for pack in source.get_products("events", telescope='erosita', just_obj=False):
             obs_id = pack[1]
             inst = pack[2]
-            #DAVID_QUESTION, just checking there will be all insts listed, just all with the same obs_id? ie this for loop will result in spectra made for every instrument
             
             # ASSUMPTION4 new output directory structure
             if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
@@ -153,12 +151,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             else:
                 # This constructs the sas strings for any radius that isn't 'region'
-                #TODO get_annular_esass_region - dont put it in BaseSource
-                reg = source.get_annular_esass_region(inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
+                reg = get_annular_esass_region(inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
                                                     interloper_regions=interloper_regions,
                                                     central_coord=source.default_coord)
-                #TODO get_annular_esass_region
-                b_reg = source.get_annular_esass_region(outer_radii[s_ind] * source.background_radius_factors[0],
+                b_reg = get_annular_esass_region(outer_radii[s_ind] * source.background_radius_factors[0],
                                                       outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
                                                       inst, interloper_regions=back_inter_reg,
                                                       central_coord=source.default_coord, bkg_reg=True)
@@ -182,6 +178,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf"
             arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf"
             b_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.fits"
+            b_rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.rmf"
+            b_arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.arf"
 
             # Making the strings of the XGA formatted names that we will rename the outputs of srctool to
             spec = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
@@ -192,6 +190,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
             b_spec = b_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+            b_rmf = b_rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+            b_arf = b_arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
             
             # These file names are for the debug images of the source and background images, they will not be loaded
             #  in as a XGA products, but exist purely to check by eye if necessary
@@ -202,7 +204,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                   dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
 
-            # DAVID_QUESTION what coordinate system are these in 
             coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
             src_reg_str = reg # dealt with in get_annular_esass_region
             #TODO allow user to chose tstep and xgrid
@@ -211,18 +212,20 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Fills out the srctool command to make the main and background spectra
             s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
-                                               breg=bsrc_reg_str, i=inst, ts=tstep)
-            #TODO might want different tstep and xgrid to the source to save processing time
-            #sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
-                                              # i=insts, ts=tstep,xg=xgrid)
+                                               i=inst, ts=tstep)
+            sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
+                                                  i=inst, ts=tstep*4) # had a longer tstep for the background to speed it up
 
             # Occupying the rename command for all the outputs of srctool
             rename_spec = rename_cmd.format(inst_no=inst, type='SourceSpec', nn=spec)
             rename_rmf = rename_cmd.format(inst_no=inst, type='RMF', nn=rmf)
             rename_arf = rename_cmd.format(inst_no=inst, type='ARF', nn=arf)
-            rename_b_spec = rename_cmd.format(inst_no=inst, type='BackgrSpec', nn=b_spec)
+            rename_b_spec = rename_cmd.format(inst_no=inst, type='SourceSpec', nn=b_spec)
+            rename_b_rmf = rename_cmd.format(inst_no=inst, type='RMF', nn=b_rmf)
+            rename_b_arf = rename_cmd.format(inst_no=inst, type='ARF', nn=b_arf)
 
-            cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, rename_b_spec])
+            cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, 
+                                sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf])
             # Removing the 'merged spectra' output of srctool - which is identical to the instrument one
             cmd_str += remove_merged_cmd
             # Adds clean up commands to move all generated files and remove temporary directory
@@ -242,8 +245,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                "rmf_path": os.path.join(OUTPUT, "erosita", obs_id, rmf),
                                "arf_path": os.path.join(OUTPUT, "erosita", obs_id, arf),
                                "b_spec_path": os.path.join(OUTPUT, "erosita", obs_id, b_spec),
-                               "b_rmf_path": '',
-                               "b_arf_path": '',
+                               "b_rmf_path": os.path.join(OUTPUT, "erosita", obs_id, b_rmf), 
+                               "b_arf_path": os.path.join(OUTPUT, "erosita", obs_id, b_arf),
                                "obs_id": obs_id, "instrument": inst, 
                                "central_coord": source.default_coord,
                                "from_region": from_region})
