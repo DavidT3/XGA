@@ -21,8 +21,7 @@ def esass_call(esass_func):
     """
     This is used as a decorator for functions that produce eSASS command strings. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
-    executing the eSASS command will change. This supports both simple multi-threading and submission
-    with the Sun Grid Engine.
+    executing the eSASS command will change. This supports both simple multi-threading.
     :return:
     """
     @wraps(esass_func)
