@@ -13,6 +13,7 @@ from .._common import region_setup
 
 from .. import OUTPUT, NUM_CORES
 from .._common import get_annular_esass_region
+from .phot import evtool_image
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 from ...samples.base import BaseSample
 from ...exceptions import eROSITAImplentationError
@@ -259,6 +260,38 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
+
+def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, inst: str,
+                      rot_angle: Quantity = Quantity(0, 'deg')):
+    """
+    Internal function to make detection maps for extended sources, so that they can be corrected for vignetting
+    correctly when spectra are generated in esass.
+    """
+    outer_radius = outer_radius.to('deg')
+
+    # Defining the region to be used
+    if outer_radius.isscalar:
+        det_map_area = "circle {cx} {cy} {r}d"
+        det_map_area = det_map_area.format(cx=source.central_coord[0].value,
+                                           cy=source.central_coord[1].value,
+                                           r=outer_radius*source.background_radius_factor[1])
+
+    elif not outer_radius.isscalar:
+        det_map_area = "ellipse {cx} {cy} {w} {h} {rot}"
+        det_map_area = det_map_area.format(cx=source.central_coord[0].value,
+                                           cy=source.central_coord[1].value,
+                                           w=outer_radius[0].value,
+                                           h=outer_radius[1].value, 
+                                           rot=rot_angle.to('deg').value)
+    
+    # Generating an image around this region
+
+    
+
+    
+
+
+
 
 
 
