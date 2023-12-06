@@ -26,6 +26,9 @@ def esass_call(esass_func):
     """
     @wraps(esass_func)
     def wrapper(*args, **kwargs):
+        # Haven't figured out how to deal with errors raised yet, so just erroring here
+        raise NotImplementedError("Functions using esass have not been implemented yet.")
+
         # Checking eSASS is installed and available on the system
         if not eSASS_AVAIL:
             raise eSASSNotFoundError("No eSASS installation has been found on this machine.")
