@@ -273,6 +273,11 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
     """
     outer_radius = outer_radius.to('deg')
     
+    # Defining the name of the detection map
+    detmap_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_detmap.fits"
+    detmap_name = detmap_str.format(o=obs_id, i=inst, n=source.name, ra=source.default_coord[0].value,
+                                    dec=source.default_coord[1].value)
+
     # Checking if an image has already been made
     en_id = "bound_{l}-{u}".format(l=0.2, u=10)
     exists = [match for match in source.get_products("image", obs_id, inst, telescope="erosita", just_obj=False)
@@ -338,10 +343,17 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
             region_mask = distance <= radius
             img[region_mask & (img != 0)] = 1
             img[~region_mask] = 0
+
+            if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
+                os.mkdir(OUTPUT + 'erosita/' + obs_id)
+
+            hdul.writeto(OUTPUT + 'erosita/' + obs_id + '/' + detmap_name)
         
         # TODO ellipses!
         elif not outer_radius.isscalar:
             raise NotImplementedError("Haven't figured out how to do this with ellipses yet")
+        
+
             
 
 
