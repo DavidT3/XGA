@@ -4,9 +4,13 @@
 import os
 from typing import Union, List
 from random import randint
+import re
 
 import numpy as np
 from astropy.units import Quantity
+from astropy.io import fits
+from astropy.wcs import WCS
+from astropy.coordinates import SkyCoord
 
 #ASSUMPTION7 that the telescope agnostic region_setup will go here
 from .._common import region_setup
@@ -268,23 +272,85 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
     correctly when spectra are generated in esass.
     """
     outer_radius = outer_radius.to('deg')
-
-    # Defining the region to be used
-    if outer_radius.isscalar:
-        det_map_area = "circle {cx} {cy} {r}d"
-        det_map_area = det_map_area.format(cx=source.central_coord[0].value,
-                                           cy=source.central_coord[1].value,
-                                           r=outer_radius*source.background_radius_factor[1])
-
-    elif not outer_radius.isscalar:
-        det_map_area = "ellipse {cx} {cy} {w} {h} {rot}"
-        det_map_area = det_map_area.format(cx=source.central_coord[0].value,
-                                           cy=source.central_coord[1].value,
-                                           w=outer_radius[0].value,
-                                           h=outer_radius[1].value, 
-                                           rot=rot_angle.to('deg').value)
     
+    # Checking if an image has already been made
+    en_id = "bound_{l}-{u}".format(l=0.2, u=10)
+    exists = [match for match in source.get_products("image", obs_id, inst, telescope="erosita", just_obj=False)
+                  if en_id in match]
+
+    if len(exists) == 1 and exists[0][-1].useable:
+        img = exists[0][-1] # DAVID_QUESTION this gets me the image Product right?
     # Generating an image around this region
+    else:
+        evtool_image(source)
+        exists = [match for match in source.get_products("image", obs_id, inst, telescope="erosita", just_obj=False)
+                  if en_id in match]
+        img = exists[0][-1]
+        
+    # Converting that image to the detection map needed
+    with fits.open(img.path) as hdul:
+        # Getting rebinning information from the image
+        bin_key_word = 'rebin'
+        process_history = hdul[0].header['SASSHIST']
+        # This creates a pattern to search for within the string of the processing history of the image
+        pattern = re.compile(fr'\b{re.escape(bin_key_word)}=(\d+)\b') # the '=(\d+)' includes an equals sign and any numbers that follow
+        matches = re.finditer(pattern, process_history) # This finds this pattern within the longer string
+
+        # returning the matches from the iter object
+        binnings = []
+        for match in matches:
+            binnings.append(match.group(1)) # using group(1) returns only the numbers, instead of the whole pattern
+
+        img_binning = int(binnings[-1]) # the results of binnings are stored as strings so need to make it an int
+
+        # Defining the WCS of the image
+        # DAVID_QUESTION, the headers are crazy!
+        hdr = hdul[0].header
+        wcs = WCS(naxis=2)
+        wcs.wcs.cdelt = [hdr["CDELT1P"], hdr["CDELT2P"]]
+        wcs.wcs.crpix = [hdr["CRPIX1P"],hdr["CRPIX2P"]]
+        wcs.wcs.crval = [hdr["CRVAL1"], hdr["CRVAL2"]]
+        wcs.wcs.ctype = [hdr["CTYPE1"], hdr["CTYPE2"]]
+
+        if outer_radius.isscalar:
+            # Defining the region first in sky coords
+            radius = outer_radius*source.background_radius_factors[1]
+            centre = SkyCoord(source.default_coord[0], source.default_coord[1], unit='deg', frame='fk5')
+
+            # Converting to image coords
+            # First converting the radius into pixels
+            arcsec_4 = Quantity(4, 'arcsec') # For a binning of 80, the pixel scale is 4 arcsec 
+            in_degrees = arcsec_4.to('deg') 
+            conv_factor = in_degrees.value/80 # Defining relationship between binning and pixel scale
+            pix_scale = img_binning*conv_factor # Finding pix_scale for this image
+            radius = radius.value/pix_scale # Radius now in pixels
+
+            # Now converting the centre into image coords
+            x, y = wcs.world_to_pixel(centre)
+            x = int(x)
+            y = int(y)
+            centre = [x, y]
+
+            # Then creating a mask in the image over the region
+            img = hdul[0].data
+            y, x = np.ogrid[:img.shape[0], :img.shape[1]]
+            distance = np.sqrt((x - centre[0])**2 + (y - centre[1])**2)
+            region_mask = distance <= radius
+            img[region_mask & (img != 0)] = 1
+            img[~region_mask] = 0
+        
+        # TODO ellipses!
+        elif not outer_radius.isscalar:
+            raise NotImplementedError("Haven't figured out how to do this with ellipses yet")
+            
+
+
+
+        
+
+
+
+
 
     
 
