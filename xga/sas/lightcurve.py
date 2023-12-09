@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/12/2023, 16:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/12/2023, 23:45. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -274,7 +274,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             # Moves up all files that don't contain 'cif' and don't contain 'spectrum' (as that would be indicative
             #  of a failed process.
             # cmd_str += "; mv !(*spectrum*|*cif*) ../; cd ..; rm -r {d}".format(d=dest_dir)
-            cmd_str += "; mv {o}*_lcurve* ../; mv {o}*debug* ../; cd ..; rm -r {d}".format(d=dest_dir, o=obs_id)
+            cmd_str += "; mv {o}*lcurve* ../; mv {o}*debug* ../; cd ..; rm -r {d}".format(d=dest_dir, o=obs_id)
 
             cmds.append(cmd_str)  # Adds the full command to the set
             # Makes sure the whole path to the temporary directory is created
