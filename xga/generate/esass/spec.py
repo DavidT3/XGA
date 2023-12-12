@@ -98,9 +98,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
     remove_merged_cmd = 'rm *srctoolout_0*'
 
-    # To correct for vignetting properly, you need a detection map of the source
-    #TODO how to make a detection/extent map then add into extended srctool cmd
-
+    # TODO this command is fishy 
+    # Grouping the spectra will be done using the heasoft
+    grp_cmd = 'grppha infile="{infi}" outfile="{of}" comm="group min {mc} & exit "'
 
     stack = False # This tells the esass_call routine that this command won't be part of a stack
     execute = True # This should be executed immediately
@@ -252,6 +252,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                i=inst, ts=tstep, map=map_path)
             sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                                   i=inst, ts=tstep*4) # had a longer tstep for the background to speed it up
+            # Filling out the grouping command
+            grp_cmd_str = grp_cmd.format(infi=spec, of=spec, mc=min_counts)
 
             # Occupying the rename command for all the outputs of srctool
             rename_spec = rename_cmd.format(inst_no=inst, type='SourceSpec', nn=spec)
@@ -263,8 +265,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, 
                                 sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf])
+                                
+            # If the user wants to group the spectra then this command should be added
+            if group_spec:
+                # DAVID_QUESTION should I group the background spectra in the same way
+                cmd_str+= "; " + grp_cmd_str
             # Removing the 'merged spectra' output of srctool - which is identical to the instrument one
-            cmd_str += remove_merged_cmd
+            cmd_str += "; " + remove_merged_cmd
             # Adds clean up commands to move all generated files and remove temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
             # If temporary region files were made, they will be here
