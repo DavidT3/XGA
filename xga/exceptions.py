@@ -21,6 +21,25 @@ class eROSITAImplentationError(Exception):
         else:
             return 'eROSITAImplementationError has been raised'
 
+class eSASSInputInvalid(Exception):
+    def __init__(self, *args):
+        """
+        This error is raised when a user provides an invalid input to an eSASS function.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eSASSInputInvalid has been raised'
+
 class HeasoftError(Exception):
     def __init__(self, *args):
         """

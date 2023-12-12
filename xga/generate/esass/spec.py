@@ -20,11 +20,12 @@ from .._common import get_annular_esass_region
 from .phot import evtool_image
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 from ...samples.base import BaseSample
-from ...exceptions import eROSITAImplentationError
+from ...exceptions import eROSITAImplentationError, eSASSInputInvalid
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-               num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False):
+               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+               min_counts: int = 5, num_cores: int = NUM_CORES, disable_progress: bool = False, 
+               force_gen: bool = False):
     """
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
     decorated by the esass_call function, so the commands aren't immediately run. This means it can be used for
@@ -39,6 +40,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
         the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
         default this is zero arcseconds, resulting in a circular spectrum.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
@@ -57,6 +61,20 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
+    
+    # Making sure this value is the expected type
+    if min_counts is not None:
+        min_counts = int(min_counts)
+    
+    # Checking user has passed a grouping argument if group spec is true
+    if group_spec and min_counts is None:
+        raise eSASSInputInvalid("If you set group_spec=True, you must supply a grouping option, min_counts may not be None")
+    
+    # Sets up the extra part of the storage key name depending on if grouping is enabled
+    if group_spec and min_counts is not None:
+        extra_name = "_mincnt{}".format(min_counts)
+    else:
+        extra_name = ''
 
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
@@ -178,25 +196,33 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # ASSUMPTION4 new output directory structure
             dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
 
+            # Setting up file names that include the extra variables
+            if group_spec and min_counts is not None:
+                extra_file_name = "_mincnt{c}".format(c=min_counts)
+            else:
+                extra_file_name = ''
+
             # Cannot control the naming of spectra from srctool, so need to store
             # the XGA formatting of the spectra, so that they can be renamed 
             #TODO put issue, renaming spectra 
-            spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_spec.fits"
+            spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_spec.fits"
             rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf"
             arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf"
-            b_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.fits"
+            b_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_backspec.fits"
             b_rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.rmf"
             b_arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.arf"
 
             # Making the strings of the XGA formatted names that we will rename the outputs of srctool to
             spec = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                               ex=extra_file_name)
             rmf = rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
             arf = arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
             b_spec = b_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                               ex=extra_file_name)
             b_rmf = b_rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
             b_arf = b_arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
