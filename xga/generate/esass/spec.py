@@ -100,7 +100,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     # TODO this command is fishy 
     # Grouping the spectra will be done using the heasoft
-    grp_cmd = 'grppha infile="{infi}" outfile="{of}" comm="group min {mc} & exit "'
+    grp_cmd = 'ftgrouppha infile="{infi}" outfile="{of}" grouptype="{gt}" groupscale="{gs}"'
 
     stack = False # This tells the esass_call routine that this command won't be part of a stack
     execute = True # This should be executed immediately
@@ -246,6 +246,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #TODO allow user to chose tstep and xgrid
             tstep = 0.5 # put it as 0.5 for now
             bsrc_reg_str = b_reg
+            group_type= 'min'
 
             # Fills out the srctool command to make the main and background spectra
             s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
@@ -253,7 +254,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                                   i=inst, ts=tstep*4) # had a longer tstep for the background to speed it up
             # Filling out the grouping command
-            grp_cmd_str = grp_cmd.format(infi=spec, of=spec, mc=min_counts)
+            grp_cmd_str = grp_cmd.format(infi=spec, of=spec, gt=group_type, gs=min_counts)
 
             # Occupying the rename command for all the outputs of srctool
             rename_spec = rename_cmd.format(inst_no=inst, type='SourceSpec', nn=spec)
