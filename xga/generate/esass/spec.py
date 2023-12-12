@@ -146,6 +146,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                          ri=src_inn_rad_str, ro=src_out_rad_str)
         else:
             spec_storage_name = "region"
+        
+        # Adds on the extra information about grouping to the storage key
+        spec_storage_name += extra_name
 
         # Check which event lists are associated with each individual source
         for pack in source.get_products("events", telescope='erosita', just_obj=False):
