@@ -110,6 +110,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     remove_merged_cmd = 'rm *srctoolout_0*'
 
     # TODO this command is fishy 
+    # TODO include the background file
     # Grouping the spectra will be done using the heasoft
     grp_cmd = 'ftgrouppha infile="{infi}" outfile="{of}" grouptype="{gt}" groupscale="{gs}"'
 
@@ -257,7 +258,16 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #TODO allow user to chose tstep and xgrid
             tstep = 0.5 # put it as 0.5 for now
             bsrc_reg_str = b_reg
-            group_type= 'min'
+            # Defining the grouping key words
+            if group_spec and not min_counts is None:
+                group_type = 'min'
+                group_scale = min_counts
+            elif group_spec and not min_sn is None:
+                group_type = 'snmin'
+                group_scale = min_sn
+            else:
+                group_type = ''
+                group_scale = ''
 
             # Fills out the srctool command to make the main and background spectra
             s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
@@ -265,7 +275,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                                   i=inst, ts=tstep*4) # had a longer tstep for the background to speed it up
             # Filling out the grouping command
-            grp_cmd_str = grp_cmd.format(infi=spec, of=spec, gt=group_type, gs=min_counts)
+            grp_cmd_str = grp_cmd.format(infi=spec, of=spec, gt=group_type, gs=group_scale)
 
             # Occupying the rename command for all the outputs of srctool
             rename_spec = rename_cmd.format(inst_no=inst, type='SourceSpec', nn=spec)
