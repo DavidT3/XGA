@@ -24,7 +24,7 @@ from ...exceptions import eROSITAImplentationError, eSASSInputInvalid
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-               min_counts: int = 5, num_cores: int = NUM_CORES, disable_progress: bool = False, 
+               min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES, disable_progress: bool = False, 
                force_gen: bool = False):
     """
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
@@ -47,6 +47,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
@@ -65,14 +67,23 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # Making sure this value is the expected type
     if min_counts is not None:
         min_counts = int(min_counts)
+    if min_sn is not None:
+        min_sn = float(min_sn)
     
     # Checking user has passed a grouping argument if group spec is true
-    if group_spec and min_counts is None:
-        raise eSASSInputInvalid("If you set group_spec=True, you must supply a grouping option, min_counts may not be None")
+    if all([o is not None for o in [min_counts, min_sn]]):
+        raise eSASSInputInvalid("Only one grouping option can passed, you can't group both by"
+                                " minimum counts AND by minimum signal to noise.")
+    # Should also check that the user has passed any sort of grouping argument, if they say they want to group
+    elif group_spec and all([o is None for o in [min_counts, min_sn]]):
+        raise eSASSInputInvalid("If you set group_spec=True, you must supply a grouping option, either min_counts"
+                              " or min_sn.")
     
     # Sets up the extra part of the storage key name depending on if grouping is enabled
     if group_spec and min_counts is not None:
         extra_name = "_mincnt{}".format(min_counts)
+    elif group_spec and min_sn is not None:
+        extra_name = "_minsn{}".format(min_sn)
     else:
         extra_name = ''
 
