@@ -62,7 +62,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # There will be a different command for extended and point sources
     ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
                 ' srcreg="{reg}" backreg=NONE insts="{i}" tstep={ts}' \
-                ' psftype=NONE'
+                ' exttype="MAP" extmap="{map}" psftype=NONE'
 
     # For extended sources, it is best to make a background spectra with a separate command
     bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
@@ -165,6 +165,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                       central_coord=source.default_coord, bkg_reg=True)
                 inn_rad_degrees = inner_radii[s_ind]
                 out_rad_degrees = outer_radii[s_ind]
+                # This creates a detection map for the source and background region
+                map_path = _det_map_creation(outer_radii[s_ind], source, obs_id, inst)
             
             # Getting the source name
             source_name = source.name
@@ -200,6 +202,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             b_arf = b_arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                             dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
             
+            # DAVID_QUESTION should I be making these
             # These file names are for the debug images of the source and background images, they will not be loaded
             #  in as a XGA products, but exist purely to check by eye if necessary
             dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_debug." \
@@ -217,7 +220,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Fills out the srctool command to make the main and background spectra
             s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
-                                               i=inst, ts=tstep)
+                                               i=inst, ts=tstep, map=map_path)
             sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                                   i=inst, ts=tstep*4) # had a longer tstep for the background to speed it up
 
@@ -277,6 +280,7 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
     detmap_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_detmap.fits"
     detmap_name = detmap_str.format(o=obs_id, i=inst, n=source.name, ra=source.default_coord[0].value,
                                     dec=source.default_coord[1].value)
+    detmap_path = OUTPUT + 'erosita/' + obs_id + '/' + detmap_name
 
     # Checking if an image has already been made
     en_id = "bound_{l}-{u}".format(l=0.2, u=10)
@@ -347,11 +351,13 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
             if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
                 os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
-            hdul.writeto(OUTPUT + 'erosita/' + obs_id + '/' + detmap_name)
+            hdul.writeto(detmap_path)
         
         # TODO ellipses!
         elif not outer_radius.isscalar:
             raise NotImplementedError("Haven't figured out how to do this with ellipses yet")
+    
+    return detmap_path
         
 
             
