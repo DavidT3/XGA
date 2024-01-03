@@ -1,6 +1,44 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 13:22. Copyright (c) The Contributors
 
+class eROSITAImplentationError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised for when the user tries to use XGA for functions that have not been
+        fully implemented for eROSITA yet.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eROSITAImplementationError has been raised'
+
+class eSASSInputInvalid(Exception):
+    def __init__(self, *args):
+        """
+        This error is raised when a user provides an invalid input to an eSASS function.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eSASSInputInvalid has been raised'
 
 class HeasoftError(Exception):
     def __init__(self, *args):
@@ -40,6 +78,26 @@ class SASNotFoundError(Exception):
             return '{0} '.format(self.message)
         else:
             return 'SASNotFoundError has been raised'
+
+class eSASSNotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the eROSITA Science Analysis Software 
+        System can not be found on the system.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eSASSNotFoundError has been raised'
 
 
 class XSPECNotFoundError(Exception):
@@ -104,6 +162,26 @@ class UnknownCommandlineError(Exception):
             return '{0} '.format(self.message)
         else:
             return 'A generic UnknownCommandlineError has been raised'
+
+class SourceNotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the user tries to run a SAS (or eSASS)
+        function that has no XMM (or eROSITA) data associated with it. 
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'SourceNotFoundError has been raised'
 
 
 class FailedProductError(Exception):
@@ -651,4 +729,3 @@ class InvalidTelescopeError(Exception):
             return '{}'.format(self.message)
         else:
             return 'InvalidTelescopeError has been raised'
-

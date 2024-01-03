@@ -618,6 +618,12 @@ SASWARNING_LIST = warnings["WarnName"].values
 
 # TODO THIS WILL BE FLESHED OUT INTO A SECTION FOR eROSITA
 ESASS_VERSION = None
+# This checks for an installation of eSASS
+eSASS_AVAIL = False
+if shutil.which("evtool") is None:
+    warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.")
+else:
+    eSASS_AVAIL = True
 
 # We set up a mapping from telescope name to software version constant
 # Don't really expect the user to use this, hence why it isn't a constant, more for checks at the end of this
