@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/06/2023, 14:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 23:00. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -43,17 +43,19 @@ class SurfaceBrightness1D(BaseProfile1D):
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool min_snr_succeeded: A boolean flag describing whether re-binning was successful or not.
+    :param str telescope: The telescope that this profile is derived from. Default is None.
     """
     def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int,
                  min_snr: float, outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
                  background: Quantity = None, pixel_bins: np.ndarray = None, back_pixel_bin: np.ndarray = None,
-                 ann_areas: Quantity = None, deg_radii: Quantity = None, min_snr_succeeded: bool = True):
+                 ann_areas: Quantity = None, deg_radii: Quantity = None, min_snr_succeeded: bool = True,
+                 telescope: str = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
         """
         super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err,
-                         deg_radii=deg_radii)
+                         deg_radii=deg_radii, telescope=telescope)
 
         if type(background) != Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
@@ -290,15 +292,17 @@ class GasMass1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
-                 deg_radii: Quantity = None):
+                 deg_radii: Quantity = None, telescope: str = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
         Clusters.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, deg_radii=deg_radii)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, deg_radii=deg_radii,
+                         telescope=telescope)
         self._prof_type = "gas_mass"
 
         # This is what the y-axis is labelled as during plotting
@@ -365,10 +369,12 @@ class GasDensity3D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
-                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
+                 telescope: str = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
         Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
@@ -400,7 +406,7 @@ class GasDensity3D(BaseProfile1D):
             values_err = values_err.to(chosen_unit)
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, telescope=telescope)
 
         # Setting the type
         self._prof_type = "gas_density"
@@ -736,17 +742,18 @@ class ProjectedGasTemperature1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, telescope: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected temperature profile. This profile
         will be considered unusable if a temperature value of greater than 30keV is present in the profile, or if a
         negative error value is detected (XSPEC can produce those).
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, telescope=telescope)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -792,15 +799,16 @@ class APECNormalisation1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, telescope: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D APEC normalisation profile.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, telescope=telescope)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -980,16 +988,17 @@ class EmissionMeasure1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, telescope: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial emission measure profile.
         """
         #
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, telescope=telescope)
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
 
@@ -1023,16 +1032,17 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, telescope: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected metallicity/abundance profile.
         """
         #
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, telescope=telescope)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -1070,15 +1080,16 @@ class GasTemperature3D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, telescope: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial 3D temperature profile.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, telescope=telescope)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1114,15 +1125,16 @@ class BaryonFraction(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, telescope: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial baryon fraction profile.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, telescope=telescope)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1163,12 +1175,13 @@ class HydrostaticMass(BaseProfile1D):
     :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
     :param bool show_warn: Should warnings thrown during the fitting processes be shown.
     :param bool progress: Should fit progress bars be shown.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
                  density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
                  radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
-                 progress: bool = True):
+                 progress: bool = True, telescope: str = None):
         """
         The init method for the HydrostaticMass class, uses temperature and density profiles, along with models, to
         set up the hydrostatic mass profile.
@@ -1266,7 +1279,8 @@ class HydrostaticMass(BaseProfile1D):
         mass_errs = np.mean(mass[1:, :], axis=0)
 
         super().__init__(radii, mass_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
-                         self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii)
+                         self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii,
+                         telescope=telescope)
 
         # Need a custom storage key for this mass profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models.
@@ -1994,12 +2008,13 @@ class SpecificEntropy(BaseProfile1D):
     :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
     :param bool show_warn: Should warnings thrown during the fitting processes be shown.
     :param bool progress: Should fit progress bars be shown.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
                  density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
                  radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
-                 progress: bool = True):
+                 progress: bool = True, telescope: str = None):
         """
         The init method for the SpecificEntropy profile class, uses temperature and density profiles, along with
         models, to set up the entropy profile.
@@ -2125,7 +2140,8 @@ class SpecificEntropy(BaseProfile1D):
         ent_errs = np.mean(ent[1:, :], axis=0)
 
         super().__init__(radii, ent_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
-                         self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii)
+                         self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii,
+                         telescope=telescope)
 
         # Need a custom storage key for this entropy profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models - identical to
@@ -2332,17 +2348,19 @@ class Generic1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  y_axis_label: str, prof_type: str, radii_err: Quantity = None, values_err: Quantity = None,
-                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
+                 telescope: str = None):
         """
         The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
         to set up an XGA profile with custom data.
         """
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, telescope=telescope)
         self._prof_type = prof_type
         self._y_axis_name = y_axis_label
 

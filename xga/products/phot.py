@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/06/2023, 00:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 13:57. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -26,7 +26,7 @@ from scipy.signal import fftconvolve
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
 from ..sourcetools import ang_to_rad
-from ..utils import xmm_sky, xmm_det, find_all_wcs
+from ..utils import xmm_sky, xmm_det, ALLOWED_INST, PRETTY_TELESCOPE_NAMES
 
 EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
 plt.rcParams['keymap.save'] = ''
@@ -64,15 +64,16 @@ class Image(BaseProduct):
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
         is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  lo_en: Quantity, hi_en: Quantity, regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
-                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None):
+                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None):
         """
         The initialisation method for the Image class.
         """
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._shape = None
         self._wcs_radec = None
         self._wcs_xmmXY = None
@@ -121,9 +122,25 @@ class Image(BaseProduct):
             self._smoothed_info = None
             self._smoothed_method = None
 
+        # TODO I am not yet dealing with multi-telescope images, because I don't quite know how we're going
+        #  to tackle that yet
         # I want combined images to be aware of the ObsIDs and Instruments that have gone into them
         if obs_id == 'combined' or instrument == 'combined':
-            if "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
+            # If the user has supplied the obs_inst_combs information, then we'll use that and won't go looking
+            #  in any file headers
+            if obs_inst_combs is not None:
+                # We check to make sure that each entry in obs_inst_combs is a two element list
+                if any([len(e) != 2 for e in obs_inst_combs]):
+                    raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
+                # And if it passes that we check that the instrument values are one of the allowed list
+                elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):
+                    raise ValueError("The allowed instruments for {t} are: "
+                                     "{al}".format(t=telescope, al=", ".join(ALLOWED_INST[telescope].values())))
+
+                self._comb_oi_pairs = obs_inst_combs
+
+            # In the case that the telescope is XMM, we can probably read the information we need from the header
+            elif telescope == 'xmm' and "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
                 # We search for the instrument names of the various components
                 ind_inst_hdrs = [h for h in self.header if 'EMSCI' in h]
                 # Then use the length of the list to find out how many components there are
@@ -141,22 +158,26 @@ class Image(BaseProduct):
                 # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
                 self._comb_oi_pairs = oi_pairs
 
-            # In the case of the combined image not being made by emosaic, we need to take the info from
-            #  the obs_inst_combs parameter
-            elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is not None:
-                # We check to make sure that each entry in obs_inst_combs is a two element list
-                if any([len(e) != 2 for e in obs_inst_combs]):
-                    raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
-                # And if it passes that we check that the instrument values are one of the allowed list
-                elif any([e[1] not in EMOSAIC_INST.values() for e in obs_inst_combs]):
-                    raise ValueError("Instruments are currently only allowed to be 'pn', 'mos1', or 'mos2'.")
+            # TODO I am confused, and am not sure whether the eROSITA software toolset can actually merge images
+            #  at the moment - thinking about it, it would make sense if they hadn't bothered with that capability
+            elif telescope == 'erosita' and self.header['INSTRUME'] == 'merged':
 
-                self._comb_oi_pairs = obs_inst_combs
+                # We search for the instrument names of the various components
+                ind_inst_hdrs = [h for h in self.header if 'INSTRUM' in h and h != 'INSTRUME']
 
-            # And if the user hasn't passed the obs_inst_combs list then we kick off
-            elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is None:
-                raise ValueError("If a combined image has not been made with emosaic, you have to "
+                # Build the list of lists of ObsID instrument combos
+                oi_pairs = [[self.header["OBS_ID"], self.header[hdr_en].lower()] for hdr_en in ind_inst_hdrs]
+
+                # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
+                self._comb_oi_pairs = oi_pairs
+
+            # And if the user hasn't passed the obs_inst_combs AND we can't pull it from the header than we kick off
+            elif telescope == 'xmm':
+                raise ValueError("If an XMM combined image has not been made with emosaic, you have to "
                                  " pass ObsID and Instrument combinations using obs_inst_combs")
+            else:
+                raise ValueError("For combined images, obs_inst_combs must be set to a list of lists "
+                                 "of ['ObsID', 'Inst'] combinations.")
 
         else:
             self._comb_oi_pairs = None
@@ -197,6 +218,9 @@ class Image(BaseProduct):
         required more than the data for individual images (as the merged images are generally used
         for analysis), so this function is split out in the interests of efficiency.
         """
+        # Import here to avoid circular import woes
+        from ..imagetools.misc import find_all_wcs
+
         try:
             # Reads only the header information
             self._header = read_header(self.path)
@@ -1116,6 +1140,9 @@ class Image(BaseProduct):
             ident = 'Combined'
         else:
             ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
+
+        if self.telescope is not None:
+            ident = PRETTY_TELESCOPE_NAMES[self.telescope] + ' ' + ident
 
         if self.src_name is not None:
             title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident,
@@ -2449,14 +2476,16 @@ class ExpMap(Image):
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
         is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None):
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None,
+                 telescope: str = None):
         """
         Init of the ExpMap class.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
-                         obs_inst_combs=obs_inst_combs)
+                         obs_inst_combs=obs_inst_combs, telescope=telescope)
         self._prod_type = "expmap"
         # Need to overwrite the data unit attribute set by the Image init
         self._data_unit = Unit("s")
@@ -2539,7 +2568,8 @@ class RateMap(Image):
                                    "do not match".format(xga_image.energy_bounds, xga_expmap.energy_bounds))
 
         super().__init__(xga_image.path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
-                         xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1])
+                         xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1],
+                         telescope=xga_image.telescope)
         self._prod_type = "ratemap"
         self._data_unit = Unit("ct/s")
 
@@ -3177,8 +3207,8 @@ class RateMap(Image):
 
 class PSF(Image):
     """
-    A subclass of image that is a wrapper for 2D images of PSFs that can be generated by SAS. This can be used to
-    view the PSF and is used in other analyses to correct images.
+    A subclass of image that is a wrapper for 2D images of PSFs. This can be used to view the PSF and is
+    used in other analyses to correct images.
 
     :param str path: The path to where the product file SHOULD be located.
     :param str psf_model: The model used for the generation of the PSF.
@@ -3187,15 +3217,16 @@ class PSF(Image):
     :param str stdout_str: The stdout from calling the terminal command.
     :param str stderr_str: The stderr from calling the terminal command.
     :param str gen_cmd: The command used to generate the product.
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
     def __init__(self, path: str, psf_model: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str):
+                 gen_cmd: str, telescope: str = None):
         """
         The init method for PSF class.
         """
         lo_en = Quantity(0, 'keV')
         hi_en = Quantity(100, 'keV')
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, telescope=telescope)
         self._prod_type = "psf"
         self._data_unit = Unit('')
         self._psf_centre = None
@@ -3308,14 +3339,15 @@ class PSFGrid(BaseAggregateProduct):
     :param str stdout_str: The stdout from calling the terminal command.
     :param str stderr_str: The stderr from calling the terminal command.
     :param str gen_cmd: The commands used to generate the products.
+    :param str telescope: The telescope that this PSFGrid is derived for. Default is None.
     """
     def __init__(self, file_paths: list, bins: int, psf_model: str, x_bounds: np.ndarray, y_bounds: np.ndarray,
-                 obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
+                 obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str, telescope: str = None):
         """
         The init of the PSFGrid class - a subclass of BaseAggregateProduct that wraps a set of PSFs that have been
         generated at different points on the detector.
         """
-        super().__init__(file_paths, 'psf', obs_id, instrument)
+        super().__init__(file_paths, 'psf', obs_id, instrument, telescope=telescope)
         self._psf_model = psf_model
         # Set none here because if I want positions of PSFs and there has been an error during generation, the user
         #  will only see the FileNotFoundError not the SAS error

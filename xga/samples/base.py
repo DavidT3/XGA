@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 09:16. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -12,10 +12,11 @@ from numpy import ndarray
 from tqdm import tqdm
 
 from .. import DEFAULT_COSMO
-from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, NotAssociatedError
 from ..exceptions import NoValidObservationsError
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
+from ..utils import check_telescope_choices, PRETTY_TELESCOPE_NAMES
 
 
 class BaseSample:
@@ -34,12 +35,53 @@ class BaseSample:
     :param bool load_products: Whether existing products should be loaded from disk.
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param bool no_prog_bar: Whether a progress bar should be shown as sources are declared.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        is None in which case standard search distances for different telescopes are used. The user may pass a
+        single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+        telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+        specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 no_prog_bar: bool = False):
+                 no_prog_bar: bool = False, telescope: Union[str, List[str]] = None,
+                 search_distance: Union[Quantity, dict] = None):
+        """
+        The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
+        interesting X-ray sources easy. This in particular creates samples of BaseSource object. It doesn't seem
+        likely that users should need to declare one of these, they should use one of the general ExtendedSample or
+        PointSample classes if they are doing exploratory analyses, or a more specific subclass like ClusterSample.
+
+        :param ndarray ra: The right-ascensions of the sources, in degrees.
+        :param ndarray dec: The declinations of the sources, in degrees.
+        :param ndarray redshift: The redshifts of the sources, optional. Default is None
+        :param ndarray name: The names of the sources, optional. Default is None, in which case the names will be
+            constructed from the coordinates.
+        :param Cosmology cosmology: An astropy cosmology object to be used in distance calculations and analyses.
+        :param bool load_products: Whether existing products should be loaded from disk.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool no_prog_bar: Whether a progress bar should be shown as sources are declared.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
+        """
         if len(ra) == 0:
             raise ValueError("You have passed an empty array for the RA values.")
+
+        # We run the telescope input check so that I know that telescope will be a list of telescope names, in case
+        #  I need to use it for joining into a string at the end of this init
+        telescope = check_telescope_choices(telescope)
 
         # There used to be a set of attributes storing the basic information (ra, dec, and redshifts) about
         #  the sources in this sample, but for subclasses its actually way more convenient for the properties
@@ -77,7 +119,8 @@ class BaseSample:
                 try:
                     # We declare the source object, making sure to tell it that its part of a sample
                     #  using in_sample=True
-                    temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits, True)
+                    temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits, True, telescope,
+                                      search_distance)
                     n = temp.name
                     self._sources[n] = temp
                     self._names.append(n)
@@ -98,8 +141,9 @@ class BaseSample:
         # It is possible (especially if someone is using the Sample classes as a way to check whether things have
         #  XMM data) that no sources will have been declared by this point, in which case it should fail now
         if len(self._sources) == 0:
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
             raise NoValidObservationsError("No sources have been declared, likely meaning that none of the sample have"
-                                           " valid XMM data.")
+                                           " valid {t} data.".format(t='/'.join(nice_tels)))
 
         # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
@@ -109,8 +153,10 @@ class BaseSample:
         no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0 and type(self) == BaseSample:
-            warn("The following do not appear to have any XMM data, and will not be included in the "
-                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)))
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
+            warn("The following do not appear to have any {t} data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
+                 stacklevel=2)
 
         # This calls the method that checks for suppressed source-level warnings that occurred during declaration, but
         #  only if this init has been called for a BaseSample declaration, rather than by a sub-class
@@ -155,7 +201,7 @@ class BaseSample:
 
         if all([np.array_equal(s.ra_dec.value, s.peak.value) for s in self._sources.values()]):
             warn("All user supplied ra-dec values are the same as the peak ra-dec values, likely means that peak "
-                 "finding was not run for this sample.")
+                 "finding was not run for this sample.", stacklevel=2)
 
         return Quantity([s.peak.value for s in self._sources.values()], 'deg')
 
@@ -191,28 +237,76 @@ class BaseSample:
         return self._cosmo
 
     @property
-    def obs_ids(self) -> dict:
+    def telescopes(self) -> list:
         """
-        Property meant to inform the user about the number (and identities) of ObsIDs associated with the sources
-        in a given sample.
+        Returns a list of any telescope that is associated with at least one of the sources in the sample. This is in
+        contrast to the telescopes property, which returns the telescopes associated with each individual source.
 
-        :return: A dictionary (where the top level keys are the source names) of the ObsIDs associated with the
-        individual sources in this sample.
+        :return: A list of unique telescope names, where the telescopes are associated with at least one source.
+        :rtype: list
+        """
+        return list(set([t for s in self._sources.values() for t in s.telescopes]))
+
+    @property
+    def src_telescopes(self) -> dict:
+        """
+        Retrieves the telescopes that have data associated with the sources in this sample.
+
+        :return: A dictionary where the keys are source names, and the values are lists of telescope names associated
+            with the sources.
         :rtype: dict
         """
-        return {n: s.obs_ids for n, s in self._sources.items()}
+        return {n: s.telescopes for n, s in self._sources.items()}
+
+    @property
+    def src_obs_ids(self) -> dict:
+        """
+        Retrieves the ObsIDs associated with the sources in this sample, for each of the telescopes associated.
+
+        :return: A nested dictionary (where the top level keys are the source names, lower level keys are telescope
+            names, and the values are lists of ObsIDs) of the ObsIDs associated with the individual sources
+            in this sample.
+        :rtype: dict
+        """
+
+        return {n: {t: s.obs_ids[t] for t in s.telescopes} for n, s in self._sources.items()}
 
     @property
     def instruments(self) -> dict:
         """
-        Property meant to inform the user about the number (and identities) of instruments associated with ObsIDs
-        associated with the sources in a given sample.
+        Retrieves the instruments associated with the ObsIDs associated with sources in this sample, for each
+        of the telescopes relevant to the particular source.
 
-        :return: A dictionary (where the top level keys are the source names) of the instruments associated with
-        ObsIDs associated with the individual sources in this sample.
+        :return: A nested dictionary (where the top level keys are the source names, mid level keys are telescope
+            names, and low level keys are ObsIDs) of the instruments associated with the ObsIDs for individual sources
+            in this sample.
         :rtype: dict
         """
         return {n: s.instruments for n, s in self._sources.items()}
+
+    @property
+    def detected(self) -> dict:
+        """
+        Retrieves whether each source is considered detected for each of the observations of each of the telescopes
+        associated with the source.
+
+        :return: A nested dictionary (where the top level keys are the source names, mid level keys are telescope
+            names, and low level keys are ObsIDs), and the values are True or False, where True indicates that
+            the object was detected.
+        :rtype: dict
+        """
+        return {n: s.detected for n, s in self._sources.items()}
+
+    @property
+    def any_detection(self) -> dict:
+        """
+        Determines whether each source has been detected in any region file associated with any observation
+        from any telescope.
+
+        :return: A dictionary with source names as keys and True/False values.
+        :rtype: dict
+        """
+        return {n: any([any(s.detected[t].values()) for t in s.detected]) for n, s in self._sources.items()}
 
     @property
     def failed_names(self) -> List[str]:
@@ -247,7 +341,27 @@ class BaseSample:
         """
         return {n: s.suppressed_warnings for n, s in self._sources.items() if len(s.suppressed_warnings) > 0}
 
-    def Lx(self, outer_radius: Union[str, Quantity], model: str,
+    def _check_source_warnings(self):
+        """
+        This method checks the suppressed_warnings property of the member sources, and if any have had warnings
+        suppressed then it itself raises a warning that instructs the user to look at the suppressed_warnings
+        property of the sample. It doesn't print them all because that could lead to a confusing mess. This method
+        is to be called at the end of every sub-class init.
+        """
+        if any([len(src.suppressed_warnings) > 0 for src in self._sources.values()]):
+            warn("Non-fatal warnings occurred during the declaration of some sources, to access them please use the "
+                 "suppressed_warnings property of this sample.", stacklevel=2)
+
+    def _del_data(self, key: int):
+        """
+        This function will be replaced in subclasses that store more information about sources
+        in internal attributes.
+
+        :param int key: The index or name of the source to delete.
+        """
+        pass
+
+    def Lx(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
            over_sample: float = None, quality_checks: bool = True):
@@ -258,8 +372,13 @@ class BaseSample:
         been included, so that any Lx measurement with an uncertainty greater than value will be set to NaN, and
         a warning will be issued.
 
+        Luminosities must be retrieved for a specific telescope; if the supplied telescope name is not associated
+        with any of the sources in this sample then an error will be raised. Any source which does not have that
+        specific telescope associated will have a NaN entry in the returned luminosity array.
+
         :param str model: The name of the fitted model that you're requesting the luminosities
             from (e.g. constant*tbabs*apec).
+        :param str telescope: The telescope for which to retrieve spectral fit luminosities.
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
             for a GalaxyCluster, or Quantity(1000, 'kpc')). You may also pass a quantity containing radius values,
@@ -286,18 +405,23 @@ class BaseSample:
         # Has to be here to prevent circular import unfortunately
         from ..sas._common import region_setup
 
+        # Have to check that the chosen telescope is actually valid for this sample
+        if telescope not in self.telescopes:
+            raise NotAssociatedError("The {t} telescope is not associated with any source in this "
+                                     "sample.".format(t=telescope))
+
         if outer_radius != 'region':
             # This just parses the input inner and outer radii into something predictable
             inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
         else:
-            raise NotImplementedError("Sorry region fitting is currently well supported")
+            raise NotImplementedError("Sorry region fitting is currently not supported")
 
         lums = []
         for src_ind, src in enumerate(self._sources.values()):
             try:
                 # Fetch the luminosity from a given source using the dedicated method
-                lx_val = src.get_luminosities(out_rads[src_ind], model, inn_rads[src_ind], lo_en, hi_en, group_spec,
-                                              min_counts, min_sn, over_sample)
+                lx_val = src.get_luminosities(out_rads[src_ind], telescope, model, inn_rads[src_ind], lo_en, hi_en,
+                                              group_spec, min_counts, min_sn, over_sample)
                 frac_err = lx_val[1:] / lx_val[0]
                 # We check that no error is larger than the measured value, if quality checks are on
                 if quality_checks and len(frac_err[frac_err >= 1]) != 0:
@@ -308,7 +432,7 @@ class BaseSample:
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
-                warn(str(err))
+                warn(str(err), stacklevel=2)
                 lums.append(np.array([np.NaN, np.NaN, np.NaN]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
@@ -351,6 +475,7 @@ class BaseSample:
         :return: The offsets.
         :rtype: Quantity
         """
+        # TODO This will need to be updated when I figure out what to do about peaks
         # This call fetches peaks which we then never use, but it triggers a check that will trigger a warning if
         #  all the ra_dec values are the same as all the peak values
         ps = self.peaks
@@ -385,7 +510,7 @@ class BaseSample:
         :param str save_path: A path to save the figure on, optional. Default is None in which case the figure is
             not saved to disk.
         """
-
+        # TODO This will need to be updated when I figure out what to do about peaks
         # Uses the convenience method for calculating separation that is built into BaseSource to grab
         #  all the offsets
         seps = self.offsets(off_unit)
@@ -437,21 +562,29 @@ class BaseSample:
 
         # Show the figure
         plt.show()
+    # The length of the sample object will be the number of associated sources.
 
     def info(self):
         """
         Simple function to show basic information about the sample.
         """
-        # Finding the number of sources in the sample that have been detected in AT LEAST one ObsID
-        num_det = sum(np.array([sum(s.detected.values()) for s in self._sources.values()]) >= 1)
-        perc_det = int(round(num_det / len(self._sources), 2) * 100)
+        # TODO There must be more useful info I can add to this
+
         print("\n-----------------------------------------------------")
         print("Number of Sources - {}".format(len(self)))
         print("Redshift Information - {}".format(self.redshifts[0] is not None))
-        print("Sources with ≥1 detection - {n} [{p}%]".format(n=num_det, p=perc_det))
+
+        # Have to try-except just in case someone for some reason declares a BaseSample and uses this method - as
+        #  BaseSource objects don't have the ability to declare something detected or not
+        try:
+            # Finding the number of sources in the sample that have been detected in AT LEAST one ObsID
+            num_det = sum(list(self.any_detection.values()))
+            perc_det = int(round(num_det / len(self._sources), 2) * 100)
+            print("Sources with ≥1 detection - {n} [{p}%]".format(n=num_det, p=perc_det))
+        except ValueError:
+            pass
         print("-----------------------------------------------------\n")
 
-    # The length of the sample object will be the number of associated sources.
     def __len__(self):
         """
         The result of using the Python len() command on this sample.
@@ -521,23 +654,3 @@ class BaseSample:
         # This function is specific to the Sample type, as some Sample classes have extra information stored
         #  that will need to be deleted.
         self._del_data(key)
-
-    def _check_source_warnings(self):
-        """
-        This method checks the suppressed_warnings property of the member sources, and if any have had warnings
-        suppressed then it itself raises a warning that instructs the user to look at the suppressed_warnings
-        property of the sample. It doesn't print them all because that could lead to a confusing mess. This method
-        is to be called at the end of every sub-class init.
-        """
-        if any([len(src.suppressed_warnings) > 0 for src in self._sources.values()]):
-            warn("Non-fatal warnings occurred during the declaration of some sources, to access them please use the "
-                 "suppressed_warnings property of this sample.", stacklevel=2)
-
-    def _del_data(self, key: int):
-        """
-        This function will be replaced in subclasses that store more information about sources
-        in internal attributes.
-
-        :param int key: The index or name of the source to delete.
-        """
-        pass

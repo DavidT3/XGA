@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2023, 13:35. Copyright (c) The Contributors
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -293,7 +293,7 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
 
         # We obviously want to remove point sources from the profiles we make, so get the mask that removes
         #  interlopers
-        int_mask = src_obj.get_interloper_mask()
+        int_mask = src_obj.get_interloper_mask('xmm')
 
         # Tells the source object to give us the requested scale radius in units of kpc
         rad = src_obj.get_radius(scale_radius, kpc)
@@ -430,7 +430,7 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
                 pix_peak = rt.coord_conv(cur_src.peak, pix)
             else:
                 pix_peak = rt.coord_conv(cur_src.ra_dec, pix)
-            inter_mask = cur_src.get_interloper_mask()
+            inter_mask = cur_src.get_interloper_mask('xmm')
             rad = cur_src.get_radius(scale_radius, kpc)
 
             prof_prods = cur_src.get_products("combined_brightness_profile")
@@ -554,7 +554,7 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
 
         # We obviously want to remove point sources from the profiles we make, so get the mask that removes
         #  interlopers
-        int_mask = src_obj.get_interloper_mask()
+        int_mask = src_obj.get_interloper_mask('xmm')
 
         # Tells the source object to give us the requested scale radius in units of kpc
         rad = src_obj.get_radius(scale_radius, kpc)
@@ -721,7 +721,7 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
                 pix_peak = rt.coord_conv(cur_src.peak, pix)
             else:
                 pix_peak = rt.coord_conv(cur_src.ra_dec, pix)
-            inter_mask = cur_src.get_interloper_mask()
+            inter_mask = cur_src.get_interloper_mask('xmm')
             rad = cur_src.get_radius(scale_radius, kpc)
 
             prof_prods = cur_src.get_products("combined_brightness_profile")

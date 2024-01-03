@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2023, 10:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 22:39. Copyright (c) The Contributors
 
 
 import os
@@ -51,16 +51,18 @@ class Spectrum(BaseProduct):
         generates these by default, as XSPEC does not make use of them).
     :param str b_arf_path: The path to the ARF generated for the background spectrum (if applicable, XGA no longer
         generates these by default, as XSPEC does not make use of them).
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str,
                  grouped: bool, min_counts: int, min_sn: float, over_sample: int, stdout_str: str,
-                 stderr_str: str, gen_cmd: str, region: bool = False, b_rmf_path: str = '', b_arf_path: str = ''):
+                 stderr_str: str, gen_cmd: str, region: bool = False, b_rmf_path: str = '', b_arf_path: str = '',
+                 telescope: str = None):
         """
         The init of the Spectrum class, sets up both the base product behind the Spectrum and the specific
         information/abilities that a spectrum needs.
         """
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._prod_type = "spectrum"
 
         if os.path.exists(rmf_path):
@@ -1745,7 +1747,15 @@ class AnnularSpectra(BaseAggregateProduct):
         The init method for the AnnularSpectrum class, performs checks and organises the spectra which
         have been passed in, for easy retrieval.
         """
-        super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined")
+        if len(set([s.telescope for s in spectra])) != 1:
+            raise NotImplementedError("AnnularSpectra comprised of spectra from multiple telescopes are not "
+                                      "supported yet.")
+        else:
+            # Given the check above, we know that all the spectra are from the same telescope, so we just take
+            #  the telescope name from the first one
+            telescope = spectra[0].telescope
+
+        super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined", telescope=telescope)
 
         # There shouldn't be any way this can happen, but it doesn't hurt to check that all of the spectra
         #  have the same set ID

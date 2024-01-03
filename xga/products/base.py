@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/06/2023, 21:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 15:34. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -31,8 +31,8 @@ from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT
 
 class BaseProduct:
     """
-    The super class for all SAS generated products in XGA. Stores relevant file path information, parses the std_err
-    output of the generation process, and stores the instrument and ObsID that the product was generated for.
+    The super class for all products in XGA. Stores relevant file path information, ObsID, instrument, and telescope.
+    It can also parse the std_err output of SAS generation processes.
 
     :param str path: The path to where the product file SHOULD be located.
     :param str obs_id: The ObsID related to the product being declared.
@@ -43,13 +43,14 @@ class BaseProduct:
     :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
         object for later use by another processing step. It isn't intended for use by a user and will only be
         accessible when defining a BaseProduct.
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 extra_info: dict = None):
+                 extra_info: dict = None, telescope: str = None):
         """
-        The initialisation method for the BaseProduct class, the super class for all SAS generated products in XGA.
-        Stores relevant file path information, parses the std_err output of the generation process, and stores the
-        instrument and ObsID that the product was generated for.
+        The initialisation method for the BaseProduct class, the super class for all products in XGA. Stores
+        relevant file path information, ObsID, instrument, and telescope. It can also parse the std_err output of
+        SAS generation processes.
 
         :param str path: The path to where the product file SHOULD be located.
         :param str obs_id: The ObsID related to the product being declared.
@@ -60,6 +61,7 @@ class BaseProduct:
         :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
             object for later use by another processing step. It isn't intended for use by a user and will only be
             accessible when defining a BaseProduct.
+        :param str telescope: The telescope that this product is derived from. Default is None.
         """
         # This attribute stores strings that indicate why a product object has been deemed as unusable
         self._why_unusable = []
@@ -78,6 +80,7 @@ class BaseProduct:
         self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
         self._obs_id = obs_id
         self._inst = instrument
+        self._tele = telescope
         self._og_cmd = gen_cmd
         self._energy_bounds = (None, None)
         self._prod_type = None
@@ -246,22 +249,29 @@ class BaseProduct:
     @property
     def obs_id(self) -> str:
         """
-        Property getter for the ObsID of this image. Admittedly this information is implicit in the location
-        this object is stored in a source object, but I think it worth storing directly as a property as well.
+        Property getter for the ObsID of the observation that this product was derived from.
 
-        :return: The XMM ObsID of this image.
+        :return: The ObsID of this product.
         :rtype: str
         """
         return self._obs_id
 
     @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this product was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
+
+    @property
     def instrument(self) -> str:
         """
-        Property getter for the instrument used to take this image. Admittedly this information is implicit
-        in the location this object is stored in a source object, but I think it worth storing
-        directly as a property as well.
+        Property getter for the name of the instrument that this product was derived from.
 
-        :return: The XMM instrument used to take this image.
+        :return: The instrument name of this product.
         :rtype: str
         """
         return self._inst
@@ -352,8 +362,9 @@ class BaseAggregateProduct:
     :param str prod_type: The product type of the individual elements.
     :param str obs_id: The ObsID related to the product.
     :param str instrument: The instrument related to the product.
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
-    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str):
+    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str = None):
         """
         The init method for the BaseAggregateProduct class
         """
@@ -361,6 +372,7 @@ class BaseAggregateProduct:
         self._all_usable = True
         self._obs_id = obs_id
         self._inst = instrument
+        self._tele = telescope
         self._prod_type = prod_type
         self._src_name = None
 
@@ -401,7 +413,7 @@ class BaseAggregateProduct:
         Property getter for the ObsID of this image. Admittedly this information is implicit in the location
         this object is stored in a source object, but I think it worth storing directly as a property as well.
 
-        :return: The XMM ObsID of this image.
+        :return: The ObsID of this image.
         :rtype: str
         """
         return self._obs_id
@@ -413,10 +425,20 @@ class BaseAggregateProduct:
         in the location this object is stored in a source object, but I think it worth storing
         directly as a property as well.
 
-        :return: The XMM instrument used to take this image.
+        :return: The instrument used to take this image.
         :rtype: str
         """
         return self._inst
+
+    @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this product was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
 
     @property
     def type(self) -> str:
@@ -551,11 +573,12 @@ class BaseProfile1D:
         plotting if the user tells the view method that they wish for the plot to use normalised x-axis data.
     :param Quantity y_norm: An astropy quantity to use to normalise the y-axis values, this is only used when
         plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
+    :param str telescope: The telescope that this profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
                  inst: str, radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
-                 y_norm: Quantity = Quantity(1, '')):
+                 y_norm: Quantity = Quantity(1, ''), telescope: str = None):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -654,14 +677,11 @@ class BaseProfile1D:
         else:
             self._rad_ann_bounds = None
 
-        # Just checking that if one of these values is combined, then both are. Doesn't make sense otherwise.
-        if (obs_id == "combined" and inst != "combined") or (inst == "combined" and obs_id != "combined"):
-            raise ValueError("If ObsID or inst is set to combined, then both must be set to combined.")
-
         # Storing the passed source name in an attribute, as well as the ObsID and instrument
         self._src_name = source_name
         self._obs_id = obs_id
         self._inst = inst
+        self._tele = telescope
 
         # Going to have this convenient attribute for profile classes, I could just use the type() command
         #  when I wanted to know but this is easier.
@@ -1994,12 +2014,15 @@ class BaseProfile1D:
         :return: The default XGA save path for this profile.
         :rtype: str
         """
-        if self._save_path is None and self._prof_type != "base":
-            temp_path = OUTPUT + "profiles/{sn}/{pt}_{sn}_{id}.xga"
+        if self._save_path is None and self._prof_type != "base" and self._tele is not None:
+            temp_path = OUTPUT + "{t}/profiles/{sn}/{pt}_{sn}_{id}.xga"
             rand_prof_id = randint(0, 1e+8)
-            while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)):
+            while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)):
                 rand_prof_id = randint(0, 1e+8)
-            self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)
+            self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)
+        elif self._tele is None:
+            raise ValueError("Cannot create an XGA save path for this profile when it does not have "
+                             "telescope information.")
 
         return self._save_path
 
@@ -2192,6 +2215,16 @@ class BaseProfile1D:
         :rtype: str
         """
         return self._inst
+
+    @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this profile was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
 
     @property
     def energy_bounds(self) -> Union[Tuple[Quantity, Quantity], Tuple[None, None]]:

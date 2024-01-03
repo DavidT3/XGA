@@ -4,3 +4,6 @@
 .pytest_cache
 xga_output
 .ipynb_checkpoints
+.vscode
+/xga.egg-info/
+__pycache__

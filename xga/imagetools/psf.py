@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 09:29. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -13,6 +13,7 @@ from fitsio import write
 from scipy.signal import convolve
 from tqdm import tqdm
 
+from ..exceptions import NotAssociatedError
 from ..products import PSFGrid, Image
 from ..samples.base import BaseSample
 from ..sas import evselect_image, psfgen, emosaic
@@ -25,15 +26,15 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
            bins: int = 4, num_cores: int = NUM_CORES):
     """
     An implementation of the Richardson-Lucy (doi:10.1364/JOSA.62.000055) PSF deconvolution algorithm that
-    also takes into account the spatial variance of the XMM Newton PSF. The sources passed into this
+    also takes into account the spatial variance of the PSF. The sources passed into this
     function will have all images matching the passed energy range deconvolved, the image objects will have the
     result stored in them alongside the original data, and a combined image will be generated. I view this
     method as quite crude, but it does seem to work, and I may implement a more intelligent way of doing
     PSF deconvolutions later.
-    I initially tried convolving the PSFs generated at different spatial points with the chunks of data relevant
-    to them in isolation, but the edge effects were very obvious. So I settled on convolving the whole
-    original image with each PSF, and after it was finished taking the relevant chunks and patchworking
+    This convolves the whole original image with each section's PSF, then we take the relevant chunks and patchwork
     them into a new array.
+
+    Currently only supports XMM-Newton.
 
     :param BaseSource/BaseSample sources: A single source object, or list of source objects.
     :param int iterations: The number of deconvolution iterations performed by the Richardson-Lucy algorithm.
@@ -104,6 +105,12 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     # Making sure that the necessary images and PSFs are generated
     evselect_image(sources, lo_en, hi_en, num_cores=num_cores)
 
+    # This method currently only works for xmm, so we need to make sure that XMM is actually associated with the
+    #  source, or at least one source if it is in a sample
+    if 'xmm' not in sources.telescopes:
+        raise NotAssociatedError("The XMM telescope is not associated with this source/sample, and this method "
+                                 "currently only supports XMM.")
+
     # If just one source is passed in, make it a list of one, makes behaviour more consistent
     #  throughout this function.
     if not isinstance(sources, (list, BaseSample)):
@@ -112,16 +119,17 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     # Only those sources that don't already have the individual PSF corrected images should be run
     sub_sources = []
     for source in sources:
-        en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-        # All the image objects of the specified energy range (so every combination of ObsID and instrument)
-        match_images = source.get_products("image", extra_key=en_id)
+        # It is possible, if we're dealing with a sample, that some of the component sources do have XMM data, and some
+        #  don't. We know at this point that some DEFINITELY do - so we check here whether we should skip this one
+        if 'xmm' not in source.telescopes:
+            continue
 
-        # This is the key under which the PSF corrected image will be stored, defining it to check that
-        #  it doesn't already exist.
-        key = "bound_{l}-{u}_{m}_{b}_rl{i}".format(l=float(lo_en.value), u=float(hi_en.value), m=psf_model,
-                                                   b=bins, i=iterations)
+        # All the image objects of the specified energy range (so every combination of ObsID and instrument)
+        match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope='xmm')
+
         # Check to see if all individual PSF corrected images are present
-        psf_corr_prod = [p for p in source.get_products("image", just_obj=False) if key in p]
+        psf_corr_prod = source.get_images(lo_en=lo_en, hi_en=hi_en, psf_corr=True, psf_model=psf_model, psf_bins=bins,
+                                          psf_iter=iterations, psf_algo='rl', telescope='xmm')
 
         # If all the PSF corrected images are present then we skip, the correction has already been performed.
         if len(psf_corr_prod) == len(match_images):
@@ -140,9 +148,8 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
             # Updates the source name in the message every iteration
             corr_progress.set_description(corr_prog_message.format(source.name))
 
-            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             # All the image objects of the specified energy range (so every combination of ObsID and instrument)
-            match_images = source.get_products("image", extra_key=en_id)
+            match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope='xmm')
 
             # Just warns the user that some of the images may not be valid
             for matched in match_images:
@@ -159,7 +166,7 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
 
                 # Extra key we need to search for the PSFGrid we need, then fetch it.
                 psf_key = "_".join([psf_model, str(bins)])
-                psf_grid: PSFGrid = source.get_products("psf", obs_id, inst, psf_key)[0]
+                psf_grid: PSFGrid = source.get_products("psf", obs_id, inst, psf_key, telescope='xmm')[0]
 
                 # This uses a built in method of the PSF class to re-sample the PSF(s) to the same
                 #  scale as our image
@@ -241,13 +248,13 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
                                         m=psf_model)
 
                 # Use the super handy fitsio write function to create the new fits datacube, and final image.
-                write(os.path.join(OUTPUT, obs_id, datacube_name), np.moveaxis(final_form, 2, 0),
+                write(os.path.join(OUTPUT, 'xmm', obs_id, datacube_name), np.moveaxis(final_form, 2, 0),
                       header=new_header(im.header))
-                write(os.path.join(OUTPUT, obs_id, im_name), np.moveaxis(final_form, 2, 0)[-1, :, :],
+                write(os.path.join(OUTPUT, 'xmm', obs_id, im_name), np.moveaxis(final_form, 2, 0)[-1, :, :],
                       header=new_header(im.header))
 
                 # Makes an XGA product of our brand new image
-                fin_im = Image(os.path.join(OUTPUT, obs_id, im_name), obs_id, inst, '', '', '', lo_en, hi_en)
+                fin_im = Image(os.path.join(OUTPUT, 'xmm', obs_id, im_name), obs_id, inst, '', '', '', lo_en, hi_en)
                 # Adds PSF correction information for XGA's internal use
                 fin_im.psf_corrected = True
                 fin_im.psf_algorithm = "rl"

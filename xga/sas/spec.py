@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/05/2023, 15:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 12:06. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -147,12 +147,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         if outer_radius != 'region':
             # Finding interloper regions within the radii we have specified has been put here because it all works in
             #  degrees and as such only needs to be run once for all the different observations.
-            interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind],
+            interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind], 'xmm',
                                                              source.default_coord)
             # This finds any regions which
             back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
                                                          outer_radii[s_ind] * source.background_radius_factors[1],
-                                                         source.default_coord)
+                                                         'xmm', source.default_coord)
             src_inn_rad_str = inner_radii[s_ind].value
             src_out_rad_str = outer_radii[s_ind].value
             # The key under which these spectra will be stored
@@ -167,21 +167,21 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         spec_storage_name += extra_name
 
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events", just_obj=False):
-            obs_id = pack[0]
-            inst = pack[1]
+        for pack in source.get_products("events", just_obj=False, telescope='xmm'):
+            obs_id = pack[1]
+            inst = pack[2]
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
+                os.mkdir(OUTPUT + "xmm/" + obs_id)
 
             # Got to check if this spectrum already exists
-            exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name)
+            exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name, telescope='xmm')
             if len(exists) == 1 and exists[0].usable and not force_gen:
                 continue
 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
-            if outer_radius == "region" and source.source_back_regions("region", obs_id)[0] is None:
+            if outer_radius == "region" and source.source_back_regions("region", 'xmm', obs_id)[0] is None:
                 continue
 
             # Because the region will be different for each ObsID, I have to call the setup function here
@@ -189,14 +189,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 interim_source, inner_radii, outer_radii = region_setup([source], outer_radius, inner_radius,
                                                                         disable_progress, obs_id)
                 # Need the reg for central coordinates
-                reg = source.source_back_regions('region', obs_id)[0]
+                reg = source.source_back_regions('region', 'xmm', obs_id)[0]
                 reg_cen_coords = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
                 # Pass the largest outer radius here, so we'll look for interlopers in a circle with the radius
                 #  being the largest axis of the ellipse
-                interloper_regions = source.regions_within_radii(inner_radii[0][0], max(outer_radii[0]), reg_cen_coords)
+                interloper_regions = source.regions_within_radii(inner_radii[0][0], max(outer_radii[0]), 'xmm',
+                                                                 reg_cen_coords)
                 back_inter_reg = source.regions_within_radii(max(outer_radii[0]) * source.background_radius_factors[0],
                                                              max(outer_radii[0]) * source.background_radius_factors[1],
-                                                             reg_cen_coords)
+                                                             'xmm', reg_cen_coords)
 
                 reg = source.get_annular_sas_region(inner_radii[0], outer_radii[0], obs_id, inst,
                                                     interloper_regions=interloper_regions, central_coord=reg_cen_coords,
@@ -238,12 +239,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 #  so for PN we preferentially select MOS2 (as MOS1 was damaged). However if there isn't a MOS2
                 #  events list from the same observation then we select MOS1, and failing that we use PN.
                 try:
-                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos2')[0]
+                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos2', telescope='xmm')[0]
                 except NotAssociatedError:
                     try:
-                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos1')[0]
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos1', telescope='xmm')[0]
                     except NotAssociatedError:
-                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn', telescope='xmm')[0]
                         # If all is lost and there are no MOS event lists then we must revert to the PN expression
                         d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
 
@@ -267,14 +268,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     cur = '2'
                     opp = '1'
                 try:
-                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+                    detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn', telescope='xmm')[0]
                 except NotAssociatedError:
                     # If we must use a MOS detmap then we have to use the MOS expression
                     d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
                     try:
-                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+opp)[0]
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+opp, telescope='xmm')[0]
                     except NotAssociatedError:
-                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+cur)[0]
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+cur, telescope='xmm')[0]
             else:
                 raise ValueError("You somehow have an illegal value for the instrument name...")
 
@@ -286,7 +287,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             evt_list = pack[-1]
             # Sets up the file names of the output files, adding a random number so that the
             #  function for generating annular spectra doesn't clash and try to use the same folder
-            dest_dir = OUTPUT + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
+            dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
 
             # Sets up something very similar to the extra name variable above, but for the file names
             #  Stores some information about grouping in the file names
@@ -409,11 +410,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
 
-            final_paths.append(os.path.join(OUTPUT, obs_id, spec))
+            final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, spec))
             extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
-                               "rmf_path": os.path.join(OUTPUT, obs_id, rmf),
-                               "arf_path": os.path.join(OUTPUT, obs_id, arf),
-                               "b_spec_path": os.path.join(OUTPUT, obs_id, b_spec),
+                               "rmf_path": os.path.join(OUTPUT, 'xmm', obs_id, rmf),
+                               "arf_path": os.path.join(OUTPUT, 'xmm', obs_id, arf),
+                               "b_spec_path": os.path.join(OUTPUT, 'xmm', obs_id, b_spec),
                                "b_rmf_path": '',
                                "b_arf_path": '',
                                "obs_id": obs_id, "instrument": inst, "grouped": group_spec, "min_counts": min_counts,
@@ -597,7 +598,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
 
         spec_storage_name += extra_name
 
-        exists = source.get_products('combined_spectrum', extra_key=spec_storage_name)
+        exists = source.get_products('combined_spectrum', extra_key=spec_storage_name, telescope='xmm')
         if len(exists) == 0:
             # If it doesn't exist then we do need to call evselect_spectrum
             generate_spec = True
@@ -803,7 +804,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
             for sp_comb in permutations(rel_sp_comp, 2):
                 obs_id = sp_comb[0].obs_id
                 inst = sp_comb[0].instrument
-                evt_list = src.get_products('events', obs_id, inst)[0]
+                evt_list = src.get_products('events', obs_id, inst, telescope='xmm')[0]
 
                 dest_dir = OUTPUT + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=src.name, r=randint(0, 1e+8))
 

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 17:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:03. Copyright (c) The Contributors
 import os.path
 import warnings
 from typing import Union, Tuple, List
@@ -86,7 +86,7 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
         if isinstance(outer_radius, str) and outer_radius != 'region':
             cur_out_rad = src.get_radius(outer_radius, 'deg')
         elif isinstance(outer_radius, str) and outer_radius == 'region':
-            reg = src.source_back_regions('region', obs_id)[0]
+            reg = src.source_back_regions('region', 'xmm', obs_id)[0]
             cur_out_rad = Quantity([reg.width.to('deg').value/2, reg.height.to('deg').value/2], 'deg')
         elif outer_radius.isscalar:
             cur_out_rad = src.convert_radius(outer_radius, 'deg')
@@ -147,12 +147,12 @@ def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 
         #  so for PN we preferentially select MOS2 (as MOS1 was damaged). However if there isn't a MOS2
         #  events list from the same observation then we select MOS1, and failing that we use PN.
         try:
-            detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos2')[0]
+            detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos2', telescope='xmm')[0]
         except NotAssociatedError:
             try:
-                detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos1')[0]
+                detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos1', telescope='xmm')[0]
             except NotAssociatedError:
-                detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+                detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn', telescope='xmm')[0]
                 # If all is lost and there are no MOS event lists then we must revert to the PN expression
                 d_expr = "expression='#XMMEA_EP && (PATTERN <= 4) && (FLAG .eq. 0)'"
 
@@ -174,19 +174,19 @@ def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 
             cur = '2'
             opp = '1'
         try:
-            detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn')[0]
+            detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn', telescope='xmm')[0]
         except NotAssociatedError:
             # If we must use a MOS detmap then we have to use the MOS expression
             d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
             try:
-                detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos' + opp)[0]
+                detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos' + opp, telescope='xmm')[0]
             except NotAssociatedError:
-                detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos' + cur)[0]
+                detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos' + cur, telescope='xmm')[0]
     else:
         raise ValueError("You somehow have an illegal value for the instrument name...")
 
     det_map = "{o}_{i}_bin{bs}_detmap.fits".format(o=detmap_evts.obs_id, i=detmap_evts.instrument, bs=bin_size)
-    det_map_path = os.path.join(OUTPUT, obs_id, det_map)
+    det_map_path = os.path.join(OUTPUT, obs_id, 'xmm', det_map)
 
     # If the detmap that we've decided we need already exists, then we don't need to generate it again
     if os.path.exists(det_map_path):

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:41. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -200,12 +200,12 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
         if all([obs_id is None, inst is None]):
             rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
             # Grabs the mask which will remove interloper sources
-            int_mask = src.get_interloper_mask()
+            int_mask = src.get_interloper_mask('xmm')
             comb = True
         elif all([obs_id is not None, inst is not None]):
             rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
             # Grabs the mask which will remove interloper sources
-            int_mask = src.get_interloper_mask(obs_id=obs_id)
+            int_mask = src.get_interloper_mask('xmm', obs_id=obs_id)
             comb = False
         else:
             raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
@@ -224,7 +224,7 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
         sb_prof = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en,
                                                 pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
                                                 psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
-                                                psf_iter=psf_iter)
+                                                psf_iter=psf_iter, telescope='xmm')
     except NoProductAvailableError:
         try:
             sb_prof, success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],

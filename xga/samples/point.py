@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 09:16. Copyright (c) The Contributors
+from typing import Union, List
 from warnings import warn
 
 import numpy as np
@@ -46,6 +47,16 @@ class StarSample(BaseSample):
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
     :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        is None in which case standard search distances for different telescopes are used. The user may pass a
+        single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+        telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+        specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, distance: np.ndarray = None, name: np.ndarray = None,
                  proper_motion: Quantity = None, point_radius: Quantity = Quantity(30, 'arcsec'),
@@ -53,9 +64,49 @@ class StarSample(BaseSample):
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, no_prog_bar: bool = False,
-                 psf_corr: bool = False):
+                 psf_corr: bool = False, telescope: Union[str, List[str]] = None,
+                 search_distance: Union[Quantity, dict] = None):
         """
          The init of the StarSample XGA class.
+
+         :param np.ndarray ra: The right-ascensions of the stars, in degrees.
+        :param np.ndarray dec: The declinations of the stars, in degrees.
+        :param np.ndarray distance: The distances to the stars in units convertible to parsecs, optional. Default is None.
+        :param np.ndarray name: The names of the stars, optional. If no names are supplied
+            then they will be constructed from the supplied coordinates.
+        :param Quantity proper_motion: The proper motion of the stars, optional. This should be passed as a non-scalar
+            astropy quantity; if magnitudes are passed it should be in the form Quantity([4, 5, 2, 7,...], 'arcsec/yr'),
+            and if vectors are passed it should be in the form Quantity([[4, 2.3], [5, 4.3], [2, 2.5],
+            [7.2, 6.9],...], 'arcsec/yr'), where the first is in RA and the second in Dec. Units should be convertible to
+            arcseconds per year. Default is None
+        :param Quantity point_radius: The point source analysis region radius(ii) for this sample. Either
+            pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
+        :param Quantity match_radius: The radius within which point source regions are accepted as a match to the
+            RAs and Dec passed by the user. The default value is 10 arcseconds.
+        :param bool use_peak: Whether peak positions should be found and used. For StarSample the 'simple' peak
+            finding method is the only one available.
+        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
+            position from. Default is 0.5keV.
+        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak
+            position from. Default is 2.0keV.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
+        :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
+        :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
         """
         # Strongly enforce that its a quantity, this also means that it should be guaranteed that all radii have
         #  a single unit
@@ -90,11 +141,13 @@ class StarSample(BaseSample):
         from xga.sas import evselect_image, eexpmap, emosaic
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
-        super().__init__(ra, dec, None, name, cosmology, load_products=True, load_fits=False, no_prog_bar=no_prog_bar)
-        evselect_image(self, peak_lo_en, peak_hi_en)
-        eexpmap(self, peak_lo_en, peak_hi_en)
-        emosaic(self, "image", peak_lo_en, peak_hi_en)
-        emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        super().__init__(ra, dec, None, name, cosmology, load_products=True, load_fits=False, no_prog_bar=no_prog_bar,
+                         telescope=telescope, search_distance=search_distance)
+        if 'xmm' in self.telescopes:
+            evselect_image(self, peak_lo_en, peak_hi_en)
+            eexpmap(self, peak_lo_en, peak_hi_en)
+            emosaic(self, "image", peak_lo_en, peak_hi_en)
+            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
 
         # Remove the BaseSources
         del self._sources
@@ -129,7 +182,7 @@ class StarSample(BaseSample):
                 try:
                     self._sources[n] = Star(r, d, di, n, pm, pr, match_radius, use_peak, peak_lo_en, peak_hi_en,
                                             back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits,
-                                            False, True)
+                                            False, True, telescope, search_distance)
                     self._point_radii.append(pr.value)
                     self._distances.append(di)
                     self._proper_motions.append(pm)
@@ -145,13 +198,14 @@ class StarSample(BaseSample):
         # Store the matching radius as an attribute, though its also in the sources
         self._match_radius = match_radius
 
-        # I've cleaned the observations, and its possible some of the data has been thrown away,
-        #  so I should regenerate the mosaic images/expmaps
-        emosaic(self, "image", peak_lo_en, peak_hi_en)
-        emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        if 'xmm' in self.telescopes:
+            # I've cleaned the observations, and its possible some of the data has been thrown away,
+            #  so I should regenerate the mosaic images/expmaps
+            emosaic(self, "image", peak_lo_en, peak_hi_en)
+            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
-        if psf_corr:
+        if psf_corr and 'xmm' in self.telescopes:
             # Trying to see if this stops a circular import issue I've been having
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
@@ -168,7 +222,7 @@ class StarSample(BaseSample):
                    self._failed_sources[name] == 'Failed ObsClean']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            warn("The following do not appear to have any XMM data, and will not be included in the "
+            warn("The following do not appear to have any data, and will not be included in the "
                  "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any

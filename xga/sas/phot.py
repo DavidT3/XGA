@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/06/2023, 14:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 12:14. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -18,7 +18,6 @@ from ..imagetools import data_limits
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
-from ..utils import energy_to_channel
 
 
 # TODO Perhaps remove the option to add to the SAS expression
@@ -49,10 +48,9 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
     if lo_en > hi_en:
         raise ValueError("lo_en cannot be greater than hi_en")
     else:
-        # Calls a useful little function that takes an astropy energy quantity to the XMM channels
-        # required by SAS commands
-        lo_chan = energy_to_channel(lo_en)
-        hi_chan = energy_to_channel(hi_en)
+        # Converts the energies to channels for EPIC detectors, assuming one channel per eV
+        lo_chan = int(lo_en.to('eV').value)
+        hi_chan = int(hi_en.to('eV').value)
 
     expr = " && ".join([e for e in ["expression='(PI in [{l}:{u}])".format(l=lo_chan, u=hi_chan),
                                     add_expr] if e != ""]) + "'"
@@ -67,22 +65,24 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events", just_obj=False):
-            obs_id = pack[0]
-            inst = pack[1]
+        for pack in source.get_products("events", just_obj=False, telescope='xmm'):
+            obs_id = pack[1]
+            inst = pack[2]
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            # TODO Is this actually necessary? I should trust that these have been setup by the source object
+            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
+                os.mkdir(OUTPUT + 'xmm/' + obs_id)
 
+            # TODO Switch this get methods to the dedicated image map one
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
+            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='xmm')
                       if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
 
             evt_list = pack[-1]
-            dest_dir = OUTPUT + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
-                                                                   n=source.name)
+            dest_dir = OUTPUT + "xmm/{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
+                                                                       n=source.name)
             im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -97,7 +97,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
                                                                                   i=im, ex=expr))
 
             # This is the products final resting place, if it exists at the end of this command
-            final_paths.append(os.path.join(OUTPUT, obs_id, im))
+            final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, im))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -138,15 +138,15 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
     if lo_en > hi_en:
         raise ValueError("lo_en cannot be greater than hi_en")
     else:
-        # Calls a useful little function that takes an astropy energy quantity to the XMM channels
-        # required by SAS commands
-        lo_chan = energy_to_channel(lo_en)
-        hi_chan = energy_to_channel(hi_en)
+        # Converts the energies to channels for EPIC detectors, assuming one channel per eV
+        lo_chan = int(lo_en.to("eV").value)
+        hi_chan = int(hi_en.to("eV").value)
 
     # These are crucial, to generate an exposure map one must have a ccf.cif calibration file, and a reference
     # image. If they do not already exist, these commands should generate them.
     cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
     sources = evselect_image(sources, lo_en, hi_en)
+
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
     if not isinstance(sources, (list, BaseSample)):
@@ -163,27 +163,28 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
         final_paths = []
         extra_info = []
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events", just_obj=False):
-            obs_id = pack[0]
-            inst = pack[1]
+        for pack in source.get_products("events", just_obj=False, telescope='xmm'):
+            obs_id = pack[1]
+            inst = pack[2]
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            # TODO Is this actually necessary? I should trust that these have been setup by the source object
+            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
+                os.mkdir(OUTPUT + "xmm/" + obs_id)
 
+            # TODO Switch these get methods to the dedicated image/exposure map ones
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False)
+            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False, telescope='xmm')
                       if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
             # Generating an exposure map requires a reference image.
-            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
-                      if en_id in match][0][-1]
+            ref_im = source.get_images(obs_id, inst, lo_en, hi_en, telescope='xmm')
             # It also requires an attitude file
-            att = source.get_att_file(obs_id)
+            att = source.get_att_file(obs_id, 'xmm')
             # Set up the paths and names of files
             evt_list = pack[-1]
-            dest_dir = OUTPUT + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
-                                                                   n=source.name)
+            dest_dir = OUTPUT + "xmm/{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
+                                                                       n=source.name)
             exp_map = "{o}_{i}_{l}-{u}keVexpmap.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -198,7 +199,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
                                            u=hi_chan, d=dest_dir, ccf=dest_dir + "ccf.cif"))
 
             # This is the products final resting place, if it exists at the end of this command
-            final_paths.append(os.path.join(OUTPUT, obs_id, exp_map))
+            final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, exp_map))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -279,8 +280,10 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
         elif psf_corr:
             en_id += "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
 
+        # TODO Switch these get methods to the dedicated image/exposure map ones
         # Checking if the combined product already exists
-        exists = [match for match in source.get_products("combined_{}".format(to_mosaic), just_obj=False)
+        exists = [match for match in source.get_products("combined_{}".format(to_mosaic), just_obj=False,
+                                                         telescope='xmm')
                   if en_id in match]
         if len(exists) == 1 and exists[0][-1].usable:
             sources_cmds.append(np.array([]))
@@ -290,7 +293,7 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
             continue
 
         # This fetches all image objects with the passed energy bounds
-        matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic, just_obj=False)
+        matches = [[match[1], match[-1]] for match in source.get_products(to_mosaic, just_obj=False, telescope='xmm')
                    if en_id in match]
         paths = [product[1].path for product in matches if product[1].usable]
         obs_ids = [product[0] for product in matches if product[1].usable]
@@ -299,14 +302,15 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
             if obs_id not in obs_ids_set:
                 obs_ids_set.append(obs_id)
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
+                os.mkdir(OUTPUT + "xmm/" + obs_id)
 
         # The files produced by this function will now be stored in the combined directory.
-        final_dest_dir = OUTPUT + "combined/"
+        final_dest_dir = OUTPUT + "xmm/combined/"
         rand_ident = randint(0, 1e+8)
         # Makes absolutely sure that the random integer hasn't already been used
-        while len([f for f in os.listdir(final_dest_dir) if str(rand_ident) in f.split(OUTPUT+"combined/")[-1]]) != 0:
+        while len([f for f in os.listdir(final_dest_dir)
+                   if str(rand_ident) in f.split(OUTPUT+"xmm/combined/")[-1]]) != 0:
             rand_ident = randint(0, 1e+8)
 
         dest_dir = os.path.join(final_dest_dir, "temp_emosaic_{}".format(rand_ident))
@@ -394,17 +398,17 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
             final_paths = []
             extra_info = []
             # Check which event lists are associated with each individual source
-            for pack in source.get_products("events", just_obj=False):
+            for pack in source.get_products("events", just_obj=False, telescope='xmm'):
                 obs_id = pack[0]
                 inst = pack[1]
 
-                if not os.path.exists(OUTPUT + obs_id):
-                    os.mkdir(OUTPUT + obs_id)
+                if not os.path.exists(OUTPUT + 'xmm/' + obs_id):
+                    os.mkdir(OUTPUT + 'xmm/' + obs_id)
 
                 # This looks for any image for this ObsID, instrument combo - it does assume that whatever
                 #  it finds will be the same resolution as any images in other energy bands that XGA will
                 #  create in the future.
-                images = source.get_products("image", obs_id, inst, just_obj=True)
+                images = source.get_products("image", obs_id, inst, just_obj=True, telescope='xmm')
 
                 if len(images) == 0:
                     raise NoProductAvailableError("There is no image available for {o} {i}, please generate "
@@ -421,7 +425,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
 
                 # Here we try and find if this PSF configuration has already been run and has been
                 #  associated with the source. If so then don't do it again.
-                psfs = source.get_products("psf", obs_id, inst, extra_key=psf_model + "_" + str(bins))
+                psfs = source.get_products("psf", obs_id, inst, extra_key=psf_model + "_" + str(bins), telescope='xmm')
                 if len(psfs) != 0:
                     continue
 
@@ -461,7 +465,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
 
                 ra_dec_coords = image.coord_conv(pix_coords, deg)
 
-                dest_dir = OUTPUT + "{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source.name)
+                dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp/".format(o=obs_id, i=inst, n=source.name)
                 psf = "{o}_{i}_{b}bin_{m}mod_{ra}_{dec}_psf.fits"
 
                 # The change directory and SAS setup commands
@@ -481,7 +485,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                     ra, dec = ra_dec_coords[pair_ind, :].value
 
                     psf_file = psf.format(o=obs_id, i=inst, b=bins, ra=ra, dec=dec, m=psf_model)
-                    psf_files.append(os.path.join(OUTPUT, obs_id, psf_file))
+                    psf_files.append(os.path.join(OUTPUT, 'xmm', obs_id, psf_file))
                     # Going with xsize and ysize as 400 pixels, I think its enough and quite a bit faster than 1000
                     total_cmd += "psfgen image={i} coordtype=EQPOS level={m} energy=1000 xsize=400 ysize=400 x={ra} " \
                                  "y={dec} output={p}; ".format(i=image.path, m=psf_model, ra=ra, dec=dec, p=psf_file)
@@ -491,7 +495,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                 # This is the products final resting place, if it exists at the end of this command
                 # In this case it just checks for the final PSF in the grid, all other files in the grid
                 # get stored in extra info.
-                final_paths.append(os.path.join(OUTPUT, obs_id, psf_file))
+                final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, psf_file))
                 extra_info.append({"obs_id": obs_id, "instrument": inst, "model": psf_model, "chunks_per_side": bins,
                                    "files": psf_files, "x_bounds": x_bound_coords, "y_bounds": y_bound_coords})
 

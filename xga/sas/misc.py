@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:04. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -45,9 +45,9 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
         cmds = []
         final_paths = []
         extra_info = []
-        for obs_id in source.obs_ids:
+        for obs_id in source.obs_ids['xmm']:
             # Fetch an events list for this ObsID, doesn't matter which
-            some_evt_lists = source.get_products("events", obs_id=obs_id)
+            some_evt_lists = source.get_products("events", obs_id=obs_id, telescope='xmm')
             obs_date = None
             for evt in some_evt_lists:
                 # Reads in the header of the events list file
@@ -64,10 +64,10 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
                 raise InvalidProductError("All event lists for {} are missing the DATE-OBS header, this is required to"
                                           " run the cifbuild function.".format(obs_id))
 
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+            if not os.path.exists(OUTPUT + 'xmm/' + obs_id):
+                os.mkdir(OUTPUT + 'xmm/' + obs_id)
 
-            dest_dir = "{out}{obs}/".format(out=OUTPUT, obs=obs_id)
+            dest_dir = "{out}xmm/{obs}/".format(out=OUTPUT, obs=obs_id)
             temp_name = "tempdir_{}".format(randint(0, 1e+8))
             temp_dir = dest_dir + temp_name + "/"
 
