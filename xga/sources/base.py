@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 23:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/12/2023, 15:22. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -844,7 +844,7 @@ class BaseSource:
                 named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
                          self._name.replace("+", "x") in f and obs in f
                          and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
-                specs = [f for f in named if "spec" in f.split('/')[-1] and "back" not in f.split('/')[-1]]
+                specs = [f for f in named if "_spec" in f.split('/')[-1] and "back" not in f.split('/')[-1]]
 
                 for sp in specs:
                     # Filename contains a lot of useful information, so splitting it out to get it
