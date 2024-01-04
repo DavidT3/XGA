@@ -77,7 +77,12 @@ class BaseProduct:
         # Saving this in attributes for future reference
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
-        self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
+        if telescope == 'xmm':
+            self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
+        else:
+            self._sas_error = []
+            self._sas_warn = []
+            self._other_error = []
         self._obs_id = obs_id
         self._inst = instrument
         self._tele = telescope

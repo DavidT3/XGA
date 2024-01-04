@@ -38,8 +38,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     if p_type == "image":
         # Maybe let the user decide not to raise errors detected in stderr
         # ASSUMPTION1 - tscope attribute in BaseProduct
-        prod = Image(p_path[0], extra_info["telescope"], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                     extra_info["lo_en"], extra_info["hi_en"])
+        prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+                     extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
         if "psf_corr" in extra_info and extra_info["psf_corr"]:
             prod.psf_corrected = True
             prod.psf_bins = extra_info["psf_bins"]
