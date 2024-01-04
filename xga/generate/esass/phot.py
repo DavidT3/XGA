@@ -9,7 +9,7 @@ import numpy as np
 from astropy.units import Quantity, UnitConversionError
 from tqdm import tqdm
 
-from .. import OUTPUT, NUM_CORES
+from ... import OUTPUT, NUM_CORES
 from .run import esass_call
 from ...sources import BaseSource
 from ...sources.base import NullSource

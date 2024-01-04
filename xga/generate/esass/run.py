@@ -12,7 +12,7 @@ from tqdm import tqdm
 from ...products import BaseProduct, AnnularSpectra
 from ... import eSASS_AVAIL
 from ...exceptions import eSASSNotFoundError, SourceNotFoundError
-from _common import execute_cmd
+from .._common import execute_cmd
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 from ...sources.base import NullSource
