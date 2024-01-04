@@ -9,7 +9,7 @@ from warnings import warn
 
 from tqdm import tqdm
 
-from ...products import BaseProduct
+from ...products import BaseProduct, AnnularSpectra
 from ... import eSASS_AVAIL
 from ...exceptions import eSASSNotFoundError, SourceNotFoundError
 from _common import execute_cmd
@@ -27,7 +27,7 @@ def esass_call(esass_func):
     @wraps(esass_func)
     def wrapper(*args, **kwargs):
         # Haven't figured out how to deal with errors raised yet, so just erroring here
-        raise NotImplementedError("Functions using esass have not been implemented yet.")
+        #raise NotImplementedError("Functions using esass have not been implemented yet.")
 
         # Checking eSASS is installed and available on the system
         if not eSASS_AVAIL:
@@ -42,12 +42,14 @@ def esass_call(esass_func):
         else:
             raise TypeError("Please pass a source, NullSource, or sample object.")
 
+        # TODO this check somewhere else and properly!
+        """
         # Checking that at least some of the sources have eROSITA data associated with them
-        # ASSUMPTION2 self._telescope will list erosita as 'erosita'
         sources = [src for src in sources if 'erosita' in src._telescope]
         # Raising an error if no erosita sources have been passed
         if len(sources) == 0:
             raise SourceNotFoundError("Please pass a source that has eROSITA data associated with it.")
+        """
 
         # This is the output from whatever function this is a decorator for
         cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = esass_func(*args, **kwargs)
@@ -129,8 +131,7 @@ def esass_call(esass_func):
 
         elif to_execute and len(all_run) == 0:
             # It is possible to call a wrapped eSASS function and find that the products already exist.
-            # print("All requested products already exist")
-            pass
+            print("All requested products already exist")
 
         # Now we assign products to source objects
         all_to_raise = []
@@ -143,6 +144,8 @@ def esass_call(esass_func):
             to_raise = []
             for product in results[entry]:
                 product: BaseProduct
+                # TODO deal with processing errors from the std_out for esass 
+                """
                 ext_info = "- {s} is the associated source, the specific data used is " \
                            "{o}-{i}.".format(s=sources[ind].name, o=product.obs_id, i=product.instrument)
                 if len(product.sas_errors) == 1:
@@ -156,6 +159,7 @@ def esass_call(esass_func):
                 elif len(product.errors) > 1:
                     errs = [SASGenerationError(e + "-" + ext_info) for e in product.errors]
                     to_raise += errs
+                """
 
                 # ccfs aren't actually stored in the source product storage, but they are briefly put into
                 #  BaseProducts for error parsing etc. So if the product type is None we don't store it
@@ -201,11 +205,12 @@ def esass_call(esass_func):
         # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
         for error in raised_errors:
             raise error
-
+        # TODO dealing with esass errors
+        """
         # And here are all the errors during SAS generation, if any
         if len(all_to_raise) != 0:
             raise SASGenerationError(all_to_raise)
-
+        """
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
         if len(sources) == 1:
