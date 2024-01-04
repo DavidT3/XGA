@@ -1,18 +1,22 @@
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 04/01/2024, 17:47. Copyright (c) The Contributors
+
+import os
 from subprocess import Popen, PIPE
 from typing import Tuple, Union
-import os
 
 import numpy as np
 from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
 
-from ..utils import erosita_sky, OUTPUT
-from ..sources import BaseSource
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
+from ..utils import OUTPUT
+
 
 #ASSUMPTION7 that the telescope agnostic region_setup will go here
 def region_setup():
     pass
+
 
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
     """
@@ -38,7 +42,6 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     #  pre-existing image
     if p_type == "image":
         # Maybe let the user decide not to raise errors detected in stderr
-        # ASSUMPTION1 - tscope attribute in BaseProduct
         prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                      extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
         if "psf_corr" in extra_info and extra_info["psf_corr"]:
@@ -48,28 +51,25 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
             prod.psf_iterations = extra_info["psf_iter"]
             prod.psf_algorithm = extra_info["psf_algo"]
     elif p_type == "expmap":
-        # ASSUMPTION1 - tscope attribute in BaseProduct
         prod = ExpMap(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                       extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
     elif p_type == "ccf" and "NullSource" not in src:
         # ccf files may not be destined to spend life as product objects, but that doesn't mean
         # I can't take momentarily advantage of the error parsing I built into the product classes
-        # ASSUMPTION1 - tscope attribute in BaseProduct
         prod = BaseProduct(p_path[0], "", "", "", out, err, cmd)
     elif (p_type == "spectrum" or p_type == "annular spectrum set components") and "NullSource" not in src:
-        # ASSUMPTION1 - tscope attribute in BaseProduct
-        prod = Spectrum(p_path[0], extra_info["telescope"], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
+        prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
                         extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
                         extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"],
                         extra_info["min_sn"], extra_info["over_sample"], out, err, cmd, extra_info["from_region"],
-                        extra_info["b_rmf_path"], extra_info["b_arf_path"])
+                        extra_info["b_rmf_path"], extra_info["b_arf_path"], telescope=extra_info["telescope"])
     elif p_type == "psf" and "NullSource" not in src:
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                        extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
                        extra_info["instrument"], out, err, cmd)
     elif p_type == "cross arfs":
-        # ASSUMPTION1 - tscope attribute in BaseProduct
-        prod = BaseProduct(p_path[0], extra_info["telescope"], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info)
+        prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info,
+                           telescope=extra_info["telescope"])
     elif "NullSource" in src:
         prod = None
     else:
@@ -81,6 +81,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod.set_ident = extra_info["set_ident"]
 
     return prod, src
+
 
 def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
     """
