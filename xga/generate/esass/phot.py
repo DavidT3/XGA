@@ -99,8 +99,9 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
             os.makedirs(dest_dir)
             cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes "
-                        "emin={l} emax={u}; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
+                        "emin={l} emax={u} events=no size='auto' rebin=87 center_position=0; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
                                                                                  i=im, l=lo_en.value, u=hi_en.value ))
+            print(cmds)
 
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
