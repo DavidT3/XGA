@@ -114,13 +114,6 @@ def sas_call(sas_func):
             sources = args[0]
         else:
             raise TypeError("Please pass a source, NullSource, or sample object.")
-        
-        # Checking that at least some of the sources have XMM data associated with them
-        # ASSUMPTION2 self._telescope will list xmm as 'xmm'
-        sources = [src for src in sources if 'xmm' in src._telescope]
-        # Raising an error if no erosita sources have been passed
-        if len(sources) == 0:
-            raise SourceNotFoundError("Please pass a source that has XMM data associated with it.")
 
         # This is the output from whatever function this is a decorator for
         cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = sas_func(*args, **kwargs)
