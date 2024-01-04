@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2023, 16:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/01/2024, 13:24. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4234,20 +4234,19 @@ class BaseSource:
 
             print("Spectra associated - {}".format(len(self.get_products("spectrum", telescope=tel))))
 
-            # TODO None of this will work right now for the multi-mission setup
-            if len(self._fit_results) != 0:
+            if len(self._fit_results[tel]) != 0:
                 print("Fitted Models - {}".format(" | ".join(self.fitted_models)))
 
             if 'get_temperature' in dir(self):
                 try:
-                    tx = self.get_temperature('r500', 'constant*tbabs*apec').value.round(2)
+                    tx = self.get_temperature('r500', tel, 'constant*tbabs*apec').value.round(2)
                     # Just average the uncertainty for this
                     print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean().round(2)))
                 except (ModelNotAssociatedError, NoProductAvailableError):
                     pass
 
                 try:
-                    lx = self.get_luminosities('r500', 'xmm', 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
+                    lx = self.get_luminosities('r500', tel, 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
                                                hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
                     print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean().round(2)))
 
