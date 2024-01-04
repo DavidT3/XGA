@@ -31,6 +31,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
+    print(err)
 
     # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
     #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
@@ -48,8 +49,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
             prod.psf_algorithm = extra_info["psf_algo"]
     elif p_type == "expmap":
         # ASSUMPTION1 - tscope attribute in BaseProduct
-        prod = ExpMap(p_path[0], extra_info["telescope"], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                      extra_info["lo_en"], extra_info["hi_en"])
+        prod = ExpMap(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+                      extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
     elif p_type == "ccf" and "NullSource" not in src:
         # ccf files may not be destined to spend life as product objects, but that doesn't mean
         # I can't take momentarily advantage of the error parsing I built into the product classes
