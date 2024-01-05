@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 13:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 13:54. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -385,8 +385,8 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -416,78 +416,81 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     src_inds = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
-        # Find matching spectrum objects associated with the current source
-        spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
-                                       group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                       over_sample=over_sample)
-        # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
-        #  a cluster with only a single valid instrument for a single valid observation this may not be the case
-        if isinstance(spec_objs, Spectrum):
-            spec_objs = [spec_objs]
+        for tel in source.telescopes:
 
-        # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
-        if len(spec_objs) == 0:
-            raise NoProductAvailableError("There are no matching spectra for {s} object, you "
-                                          "need to generate them first!".format(s=source.name))
+            # Find matching spectrum objects associated with the current source
+            spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
+                                           group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                           over_sample=over_sample, telescope=tel)
+            # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
+            #  a cluster with only a single valid instrument for a single valid observation this may not be the case
+            if isinstance(spec_objs, Spectrum):
+                spec_objs = [spec_objs]
 
-        # Turn spectra paths into TCL style list for substitution into template
-        specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
-        # For this model, we have to know the redshift of the source.
-        if source.redshift is None:
-            raise ValueError("You cannot supply a source without a redshift to this model.")
+            # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
+            if len(spec_objs) == 0:
+                raise NoProductAvailableError("There are no matching spectra for {s} object, you "
+                                              "need to generate them first!".format(s=source.name))
 
-        # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        t = start_max_temp.to("keV", equivalencies=u.temperature_energy()).value
-        # Another TCL list, this time of the parameter start values for this model.
-        par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
-                                                                          start_t_rat, start_inv_em_slope,
-                                                                          1, start_met, source.redshift, 2, 1.)
+            # Turn spectra paths into TCL style list for substitution into template
+            specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
+            # For this model, we have to know the redshift of the source.
+            if source.redshift is None:
+                raise ValueError("You cannot supply a source without a redshift to this model.")
 
-        # Set up the TCL list that defines which parameters are frozen, dependant on user input
-        freezing = "{{F {n} F F F T {ab} T T F}}".format(n='T' if freeze_nh else 'F',
-                                                         ab='T' if freeze_met else 'F')
+            # Whatever start temperature is passed gets converted to keV, this will be put in the template
+            t = start_max_temp.to("keV", equivalencies=u.temperature_energy()).value
+            # Another TCL list, this time of the parameter start values for this model.
+            par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
+                                                                              start_t_rat, start_inv_em_slope,
+                                                                              1, start_met, source.redshift, 2, 1.)
 
-        # Set up the TCL list that defines which parameters are linked across different spectra, only the
-        #  multiplicative constant that accounts for variation in normalisation over different observations is not
-        #  linked
-        linking = "{F T T T T T T T T T}"
+            # Set up the TCL list that defines which parameters are frozen, dependant on user input
+            freezing = "{{F {n} F F F T {ab} T T F}}".format(n='T' if freeze_nh else 'F',
+                                                             ab='T' if freeze_met else 'F')
 
-        # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
-        #  limits. The check limits here are somewhat of a guesstimate based on my understanding of the model
-        #  rather than on practical experience with it
-        if spectrum_checking:
-            check_list = "{Tmax beta inv_slope}"
-            check_lo_lims = "{0.01 0.01 0.1}"
-            check_hi_lims = "{20 1 20}"
-            check_err_lims = "{15 5 5}"
-        else:
-            check_list = "{}"
-            check_lo_lims = "{}"
-            check_hi_lims = "{}"
-            check_err_lims = "{}"
+            # Set up the TCL list that defines which parameters are linked across different spectra, only the
+            #  multiplicative constant that accounts for variation in normalisation over different observations is not
+            #  linked
+            linking = "{F T T T T T T T T T}"
 
-        # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
-        #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
-        #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
-        #  them all.
-        nh_to_zero = "{2}"
+            # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
+            #  limits. The check limits here are somewhat of a guesstimate based on my understanding of the model
+            #  rather than on practical experience with it
+            if spectrum_checking:
+                check_list = "{Tmax beta inv_slope}"
+                check_lo_lims = "{0.01 0.01 0.1}"
+                check_hi_lims = "{20 1 20}"
+                check_err_lims = "{15 5 5}"
+            else:
+                check_list = "{}"
+                check_lo_lims = "{}"
+                check_hi_lims = "{}"
+                check_err_lims = "{}"
 
-        # This internal function writes out the XSPEC script with all the information we've assembled in this
-        #  function - filling out the XSPEC template and writing to disk
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
-                                                    spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True, nh_to_zero)
+            # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
+            #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
+            #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
+            #  them all.
+            nh_to_zero = "{2}"
 
-        # If the fit has already been performed we do not wish to perform it again
-        try:
-            res = source.get_results(out_rad_vals[src_ind], 'xmm', model, inn_rad_vals[src_ind], 'kT', group_spec,
-                                     min_counts, min_sn, over_sample)
-        except ModelNotAssociatedError:
-            script_paths.append(script_file)
-            outfile_paths.append(out_file)
-            src_inds.append(src_ind)
+            # This internal function writes out the XSPEC script with all the information we've assembled in this
+            #  function - filling out the XSPEC template and writing to disk
+            out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                        fit_method, specs, lo_en, hi_en, par_names, par_values,
+                                                        linking, freezing, par_fit_stat, lum_low_lims, lum_upp_lims,
+                                                        lum_conf, source.redshift, spectrum_checking, check_list,
+                                                        check_lo_lims, check_hi_lims, check_err_lims, True,
+                                                        nh_to_zero, tel)
+
+            # If the fit has already been performed we do not wish to perform it again
+            try:
+                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'kT', group_spec,
+                                         min_counts, min_sn, over_sample)
+            except ModelNotAssociatedError:
+                script_paths.append(script_file)
+                outfile_paths.append(out_file)
+                src_inds.append(src_ind)
 
     run_type = "fit"
     return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
