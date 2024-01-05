@@ -195,12 +195,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             else:
                 # This constructs the sas strings for any radius that isn't 'region'
-                reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
+                reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], obs_id,
                                                     interloper_regions=interloper_regions,
                                                     central_coord=source.default_coord)
                 b_reg = get_annular_esass_region(source, outer_radii[s_ind] * source.background_radius_factors[0],
                                                       outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
-                                                      inst, interloper_regions=back_inter_reg,
+                                                      interloper_regions=back_inter_reg,
                                                       central_coord=source.default_coord, bkg_reg=True)
                 inn_rad_degrees = inner_radii[s_ind]
                 out_rad_degrees = outer_radii[s_ind]
