@@ -1957,7 +1957,7 @@ class BaseSource:
                 po.src_name = self.name
 
                 # Double check that something is trying to add products from another source to the current one.
-                if obs_id != "combined" and obs_id not in self.instruments[tel]:
+                if obs_id != "combined" and obs_id not in self.obs_ids[tel]:
                     raise NotAssociatedError("{t}-{o} is not associated with this X-ray "
                                              "source.".format(t=tel, o=obs_id))
                 elif inst != "combined" and inst not in self.instruments[tel][obs_id]:
@@ -1966,7 +1966,7 @@ class BaseSource:
 
                 if extra_key is not None and obs_id != "combined":
                     # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
-                    if extra_key not in self.instruments[tel][obs_id][inst]:
+                    if extra_key not in self._products[tel][obs_id][inst]:
                         self._products[tel][obs_id][inst][extra_key] = {}
                     self._products[tel][obs_id][inst][extra_key][p_type] = po
 
@@ -1976,7 +1976,7 @@ class BaseSource:
                 # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
                 #  and ObsID = 'combined'
                 elif extra_key is not None and obs_id == "combined":
-                    if extra_key not in self.instruments[tel][obs_id]:
+                    if extra_key not in self._products[tel][obs_id]:
                         self._products[tel][obs_id][extra_key] = {}
                     self._products[tel][obs_id][extra_key][p_type] = po
 
