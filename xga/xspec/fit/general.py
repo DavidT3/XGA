@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 13:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 13:57. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -647,12 +647,12 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 @xspec_call
 def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
-              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_temp: Quantity = Quantity(1, "keV"),
-              lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-              freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
-              fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-              over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-              timeout: Quantity = Quantity(1, 'hr')):
+              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+              start_temp: Quantity = Quantity(1, "keV"), lo_en: Quantity = Quantity(0.3, "keV"),
+              hi_en: Quantity = Quantity(7.9, "keV"), freeze_nh: bool = True, par_fit_stat: float = 1.,
+              lum_conf: float = 68., abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
+              min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+              num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr')):
     """
     This is a convenience function for fitting a tbabs absorbed blackbody (or zbbody if redshifted
     is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
@@ -715,77 +715,80 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     outfile_paths = []
     src_inds = []
     for src_ind, source in enumerate(sources):
-        spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind], group_spec=group_spec,
-                                       min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+        for tel in source.telescopes:
+            spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
+                                           group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                           over_sample=over_sample, telescope=tel)
 
-        # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
-        #  a source with only a single valid instrument for a single valid observation this may not be the case
-        if isinstance(spec_objs, Spectrum):
-            spec_objs = [spec_objs]
+            # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
+            #  a source with only a single valid instrument for a single valid observation this may not be the case
+            if isinstance(spec_objs, Spectrum):
+                spec_objs = [spec_objs]
 
-        if len(spec_objs) == 0:
-            raise NoProductAvailableError("There are no matching spectra for {s}, you "
-                                          "need to generate them first!".format(s=source.name))
+            if len(spec_objs) == 0:
+                raise NoProductAvailableError("There are no matching spectra for {s}, you "
+                                              "need to generate them first!".format(s=source.name))
 
-        # Turn spectra paths into TCL style list for substitution into template
-        specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
+            # Turn spectra paths into TCL style list for substitution into template
+            specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
 
-        # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
+            # Whatever start temperature is passed gets converted to keV, this will be put in the template
+            t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
 
-        # For this model, we have to know the redshift of the source.
-        if redshifted and source.redshift is None:
-            raise ValueError("You cannot supply a source without a redshift if you have elected to fit zbbody.")
-        elif redshifted and source.redshift is not None:
-            par_values = "{{{0} {1} {2} {3} {4}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
-                                                          source.redshift, 1.)
-        else:
-            par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, t, 1.)
+            # For this model, we have to know the redshift of the source.
+            if redshifted and source.redshift is None:
+                raise ValueError("You cannot supply a source without a redshift if you have elected to fit zbbody.")
+            elif redshifted and source.redshift is not None:
+                par_values = "{{{0} {1} {2} {3} {4}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
+                                                              source.redshift, 1.)
+            else:
+                par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, t, 1.)
 
-        # Set up the TCL list that defines which parameters are frozen, dependant on user input
-        if redshifted and freeze_nh:
-            freezing = "{F T F T F}"
-        elif not redshifted and freeze_nh:
-            freezing = "{F T F F}"
-        elif redshifted and not freeze_nh:
-            freezing = "{F F F T F}"
-        elif not redshifted and not freeze_nh:
-            freezing = "{F F F F}"
+            # Set up the TCL list that defines which parameters are frozen, dependent on user input
+            if redshifted and freeze_nh:
+                freezing = "{F T F T F}"
+            elif not redshifted and freeze_nh:
+                freezing = "{F T F F}"
+            elif redshifted and not freeze_nh:
+                freezing = "{F F F T F}"
+            elif not redshifted and not freeze_nh:
+                freezing = "{F F F F}"
 
-        # Set up the TCL list that defines which parameters are linked across different spectra,
-        #  dependant on user input
-        if redshifted:
-            linking = "{F T T T T}"
-        else:
-            linking = "{F T T T}"
+            # Set up the TCL list that defines which parameters are linked across different spectra,
+            #  dependant on user input
+            if redshifted:
+                linking = "{F T T T T}"
+            else:
+                linking = "{F T T T}"
 
-        # If the blackbody with redshift has been chosen, then we use the redshift attached to the source object
-        #  If not we just pass a filler redshift and the luminosities are invalid
-        if redshifted or (not redshifted and source.redshift is not None):
-            z = source.redshift
-        else:
-            z = 1
-            warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
-                          " will be invalid, as redshift has been set to one.".format(s=source.name))
+            # If the blackbody with redshift has been chosen, then we use the redshift attached to the source object
+            #  If not we just pass a filler redshift and the luminosities are invalid
+            if redshifted or (not redshifted and source.redshift is not None):
+                z = source.redshift
+            else:
+                z = 1
+                warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
+                              " will be invalid, as redshift has been set to one.".format(s=source.name))
 
-        # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
-        #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
-        #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
-        #  them all.
-        nh_to_zero = "{2}"
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
-                                                    "{}", "{}", "{}", True, nh_to_zero)
+            # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed
+            #  luminosities. I am only specifying parameter 2 here (though there will likely be multiple models
+            #  because there are likely multiple spectra) because I know that nH of tbabs is linked in this setup, so
+            #  zeroing one will zero them all.
+            nh_to_zero = "{2}"
+            out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                        fit_method, specs, lo_en, hi_en, par_names, par_values,
+                                                        linking, freezing, par_fit_stat, lum_low_lims, lum_upp_lims,
+                                                        lum_conf, z, False, "{}", "{}", "{}", "{}", True,
+                                                        nh_to_zero, tel)
 
-        # If the fit has already been performed we do not wish to perform it again
-        try:
-            res = source.get_results(out_rad_vals[src_ind], 'xmm', model, inn_rad_vals[src_ind], None, group_spec,
-                                     min_counts, min_sn, over_sample)
-        except ModelNotAssociatedError:
-            script_paths.append(script_file)
-            outfile_paths.append(out_file)
-            src_inds.append(src_ind)
+            # If the fit has already been performed we do not wish to perform it again
+            try:
+                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
+                                         min_counts, min_sn, over_sample)
+            except ModelNotAssociatedError:
+                script_paths.append(script_file)
+                outfile_paths.append(out_file)
+                src_inds.append(src_ind)
 
     run_type = "fit"
     return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
