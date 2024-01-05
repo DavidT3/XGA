@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/01/2024, 13:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 15:57. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -830,6 +830,7 @@ class BaseSource:
                 #  the 'combined' flag (i.e. this is what they are stored under).
                 if inst_or_tel == tel:
                     inst = 'combined'
+                    obs_dict[tel][obs_id].update({i: {} for i in self.instruments[tel][obs_id]})
                 else:
                     inst = inst_or_tel
 
@@ -902,11 +903,11 @@ class BaseSource:
 
             if not merged:
                 # I know its hard coded but this will always be the case, these are files I generate with XGA.
-                obs_id = im_info[0]
+                cur_obs_id = im_info[0]
                 ins = im_info[1]
             else:
                 ins = "combined"
-                obs_id = "combined"
+                cur_obs_id = "combined"
 
             en_str = [entry for entry in im_info if "keV" in entry][0]
             lo_en, hi_en = en_str.split("keV")[0].split("-")
@@ -918,9 +919,9 @@ class BaseSource:
             # Different types of Product objects, the empty strings are because I don't have the stdout, stderr,
             #  or original commands for these objects.
             if exact_type == "image" and "psfcorr" not in file_path:
-                final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
+                final_obj = Image(file_path, cur_obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
             elif exact_type == "image" and "psfcorr" in file_path:
-                final_obj = Image(file_path, obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
+                final_obj = Image(file_path, cur_obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
                 final_obj.psf_corrected = True
                 final_obj.psf_bins = int([entry for entry in im_info if "bin" in entry][0].split('bin')[0])
                 final_obj.psf_iterations = int([entry for entry in im_info if "iter" in
@@ -928,7 +929,7 @@ class BaseSource:
                 final_obj.psf_model = [entry for entry in im_info if "mod" in entry][0].split("mod")[0]
                 final_obj.psf_algorithm = [entry for entry in im_info if "algo" in entry][0].split("algo")[0]
             elif exact_type == "expmap":
-                final_obj = ExpMap(file_path, obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
+                final_obj = ExpMap(file_path, cur_obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
             else:
                 raise TypeError("Only image and expmap are allowed.")
 
