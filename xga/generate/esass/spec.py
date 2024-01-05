@@ -431,6 +431,26 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
     default inner radius is zero, so by default this function will produce circular spectra out to the outer_radius.
     It is possible to generate both grouped and ungrouped spectra using this function, with the degree
     of grouping set by the min_counts and min_sn parameters.
+
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
+    :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
+        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+        'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
+    :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
+        the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
+        default this is zero arcseconds, resulting in a circular spectrum.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
+    :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
+    :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
