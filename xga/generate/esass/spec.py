@@ -14,7 +14,7 @@ from astropy.coordinates import SkyCoord
 
 #ASSUMPTION7 that the telescope agnostic region_setup will go here
 from .._common import region_setup
-
+from .run import esass_call
 from .. import OUTPUT, NUM_CORES
 from .._common import get_annular_esass_region
 from .phot import evtool_image
@@ -110,7 +110,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     remove_merged_cmd = 'rm *srctoolout_0*'
 
     # TODO this command is fishy 
-    # TODO include the background file
+    # TODO include the background file - YES
+    # TODO regroup the background file too 
     # Grouping the spectra will be done using the heasoft
     grp_cmd = 'ftgrouppha infile="{infi}" outfile="{of}" grouptype="{gt}" groupscale="{gs}"'
 
@@ -346,7 +347,7 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
                   if en_id in match]
 
     if len(exists) == 1 and exists[0][-1].useable:
-        img = exists[0][-1] # DAVID_QUESTION this gets me the image Product right?
+        img = exists[0][-1] 
     # Generating an image around this region
     else:
         evtool_image(source)
@@ -416,35 +417,22 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
             raise NotImplementedError("Haven't figured out how to do this with ellipses yet")
     
     return detmap_path
-        
 
-            
-
-
-
-        
-
-
-
-
-
+@esass_call
+def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
+                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                      min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES, 
+                      disable_progress: bool = False, force_gen: bool = False):
     
-
-    
-
-
-
-
-
-
-
-            
-            
-
-            
-
-
-        
-
-
-
+    """
+    A wrapper for all of the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
+    in XSPEC. Every observation associated with this source, and every instrument associated with that
+    observation, will have a spectrum generated using the specified outer and inner radii as a boundary. The
+    default inner radius is zero, so by default this function will produce circular spectra out to the outer_radius.
+    It is possible to generate both grouped and ungrouped spectra using this function, with the degree
+    of grouping set by the min_counts and min_sn parameters.
+    """
+    # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
+    #  can also use them
+    return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
+                      num_cores, disable_progress, force_gen)
