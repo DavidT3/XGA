@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 16:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 16:25. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -220,9 +220,6 @@ class BaseSource:
             if COMBINED_INSTS[tel]:
                 for oi in obs[tel]:
                     self._products[tel][oi].update({i: {} for i in obs[tel][oi]})
-
-        print(self._products)
-        print('\n\n')
 
         # We now have the final set of initial observations, so we'll store them in an attribute - note that they
         #  may change later as other source classes have different cleaning steps, but any observations will be
