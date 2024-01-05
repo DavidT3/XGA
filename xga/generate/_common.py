@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/01/2024, 17:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:51. Copyright (c) The Contributors
 
 import os
 from subprocess import Popen, PIPE
@@ -9,9 +9,10 @@ import numpy as np
 from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
 
-from ..sources import BaseSource
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
+from ..sources import BaseSource
 from ..utils import OUTPUT
+
 
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
     """
@@ -102,9 +103,11 @@ def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
 
     return shape_str
 
+
 def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_radius: Quantity, obs_id: str,
-                               output_unit: Union[UnitBase, str] = deg, rot_angle: Quantity = Quantity(0, 'deg'),
-                               interloper_regions: np.ndarray = None, central_coord: Quantity = None, bkg_reg: bool = False) -> str:
+                             output_unit: Union[UnitBase, str] = deg, rot_angle: Quantity = Quantity(0, 'deg'),
+                             interloper_regions: np.ndarray = None, central_coord: Quantity = None,
+                             bkg_reg: bool = False) -> str:
     """
     A method to generate an eSASS region string for an arbitrary circular or elliptical annular region, with
     interloper sources removed.
@@ -145,7 +148,7 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
 
     # So now we convert our interloper regions into their eSASS equivalents
     esass_interloper = [source._interloper_esass_string(i) for i in interloper_regions]
-    #TODO I have assumed that the eSASS versions of the regions are in the correct format
+    # TODO I have assumed that the eSASS versions of the regions are in the correct format
 
     if inner_radius.isscalar and inner_radius.value !=0:
         esass_source_area = "annulus {cx} {cy} {ri}d {ro}d"
@@ -176,13 +179,12 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
                                                      h=outer_radius[1].value,
                                                      rot=rot_angle.to('deg').value)
 
-    
     # Combining the source region with regions we need to cut out
     if len(esass_interloper) == 0:
         final_src = esass_source_area
     else:
         # Multiple regions must be parsed to eSASS via an ASCII file, so I will write this here
-        reg_file_path = OUTPUT +  'erosita/' + obs_id + '/temp_regs'
+        reg_file_path = OUTPUT + 'erosita/' + obs_id + '/temp_regs'
         reg_str = esass_source_area.replace(" ", "_") # replacing spaces with underscores for file naming purposes
         reg_str = reg_str.replace(".", "-") # replacing any dots with dashes 
 
@@ -192,8 +194,9 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         
         reg_file_name = f"{reg_str}.reg"
 
-        # Making a temporary directory to write files into
-        os.makedirs(reg_file_path, exist_ok=True) # extra arguement means no error is raised if directories already exist
+        # Making a temporary directory to write files into.
+        #  Extra argument means no error is raised if directories already exist
+        os.makedirs(reg_file_path, exist_ok=True)
 
         # Making the file
         with open(reg_file_path + '/' + reg_file_name, 'w') as file:
