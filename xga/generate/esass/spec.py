@@ -96,21 +96,23 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
     ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                ' srcreg="{reg}" backreg=NONE tstep={ts}' \
+                ' srcreg="{reg}" backreg=NONE tstep={ts} insts={i}' \
                 ' psftype=NONE'
 
     # For extended sources, it is best to make a background spectra with a separate command
-    bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                        ' srcreg="{breg}" backreg=NONE' \
+    bckgr_srctool_cmd = 'srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
+                        ' srcreg="{breg}" backreg=NONE insts={i}' \
                         ' tstep={ts} psftype=NONE'
 
     #TODO check the point source command in esass with some EDR obs
     pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF"' \
                       ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts}' \
-                      ' psftype="2D_PSF"'
+                      ' insts={i} psftype="2D_PSF"'
     
     #You can't control the whole name of the output of srctool, so this renames it to the XGA format
-    rename_cmd = 'mv srctoolout_0??_{type}* {nn}'
+    rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn}'
+    # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
+    remove_merged_cmd = 'rm *srctoolout_0*'
 
     # TODO this command is fishy 
     # TODO include the background file - YES
@@ -169,159 +171,184 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         # Check which event lists are associated with each individual source
         for pack in source.get_products("events", telescope='erosita', just_obj=False):
             obs_id = pack[1]
-            inst = pack[2]
-            
-            # ASSUMPTION4 new output directory structure
-            if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
-                os.mkdir(OUTPUT + 'erosita/' + obs_id)
+            for inst in source.instruments["erosita"][obs_id]:
+                # Extracting just the instrument number for later use in esass commands
+                inst_no = [s for s in inst if s.isdigit()][0]
 
-            # Got to check if this spectrum already exists
-            # ASSUMPTION5 source.get_products has a telescope parameter
-            exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name, telescope="erosita")
-            if len(exists) == 1 and exists[0].usable and not force_gen:
-                continue
+                # ASSUMPTION4 new output directory structure
+                if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
+                    os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
-            # If there is no match to a region, the source region returned by this method will be None,
-            #  and if the user wants to generate spectra from region files, we have to ignore that observations
-            # ASSUMPTION6 source.source_back_regions will have a telescope parameter
-            if outer_radius == "region" and source.source_back_regions("erosita", "region", obs_id)[0] is None:
-                raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' argument.")
+                # Got to check if this spectrum already exists
+                # ASSUMPTION5 source.get_products has a telescope parameter
+                exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name, telescope="erosita")
+                if len(exists) == 1 and exists[0].usable and not force_gen:
+                    continue
 
-            # Because the region will be different for each ObsID, I have to call the setup function here
-            if outer_radius == 'region':
-                raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' argument.")
+                # If there is no match to a region, the source region returned by this method will be None,
+                #  and if the user wants to generate spectra from region files, we have to ignore that observations
+                # ASSUMPTION6 source.source_back_regions will have a telescope parameter
+                if outer_radius == "region" and source.source_back_regions("erosita", "region", obs_id)[0] is None:
+                    raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' argument.")
 
-            else:
-                # This constructs the sas strings for any radius that isn't 'region'
-                reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], obs_id,
-                                                    interloper_regions=interloper_regions,
-                                                    central_coord=source.default_coord)
-                b_reg = get_annular_esass_region(source, outer_radii[s_ind] * source.background_radius_factors[0],
-                                                      outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
-                                                      interloper_regions=back_inter_reg,
-                                                      central_coord=source.default_coord, bkg_reg=True)
-                inn_rad_degrees = inner_radii[s_ind]
-                out_rad_degrees = outer_radii[s_ind]
+                # Because the region will be different for each ObsID, I have to call the setup function here
+                if outer_radius == 'region':
+                    raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' argument.")
 
-                # TODO implement the detector map
-                # This creates a detection map for the source and background region
-                #map_path = _det_map_creation(outer_radii[s_ind], source, obs_id, inst)
-            
-            # Getting the source name
-            source_name = source.name
-            
-            # Just grabs the event list object
-            evt_list = pack[-1]
-            # Sets up the file names of the output files, adding a random number so that the
-            #  function for generating annular spectra doesn't clash and try to use the same folder
-            # ASSUMPTION4 new output directory structure
-            dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
+                else:
+                    # This constructs the sas strings for any radius that isn't 'region'
+                    reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], obs_id,
+                                                        interloper_regions=interloper_regions,
+                                                        central_coord=source.default_coord)
+                    b_reg = get_annular_esass_region(source, outer_radii[s_ind] * source.background_radius_factors[0],
+                                                        outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
+                                                        interloper_regions=back_inter_reg,
+                                                        central_coord=source.default_coord, bkg_reg=True)
+                    inn_rad_degrees = inner_radii[s_ind]
+                    out_rad_degrees = outer_radii[s_ind]
 
-            # Setting up file names that include the extra variables
-            if group_spec and min_counts is not None:
-                extra_file_name = "_mincnt{c}".format(c=min_counts)
-            else:
-                extra_file_name = ''
+                    # TODO implement the detector map
+                    # This creates a detection map for the source and background region
+                    #map_path = _det_map_creation(outer_radii[s_ind], source, obs_id, inst)
+                
+                # Getting the source name
+                source_name = source.name
+                
+                # Just grabs the event list object
+                evt_list = pack[-1]
+                # Sets up the file names of the output files, adding a random number so that the
+                #  function for generating annular spectra doesn't clash and try to use the same folder
+                # ASSUMPTION4 new output directory structure
+                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
 
-            # Cannot control the naming of spectra from srctool, so need to store
-            # the XGA formatting of the spectra, so that they can be renamed 
-            #TODO put issue, renaming spectra 
-            spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_spec.fits"
-            rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf"
-            arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf"
-            b_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_backspec.fits"
-            b_rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.rmf"
-            b_arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.arf"
+                # Setting up file names that include the extra variables
+                if group_spec and min_counts is not None:
+                    extra_file_name = "_mincnt{c}".format(c=min_counts)
+                else:
+                    extra_file_name = ''
 
-            # Making the strings of the XGA formatted names that we will rename the outputs of srctool to
-            spec = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                               ex=extra_file_name)
-            rmf = rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-            arf = arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-            b_spec = b_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                               ex=extra_file_name)
-            b_rmf = b_rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                               dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-            b_arf = b_arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-            
-            # DAVID_QUESTION should I be making these
-            # These file names are for the debug images of the source and background images, they will not be loaded
-            #  in as a XGA products, but exist purely to check by eye if necessary
-            dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_debug." \
-                  "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                # Cannot control the naming of spectra from srctool, so need to store
+                # the XGA formatting of the spectra, so that they can be renamed 
+                #TODO put issue, renaming spectra 
+                spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_spec.fits"
+                rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf"
+                arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf"
+                b_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_backspec.fits"
+                b_rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.rmf"
+                b_arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.arf"
+
+                # Naming the non grouped spectra
+                no_grp_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_spec_not_grouped.fits"
+                no_grp_spec = no_grp_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                              dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                              ex=extra_file_name)
+
+                # Making the strings of the XGA formatted names that we will rename the outputs of srctool to
+                spec = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                ex=extra_file_name)
+                rmf = rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                 dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-            b_dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_back_debug." \
+                arf = arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                b_spec = b_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                ex=extra_file_name)
+                b_rmf = b_rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                b_arf = b_arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                
+                # DAVID_QUESTION should I be making these
+                # These file names are for the debug images of the source and background images, they will not be loaded
+                #  in as a XGA products, but exist purely to check by eye if necessary
+                dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_debug." \
                     "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                  dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                                    dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                b_dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_back_debug." \
+                        "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                    dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
 
-            coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
-            src_reg_str = reg # dealt with in get_annular_esass_region
-            #TODO allow user to chose tstep and xgrid
-            tstep = 0.5 # put it as 0.5 for now
-            bsrc_reg_str = b_reg
-            # Defining the grouping key words
-            if group_spec and not min_counts is None:
-                group_type = 'min'
-                group_scale = min_counts
-            elif group_spec and not min_sn is None:
-                group_type = 'snmin'
-                group_scale = min_sn
-            else:
-                group_type = ''
-                group_scale = ''
+                coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
+                src_reg_str = reg # dealt with in get_annular_esass_region
+                #TODO allow user to chose tstep and xgrid
+                tstep = 0.5 # put it as 0.5 for now
+                bsrc_reg_str = b_reg
+                # Defining the grouping key words
+                if group_spec and not min_counts is None:
+                    group_type = 'min'
+                    group_scale = min_counts
+                elif group_spec and not min_sn is None:
+                    group_type = 'snmin'
+                    group_scale = min_sn
+                else:
+                    group_type = ''
+                    group_scale = ''
 
-            # Fills out the srctool command to make the main and background spectra
-            s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
-                                               ts=tstep)
-            sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
-                                                  ts=tstep*4) # had a longer tstep for the background to speed it up
-            # Filling out the grouping command
-            grp_cmd_str = grp_cmd.format(infi=spec, of=spec, gt=group_type, gs=group_scale)
+                # Fills out the srctool command to make the main and background spectra
+                s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
+                                                   i=inst_no, ts=tstep)
+                sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
+                                                      i=inst_no, ts=tstep*4) # had a longer tstep for the background to speed it up
+                # Filling out the grouping command
+                grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
-            # Occupying the rename command for all the outputs of srctool
-            rename_spec = rename_cmd.format(type='SourceSpec', nn=spec)
-            rename_rmf = rename_cmd.format(type='RMF', nn=rmf)
-            rename_arf = rename_cmd.format(type='ARF', nn=arf)
-            rename_b_spec = rename_cmd.format(type='SourceSpec', nn=b_spec)
-            rename_b_rmf = rename_cmd.format(type='RMF', nn=b_rmf)
-            rename_b_arf = rename_cmd.format(type='ARF', nn=b_arf)
+                # Occupying the rename command for all the outputs of srctool
+                if group_spec:
+                    rename_spec = rename_cmd.format(i_no=inst_no, type='SourceSpec', nn=no_grp_spec)
+                else:
+                    rename_spec = rename_cmd.format(i_no=inst_no, type='SourceSpec', nn=spec)
+                rename_rmf = rename_cmd.format(i_no=inst_no, type='RMF', nn=rmf)
+                rename_arf = rename_cmd.format(i_no=inst_no, type='ARF', nn=arf)
+                rename_b_spec = rename_cmd.format(i_no=inst_no, type='SourceSpec', nn=b_spec)
+                rename_b_rmf = rename_cmd.format(i_no=inst_no, type='RMF', nn=b_rmf)
+                rename_b_arf = rename_cmd.format(i_no=inst_no, type='ARF', nn=b_arf)
 
-            cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, 
-                                sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf])
-                                
-            # If the user wants to group the spectra then this command should be added
-            if group_spec:
-                # DAVID_QUESTION should I group the background spectra in the same way
-                cmd_str+= "; " + grp_cmd_str
+                cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf])
 
-            # Adds clean up commands to move all generated files and remove temporary directory
-            cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
-            # If temporary region files were made, they will be here
-            if os.path.exists(OUTPUT +  'erosita/' + obs_id + '/temp_regs'):
-                # Removing this directory
-                 cmd_str += ";rm -r temp_regs"
+                # Removing the 'merged spectra' output of srctool - which is identical to the instrument one
+                cmd_str += "; " + remove_merged_cmd  + "; "
+                
+                cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf])
 
-            cmds.append(cmd_str)  # Adds the full command to the set
-            # Makes sure the whole path to the temporary directory is created
-            os.makedirs(dest_dir)
+                # Removing the 'merged spectra' output of srctool - which is identical to the instrument one
+                cmd_str += "; " + remove_merged_cmd                
 
-            # ASSUMPTION4 new output directory structure
-            final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec))
-            extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
-                               "rmf_path": os.path.join(OUTPUT, "erosita", obs_id, rmf),
-                               "arf_path": os.path.join(OUTPUT, "erosita", obs_id, arf),
-                               "b_spec_path": os.path.join(OUTPUT, "erosita", obs_id, b_spec),
-                               "b_rmf_path": os.path.join(OUTPUT, "erosita", obs_id, b_rmf), 
-                               "b_arf_path": os.path.join(OUTPUT, "erosita", obs_id, b_arf),
-                               "obs_id": obs_id, "instrument": inst, 
-                               "central_coord": source.default_coord,
-                               "from_region": from_region,
-                               "grouped": group_spec})
+                # If the user wants to group the spectra then this command should be added
+                if group_spec:
+                    # DAVID_QUESTION should I group the background spectra in the same way
+                    cmd_str+= "; " + grp_cmd_str
+
+                # Adds clean up commands to move all generated files and remove temporary directory
+                #cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+                cmd_str += "; mv * ../; cd .."
+                # If temporary region files were made, they will be here
+                if os.path.exists(OUTPUT +  'erosita/' + obs_id + '/temp_regs'):
+                    # Removing this directory
+                    cmd_str += ";rm -r temp_regs"
+
+                cmds.append(cmd_str)  # Adds the full command to the set
+                print(cmds)
+                # Makes sure the whole path to the temporary directory is created
+                os.makedirs(dest_dir)
+
+                # ASSUMPTION4 new output directory structure
+                final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec))
+                extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
+                                "rmf_path": os.path.join(OUTPUT, "erosita", obs_id, rmf),
+                                "arf_path": os.path.join(OUTPUT, "erosita", obs_id, arf),
+                                "b_spec_path": os.path.join(OUTPUT, "erosita", obs_id, b_spec),
+                                "b_rmf_path": os.path.join(OUTPUT, "erosita", obs_id, b_rmf), 
+                                "b_arf_path": os.path.join(OUTPUT, "erosita", obs_id, b_arf),
+                                "obs_id": obs_id, "instrument": inst, 
+                                "central_coord": source.default_coord,
+                                "from_region": from_region,
+                                "grouped": group_spec, 
+                                "min_counts": min_counts,
+                                "min_sn": min_sn,
+                                "over_sample": None,
+                                "from_region": from_region,
+                                "telescope": "erosita"})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
