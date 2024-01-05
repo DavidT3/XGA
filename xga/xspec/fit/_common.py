@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 11:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:25. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -126,7 +126,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
                         linking: str, freezing: str, par_fit_stat: float, lum_low_lims: str, lum_upp_lims: str,
                         lum_conf: float, redshift: float, pre_check: bool, check_par_names: str, check_par_lo_lims: str,
                         check_par_hi_lims: str, check_par_err_lims: str, norm_scale: bool,
-                        which_par_nh: str = 'None') -> Tuple[str, str]:
+                        which_par_nh: str = 'None', telescope: str = 'xmm') -> Tuple[str, str]:
     """
     This writes out a configured XSPEC script, and is common to all fit functions.
 
@@ -162,6 +162,8 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         you can get from different observations of a cluster.
     :param str which_par_nh: The parameter IDs of the nH parameters values which should be zeroed for the calculation
         of unabsorbed luminosities.
+    :param str telescope: The name of the telescope for which the fitting script is being generated. The default
+        is 'xmm' to support the original behaviour of XGA as an XMM focused tool.
     :return: The paths to the output file and the script file.
     :rtype: Tuple[str, str]
     """
@@ -175,8 +177,8 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
     # Defining where the output summary file of the fit is written
-    out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model
-    script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + ".xcm"
+    out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + telescope
+    script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + telescope + ".xcm"
 
     # The template is filled out here, taking everything we have generated and everything the user
     #  passed in. The result is an XSPEC script that can be run as is.
