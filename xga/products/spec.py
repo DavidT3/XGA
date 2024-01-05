@@ -294,7 +294,8 @@ class Spectrum(BaseProduct):
                     # If the spectrum has not been grouped it may not have this column
                     if "GROUPING" in all_dat.dtype.names:
                         self._spec_group = all_dat['GROUPING']
-                    self._spec_quality = all_dat['QUALITY']
+                    if "QUALITY" in all_dat.dtype.names:
+                        self._spec_quality = all_dat['QUALITY']
 
                 # And if not then the only other option is to populate the background spectrum attributes
                 else:
