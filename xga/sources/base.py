@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 16:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 16:16. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -196,6 +196,11 @@ class BaseSource:
         # Now we run the method which takes those initially identified observations and goes looking for their
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
         self._products, region_dict, self._att_files = self._initial_products(obs)
+
+        print(obs)
+        print('\n\n')
+
+        stop
 
         # Now we do ANOTHER check just like the one above, but on the products attribute, as it is possible that
         #  all those files cannot be found
