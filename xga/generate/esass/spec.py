@@ -61,6 +61,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         from_region = False
         # TODO edit region_setup to be telescope agnostic
         sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress, '')
+        print(sources)
+        print(inner_radii)
+        print(outer_radii)
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
@@ -191,10 +194,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             else:
                 # This constructs the sas strings for any radius that isn't 'region'
-                reg = get_annular_esass_region(inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
+                reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
                                                     interloper_regions=interloper_regions,
                                                     central_coord=source.default_coord)
-                b_reg = get_annular_esass_region(outer_radii[s_ind] * source.background_radius_factors[0],
+                b_reg = get_annular_esass_region(source, outer_radii[s_ind] * source.background_radius_factors[0],
                                                       outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
                                                       inst, interloper_regions=back_inter_reg,
                                                       central_coord=source.default_coord, bkg_reg=True)
