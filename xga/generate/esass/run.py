@@ -1,21 +1,21 @@
-# This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-# Last modified by Jessica Pilling (jp735@sussex.ac.uk) Wed Oct 11 2023, 13:52. Copyright (c) The Contributors
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:55. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
-from subprocess import Popen, PIPE
 from typing import Tuple
 from warnings import warn
 
 from tqdm import tqdm
 
-from ...products import BaseProduct, AnnularSpectra
-from ... import eSASS_AVAIL
-from ...exceptions import eSASSNotFoundError, SourceNotFoundError
 from .._common import execute_cmd
+from ... import eSASS_AVAIL
+from ...exceptions import eSASSNotFoundError
+from ...products import BaseProduct, AnnularSpectra
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 from ...sources.base import NullSource
+
 
 def esass_call(esass_func):
     """
@@ -26,9 +26,6 @@ def esass_call(esass_func):
     """
     @wraps(esass_func)
     def wrapper(*args, **kwargs):
-        # Haven't figured out how to deal with errors raised yet, so just erroring here
-        #raise NotImplementedError("Functions using esass have not been implemented yet.")
-
         # Checking eSASS is installed and available on the system
         if not eSASS_AVAIL:
             raise eSASSNotFoundError("No eSASS installation has been found on this machine.")
