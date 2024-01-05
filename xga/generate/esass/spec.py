@@ -92,27 +92,25 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     else:
         extra_name = ''
 
+    # TODO implement the det map EXTTPYE, at the moment this spectrum will treat the target as a point source
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
     ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                ' srcreg="{reg}" backreg=NONE insts="{i}" tstep={ts}' \
-                ' exttype="MAP" extmap="{map}" psftype=NONE'
+                ' srcreg="{reg}" backreg=NONE tstep={ts}' \
+                ' psftype=NONE'
 
     # For extended sources, it is best to make a background spectra with a separate command
     bckgr_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                        ' srcreg="{breg}" backreg=NONE insts="{i}"' \
+                        ' srcreg="{breg}" backreg=NONE' \
                         ' tstep={ts} psftype=NONE'
 
     #TODO check the point source command in esass with some EDR obs
-    pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF" insts="{i}"' \
+    pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF"' \
                       ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts}' \
                       ' psftype="2D_PSF"'
     
     #You can't control the whole name of the output of srctool, so this renames it to the XGA format
-    rename_cmd = 'mv srctoolout_{inst_no}??_{type}* {nn}'
-
-    # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
-    remove_merged_cmd = 'rm *srctoolout_0*'
+    rename_cmd = 'mv srctoolout_0??_{type}* {nn}'
 
     # TODO this command is fishy 
     # TODO include the background file - YES
@@ -204,8 +202,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                       central_coord=source.default_coord, bkg_reg=True)
                 inn_rad_degrees = inner_radii[s_ind]
                 out_rad_degrees = outer_radii[s_ind]
+
+                # TODO implement the detector map
                 # This creates a detection map for the source and background region
-                map_path = _det_map_creation(outer_radii[s_ind], source, obs_id, inst)
+                #map_path = _det_map_creation(outer_radii[s_ind], source, obs_id, inst)
             
             # Getting the source name
             source_name = source.name
@@ -277,19 +277,19 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Fills out the srctool command to make the main and background spectra
             s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
-                                               i=inst, ts=tstep, map=map_path)
+                                               ts=tstep)
             sb_cmd_str = bckgr_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
-                                                  i=inst, ts=tstep*4) # had a longer tstep for the background to speed it up
+                                                  ts=tstep*4) # had a longer tstep for the background to speed it up
             # Filling out the grouping command
             grp_cmd_str = grp_cmd.format(infi=spec, of=spec, gt=group_type, gs=group_scale)
 
             # Occupying the rename command for all the outputs of srctool
-            rename_spec = rename_cmd.format(inst_no=inst, type='SourceSpec', nn=spec)
-            rename_rmf = rename_cmd.format(inst_no=inst, type='RMF', nn=rmf)
-            rename_arf = rename_cmd.format(inst_no=inst, type='ARF', nn=arf)
-            rename_b_spec = rename_cmd.format(inst_no=inst, type='SourceSpec', nn=b_spec)
-            rename_b_rmf = rename_cmd.format(inst_no=inst, type='RMF', nn=b_rmf)
-            rename_b_arf = rename_cmd.format(inst_no=inst, type='ARF', nn=b_arf)
+            rename_spec = rename_cmd.format(type='SourceSpec', nn=spec)
+            rename_rmf = rename_cmd.format(type='RMF', nn=rmf)
+            rename_arf = rename_cmd.format(type='ARF', nn=arf)
+            rename_b_spec = rename_cmd.format(type='SourceSpec', nn=b_spec)
+            rename_b_rmf = rename_cmd.format(type='RMF', nn=b_rmf)
+            rename_b_arf = rename_cmd.format(type='ARF', nn=b_arf)
 
             cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, 
                                 sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf])
@@ -298,8 +298,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             if group_spec:
                 # DAVID_QUESTION should I group the background spectra in the same way
                 cmd_str+= "; " + grp_cmd_str
-            # Removing the 'merged spectra' output of srctool - which is identical to the instrument one
-            cmd_str += "; " + remove_merged_cmd
+
             # Adds clean up commands to move all generated files and remove temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
             # If temporary region files were made, they will be here
@@ -321,7 +320,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                "b_arf_path": os.path.join(OUTPUT, "erosita", obs_id, b_arf),
                                "obs_id": obs_id, "instrument": inst, 
                                "central_coord": source.default_coord,
-                               "from_region": from_region})
+                               "from_region": from_region,
+                               "grouped": group_spec})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -332,7 +332,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
-
+# TODO fix this function to use XGA in built function and I still need to debug
 def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, inst: str,
                       rot_angle: Quantity = Quantity(0, 'deg')):
     """
@@ -342,9 +342,9 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
     outer_radius = outer_radius.to('deg')
     
     # Defining the name of the detection map
-    detmap_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_detmap.fits"
+    detmap_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ro{ro}_detmap.fits"
     detmap_name = detmap_str.format(o=obs_id, i=inst, n=source.name, ra=source.default_coord[0].value,
-                                    dec=source.default_coord[1].value)
+                                    dec=source.default_coord[1].value, ro=outer_radius.to_value)
     detmap_path = OUTPUT + 'erosita/' + obs_id + '/' + detmap_name
 
     # Checking if an image has already been made
