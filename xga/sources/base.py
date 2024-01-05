@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 15:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 16:12. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -207,6 +207,12 @@ class BaseSource:
             # Cut out any mention of a telescope with no loaded files
             new_obs = {tel: obs[tel] for tel, num in cur_obs_nums.items() if num != 0}
             new_prods = {tel: self._products[tel] for tel, num in cur_obs_nums.items() if num != 0}
+            # TODO UNDO HORRIBLE BODGE
+            for tel in new_prods:
+                if COMBINED_INSTS[tel]:
+                    for oi in new_prods[tel]:
+                        new_prods[tel][oi].update({i: {} for i in obs[tel][oi]})
+
             new_regs = {tel: region_dict[tel] for tel, num in cur_obs_nums.items() if num != 0}
             new_atts = {tel: self._att_files[tel] for tel, num in cur_obs_nums.items() if num != 0}
             # Then assign the new cut down dictionaries to their original names
@@ -214,6 +220,9 @@ class BaseSource:
             self._products = new_prods
             self._att_files = new_atts
             region_dict = new_regs
+
+        print(self._products)
+        print('\n\n')
 
         # We now have the final set of initial observations, so we'll store them in an attribute - note that they
         #  may change later as other source classes have different cleaning steps, but any observations will be
@@ -223,7 +232,7 @@ class BaseSource:
         self._obs = {t: {o: obs[t][o] if COMBINED_INSTS[t] else [i for i in self._products[t][o]
                                                                  if len(self._products[t][o][i]) != 0]
                          for o in self._products[t]} for t in self._products}
-        
+
         # Set the blacklisted observation attribute with our dictionary - if all has gone well then this will be a
         #  dictionary of empty dictionaries
         self._blacklisted_obs = blacklisted_obs
@@ -830,7 +839,6 @@ class BaseSource:
                 #  the 'combined' flag (i.e. this is what they are stored under).
                 if inst_or_tel == tel:
                     inst = 'combined'
-                    obs_dict[tel][obs_id].update({i: {} for i in self.instruments[tel][obs_id]})
                 else:
                     inst = inst_or_tel
 
