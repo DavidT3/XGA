@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:58. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -8,6 +8,7 @@ from typing import List, Union, Tuple
 from astropy.units import Quantity, UnitConversionError
 
 from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES
+from ...generate.esass import srctool_spectrum
 from ...samples.base import BaseSample
 from ...sas import evselect_spectrum, region_setup
 from ...sources import BaseSource, ExtendedSource, PointSource
@@ -30,28 +31,38 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
     :param str/Quantity inner_radius: The name or value of the outer radius of the region that the
         desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
         or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
-        inner radius will be ignored. By default this is zero arcseconds, resulting in a circular spectrum. If
+        inner radius will be ignored. By default, this is zero arcseconds, resulting in a circular spectrum. If
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
-    :return: Most likely just the passed in sources, but if a single source was passed
-    then a list will be returned.
+    :return: Most likely just the passed in sources, but if a single source was passed then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
     """
-    # I call the evselect_spectrum function here for two reasons; to make sure that the spectra which the user
-    #  want to fit are generated, and because that function has a lot of radius parsing and checking stuff
-    #  in it which will kick up a fuss if variables aren't formatted right
-    sources = evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample,
-                                one_rmf, num_cores)
+    for tel in sources.telescopes:
+        # TODO create a function that does this sort of thing for us - as in generating spectra for each of the
+        #  telescopes that are associated with a source or sample
+        # Each telescope has its own methods of generating spectra
+        if tel == 'xmm':
+            # I call the evselect_spectrum function here for two reasons; to make sure that the spectra which the user
+            #  want to fit are generated, and because that function has a lot of radius parsing and checking stuff
+            #  in it which will kick up a fuss if variables aren't formatted right
+            sources = evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
+                                        over_sample, one_rmf, num_cores)
+        elif tel == 'erosita':
+            # This is the spectrum generation tool that is specific to eROSITA
+            sources = srctool_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores)
+        else:
+            raise NotImplementedError("Spectrum generation functionality is not implemented "
+                                      "for {t} yet!".format(t=tel))
 
     # This is the spectrum region preparation function, and I'm calling it here because it will return properly
     #  formatted arrays for the inner and outer radii
