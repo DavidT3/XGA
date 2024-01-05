@@ -101,7 +101,6 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes "
                         "emin={l} emax={u} events=no size='auto' rebin=87 center_position=0; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
                                                                                  i=im, l=lo_en.value, u=hi_en.value ))
-            print(cmds)
 
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
@@ -220,8 +219,6 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                         " emax={u} mergedmaps={em}; fthedit {em} REFYCRVL delete; mv * ../"
                         "; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path,
                          l=lo_en.value, u=hi_en.value, em=exp_map, d=dest_dir))
-            
-            print(cmds)
 
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
