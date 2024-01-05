@@ -134,6 +134,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
     """
+    # TODO make sure that the same exposure map is added as a product to every source it covers
     stack = False # This tells the esass_call routine that this command won't be part of a stack
     execute = True # This should be executed immediately
 
@@ -216,8 +217,11 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
 
             os.makedirs(dest_dir)
             cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l}"
-                        "emax={u}; mv * ../; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path,
-                         l=lo_en.value, u=hi_en.value, d=dest_dir))
+                        " emax={u} mergedmaps={em}; fthedit {em} REFYCRVL delete; mv * ../"
+                        "; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path,
+                         l=lo_en.value, u=hi_en.value, em=exp_map, d=dest_dir))
+            
+            print(cmds)
 
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
