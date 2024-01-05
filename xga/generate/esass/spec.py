@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:51. Copyright (c) The Contributors
 
 import os
 import re
@@ -429,7 +429,7 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      disable_progress: bool = False, force_gen: bool = False):
     
     """
-    A wrapper for all of the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
+    A wrapper for all the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
     observation, will have a spectrum generated using the specified outer and inner radii as a boundary. The
     default inner radius is zero, so by default this function will produce circular spectra out to the outer_radius.
@@ -449,9 +449,9 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+        To disable minimum signal-to-noise set this parameter to None.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
