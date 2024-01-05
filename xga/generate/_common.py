@@ -9,14 +9,9 @@ import numpy as np
 from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
 
+from ..sources import BaseSource
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
 from ..utils import OUTPUT
-
-
-#ASSUMPTION7 that the telescope agnostic region_setup will go here
-def region_setup():
-    pass
-
 
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
     """
@@ -107,7 +102,7 @@ def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
 
     return shape_str
 
-def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
+def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_radius: Quantity, obs_id: str,
                                output_unit: Union[UnitBase, str] = deg, rot_angle: Quantity = Quantity(0, 'deg'),
                                interloper_regions: np.ndarray = None, central_coord: Quantity = None, bkg_reg: bool = False) -> str:
     """
@@ -116,18 +111,18 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
     """
 
     if central_coord is None:
-        central_coord = self._default_coord
+        central_coord = source._default_coord
 
-    inner_radius = self.convert_radius(inner_radius, 'deg')
-    outer_radius = self.convert_radius(outer_radius, 'deg')
+    inner_radius = source.convert_radius(inner_radius, 'deg')
+    outer_radius = source.convert_radius(outer_radius, 'deg')
 
     # Then we can check to make sure that the outer radius is larger than the inner radius
     if inner_radius.isscalar and inner_radius >= outer_radius:
         raise ValueError("An eSASS circular region for {s} cannot have an inner_radius larger than or equal to its "
-                            "outer_radius".format(s=self.name))
+                            "outer_radius".format(s=source.name))
     elif not inner_radius.isscalar and (inner_radius[0] >= outer_radius[0] or inner_radius[1] >= outer_radius[1]):
         raise ValueError("An eSASS elliptical region for {s} cannot have inner radii larger than or equal to its "
-                            "outer radii".format(s=self.name))
+                            "outer radii".format(s=source.name))
     
     if output_unit != deg:
         raise NotImplementedError("Only degree coordinates are currently supported "
@@ -143,13 +138,13 @@ def get_annular_esass_region(self, inner_radius: Quantity, outer_radius: Quantit
     #  like in evselect_spectrum for instance.
     #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
     if interloper_regions is None and inner_radius.isscalar:
-        interloper_regions = self.regions_within_radii(inner_radius, outer_radius, central_coord, telescope="erosita")
+        interloper_regions = source.regions_within_radii(inner_radius, outer_radius, "erosita", central_coord)
     #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
     elif interloper_regions is None and not inner_radius.isscalar:
-        interloper_regions = self.regions_within_radii(min(inner_radius), max(outer_radius), central_coord, telescope="erosita")
+        interloper_regions = source.regions_within_radii(min(inner_radius), max(outer_radius), "erosita", central_coord)
 
     # So now we convert our interloper regions into their eSASS equivalents
-    esass_interloper = [self._interloper_esass_string(i) for i in interloper_regions]
+    esass_interloper = [source._interloper_esass_string(i) for i in interloper_regions]
     #TODO I have assumed that the eSASS versions of the regions are in the correct format
 
     if inner_radius.isscalar and inner_radius.value !=0:

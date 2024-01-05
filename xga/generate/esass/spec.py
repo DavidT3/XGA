@@ -13,9 +13,9 @@ from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 
 #ASSUMPTION7 that the telescope agnostic region_setup will go here
-from .._common import region_setup
+from ...sas._common import region_setup
 from .run import esass_call
-from .. import OUTPUT, NUM_CORES
+from ... import OUTPUT, NUM_CORES
 from .._common import get_annular_esass_region
 from .phot import evtool_image
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -59,7 +59,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     if outer_radius != 'region':
         from_region = False
-        sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress, 'erosita')
+        # TODO edit region_setup to be telescope agnostic
+        sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress, '')
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
@@ -143,13 +144,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Finding interloper regions within the radii we have specified has been put here because it all works in
             #  degrees and as such only needs to be run once for all the different observations.
             #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
-            interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind],
-                                                             source.default_coord, telescope="erosita")
+            interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind], "erosita",
+                                                             source.default_coord)
             # This finds any regions which
             #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
             back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
                                                          outer_radii[s_ind] * source.background_radius_factors[1],
-                                                         source.default_coord, telescope="erosita")
+                                                         "erosita", source.default_coord)
             src_inn_rad_str = inner_radii[s_ind].value
             src_out_rad_str = outer_radii[s_ind].value
             # The key under which these spectra will be stored
