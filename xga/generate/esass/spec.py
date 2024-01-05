@@ -1,26 +1,27 @@
-# This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-# Last modified by Jessica Pilling (jp735@sussex.ac.uk) Wed Oct 11 2023, 13:51. Copyright (c) The Contributors
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:44. Copyright (c) The Contributors
 
 import os
-from typing import Union, List
-from random import randint
 import re
+from random import randint
+from typing import Union
 
 import numpy as np
-from astropy.units import Quantity
-from astropy.io import fits
-from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
+from astropy.io import fits
+from astropy.units import Quantity
+from astropy.wcs import WCS
 
-#ASSUMPTION7 that the telescope agnostic region_setup will go here
-from ...sas._common import region_setup
-from .run import esass_call
-from ... import OUTPUT, NUM_CORES
-from .._common import get_annular_esass_region
 from .phot import evtool_image
-from ...sources import BaseSource, ExtendedSource, GalaxyCluster
-from ...samples.base import BaseSample
+from .run import esass_call
+from .._common import get_annular_esass_region
+from ... import OUTPUT, NUM_CORES
 from ...exceptions import eROSITAImplentationError, eSASSInputInvalid
+from ...samples.base import BaseSample
+# ASSUMPTION7 that the telescope agnostic region_setup will go here
+from ...sas._common import region_setup
+from ...sources import BaseSource, ExtendedSource, GalaxyCluster
+
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
@@ -328,6 +329,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
+
 def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, inst: str,
                       rot_angle: Quantity = Quantity(0, 'deg')):
     """
@@ -419,11 +421,12 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
     
     return detmap_path
 
+
 @esass_call
 def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                      min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES, 
-                      disable_progress: bool = False, force_gen: bool = False):
+                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                     min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
+                     disable_progress: bool = False, force_gen: bool = False):
     
     """
     A wrapper for all of the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
