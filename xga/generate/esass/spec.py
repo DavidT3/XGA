@@ -320,8 +320,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                "b_arf_path": os.path.join(OUTPUT, "erosita", obs_id, b_arf),
                                "obs_id": obs_id, "instrument": inst, 
                                "central_coord": source.default_coord,
-                               "from_region": from_region},
-                               "grouped": group_spec)
+                               "from_region": from_region,
+                               "grouped": group_spec})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
