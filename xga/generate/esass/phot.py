@@ -1,19 +1,19 @@
-# This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-# Last modified by Jessica Pilling (jp735@sussex.ac.uk) Wed Oct 11 2023, 13:52. Copyright (c) The Contributors
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:44. Copyright (c) The Contributors
 
 import os
-from typing import Union
 from shutil import rmtree
+from typing import Union
 
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
-from tqdm import tqdm
 
-from ... import OUTPUT, NUM_CORES
 from .run import esass_call
+from ... import OUTPUT, NUM_CORES
+from ...samples.base import BaseSample
 from ...sources import BaseSource
 from ...sources.base import NullSource
-from ...samples.base import BaseSample
+
 
 @esass_call
 def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.2, 'keV'),
@@ -117,6 +117,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     # it could just be picked up in the decorator.
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
+
 @esass_call
 def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.2, 'keV'),
             hi_en: Quantity = Quantity(10, 'keV'), num_cores: int = NUM_CORES, disable_progress: bool = False):
@@ -195,13 +196,15 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             # ASSUMPTION5 source.get_products has a telescope parameter
-            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False, telescope='erosita')
+            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False,
+                                                             telescope='erosita')
                       if en_id in match]
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
             # Generating an exposure map requires a reference image.
             # ASSUMPTION5 source.get_products has a telescope parameter
-            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='erosita')
+            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False,
+                                                             telescope='erosita')
                       if en_id in match][0][-1]
             # Set up the paths and names of files
             evt_list = pack[-1]
@@ -223,7 +226,8 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
             final_paths.append(os.path.join(OUTPUT,"erosita", obs_id, exp_map))
-            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst, "telescope": "erosita"})
+            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
+                               "telescope": "erosita"})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
