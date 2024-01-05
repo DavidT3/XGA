@@ -1957,10 +1957,10 @@ class BaseSource:
                 po.src_name = self.name
 
                 # Double check that something is trying to add products from another source to the current one.
-                if obs_id != "combined" and obs_id not in self._products[tel]:
+                if obs_id != "combined" and obs_id not in self.instruments[tel]:
                     raise NotAssociatedError("{t}-{o} is not associated with this X-ray "
                                              "source.".format(t=tel, o=obs_id))
-                elif inst != "combined" and inst not in self._products[tel][obs_id]:
+                elif inst != "combined" and inst not in self.instruments[tel][obs_id]:
                     raise NotAssociatedError("{i} is not associated with {t} observation "
                                              "{o}".format(i=inst, o=obs_id, t=PRETTY_TELESCOPE_NAMES[tel]))
 
