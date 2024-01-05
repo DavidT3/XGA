@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 16:18. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -197,11 +197,6 @@ class BaseSource:
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
         self._products, region_dict, self._att_files = self._initial_products(obs)
 
-        print(obs)
-        print('\n\n')
-
-        stop
-
         # Now we do ANOTHER check just like the one above, but on the products attribute, as it is possible that
         #  all those files cannot be found
         cur_obs_nums = {tel: len(self._products[tel]) for tel in self._products}
@@ -212,12 +207,6 @@ class BaseSource:
             # Cut out any mention of a telescope with no loaded files
             new_obs = {tel: obs[tel] for tel, num in cur_obs_nums.items() if num != 0}
             new_prods = {tel: self._products[tel] for tel, num in cur_obs_nums.items() if num != 0}
-            # TODO UNDO HORRIBLE BODGE
-            for tel in new_prods:
-                if COMBINED_INSTS[tel]:
-                    for oi in new_prods[tel]:
-                        new_prods[tel][oi].update({i: {} for i in obs[tel][oi]})
-
             new_regs = {tel: region_dict[tel] for tel, num in cur_obs_nums.items() if num != 0}
             new_atts = {tel: self._att_files[tel] for tel, num in cur_obs_nums.items() if num != 0}
             # Then assign the new cut down dictionaries to their original names
@@ -225,6 +214,12 @@ class BaseSource:
             self._products = new_prods
             self._att_files = new_atts
             region_dict = new_regs
+
+        # TODO UNDO HORRIBLE BODGE
+        for tel in self._products:
+            if COMBINED_INSTS[tel]:
+                for oi in obs[tel]:
+                    self._products[tel][oi].update({i: {} for i in obs[tel][oi]})
 
         print(self._products)
         print('\n\n')
