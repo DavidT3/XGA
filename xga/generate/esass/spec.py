@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 15:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 15:48. Copyright (c) The Contributors
 
 import os
 import re
@@ -45,14 +45,16 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         To disable minimum counts set this parameter to None.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
+    # TODO MORE COMMENTS
+
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
@@ -112,8 +114,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # TODO this command is fishy 
     # TODO include the background file - YES
     # TODO regroup the background file too 
-    # Grouping the spectra will be done using the heasoft
-    grp_cmd = 'export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; ftgrouppha infile="{infi}" outfile="{of}" grouptype="{gt}" groupscale="{gs}"'
+    # Grouping the spectra will be done using the HEASoft tool 'ftgrouppha' - we make sure to remove the original
+    #  ungrouped file. I think maybe that approach is safer than turning clobber on and just having the original
+    #  generated file with a name that only truly applies once grouping has been done.
+    # The HEASoft environment variables set here ensure that ftgrouppha doesn't try to access the terminal, which
+    #  causes 'device not available' errors
+    grp_cmd = ('export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; '
+               'ftgrouppha infile="{infi}" outfile="{of}" grouptype="{gt}" groupscale="{gs}"; rm {infi}')
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -133,7 +140,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         else:
             ex_src = "no"
             dt = 'flat'
-            raise eROSITAImplentationError("Spectral Generation has not yet been implemented for point sources.")
+            raise eROSITAImplentationError("Spectral generation has not yet been implemented for point sources.")
 
         cmds = []
         final_paths = []
@@ -295,14 +302,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Fills out the srctool command to make the main and background spectra
                 s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
                                                    i=inst_no, ts=tstep)
-                # had a longer tstep for the background to speed it up
+                # Gad a longer tstep for the background to speed it up
                 sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                                       i=inst_no, ts=tstep*4)
                 # Filling out the grouping command
                 grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
                 # Occupying the rename command for all the outputs of srctool
-                # TODO MORE COMMENTS
                 if group_spec:
                     rename_spec = rename_cmd.format(i_no=inst_no, type='SourceSpec', nn=no_grp_spec)
                 else:
@@ -316,7 +322,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf])
 
                 # Removing the 'merged spectra' output of srctool - which is identical to the instrument one
-                cmd_str += "; " + remove_merged_cmd  + "; "
+                cmd_str += "; " + remove_merged_cmd + "; "
                 
                 cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf])
 
@@ -325,7 +331,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
                 # If the user wants to group the spectra then this command should be added
                 if group_spec:
-                    # DAVID_QUESTION should I group the background spectra in the same way
+                    # This both performs the grouping, and deletes the original non-grouped file. A similar effect
+                    #  could be ensured by turning clobber on for ftgrouppha, but I think this way is safer. That way
+                    #  if grouping fails there definitely won't be a file with the name of the grouped spectrum, but
+                    #  no grouping applied.
                     cmd_str += "; " + grp_cmd_str
 
                 # Adds clean up commands to move all generated files and remove temporary directory
