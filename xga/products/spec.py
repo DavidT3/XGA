@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 22:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 15:28. Copyright (c) The Contributors
 
 
 import os
@@ -294,8 +294,11 @@ class Spectrum(BaseProduct):
                     # If the spectrum has not been grouped it may not have this column
                     if "GROUPING" in all_dat.dtype.names:
                         self._spec_group = all_dat['GROUPING']
+
                     if "QUALITY" in all_dat.dtype.names:
                         self._spec_quality = all_dat['QUALITY']
+                    else:
+                        self._spec_quality = np.zeros(len(self._spec_channels))
 
                 # And if not then the only other option is to populate the background spectrum attributes
                 else:
