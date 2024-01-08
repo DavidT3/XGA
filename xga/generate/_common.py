@@ -146,7 +146,7 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         interloper_regions = source.regions_within_radii(min(inner_radius), max(outer_radius), "erosita", central_coord)
 
     # So now we convert our interloper regions into their eSASS equivalents
-    esass_interloper = [source._interloper_esass_string(i) for i in interloper_regions]
+    esass_interloper = [_interloper_esass_string(i) for i in interloper_regions]
     # TODO I have assumed that the eSASS versions of the regions are in the correct format
 
     if inner_radius.isscalar and inner_radius.value !=0:
