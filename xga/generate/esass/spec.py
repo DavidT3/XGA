@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 12:14. Copyright (c) The Contributors
 
 import os
 import re
@@ -18,7 +18,6 @@ from .._common import get_annular_esass_region
 from ... import OUTPUT, NUM_CORES
 from ...exceptions import eROSITAImplentationError, eSASSInputInvalid
 from ...samples.base import BaseSample
-# ASSUMPTION7 that the telescope agnostic region_setup will go here
 from ...sas._common import region_setup
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 
@@ -62,9 +61,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         from_region = False
         # TODO edit region_setup to be telescope agnostic
         sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress, '')
-        print(sources)
-        print(inner_radii)
-        print(outer_radii)
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
@@ -82,7 +78,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # Should also check that the user has passed any sort of grouping argument, if they say they want to group
     elif group_spec and all([o is None for o in [min_counts, min_sn]]):
         raise eSASSInputInvalid("If you set group_spec=True, you must supply a grouping option, either min_counts"
-                              " or min_sn.")
+                                " or min_sn.")
     
     # Sets up the extra part of the storage key name depending on if grouping is enabled
     if group_spec and min_counts is not None:
@@ -95,9 +91,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # TODO implement the det map EXTTPYE, at the moment this spectrum will treat the target as a point source
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
-    ext_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
-                ' srcreg="{reg}" backreg=NONE tstep={ts} insts={i}' \
-                ' psftype=NONE'
+    ext_srctool_cmd = ('cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF" srcreg="{reg}" '
+                       'backreg=NONE tstep={ts} insts={i} psftype=NONE')
 
     # For extended sources, it is best to make a background spectra with a separate command
     bckgr_srctool_cmd = 'srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
@@ -109,7 +104,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                       ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts}' \
                       ' insts={i} psftype="2D_PSF"'
     
-    #You can't control the whole name of the output of srctool, so this renames it to the XGA format
+    # You can't control the whole name of the output of srctool, so this renames it to the XGA format
     rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn}'
     # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
     remove_merged_cmd = 'rm *srctoolout_0*'
@@ -120,8 +115,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # Grouping the spectra will be done using the heasoft
     grp_cmd = 'ftgrouppha infile="{infi}" outfile="{of}" grouptype="{gt}" groupscale="{gs}"'
 
-    stack = False # This tells the esass_call routine that this command won't be part of a stack
-    execute = True # This should be executed immediately
+    stack = False  # This tells the esass_call routine that this command won't be part of a stack
+    execute = True  # This should be executed immediately
 
     sources_cmds = []
     sources_paths = []
@@ -172,16 +167,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         for pack in source.get_products("events", telescope='erosita', just_obj=False):
             obs_id = pack[1]
             for inst in source.instruments["erosita"][obs_id]:
-                # Extracting just the instrument number for later use in esass commands
+                # Extracting just the instrument number for later use in eSASS commands
                 inst_no = [s for s in inst if s.isdigit()][0]
 
-                # ASSUMPTION4 new output directory structure
-                if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
-                    os.mkdir(OUTPUT + 'erosita/' + obs_id)
-
                 # Got to check if this spectrum already exists
-                # ASSUMPTION5 source.get_products has a telescope parameter
-                exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name, telescope="erosita")
+                exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name,
+                                             telescope="erosita")
                 if len(exists) == 1 and exists[0].usable and not force_gen:
                     continue
 
