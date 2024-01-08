@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:24. Copyright (c) The Contributors
 
 import os
 import re
@@ -178,7 +178,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 except NoProductAvailableError:
                     exists = False
 
-                if len(exists) == 1 and exists[0].usable and not force_gen:
+                if exists and exists[0].usable and not force_gen:
                     continue
 
                 # If there is no match to a region, the source region returned by this method will be None,
