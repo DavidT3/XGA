@@ -298,6 +298,8 @@ class Spectrum(BaseProduct):
                     if "QUALITY" in all_dat.dtype.names:
                         self._spec_quality = all_dat['QUALITY']
                     else:
+                        # If there is no quality information then we just have to assume every channel is okay
+                        #  to use - otherwise the get_grouped_data method will fall over
                         self._spec_quality = np.zeros(len(self._spec_channels))
 
                 # And if not then the only other option is to populate the background spectrum attributes
